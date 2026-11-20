@@ -4,7 +4,7 @@ import { aborted, fetchJson, jsonInit } from '../../http'
 import type { SiteLocation } from '../../location/site'
 import { createRequestGuard } from '../../sky/selection'
 import { planningSite, showTargetInSky } from '../observingplanner/observingplanner'
-import { browserPlannerIo, errorMessage, interpolateTrack as interpolateMoons, type MoonPosition, type PlanetOrientation, type PlanetPeriod, type PlanetRate, type PlannerIo, playClock, scheduleLoad, setTime } from '../planetary/planetary'
+import { browserPlannerIo, errorMessage, eveningOf, interpolateTrack as interpolateMoons, type MoonPosition, type PlanetOrientation, type PlanetPeriod, type PlanetRate, type PlannerIo, playClock, scheduleLoad, screenOffset, setTime } from '../planetary/planetary'
 
 // Jupiter Observing Planner of the tab: the tool-local clock and period, the filters, the answers of the server (the view
 // at the clock's instant, the satellite tracks and the events over the period), and the mirror of the server's Great Red
@@ -25,8 +25,23 @@ export const MOON_LABELS: Readonly<Record<GalileanMoon, string>> = { io: 'Io', e
 // Initial of each moon, drawn beside it.
 export const MOON_INITIALS: Readonly<Record<GalileanMoon, string>> = { io: 'I', europa: 'E', ganymede: 'G', callisto: 'C' }
 
-// Colour of each moon's curve and marker.
-export const MOON_COLORS: Readonly<Record<GalileanMoon, string>> = { io: '#e0a030', europa: '#4aa3df', ganymede: '#9b7fd4', callisto: '#5bbf7a' }
+// Colour of each moon's curve and marker: the moon tokens of web/src/index.css.
+export const MOON_COLORS: Readonly<Record<GalileanMoon, string>> = { io: 'var(--color-moon-io)', europa: 'var(--color-moon-europa)', ganymede: 'var(--color-moon-ganymede)', callisto: 'var(--color-moon-callisto)' }
+
+// Which events the list shows by their visibility from the site: those that can be watched at least in part, or all.
+export type JupiterVisibilityFilter = 'watchable' | 'all'
+
+// Every visibility filter, in display order.
+export const VISIBILITY_FILTERS: readonly JupiterVisibilityFilter[] = ['watchable', 'all']
+
+// Order of the event list: chronological by start, or by the server's rank of the watchable events.
+export type JupiterEventOrder = 'time' | 'rank'
+
+// Margin around the moons of a framed event, in Jupiter radii, so their labels and the accent rings stay inside the view.
+const FRAME_MARGIN = 2
+
+// Half-width of the view that frames Jupiter's disk alone, in Jupiter radii: the close-up of the viewer.
+export const PLANET_HALF_WIDTH = 2.6
 
 // Every event kind, in display order.
 export const EVENT_KINDS: readonly JupiterEventKind[] = ['grsTransit', 'satelliteTransit', 'shadowTransit', 'satelliteOccultation', 'satelliteEclipse', 'mutualOccultation', 'mutualEclipse']
@@ -90,8 +105,12 @@ export interface JupiterPlannerState {
 	kinds: JupiterEventKind[]
 	// Moons whose events are listed and whose curves are drawn.
 	moons: GalileanMoon[]
-	// Orientation of the viewer.
+	// Orientation of the viewer and of the moon chart's offset axis.
 	orientation: PlanetOrientation
+	// Which events the list shows by their visibility from the site; without a site every event is shown.
+	visibilityFilter: JupiterVisibilityFilter
+	// Order of the event list.
+	order: JupiterEventOrder
 	// Id of the event selected.
 	selected?: string
 	// View at the clock's instant, the latest answered.
@@ -123,6 +142,8 @@ export function createJupiterPlannerState(): JupiterPlannerState {
 		kinds: [...EVENT_KINDS],
 		moons: [...GALILEAN_MOONS],
 		orientation: 'north',
+		visibilityFilter: 'watchable',
+		order: 'time',
 		trackLoading: false,
 		eventsLoading: false,
 	}
@@ -214,6 +235,45 @@ export function selectEvent(state: JupiterPlannerState, event: Pick<JupiterEvent
 // The events listed: the filtered kinds, and for an event of moons, at least one of the filtered moons.
 export function listedEvents(events: readonly JupiterEvent[], kinds: readonly JupiterEventKind[], moons: readonly GalileanMoon[]) {
 	return events.filter((e) => kinds.includes(e.kind) && (e.moons.length === 0 || e.moons.some((moon) => moons.includes(moon))))
+}
+
+// Whether an event can be watched from the site, at least in part.
+export function watchable(event: Pick<JupiterEvent, 'visibility'>) {
+	return event.visibility.status === 'observable' || event.visibility.status === 'partial'
+}
+
+// The events the list shows, from the listed ones: only the watchable ones when the filter asks for them and a site
+// judged them, in the chosen order. Chronological is by start, the order the When column reads; by rank puts the
+// watchable events first from rank 1, then the others chronologically.
+export function shownEvents(events: readonly JupiterEvent[], filter: JupiterVisibilityFilter, hasSite: boolean, order: JupiterEventOrder) {
+	const kept = filter === 'watchable' && hasSite ? events.filter(watchable) : [...events]
+	const byTime = (a: JupiterEvent, b: JupiterEvent) => a.start - b.start || a.maximum - b.maximum
+	if (order === 'time') return kept.sort(byTime)
+	return kept.sort((a, b) => (a.visibility.rank ?? Number.POSITIVE_INFINITY) - (b.visibility.rank ?? Number.POSITIVE_INFINITY) || byTime(a, b))
+}
+
+// Civil date of the night an event belongs to, which groups the list: the server's night of the site, else the evening
+// of its maximum in the display zone.
+export function eventNight(event: Pick<JupiterEvent, 'visibility' | 'maximum'>, timeZone: string) {
+	return event.visibility.eveningDate ?? eveningOf(event.maximum, timeZone)
+}
+
+// Half-width of the view, in Jupiter radii, that shows the moons taking part in an event at its maximum around the
+// centred planet, from the sampled tracks: the farthest of them on the screen, either axis (the vertical one scaled by
+// the view's width over height), plus a margin, and never closer than the planet's close-up. A Great Red Spot transit
+// frames the disk. Undefined when the tracks do not reach the maximum.
+export function eventHalfWidth(event: Pick<JupiterEvent, 'moons' | 'maximum'>, track: Pick<JupiterTrack, 'times' | 'moons'> | undefined, orientation: PlanetOrientation, aspect: number) {
+	if (event.moons.length === 0) return PLANET_HALF_WIDTH
+	const positions = interpolateTrack(track, event.maximum)
+	if (!positions) return undefined
+	let farthest = 0
+
+	for (const moon of event.moons) {
+		const [x, y] = screenOffset(positions[moon].east, positions[moon].north, orientation)
+		farthest = Math.max(farthest, Math.abs(x), Math.abs(y) * aspect)
+	}
+
+	return Math.max(PLANET_HALF_WIDTH, farthest + FRAME_MARGIN)
 }
 
 // Positions of the four moons at an instant by linear interpolation between the samples of the tracks, for display

@@ -3,14 +3,17 @@ import { useSnapshot } from 'valtio'
 import { CollapsibleSection } from '../../shell/CollapsibleSection'
 import { Button } from '../../ui/Button'
 import { Notice } from '../../ui/Notice'
-import { NumberInput } from '../../ui/NumberInput'
+import { isNumberText, parseNumberText } from '../../ui/numberinput.step'
 import { StatusBadge, type StatusTone } from '../../ui/StatusBadge'
 import { TextInput } from '../../ui/TextInput'
 import { inputInstant, localInput } from '../planetary/planetary'
 import { type JupiterGrsState, jupiterGrsState, keepTheirGrs, saveJupiterGrs, saveMineGrs } from './jupiter'
 
 // Editor of the server's Great Red Spot model: the System II longitude at a reference instant and its drift, in degrees,
-// with where they came from. The values are the operator's, from an observer bulletin; nothing is fetched or defaulted.
+// with where they came from. The values are the operator's, from an observer bulletin; nothing is fetched or defaulted:
+// without a saved model every field is empty, and Save Model stays disabled, with what is missing as its tooltip, until
+// the longitude, the instant it was measured, and the drift are entered. The numbers are text fields with the decimal
+// keypad, read as NumberInput reads them, so an empty field stays empty instead of showing a zero.
 // A save from an outdated revision shows what the other tab saved and lets the operator keep it or save over it.
 
 // Degrees per radian.
@@ -28,27 +31,33 @@ export interface GrsSettingsProps {
 export function GrsSettings({ timeZone }: GrsSettingsProps) {
 	const grs = useSnapshot(jupiterGrsState) as JupiterGrsState
 	const model = grs.grs?.model
-	const [longitude, setLongitude] = useState(0)
+	// Text of the longitude and of the drift as typed, in degrees and degrees per day; empty until entered.
+	const [longitudeText, setLongitudeText] = useState('')
 	const [reference, setReference] = useState('')
-	const [drift, setDrift] = useState(0)
+	const [driftText, setDriftText] = useState('')
 	const [sourceLabel, setSourceLabel] = useState('')
 	const [notes, setNotes] = useState('')
 
-	// The form shows the saved model whenever a new revision arrives.
+	// The form shows the saved model whenever a new revision arrives, and stays empty without one.
 	useEffect(() => {
-		setLongitude(model ? Number((model.longitude * DEGREES).toFixed(2)) : 0)
-		setReference(model ? localInput(model.referenceTime, timeZone) : localInput(Date.now(), timeZone))
-		setDrift(model ? Number((model.drift * DEGREES).toFixed(4)) : 0)
+		setLongitudeText(model ? String(Number((model.longitude * DEGREES).toFixed(2))) : '')
+		setReference(model ? localInput(model.referenceTime, timeZone) : '')
+		setDriftText(model ? String(Number((model.drift * DEGREES).toFixed(4))) : '')
 		setSourceLabel(model?.sourceLabel ?? '')
 		setNotes(model?.notes ?? '')
 	}, [grs.grs?.revision, timeZone])
 
+	const longitude = parseNumberText(longitudeText)
+	const drift = parseNumberText(driftText)
 	const referenceTime = inputInstant(reference, timeZone)
+	const skipped = reference !== '' && referenceTime === undefined
+	const missing = [longitude === undefined && 'the longitude', reference === '' && 'when it was measured', drift === undefined && 'the drift'].filter((e) => e !== false)
 	const status = grs.grs?.status
 	const quality = QUALITY_LABELS[status?.quality ?? 'unconfigured']
+	const blocked = grs.conflict ? 'Resolve the conflict first' : missing.length > 0 ? `Enter ${missing.length > 1 ? `${missing.slice(0, -1).join(', ')} and ${missing.at(-1)}` : missing[0]}` : skipped ? 'The clocks skip the time measured' : undefined
 
 	function save() {
-		if (referenceTime === undefined) return
+		if (longitude === undefined || drift === undefined || referenceTime === undefined) return
 		const normalized = ((longitude % 360) + 360) % 360
 		void saveJupiterGrs(jupiterGrsState, { longitude: normalized / DEGREES, referenceTime, drift: drift / DEGREES, sourceLabel: sourceLabel.trim() || undefined, notes: notes.trim() || undefined })
 	}
@@ -61,12 +70,12 @@ export function GrsSettings({ timeZone }: GrsSettingsProps) {
 			</span>
 			{!model && <Notice>Enter the spot's System II longitude from a recent observer report (such as ALPO or JUPOS) to predict its transits. Everything else works without it.</Notice>}
 			{status?.quality === 'stale' && <Notice>The reference is more than 60 days from now; the drift is extrapolated and the transits may be off by tens of minutes.</Notice>}
-			<NumberInput label="Longitude (System II, west)" suffix="°" value={longitude} min={0} max={360} step={0.1} onChange={setLongitude} />
+			<TextInput label="Longitude (System II, west)" suffix="°" inputMode="decimal" autoComplete="off" spellCheck={false} placeholder="From the report" value={longitudeText} onChange={(event) => isNumberText(event.target.value) && setLongitudeText(event.target.value)} />
 			<TextInput label={`Measured at (${timeZone})`} type="datetime-local" value={reference} onChange={(event) => setReference(event.target.value)} />
-			<NumberInput label="Drift (positive westward)" suffix="°/day" value={drift} min={-5} max={5} step={0.001} onChange={setDrift} />
+			<TextInput label="Drift (positive westward)" suffix="°/day" inputMode="decimal" autoComplete="off" spellCheck={false} placeholder="From the report" value={driftText} onChange={(event) => isNumberText(event.target.value) && setDriftText(event.target.value)} />
 			<TextInput label="Source" value={sourceLabel} onChange={(event) => setSourceLabel(event.target.value)} placeholder="ALPO report of …" />
 			<TextInput label="Notes" value={notes} onChange={(event) => setNotes(event.target.value)} />
-			{referenceTime === undefined && <Notice error>The clocks skip this time in {timeZone}.</Notice>}
+			{skipped && <Notice error>The clocks skip this time in {timeZone}.</Notice>}
 			{grs.error && <Notice error>{grs.error}</Notice>}
 			{grs.conflict && (
 				<Notice error>
@@ -81,7 +90,7 @@ export function GrsSettings({ timeZone }: GrsSettingsProps) {
 					</span>
 				</Notice>
 			)}
-			<Button onClick={save} disabled={grs.saving || referenceTime === undefined || grs.conflict !== undefined} title={grs.conflict ? 'Resolve the conflict first' : undefined}>
+			<Button onClick={save} disabled={grs.saving || blocked !== undefined} title={blocked}>
 				{grs.saving ? 'Saving…' : 'Save Model'}
 			</Button>
 		</CollapsibleSection>

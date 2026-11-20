@@ -3,7 +3,7 @@ import type { JupiterEvent, JupiterGrsResponse, JupiterTrack, ServerEvent } from
 import { proxy } from 'valtio'
 import { skyClock } from '../../sky/clock'
 import type { PlannerIo } from '../planetary/planetary'
-import { createJupiterPlannerState, handleJupiterGrsEvent, interpolateTrack, type JupiterGrsState, keepTheirGrs, listedEvents, loadEvents, loadState, play, saveJupiterGrs, saveMineGrs, selectEvent } from './jupiter'
+import { createJupiterPlannerState, eventHalfWidth, eventNight, handleJupiterGrsEvent, interpolateTrack, type JupiterGrsState, keepTheirGrs, listedEvents, loadEvents, loadState, PLANET_HALF_WIDTH, play, saveJupiterGrs, saveMineGrs, selectEvent, shownEvents } from './jupiter'
 
 const HOUR = 3_600_000
 const DAY = 24 * HOUR
@@ -154,6 +154,34 @@ describe('helpers', () => {
 		const events = [event('a', 'satelliteTransit', 1), event('b', 'mutualEclipse', 2, ['europa', 'ganymede']), event('c', 'grsTransit', 3, [])]
 		expect(listedEvents(events, ['satelliteTransit', 'mutualEclipse', 'grsTransit'], ['ganymede']).map((e) => e.id)).toEqual(['b', 'c'])
 		expect(listedEvents(events, ['satelliteTransit'], ['io']).map((e) => e.id)).toEqual(['a'])
+	})
+
+	test('the list keeps the watchable events only with a site, by start or by rank', () => {
+		const seen = (id: string, maximum: number, status: JupiterEvent['visibility']['status'], rank?: number, start: number = maximum - HOUR): JupiterEvent => ({ ...event(id, 'satelliteTransit', maximum), start, visibility: { status, windows: [], longestMs: 0, reasons: [], rank } })
+		// b starts first although its maximum is the latest.
+		const events = [seen('a', 3 * HOUR, 'observable', 2), seen('b', 6 * HOUR, 'notObservable', undefined, 0), seen('c', 4 * HOUR, 'partial', 1), seen('d', 5 * HOUR, 'notObservable')]
+		expect(shownEvents(events, 'watchable', true, 'time').map((e) => e.id)).toEqual(['a', 'c'])
+		expect(shownEvents(events, 'watchable', false, 'time').map((e) => e.id)).toEqual(['b', 'a', 'c', 'd'])
+		expect(shownEvents(events, 'all', true, 'time').map((e) => e.id)).toEqual(['b', 'a', 'c', 'd'])
+		expect(shownEvents(events, 'all', true, 'rank').map((e) => e.id)).toEqual(['c', 'a', 'b', 'd'])
+		expect(events.map((e) => e.id)).toEqual(['a', 'b', 'c', 'd'])
+	})
+
+	test("an event's night is the server's, else the evening of its maximum", () => {
+		const night = event('a', 'satelliteTransit', Date.UTC(2026, 11, 2, 3))
+		expect(eventNight(night, 'UTC')).toBe('2026-12-01')
+		expect(eventNight({ ...night, visibility: { ...night.visibility, eveningDate: '2026-11-30' } }, 'UTC')).toBe('2026-11-30')
+	})
+
+	test('an event is framed by its farthest moon on the screen, never closer than the disk', () => {
+		const series = (east: number, north: number) => ({ east: [east, east], north: [north, north], depth: [1, 1], disk: ['clear' as const, 'clear' as const], eclipse: ['none' as const, 'none' as const] })
+		const track: Pick<JupiterTrack, 'times' | 'moons'> = { times: [0, HOUR], moons: { io: series(0.5, 0), europa: series(-7.8, 0), ganymede: series(10.3, 1), callisto: series(0, 9) } }
+		expect(eventHalfWidth({ moons: ['europa', 'ganymede'], maximum: HOUR / 2 }, track, 'north', 2)).toBeCloseTo(12.3)
+		// A moon 9 radii north needs 18 radii of half-width in a view twice as wide as high.
+		expect(eventHalfWidth({ moons: ['callisto'], maximum: HOUR / 2 }, track, 'south', 2)).toBeCloseTo(20)
+		expect(eventHalfWidth({ moons: ['io'], maximum: HOUR / 2 }, track, 'north', 2)).toBe(PLANET_HALF_WIDTH)
+		expect(eventHalfWidth({ moons: [], maximum: 5 * HOUR }, track, 'north', 2)).toBe(PLANET_HALF_WIDTH)
+		expect(eventHalfWidth({ moons: ['io'], maximum: 5 * HOUR }, track, 'north', 2)).toBeUndefined()
 	})
 })
 

@@ -1,14 +1,17 @@
 import type { JupiterEvent, JupiterEvents } from 'api'
 import { formatDegrees, formatFixed, formatLongDateTime } from '../../format'
+import { Button } from '../../ui/Button'
 import { DataList, DataRow } from '../../ui/DataRow'
-import { ContactRows, EventTable, VisibilityRows } from '../planetary/EventTable'
+import { StatusBadge } from '../../ui/StatusBadge'
+import { ContactRows, EventTable, type EventTableOrder, VisibilityRows } from '../planetary/EventTable'
 import { VISIBILITY_LABELS } from '../planetary/planetary'
-import { describeSource, KIND_DEFINITIONS, KIND_LABELS, MOON_LABELS, REASON_LABELS } from './jupiter'
+import { describeSource, eventNight, KIND_DEFINITIONS, KIND_LABELS, MOON_LABELS, REASON_LABELS } from './jupiter'
 
-// Events of the period: a chronological table of what happens, when, and whether the site can watch it, and the inspector
-// of the selected event with its contacts in the display zone and in UTC, its definition, what overlaps it, and where its
-// numbers came from. The table and the contact and visibility rows are the shared planetary ones; Great Red Spot transits
-// show their viewing window instead of contacts. Every contact is the server's; a contact is listed only when it was reached.
+// Events of the period: a table of what happens, when, and whether the site can watch it, headed by night while it
+// reads chronologically, and the inspector of the selected event, named and with its status at the top, then its
+// contacts in the display zone and in UTC, its definition, what overlaps it, and where its numbers came from. The table
+// and the contact and visibility rows are the shared planetary ones; Great Red Spot transits show their viewing window
+// instead of contacts. Every contact is the server's; a contact is listed only when it was reached.
 
 // Name of an event: its kind and the moons taking part.
 export function eventName(event: Pick<JupiterEvent, 'kind' | 'moons'>) {
@@ -18,19 +21,39 @@ export function eventName(event: Pick<JupiterEvent, 'kind' | 'moons'>) {
 }
 
 export interface EventTimelineProps {
-	// Events listed, chronologically.
+	// Events listed, in the order chosen.
 	readonly events: readonly JupiterEvent[]
 	// Id of the selected event.
 	readonly selected?: string
 	// IANA zone the times are shown in.
 	readonly timeZone: string
+	// Order of the list; the nights head it only in time order.
+	readonly order: EventTableOrder
+	// Receives the order chosen on a header.
+	readonly onOrder: (order: EventTableOrder) => void
 	// Receives the event chosen.
 	readonly onSelect: (event: JupiterEvent) => void
+	// Classes of the table's scrolling frame.
+	readonly className?: string
 }
 
-// Chronological table of the events.
-export function EventTimeline({ events, selected, timeZone, onSelect }: EventTimelineProps) {
-	return <EventTable events={events} selected={selected} timeZone={timeZone} name={eventName} definition={(event) => KIND_DEFINITIONS[event.kind]} status={(event) => VISIBILITY_LABELS[event.visibility.status]} onSelect={onSelect} />
+// Table of the events.
+export function EventTimeline({ events, selected, timeZone, order, onOrder, onSelect, className }: EventTimelineProps) {
+	return (
+		<EventTable
+			events={events}
+			selected={selected}
+			timeZone={timeZone}
+			name={eventName}
+			definition={(event) => KIND_DEFINITIONS[event.kind]}
+			status={(event) => VISIBILITY_LABELS[event.visibility.status]}
+			onSelect={onSelect}
+			group={order === 'time' ? (event) => `Night of ${eventNight(event, timeZone)}` : undefined}
+			order={order}
+			onOrder={onOrder}
+			className={className}
+		/>
+	)
 }
 
 export interface EventInspectorProps {
@@ -40,15 +63,27 @@ export interface EventInspectorProps {
 	readonly answer: JupiterEvents
 	// IANA zone the times are shown in.
 	readonly timeZone: string
+	// Brings the viewer, which shows the event at its maximum, into sight.
+	readonly onShowViewer: () => void
 }
 
 // Inspector of the selected event.
-export function EventInspector({ event, all, answer, timeZone }: EventInspectorProps) {
+export function EventInspector({ event, all, answer, timeZone, onShowViewer }: EventInspectorProps) {
 	const overlapping = all.filter((e) => event.overlaps.includes(e.id))
+	const status = VISIBILITY_LABELS[event.visibility.status]
 
 	return (
 		<div className="flex flex-col gap-3">
-			<p className="m-0 text-sm text-ink-200">{KIND_DEFINITIONS[event.kind]}</p>
+			<div className="flex flex-col gap-2">
+				<h3 className="m-0 text-sm font-semibold text-ink-100">{eventName(event)}</h3>
+				<div className="flex flex-wrap items-center gap-2">
+					<StatusBadge {...status} />
+					<Button variant="secondary" className="ml-auto" title="Scrolls to the viewer, which shows the event at its maximum with its moons ringed" onClick={onShowViewer}>
+						Show in Viewer
+					</Button>
+				</div>
+				<p className="m-0 text-sm text-ink-200">{KIND_DEFINITIONS[event.kind]}</p>
+			</div>
 			<DataList>
 				{event.kind === 'grsTransit' ? (
 					<>
@@ -63,7 +98,7 @@ export function EventInspector({ event, all, answer, timeZone }: EventInspectorP
 				)}
 				{event.startsBeforeRange && <DataRow label="Starts">Before the period</DataRow>}
 				{event.endsAfterRange && <DataRow label="Ends">After the period</DataRow>}
-				<VisibilityRows visibility={event.visibility} status={VISIBILITY_LABELS[event.visibility.status].label} planet="Jupiter" reason={(reason) => REASON_LABELS[reason]} timeZone={timeZone} />
+				<VisibilityRows visibility={event.visibility} status={status.label} planet="Jupiter" reason={(reason) => REASON_LABELS[reason]} timeZone={timeZone} />
 				{overlapping.map((other) => (
 					<DataRow key={other.id} label="Overlaps">
 						{eventName(other)}

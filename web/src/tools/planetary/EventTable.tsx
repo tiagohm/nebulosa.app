@@ -1,14 +1,15 @@
 import type { PlanetEventVisibility } from 'api'
-import type { ReactNode } from 'react'
+import { Fragment, type ReactNode } from 'react'
 import { formatClockTime, formatDateTime, formatDegrees, formatHours, formatFixed, formatLongDateTime, formatSpan } from '../../format'
 import { DataRow } from '../../ui/DataRow'
 import { StatusBadge, type StatusTone } from '../../ui/StatusBadge'
-import { Cell, Row, Table } from '../../ui/Table'
+import { Cell, GroupRow, Row, SortHeader, Table, type TableColumn } from '../../ui/Table'
 import { CONTACT_LABELS, CONTACT_ORDER } from './planetary'
 
-// Events of a planetary planner: a chronological table of what happens, when, and whether the site can watch it, and
-// the rows an inspector shows for an event's contacts and visibility. The planner supplies the names, definitions, and
-// labels of its own event kinds and reasons. Every contact is the server's; a contact is listed only when it was reached.
+// Events of a planetary planner: a table of what happens, when, and whether the site can watch it, and the rows an
+// inspector shows for an event's contacts and visibility. The planner supplies the names, definitions, and labels of its
+// own event kinds and reasons, and the order of the events; it may head each night's events with a group row, and may let
+// the When and Rank headers order the table. Every contact is the server's; a contact is listed only when it was reached.
 
 // What the table and the inspector rows read of an event.
 export interface PlanetEventRow {
@@ -32,11 +33,37 @@ export interface StatusLabel {
 	readonly tone: StatusTone
 }
 
-// Columns of the table.
-const COLUMNS = ['When', 'Event', { key: 'maximum', label: 'Maximum' }, 'Here', { key: 'rank', label: 'Rank', numeric: true }] as const
+// Order of an event table that the planner lets the headers change: by time, or by the rank of the watchable events.
+export type EventTableOrder = 'time' | 'rank'
+
+// Number of columns of the table.
+const COLUMN_COUNT = 5
+
+// Classes of the Maximum column, hidden below 640 px so the status fits a phone; the inspector lists the maximum.
+const NARROW_HIDDEN = 'max-sm:hidden'
+
+// Columns of the table, with the When and Rank headers ordering it when the planner gives `onOrder`.
+function columns(order: EventTableOrder | undefined, onOrder: ((order: EventTableOrder) => void) | undefined): readonly TableColumn[] {
+	const sortable = order !== undefined && onOrder !== undefined
+	const when = sortable ? (
+		<SortHeader direction={order === 'time' ? 'up' : undefined} title="Orders the events by their start" onClick={() => onOrder('time')}>
+			When
+		</SortHeader>
+	) : (
+		'When'
+	)
+	const rank = sortable ? (
+		<SortHeader direction={order === 'rank' ? 'up' : undefined} title="Orders the watchable events from the best, by their longest watchable part, then the others by time" onClick={() => onOrder('rank')}>
+			Rank
+		</SortHeader>
+	) : (
+		'Rank'
+	)
+	return [{ key: 'when', label: when }, 'Event', { key: 'maximum', label: 'Maximum', className: NARROW_HIDDEN }, 'From the site', { key: 'rank', label: rank, numeric: true }]
+}
 
 export interface EventTableProps<E extends PlanetEventRow> {
-	// Events listed, chronologically.
+	// Events listed, in the order the planner chose.
 	readonly events: readonly E[]
 	// Id of the selected event.
 	readonly selected?: string
@@ -50,32 +77,56 @@ export interface EventTableProps<E extends PlanetEventRow> {
 	readonly status: (event: E) => StatusLabel
 	// Receives the event chosen.
 	readonly onSelect: (event: E) => void
+	// Heading of the group an event belongs to, such as its night; a group row starts wherever it changes. Absent for no
+	// groups.
+	readonly group?: (event: E) => string
+	// Current order, shown on the When and Rank headers; with onOrder, those headers change it.
+	readonly order?: EventTableOrder
+	// Receives the order chosen on a header.
+	readonly onOrder?: (order: EventTableOrder) => void
+	// Classes of the table's scrolling frame, such as a largest height.
+	readonly className?: string
 }
 
-// Chronological table of the events.
-export function EventTable<E extends PlanetEventRow>({ events, selected, timeZone, name, definition, status, onSelect }: EventTableProps<E>) {
+// Table of the events.
+export function EventTable<E extends PlanetEventRow>({ events, selected, timeZone, name, definition, status, onSelect, group, order, onOrder, className }: EventTableProps<E>) {
 	return (
-		<Table columns={COLUMNS}>
-			{events.map((event) => (
-				<Row key={event.id} selected={event.id === selected} onSelect={() => onSelect(event)} title={definition(event)}>
-					<Cell>
-						{formatDateTime(event.start, timeZone, false)}
-						{event.end > event.start && `–${formatClockTime(event.end, timeZone)}`}
-						{(event.startsBeforeRange || event.endsAfterRange) && <span className="text-ink-300"> (beyond the period)</span>}
-					</Cell>
-					<Cell>
-						{name(event)}
-						{event.overlaps.length > 0 && <span className="text-ink-300"> · overlaps {event.overlaps.length}</span>}
-						{event.grazing && <span className="text-ink-300"> · grazing</span>}
-					</Cell>
-					<Cell>{formatClockTime(event.maximum, timeZone)}</Cell>
-					<Cell>
-						<StatusBadge {...status(event)} />
-					</Cell>
-					<Cell numeric>{event.visibility.rank ?? ''}</Cell>
-				</Row>
+		<Table columns={columns(order, onOrder)} className={className}>
+			{events.map((event, i) => (
+				<Fragment key={event.id}>
+					{group && (i === 0 || group(events[i - 1]) !== group(event)) && <GroupRow span={COLUMN_COUNT}>{group(event)}</GroupRow>}
+					<EventRow event={event} selected={event.id === selected} timeZone={timeZone} name={name} definition={definition} status={status} onSelect={onSelect} />
+				</Fragment>
 			))}
 		</Table>
+	)
+}
+
+interface EventRowProps<E extends PlanetEventRow> extends Pick<EventTableProps<E>, 'timeZone' | 'name' | 'definition' | 'status' | 'onSelect'> {
+	readonly event: E
+	readonly selected: boolean
+}
+
+// Row of one event.
+function EventRow<E extends PlanetEventRow>({ event, selected, timeZone, name, definition, status, onSelect }: EventRowProps<E>) {
+	return (
+		<Row selected={selected} onSelect={() => onSelect(event)} title={definition(event)}>
+			<Cell>
+				{formatDateTime(event.start, timeZone, false)}
+				{event.end > event.start && `–${formatClockTime(event.end, timeZone)}`}
+				{(event.startsBeforeRange || event.endsAfterRange) && <span className="text-ink-300"> (beyond the period)</span>}
+			</Cell>
+			<Cell>
+				{name(event)}
+				{event.overlaps.length > 0 && <span className="text-ink-300"> · overlaps {event.overlaps.length}</span>}
+				{event.grazing && <span className="text-ink-300"> · grazing</span>}
+			</Cell>
+			<Cell className={NARROW_HIDDEN}>{formatClockTime(event.maximum, timeZone)}</Cell>
+			<Cell>
+				<StatusBadge {...status(event)} />
+			</Cell>
+			<Cell numeric>{event.visibility.rank ?? ''}</Cell>
+		</Row>
 	)
 }
 
@@ -98,7 +149,7 @@ export function ContactRows({ event, timeZone }: ContactRowsProps) {
 				</DataRow>
 			))}
 			<DataRow label="Maximum">{formatLongDateTime(event.maximum, timeZone)}</DataRow>
-			{event.impactParameter !== undefined && <DataRow label="Impact parameter">{formatFixed(event.impactParameter, 3)}</DataRow>}
+			{event.impactParameter !== undefined && <DataRow label="Impact parameter (0 central, 1 grazing)">{formatFixed(event.impactParameter, 3)}</DataRow>}
 			{contacts.length === 0 && <DataRow label="Contacts">None reached: a tangency or a contact outside the search.</DataRow>}
 		</>
 	)

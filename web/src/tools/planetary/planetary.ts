@@ -74,11 +74,12 @@ export const CONTACT_LABELS: Readonly<Record<string, string>> = {
 // Order the contacts are listed in.
 export const CONTACT_ORDER = ['external1', 'internal1', 'center1', 'visibleStart', 'visibleEnd', 'center2', 'internal2', 'external2'] as const
 
-// Label and tone of each visibility status shared by the planners.
+// Label and tone of each visibility status shared by the planners. An event the site cannot watch is muted, not a
+// failure: the danger tone is for failures, and most events of a period are out of sight.
 export const VISIBILITY_LABELS: Readonly<Record<PlanetVisibilityStatus, { readonly label: string; readonly tone: StatusTone }>> = {
 	observable: { label: 'Observable', tone: 'success' },
 	partial: { label: 'Partly observable', tone: 'warning' },
-	notObservable: { label: 'Not observable here', tone: 'danger' },
+	notObservable: { label: 'Not observable here', tone: 'muted' },
 	unknownNoSite: { label: 'No site', tone: 'muted' },
 }
 

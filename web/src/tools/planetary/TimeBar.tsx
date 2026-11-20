@@ -7,7 +7,8 @@ import { adjacentEvent, inputInstant, localInput, PLANET_PERIODS, PLANET_RATES, 
 
 // Clock of a planetary planner, independent of the Sky clock: the evening the period starts and its length, the instant
 // shown, now, steps, the previous and next listed events, and play with its rate. Times are entered and shown in the
-// display zone.
+// display zone. Every transport button has its own glyph, a media player's: the clock for now, skip for the events,
+// step for ten minutes; on a coarse pointer each is a 44 px target.
 
 // The clock and period of a planner.
 export interface PlannerTimeState extends PlannerClock {
@@ -36,6 +37,9 @@ export interface TimeBarProps {
 // Milliseconds per hour.
 const HOUR_MS = 3_600_000
 
+// Classes of the transport buttons: the 44 px touch target on a coarse pointer.
+const BUTTON_CLASS = 'pointer-coarse:size-[44px]'
+
 // Clock of a planner.
 export function TimeBar({ state, store, range, events, timeZone, now }: TimeBarProps) {
 	const time = state.time ?? range.start
@@ -43,7 +47,7 @@ export function TimeBar({ state, store, range, events, timeZone, now }: TimeBarP
 	const next = adjacentEvent(events, time, 1)
 
 	return (
-		<div className="flex flex-col gap-2 rounded border border-line-100 bg-base-050 p-3">
+		<div className="flex flex-col gap-2 rounded border border-line-100 bg-base-100 p-3">
 			<div className="flex flex-wrap items-end gap-2">
 				<TextInput label="First evening" type="date" value={state.eveningDate ?? ''} onChange={(event) => event.target.value && (store.eveningDate = event.target.value)} />
 				<Select label="Period" className="w-32 flex-none" options={PLANET_PERIODS.map(String)} value={String(state.period)} format={(days) => (days === '1' ? '1 day' : `${days} days`)} onChange={(days) => (store.period = Number(days) as PlanetPeriod)} />
@@ -57,12 +61,12 @@ export function TimeBar({ state, store, range, events, timeZone, now }: TimeBarP
 					}}
 				/>
 				<span className="flex items-center gap-1">
-					<IconButton icon="skipToEnd" label="Now" onClick={() => setTime(store, now())} />
-					<IconButton icon="stepBack" label="Previous event" disabled={!previous} onClick={() => previous && setTime(store, previous.maximum)} />
-					<IconButton icon="stepBack" label="Back 10 minutes" className="opacity-80" onClick={() => setTime(store, time - STEP_MS)} />
-					<IconButton icon={state.playing ? 'pause' : 'play'} label={state.playing ? 'Pause' : 'Play'} pressed={state.playing} onClick={() => (store.playing = !state.playing)} />
-					<IconButton icon="stepForward" label="Forward 10 minutes" className="opacity-80" onClick={() => setTime(store, time + STEP_MS)} />
-					<IconButton icon="stepForward" label="Next event" disabled={!next} onClick={() => next && setTime(store, next.maximum)} />
+					<IconButton icon="clock" label="Now" className={BUTTON_CLASS} onClick={() => setTime(store, now())} />
+					<IconButton icon="skipToStart" label="Previous event" className={BUTTON_CLASS} disabled={!previous} onClick={() => previous && setTime(store, previous.maximum)} />
+					<IconButton icon="stepBack" label="Back 10 minutes" className={BUTTON_CLASS} onClick={() => setTime(store, time - STEP_MS)} />
+					<IconButton icon={state.playing ? 'pause' : 'play'} label={state.playing ? 'Pause' : 'Play'} className={BUTTON_CLASS} pressed={state.playing} onClick={() => (store.playing = !state.playing)} />
+					<IconButton icon="stepForward" label="Forward 10 minutes" className={BUTTON_CLASS} onClick={() => setTime(store, time + STEP_MS)} />
+					<IconButton icon="skipToEnd" label="Next event" className={BUTTON_CLASS} disabled={!next} onClick={() => next && setTime(store, next.maximum)} />
 				</span>
 				<Select label="Speed" className="w-32 flex-none" options={PLANET_RATES.map(String)} value={String(state.rate)} format={(rate) => RATE_LABELS[Number(rate) as PlanetRate]} onChange={(rate) => (store.rate = Number(rate) as PlanetRate)} />
 			</div>

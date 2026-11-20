@@ -90,6 +90,22 @@
 	--color-frame-6: oklch(0.72 0.085 345);
 }
 
+/* Colours of the Jupiter Observing Planner's viewer and moon chart (web/src/tools/jupiter): the schematic disk, its
+   decorative belts, the Great Red Spot, and the shadows on the disk, toned down so the disk is never the brightest fill
+   of a night screen; and the four Galilean moons at the map hues' low chroma, sulfur Io, icy Europa, mauve Ganymede,
+   and warm gray Callisto, kept away from the green, amber, and red of the signal colours and from the ember accent,
+   which rings the moons of the selected event. */
+@theme static {
+	--color-jupiter-disk: oklch(0.72 0.04 80);
+	--color-jupiter-belt: oklch(0.5 0.05 55);
+	--color-jupiter-spot: oklch(0.55 0.11 30);
+	--color-jupiter-shadow: oklch(0.12 0 0);
+	--color-moon-io: oklch(0.8 0.1 100);
+	--color-moon-europa: oklch(0.74 0.07 225);
+	--color-moon-ganymede: oklch(0.7 0.08 300);
+	--color-moon-callisto: oklch(0.68 0.025 65);
+}
+
 @layer base {
 	html {
 		color-scheme: dark;

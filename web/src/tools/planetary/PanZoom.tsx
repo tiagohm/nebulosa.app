@@ -5,8 +5,9 @@ import type { ViewTransform } from '../../sky/celestial/types'
 import { IconButton } from '../../ui/IconButton'
 
 // Pan and zoom of a planetary viewer: one view that goes from the whole satellite system down to the planet's disk.
-// The wheel (or a trackpad pinch) zooms around the pointer, a drag pans, two fingers pinch and pan, and the buttons
-// zoom around the centre or return to the planet and to the whole system. The view is a pixel ViewTransform of the
+// The wheel with Ctrl or ⌘ (or a trackpad pinch, which the browser sends so) zooms around the pointer while a plain
+// wheel scrolls the page, a drag pans, two fingers pinch and pan while one finger moving up or down scrolls the page,
+// and the buttons zoom around the centre or return to the planet and to the whole system. The view is a pixel ViewTransform of the
 // Sky's gesture math over the base layout, which shows the whole system (half-width `maxHalfWidth` planet radii) across
 // the surface's width; it becomes the SVG viewBox in planet radii. The transform is transient UI state of the tab.
 
@@ -58,6 +59,9 @@ export function panZoomViewBox(transform: Readonly<ViewTransform>, maxHalfWidth:
 export interface PanZoom {
 	// The visible rectangle, in planet radii.
 	readonly box: ViewBox
+	// Planet radii per CSS pixel of the surface, to size marks and labels in pixels whatever the zoom and the width;
+	// undefined until the surface is measured.
+	readonly radiiPerPixel?: number
 	// Props of the element the gestures act on, wrapping the SVG.
 	readonly surface: {
 		readonly ref: (element: HTMLDivElement | null) => void
@@ -85,8 +89,9 @@ export function usePanZoom({ maxHalfWidth, minHalfWidth, initialHalfWidth, aspec
 	const anchor = useRef<GestureAnchor>(undefined)
 	const press = useRef<{ x: number; y: number; dragged: boolean }>(undefined)
 
-	// Follows the surface's width, which sets the pixels of the transform, and zooms with the wheel around the pointer;
-	// the wheel listener is not passive so the page does not scroll under the viewer.
+	// Follows the surface's width, which sets the pixels of the transform, and zooms around the pointer with the wheel
+	// held with Ctrl or ⌘, as a trackpad pinch arrives; the listener is not passive so that wheel neither zooms the page
+	// nor scrolls it, while a plain wheel is left to scroll the page.
 	useEffect(() => {
 		if (!element) return undefined
 		const observer = new ResizeObserver(() => setWidthPx(element.getBoundingClientRect().width))
@@ -94,6 +99,7 @@ export function usePanZoom({ maxHalfWidth, minHalfWidth, initialHalfWidth, aspec
 		setWidthPx(element.getBoundingClientRect().width)
 
 		function wheel(event: WheelEvent) {
+			if (!event.ctrlKey && !event.metaKey) return
 			event.preventDefault()
 			const rect = element!.getBoundingClientRect()
 			const x = event.clientX - rect.left
@@ -158,8 +164,11 @@ export function usePanZoom({ maxHalfWidth, minHalfWidth, initialHalfWidth, aspec
 		setTransform({ x: 0, y: 0, k: clamp(maxHalfWidth / halfWidth, 1, maxZoom) })
 	}
 
+	const box = panZoomViewBox(transform, maxHalfWidth, aspect, widthPx)
+
 	return {
-		box: panZoomViewBox(transform, maxHalfWidth, aspect, widthPx),
+		box,
+		radiiPerPixel: widthPx > 0 ? box.width / widthPx : undefined,
 		surface: { ref: setElement, onPointerDown, onPointerMove, onPointerUp, onPointerCancel: onPointerUp },
 		zoomBy,
 		show,
@@ -176,21 +185,26 @@ export interface PanZoomSurfaceProps {
 	readonly planet: string
 	// The viewer's SVG.
 	readonly children: ReactNode
+	// What reads the view, such as its compass, at the end of the button row.
+	readonly legend?: ReactNode
 }
 
+// Classes of the zoom buttons: the 44 px touch target on a coarse pointer.
+const BUTTON_CLASS = 'pointer-coarse:size-[44px]'
+
 // The viewer's surface with its zoom buttons: zoom in and out around the centre, the planet close up, the whole system.
-export function PanZoomSurface({ zoom, planetHalfWidth, planet, children }: PanZoomSurfaceProps) {
+export function PanZoomSurface({ zoom, planetHalfWidth, planet, children, legend }: PanZoomSurfaceProps) {
 	return (
 		<div className="flex flex-col gap-1">
-			<div {...zoom.surface} className="cursor-grab touch-none select-none active:cursor-grabbing">
+			<div {...zoom.surface} title="Drag to pan; pinch, or turn the wheel with Ctrl or ⌘, to zoom" className="cursor-grab touch-pan-y select-none active:cursor-grabbing">
 				{children}
 			</div>
-			<div className="flex items-center gap-1">
-				<IconButton icon="zoomOut" label="Zoom out" disabled={zoom.widest} onClick={() => zoom.zoomBy(1 / BUTTON_ZOOM)} />
-				<IconButton icon="zoomIn" label="Zoom in" disabled={zoom.closest} onClick={() => zoom.zoomBy(BUTTON_ZOOM)} />
-				<IconButton icon="actualSize" label={`${planet} close up`} onClick={() => zoom.show(planetHalfWidth)} />
-				<IconButton icon="fit" label="Whole system" disabled={zoom.widest} onClick={() => zoom.show(Number.POSITIVE_INFINITY)} />
-				<span className="ml-1 text-xs text-ink-300">Wheel or pinch to zoom, drag to pan.</span>
+			<div className="flex flex-wrap items-center gap-1">
+				<IconButton icon="zoomOut" label="Zoom out" className={BUTTON_CLASS} disabled={zoom.widest} onClick={() => zoom.zoomBy(1 / BUTTON_ZOOM)} />
+				<IconButton icon="zoomIn" label="Zoom in" className={BUTTON_CLASS} disabled={zoom.closest} onClick={() => zoom.zoomBy(BUTTON_ZOOM)} />
+				<IconButton icon="actualSize" label={`${planet} close up`} className={BUTTON_CLASS} onClick={() => zoom.show(planetHalfWidth)} />
+				<IconButton icon="fit" label="Whole system" className={BUTTON_CLASS} disabled={zoom.widest} onClick={() => zoom.show(Number.POSITIVE_INFINITY)} />
+				{legend && <span className="ml-auto flex items-center">{legend}</span>}
 			</div>
 		</div>
 	)

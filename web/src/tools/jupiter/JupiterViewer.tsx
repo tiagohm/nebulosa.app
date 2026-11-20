@@ -9,14 +9,20 @@ import { type GalileanMoon, GALILEAN_MOONS, MOON_COLORS, MOON_INITIALS, MOON_LAB
 // of its pole, the central meridian, the moons in front of or behind it, their shadows where they fall on the disk, and
 // the Great Red Spot from the operator's model at a schematic latitude. Sizes and offsets are in Jupiter's apparent
 // equatorial radii, from the server; the faint belts are decoration, not observed cloud features. Moon positions may be
-// interpolated from the tracks while the clock plays; states, shadows, and the spot are the exact view's.
+// interpolated from the tracks while the clock plays; states, shadows, and the spot are the exact view's. The moons of
+// the selected event (and the spot of a selected transit) are ringed in the accent. Marks and labels are sized in CSS
+// pixels, so they read the same at every zoom and width; the compass is drawn beside the view (JupiterCompass), never
+// over a moon. Colours are the jupiter-* and moon-* tokens of web/src/index.css.
 
-// Smallest drawn radius of a moon and of a shadow, as a fraction of the view's half-width, so they stay visible at
-// any zoom.
-const MINIMUM_RADIUS = 0.012
+// Smallest drawn radius of a moon and of a shadow, in CSS pixels, so they stay visible at any zoom.
+const MINIMUM_RADIUS_PX = 3
 
-// Size of the label of a moon, as a fraction of the view's half-width.
-const LABEL_SIZE = 0.05
+// Size of the initial of a moon, in CSS pixels.
+const LABEL_PX = 12
+
+// Gap between a mark and the accent ring around it, and the ring's stroke, in CSS pixels.
+const RING_GAP_PX = 4
+const RING_STROKE_PX = 1.5
 
 // Half-axes of the schematic Great Red Spot, in Jupiter radii: about 16 000 by 12 000 km.
 const GRS_AXES = [0.11, 0.08] as const
@@ -32,14 +38,21 @@ export interface JupiterViewerProps {
 	readonly orientation: PlanetOrientation
 	// The rectangle shown, in Jupiter radii (x right, y down).
 	readonly box: ViewBox
+	// Jupiter radii per CSS pixel of the drawing; until measured, the drawing assumes 600 pixels across the box.
+	readonly radiiPerPixel?: number
 	// Moons drawn.
 	readonly moons: readonly GalileanMoon[]
+	// Moons of the selected event, ringed in the accent.
+	readonly highlight?: readonly GalileanMoon[]
+	// Whether the Great Red Spot is ringed, for a selected transit of it.
+	readonly highlightSpot?: boolean
 }
 
 // Schematic view of Jupiter and its moons.
-export function JupiterViewer({ state, positions, orientation, box, moons }: JupiterViewerProps) {
+export function JupiterViewer({ state, positions, orientation, box, radiiPerPixel, moons, highlight = [], highlightSpot = false }: JupiterViewerProps) {
 	const viewBox = `${box.x} ${box.y} ${box.width} ${box.height}`
 	const halfWidth = box.width / 2
+	const pixel = radiiPerPixel ?? box.width / 600
 	const id = useId()
 	const clip = `${id}-disk`
 	const localClip = `${id}-local`
@@ -57,35 +70,38 @@ export function JupiterViewer({ state, positions, orientation, box, moons }: Jup
 	// Screen direction of the projected north pole, which carries the disk's minor axis.
 	const [px, py] = screenOffset(Math.sin(disk.poleAngle), Math.cos(disk.poleAngle), orientation)
 	const rotation = Math.atan2(py, px) * DEGREES + 90
-	const minimum = MINIMUM_RADIUS * halfWidth
-	const label = LABEL_SIZE * halfWidth
+	const minimum = MINIMUM_RADIUS_PX * pixel
+	const label = LABEL_PX * pixel
 	const drawn = GALILEAN_MOONS.filter((moon) => moons.includes(moon))
 	const view = new Map(state.moons.map((moon) => [moon.moon, moon]))
 	const place = (moon: GalileanMoon) => positions?.[moon] ?? view.get(moon)!
 	const behind = drawn.filter((moon) => place(moon).depth < 0)
 	const front = drawn.filter((moon) => place(moon).depth >= 0)
-	const [northX, northY] = screenOffset(0, 1, orientation)
-	const [eastX, eastY] = screenOffset(1, 0, orientation)
-	const compass = [box.x + label * 4, box.y + box.height - label * 4] as const
 
-	// A moon: a filled disk, hollow inside the umbra, dimmed in the penumbra, with its initial above.
+	// A moon: a filled disk, hollow inside the umbra, dimmed in the penumbra, with its initial above, ringed when it takes
+	// part in the selected event.
 	const moonMark = (moon: GalileanMoon) => {
 		const { east, north } = place(moon)
 		const exact = view.get(moon)!
 		const [x, y] = screenOffset(east, north, orientation)
 		const r = Math.max(exact.radius, minimum)
 		const umbra = exact.eclipse === 'umbra'
+		const ringed = highlight.includes(moon)
+		const ring = r + RING_GAP_PX * pixel
 		return (
 			<g key={moon}>
 				<circle cx={x} cy={y} r={r} fill={umbra ? 'none' : MOON_COLORS[moon]} fillOpacity={exact.eclipse === 'penumbra' ? 0.5 : 1} stroke={MOON_COLORS[moon]} strokeWidth={r * 0.35} strokeDasharray={umbra ? `${r * 0.6} ${r * 0.4}` : undefined}>
-					<title>{`${MOON_LABELS[moon]}${exact.disk === 'transit' ? ', in transit' : exact.disk === 'occulted' ? ', behind Jupiter' : ''}${umbra ? ", in Jupiter's shadow" : exact.eclipse === 'penumbra' ? ", in Jupiter's penumbra" : ''}`}</title>
+					<title>{`${MOON_LABELS[moon]}${exact.disk === 'transit' ? ', in transit' : exact.disk === 'occulted' ? ', behind Jupiter' : ''}${umbra ? ", in Jupiter's shadow" : exact.eclipse === 'penumbra' ? ", in Jupiter's penumbra" : ''}${ringed ? ', taking part in the selected event' : ''}`}</title>
 				</circle>
-				<text x={x} y={y - r - label * 0.4} fontSize={label} textAnchor="middle" fill="var(--color-ink-200)">
+				{ringed && <circle cx={x} cy={y} r={ring} fill="none" stroke="var(--color-accent)" strokeWidth={RING_STROKE_PX * pixel} />}
+				<text x={x} y={y - (ringed ? ring : r) - label * 0.35} fontSize={label} fontWeight={ringed ? 600 : 400} textAnchor="middle" fill={ringed ? 'var(--color-ink-100)' : 'var(--color-ink-200)'}>
 					{MOON_INITIALS[moon]}
 				</text>
 			</g>
 		)
 	}
+
+	const spot = state.grs?.visible ? screenOffset(state.grs.east, state.grs.north, orientation) : undefined
 
 	return (
 		<svg viewBox={viewBox} className="block h-auto w-full rounded border border-line-100 bg-base-000">
@@ -100,45 +116,62 @@ export function JupiterViewer({ state, positions, orientation, box, moons }: Jup
 			</defs>
 			{behind.map(moonMark)}
 			<g transform={`rotate(${rotation})`}>
-				<ellipse cx={0} cy={0} rx={1} ry={ratio} fill="#d8c3a0" stroke="var(--color-line-200)" strokeWidth={0.01} />
+				<ellipse cx={0} cy={0} rx={1} ry={ratio} fill="var(--color-jupiter-disk)" stroke="var(--color-line-200)" strokeWidth={pixel} />
 				{/* Decorative belts, not observed cloud features. */}
-				<g clipPath={`url(#${localClip})`} opacity={0.35}>
-					<rect x={-1} y={-0.3 * ratio} width={2} height={0.12 * ratio} fill="#9a6b4a" />
-					<rect x={-1} y={0.16 * ratio} width={2} height={0.14 * ratio} fill="#9a6b4a" />
+				<g clipPath={`url(#${localClip})`} opacity={0.5}>
+					<rect x={-1} y={-0.3 * ratio} width={2} height={0.12 * ratio} fill="var(--color-jupiter-belt)" />
+					<rect x={-1} y={0.16 * ratio} width={2} height={0.14 * ratio} fill="var(--color-jupiter-belt)" />
 				</g>
-				<line x1={0} x2={0} y1={-ratio} y2={ratio} stroke="var(--color-ink-300)" strokeWidth={0.008} strokeDasharray="0.04 0.04">
+				<line x1={0} x2={0} y1={-ratio} y2={ratio} stroke="var(--color-ink-300)" strokeWidth={pixel} strokeDasharray={`${4 * pixel} ${4 * pixel}`}>
 					<title>Central meridian</title>
 				</line>
 			</g>
 			<g clipPath={`url(#${clip})`}>
-				{state.grs?.visible &&
-					(() => {
-						const [x, y] = screenOffset(state.grs.east, state.grs.north, orientation)
-						return (
-							<ellipse cx={x} cy={y} rx={GRS_AXES[0]} ry={GRS_AXES[1]} transform={`rotate(${rotation} ${x} ${y})`} fill="#c0503a" opacity={0.85}>
-								<title>{`Great Red Spot from your model, System II ${formatDegrees(state.grs.longitude, 1)}, drawn at a schematic 22° S`}</title>
-							</ellipse>
-						)
-					})()}
+				{spot && state.grs && (
+					<ellipse cx={spot[0]} cy={spot[1]} rx={GRS_AXES[0]} ry={GRS_AXES[1]} transform={`rotate(${rotation} ${spot[0]} ${spot[1]})`} fill="var(--color-jupiter-spot)">
+						<title>{`Great Red Spot from your model, System II ${formatDegrees(state.grs.longitude, 1)}, drawn at a schematic 22° S`}</title>
+					</ellipse>
+				)}
 				{drawn.map((moon) => {
 					const shadow = view.get(moon)!.shadow
 					if (!shadow?.visible) return null
 					const [x, y] = screenOffset(shadow.east, shadow.north, orientation)
 					return (
-						<circle key={moon} cx={x} cy={y} r={Math.max(view.get(moon)!.radius, minimum)} fill="#000">
+						<circle key={moon} cx={x} cy={y} r={Math.max(view.get(moon)!.radius, minimum)} fill="var(--color-jupiter-shadow)">
 							<title>{`Shadow of ${MOON_LABELS[moon]}`}</title>
 						</circle>
 					)
 				})}
 			</g>
+			{spot && highlightSpot && <ellipse cx={spot[0]} cy={spot[1]} rx={GRS_AXES[0] + RING_GAP_PX * pixel} ry={GRS_AXES[1] + RING_GAP_PX * pixel} transform={`rotate(${rotation} ${spot[0]} ${spot[1]})`} fill="none" stroke="var(--color-accent)" strokeWidth={RING_STROKE_PX * pixel} />}
 			{front.map(moonMark)}
-			<g stroke="var(--color-ink-300)" strokeWidth={label * 0.12} fill="var(--color-ink-300)" fontSize={label}>
-				<line x1={compass[0]} y1={compass[1]} x2={compass[0] + northX * label * 2} y2={compass[1] + northY * label * 2} />
-				<text x={compass[0] + northX * label * 2.8} y={compass[1] + northY * label * 2.8} stroke="none" textAnchor="middle" dominantBaseline="middle">
+		</svg>
+	)
+}
+
+// Size of the compass, in CSS pixels.
+const COMPASS_PX = 40
+
+// Compass of the viewer: where north and east lie on the screen in an orientation, drawn beside the view.
+export function JupiterCompass({ orientation }: { readonly orientation: PlanetOrientation }) {
+	const [northX, northY] = screenOffset(0, 1, orientation)
+	const [eastX, eastY] = screenOffset(1, 0, orientation)
+	const centre = COMPASS_PX / 2
+	const arm = 9
+	const text = 15
+
+	return (
+		<svg viewBox={`0 0 ${COMPASS_PX} ${COMPASS_PX}`} className="size-10 flex-none text-ink-300">
+			<title>{`Compass: north ${northY < 0 ? 'up' : 'down'}, east ${eastX < 0 ? 'left' : 'right'}`}</title>
+			<g stroke="currentColor" strokeWidth={1.5} strokeLinecap="round">
+				<line x1={centre} y1={centre} x2={centre + northX * arm} y2={centre + northY * arm} />
+				<line x1={centre} y1={centre} x2={centre + eastX * arm} y2={centre + eastY * arm} />
+			</g>
+			<g fill="currentColor" fontSize={11} textAnchor="middle" dominantBaseline="central">
+				<text x={centre + northX * text} y={centre + northY * text}>
 					N
 				</text>
-				<line x1={compass[0]} y1={compass[1]} x2={compass[0] + eastX * label * 2} y2={compass[1] + eastY * label * 2} />
-				<text x={compass[0] + eastX * label * 2.8} y={compass[1] + eastY * label * 2.8} stroke="none" textAnchor="middle" dominantBaseline="middle">
+				<text x={centre + eastX * text} y={centre + eastY * text}>
 					E
 				</text>
 			</g>

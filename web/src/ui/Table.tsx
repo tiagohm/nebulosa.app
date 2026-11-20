@@ -4,8 +4,8 @@ import { Icon } from './Icon'
 import { moveIndex } from './navigation'
 
 // Compact data tables of the tools: a frame that scrolls itself under a sticky header, header labels that may order the
-// table, rows that may select what they show, and cells of text or numbers. A selectable row is reached with Tab, moves to its siblings with the arrow keys, Home, and
-// End, and selects with Enter or Space, like every other list of the app; a key pressed on a control inside a row is left to
+// table, rows that may select what they show, rows that head a group of them, and cells of text or numbers. A selectable row is reached with Tab, moves to its selectable siblings with the arrow keys, Home, and
+// End, skipping the group headings, and selects with Enter or Space, like every other list of the app; a key pressed on a control inside a row is left to
 // that control.
 
 // Column of a table: a plain label, or a label with a stable key that may be a control (such as a sort button) and may hold
@@ -112,12 +112,13 @@ export function Row({ selected = false, onSelect, title, children }: RowProps) {
 			return
 		}
 
-		const rows = event.currentTarget.parentElement?.children
-		if (!rows) return
-		const next = moveIndex(Array.prototype.indexOf.call(rows, event.currentTarget), rows.length, event.key)
+		const siblings = event.currentTarget.parentElement?.children
+		if (!siblings) return
+		const rows = Array.from(siblings as HTMLCollectionOf<HTMLElement>).filter((row) => row.tabIndex >= 0)
+		const next = moveIndex(rows.indexOf(event.currentTarget), rows.length, event.key)
 		if (next === undefined) return
 		event.preventDefault()
-		;(rows[next] as HTMLElement).focus()
+		rows[next].focus()
 	}
 
 	return (
@@ -129,6 +130,24 @@ export function Row({ selected = false, onSelect, title, children }: RowProps) {
 			className={cn('border-b border-line-100 last:border-b-0', onSelect && 'cursor-pointer hover:bg-base-200 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent', selected && 'bg-accent-subtle hover:bg-accent-subtle')}
 		>
 			{children}
+		</tr>
+	)
+}
+
+export interface GroupRowProps {
+	// Number of columns the heading spans.
+	readonly span: number
+	// Heading of the group.
+	readonly children: ReactNode
+}
+
+// Row heading the rows after it, such as the night they belong to, in the uppercase label style; not selectable.
+export function GroupRow({ span, children }: GroupRowProps) {
+	return (
+		<tr className="border-b border-line-100">
+			<th colSpan={span} className="bg-base-000 px-2 pt-3 pb-1 text-left text-xs font-medium tracking-[0.08em] whitespace-nowrap text-ink-300 uppercase">
+				{children}
+			</th>
 		</tr>
 	)
 }

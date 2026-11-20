@@ -14,7 +14,7 @@ import { SegmentedControl } from '../../ui/SegmentedControl'
 import { Select } from '../../ui/Select'
 import { StatusBadge } from '../../ui/StatusBadge'
 import { PanZoomSurface, usePanZoom } from '../planetary/PanZoom'
-import { browserPlannerIo, eveningOf, openKernelLibrary, ORIENTATION_LABELS, PLANET_ORIENTATIONS, type PlanetOrientation, periodRange, setTime } from '../planetary/planetary'
+import { browserPlannerIo, eveningOf, followNow, openKernelLibrary, ORIENTATION_LABELS, PLANET_ORIENTATIONS, type PlanetOrientation, periodRange, setTime } from '../planetary/planetary'
 import { TimeBar } from '../planetary/TimeBar'
 import { spiceKernelsState } from '../spicekernels/spicekernels'
 import { MoonChart } from './MoonChart'
@@ -53,7 +53,8 @@ import { SaturnViewer } from './SaturnViewer'
 // Saturn Observing Planner tool: Saturn's disk, rings and seven major moons at the tool's own instant, the ring openings
 // and ring-plane seasons over years, the moons over the period, and their greatest separations, all computed by the server
 // from the ephemeris source it names for the rings and for the moons. The rings stay available when the moons cannot be
-// computed. The tool's clock is its own, never the Sky's; choosing an event or a point of a chart only moves that clock.
+// computed. The tool's clock is its own, never the Sky's: it opens following real now (read again every 30 s until another
+// instant is chosen), choosing an event or a point of a chart only moves it, and Show in Sky hands it to the Sky clock.
 // Nothing here moves the mount, changes a site or the profile, or starts an operation.
 
 // Pan and zoom of the viewer, in Saturn radii: from the whole system (Iapetus reaches ~59) to the disk and rings,
@@ -83,10 +84,10 @@ export function SaturnPlanner() {
 	// A new kernel generation may change every answer, so they are all read again.
 	const kernelKey = `${kernels.snapshot?.generation ?? -1}`
 
-	// The clock starts at real now and the period at tonight, once.
+	// The clock starts following real now and the period at tonight, once.
 	useEffect(() => {
 		const now = browserPlannerIo.time()
-		saturnPlannerState.time ??= now
+		if (saturnPlannerState.time === undefined) followNow(saturnPlannerState, now)
 		saturnPlannerState.eveningDate ??= eveningOf(now, namingZone)
 	}, [])
 
@@ -180,7 +181,7 @@ export function SaturnPlanner() {
 
 	const actions = (
 		<Actions>
-			<Button variant="secondary" onClick={() => showSaturnInSky(site)}>
+			<Button variant="secondary" onClick={() => showSaturnInSky(saturnPlannerState, site)} title="Shows Saturn in the Sky at this tool's instant">
 				Show in Sky
 			</Button>
 		</Actions>

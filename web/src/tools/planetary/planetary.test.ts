@@ -1,7 +1,8 @@
 import { describe, expect, test } from 'bun:test'
 import { proxy } from 'valtio'
+import type { SkyClock } from '../../sky/clock'
 import { panZoomViewBox } from './PanZoom'
-import { adjacentEvent, equatorOffset, eveningOf, inputInstant, interpolateTrack, localInput, periodRange, type PlannerClock, playClock, screenOffset, setTime } from './planetary'
+import { adjacentEvent, equatorOffset, eveningOf, followNow, inputInstant, interpolateTrack, localInput, periodRange, type PlannerClock, playClock, screenOffset, setTime, syncSkyClock } from './planetary'
 
 const HOUR = 3_600_000
 const DAY = 24 * HOUR
@@ -32,14 +33,34 @@ describe('dates and periods', () => {
 })
 
 describe('clock', () => {
-	test('setting the time stops playing', () => {
-		const clock = proxy<PlannerClock>({ time: 0, playing: true, rate: 60 })
+	test('setting the time stops playing and following now', () => {
+		const clock = proxy<PlannerClock>({ time: 0, playing: true, following: true, rate: 60 })
 		setTime(clock, 5)
-		expect(clock).toEqual({ time: 5, playing: false, rate: 60 })
+		expect(clock).toEqual({ time: 5, playing: false, following: false, rate: 60 })
+	})
+
+	test('now makes the clock follow real now and stops playing', () => {
+		const clock = proxy<PlannerClock>({ time: 0, playing: true, following: false, rate: 60 })
+		followNow(clock, 7)
+		expect(clock).toEqual({ time: 7, playing: false, following: true, rate: 60 })
+	})
+
+	test('the Sky takes the planner instant, or follows now with the planner', () => {
+		const sky: SkyClock = { mode: 'now', anchor: 0, startedAt: 0, rate: 1 }
+		syncSkyClock({ time: 5 * HOUR, following: false }, sky, 100)
+		expect(sky).toMatchObject({ mode: 'fixed', anchor: 5 * HOUR, startedAt: 100 })
+		syncSkyClock({ time: 5 * HOUR, following: true }, sky, 200)
+		expect(sky.mode).toBe('now')
+		syncSkyClock({ time: undefined, following: false }, sky, 300)
+		expect(sky.mode).toBe('now')
+		// A playing Sky keeps playing from the planner instant.
+		sky.mode = 'playing'
+		syncSkyClock({ time: 2 * HOUR, following: false }, sky, 400)
+		expect(sky).toMatchObject({ mode: 'playing', anchor: 2 * HOUR, startedAt: 400 })
 	})
 
 	test('playing advances the clock at its rate and loads at intervals', () => {
-		const clock = proxy<PlannerClock>({ time: 0, playing: true, rate: 600 })
+		const clock = proxy<PlannerClock>({ time: 0, playing: true, following: false, rate: 600 })
 		const frames: ((now: number) => void)[] = []
 		let loads = 0
 		playClock(

@@ -1,9 +1,9 @@
 import { describe, expect, test } from 'bun:test'
 import type { JupiterEvent, JupiterGrsResponse, JupiterTrack, ServerEvent } from 'api'
 import { proxy } from 'valtio'
-import { skyClock } from '../../sky/clock'
+import { type SkyClock, skyClock } from '../../sky/clock'
 import type { PlannerIo } from '../planetary/planetary'
-import { createJupiterPlannerState, eventHalfWidth, eventNight, handleJupiterGrsEvent, interpolateTrack, type JupiterGrsState, keepTheirGrs, listedEvents, loadEvents, loadState, PLANET_HALF_WIDTH, play, saveJupiterGrs, saveMineGrs, selectEvent, shownEvents } from './jupiter'
+import { createJupiterPlannerState, eventHalfWidth, eventNight, handleJupiterGrsEvent, interpolateTrack, type JupiterGrsState, keepTheirGrs, listedEvents, loadEvents, loadState, PLANET_HALF_WIDTH, play, saveJupiterGrs, saveMineGrs, selectEvent, shownEvents, showJupiterInSky } from './jupiter'
 
 const HOUR = 3_600_000
 const DAY = 24 * HOUR
@@ -86,6 +86,18 @@ describe('clock', () => {
 		expect(state.time).toBe(12345)
 		expect(state.playing).toBeFalse()
 		expect({ ...skyClock }).toEqual(sky)
+	})
+
+	test("Show in Sky sets the Sky clock to the tool's instant, then selects Jupiter", () => {
+		const sky: SkyClock = { mode: 'now', anchor: 0, startedAt: 0, rate: 1 }
+		const shown: unknown[] = []
+		const show = ((target: unknown) => shown.push(target)) as typeof import('../observingplanner/observingplanner').showTargetInSky
+		const { io } = fakeIo()
+		showJupiterInSky({ time: Date.UTC(2026, 11, 2, 3), following: false }, undefined, sky, show, io)
+		expect(sky).toMatchObject({ mode: 'fixed', anchor: Date.UTC(2026, 11, 2, 3), startedAt: io.time() })
+		expect(shown).toEqual([{ target: { kind: 'body', code: '599' }, name: 'Jupiter' }])
+		showJupiterInSky({ time: Date.UTC(2026, 11, 2, 3), following: true }, undefined, sky, show, io)
+		expect(sky.mode).toBe('now')
 	})
 
 	test('playing advances the clock at its rate and asks for the exact view at intervals', async () => {

@@ -2,13 +2,15 @@ import type { PlanetVisibilityStatus } from 'api'
 import { type ApiFetch, browserFetch } from '../../http'
 import { wallTimeToInstant, zonedWallTime } from '../../location/zone'
 import { navigate, type RouteState, routeState } from '../../shell/route'
+import { type SkyClock, setSkyTime, setSkyTimeNow, skyClock } from '../../sky/clock'
 import type { StatusTone } from '../../ui/StatusBadge'
 
 // Pieces shared by the planetary satellite planners (Jupiter, Saturn): the tool-local clock that plays independently of
-// the Sky clock, the periods and evening dates, the datetime-local conversions, the viewer orientations, the
-// interpolation of sampled moon tracks for display, the contact and visibility labels, and the way to the SPICE Kernel
-// Library. Every position, contact, and classification comes from the server; these helpers only move a clock, format,
-// and interpolate for display. Times are Unix milliseconds (UTC).
+// the Sky clock and may follow real now, the hand of that clock to the Sky for Show in Sky, the periods and evening
+// dates, the datetime-local conversions, the viewer orientations, the interpolation of sampled moon tracks for display,
+// the contact and visibility labels, and the way to the SPICE Kernel Library. Every position, contact, and
+// classification comes from the server; these helpers only move a clock, format, and interpolate for display. Times are
+// Unix milliseconds (UTC).
 
 // Requests of a planner, replaced in tests.
 export interface PlannerIo {
@@ -21,12 +23,15 @@ export interface PlannerIo {
 // Browser implementation of PlannerIo.
 export const browserPlannerIo: PlannerIo = { fetch: browserFetch, time: () => Date.now() }
 
-// The clock of a planner: its instant, whether it plays, and its rate.
+// The clock of a planner: its instant, whether it plays or follows real now, and its rate.
 export interface PlannerClock {
 	// Instant of the clock; absent until the tool opens.
 	time?: number
 	// Whether the clock plays.
 	playing: boolean
+	// Whether the clock follows real now, read again every FOLLOW_INTERVAL_MS; any other change of the instant, and
+	// play, stop it.
+	following: boolean
 	// Rate of the clock while it plays, in simulated seconds per real second.
 	rate: number
 }
@@ -95,6 +100,10 @@ const STATE_DELAY_MS = 120
 // Shortest wait between two requests of the exact view while the clock plays, in milliseconds.
 const PLAY_STATE_INTERVAL_MS = 750
 
+// Interval at which a clock that follows real now reads it again, in milliseconds (30 s): each read asks the server for
+// the exact view once, so the view stays current at the telescope without a request every frame.
+export const FOLLOW_INTERVAL_MS = 30_000
+
 // Returns the message of a failure.
 export function errorMessage(error: unknown) {
 	return error instanceof Error ? error.message : String(error)
@@ -134,10 +143,27 @@ export function inputInstant(value: string, timeZone: string) {
 	return instant.kind === 'exact' ? instant.time : instant.kind === 'ambiguous' ? instant.earlier : undefined
 }
 
-// Sets a clock to an instant and stops playing.
+// Sets a clock to an instant, and stops playing and following real now.
 export function setTime(clock: PlannerClock, time: number) {
 	clock.time = time
 	clock.playing = false
+	clock.following = false
+}
+
+// Sets a clock to real now and makes it follow real now, refreshed every FOLLOW_INTERVAL_MS by the time bar; it stops
+// playing.
+export function followNow(clock: PlannerClock, now: number) {
+	clock.time = now
+	clock.playing = false
+	clock.following = true
+}
+
+// Hands a planner's clock to the Sky before Show in Sky: the Sky follows real now when the planner does (or has no
+// instant yet), else it shows the planner's instant, fixed or still playing as the Sky was. The one deliberate change
+// of the Sky clock by a planner.
+export function syncSkyClock(clock: Readonly<Pick<PlannerClock, 'time' | 'following'>>, sky: SkyClock = skyClock, realNow: number = Date.now()) {
+	if (clock.following || clock.time === undefined) setSkyTimeNow(sky)
+	else setSkyTime(sky, clock.time, realNow)
 }
 
 // The event whose maximum is the next after (direction 1) or the last before (direction −1) an instant.

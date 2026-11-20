@@ -2,17 +2,18 @@ import type { PlanetaryFallbackReason, SaturnElongation, SaturnElongations, Satu
 import { proxy } from 'valtio'
 import { aborted, fetchJson, jsonInit } from '../../http'
 import type { SiteLocation } from '../../location/site'
+import { type SkyClock, skyClock } from '../../sky/clock'
 import { createRequestGuard } from '../../sky/selection'
 import type { StatusTone } from '../../ui/StatusBadge'
 import { planningSite, showTargetInSky } from '../observingplanner/observingplanner'
-import { browserPlannerIo, errorMessage, interpolateTrack as interpolateMoons, type MoonPosition, type PlanetOrientation, type PlanetPeriod, type PlanetRate, type PlannerIo, playClock, scheduleLoad, setTime, VISIBILITY_LABELS } from '../planetary/planetary'
+import { browserPlannerIo, errorMessage, interpolateTrack as interpolateMoons, type MoonPosition, type PlanetOrientation, type PlanetPeriod, type PlanetRate, type PlannerIo, playClock, scheduleLoad, setTime, syncSkyClock, VISIBILITY_LABELS } from '../planetary/planetary'
 
 // Saturn Observing Planner of the tab: the tool-local clock and period, the moons drawn, the view, and the answers of the
 // server (the rings and moons at the clock's instant, the ring openings and ring-plane events over a season, the moon
 // tracks and their greatest separations over the period, and the kernel readiness of the rings and the moons). Every
 // position, opening, event, and classification comes from the server; the tab only interpolates the sampled tracks for
-// display while the clock moves, and never derives an event from samples. Nothing here changes the Sky clock, a site,
-// the profile, or a device. Times are Unix milliseconds (UTC); angles radians.
+// display while the clock moves, and never derives an event from samples. Only Show in Sky changes the Sky clock, to the
+// tool's instant; nothing here changes a site, the profile, or a device. Times are Unix milliseconds (UTC); angles radians.
 
 // The seven major moons, in orbital order.
 export const SATURN_MOONS: readonly SaturnMoon[] = ['mimas', 'enceladus', 'tethys', 'dione', 'rhea', 'titan', 'iapetus']
@@ -121,6 +122,8 @@ export interface SaturnPlannerState {
 	time?: number
 	// Whether the clock plays.
 	playing: boolean
+	// Whether the clock follows real now, as it does when the tool opens and after Now.
+	following: boolean
 	// Rate of the clock while it plays.
 	rate: PlanetRate
 	// Moons drawn and listed.
@@ -172,6 +175,7 @@ export function createSaturnPlannerState(): SaturnPlannerState {
 	return {
 		period: 3,
 		playing: false,
+		following: false,
 		rate: 600,
 		moons: [...SATURN_MOONS],
 		kinds: [...EVENT_KINDS],
@@ -387,6 +391,7 @@ export function play(state: SaturnPlannerState, reducedMotion: boolean, io: Plan
 }
 
 // Shows Saturn in the Sky at the Sky's own time, through the Observing Planner's handoff, which changes no clock.
-export function showSaturnInSky(site: SiteLocation | undefined) {
-	showTargetInSky({ target: { kind: 'body', code: '699' }, name: 'Saturn' }, site)
+export function showSaturnInSky(clock: Readonly<Pick<SaturnPlannerState, 'time' | 'following'>>, site: SiteLocation | undefined, sky: SkyClock = skyClock, show: typeof showTargetInSky = showTargetInSky, io: Pick<PlannerIo, 'time'> = browserPlannerIo) {
+	syncSkyClock(clock, sky, io.time())
+	show({ target: { kind: 'body', code: '699' }, name: 'Saturn' }, site)
 }

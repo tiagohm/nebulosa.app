@@ -2,16 +2,18 @@ import type { JupiterEvent, JupiterEventKind, JupiterEvents, JupiterEventsReques
 import { proxy } from 'valtio'
 import { aborted, fetchJson, jsonInit } from '../../http'
 import type { SiteLocation } from '../../location/site'
+import { type SkyClock, skyClock } from '../../sky/clock'
 import { createRequestGuard } from '../../sky/selection'
 import { planningSite, showTargetInSky } from '../observingplanner/observingplanner'
-import { browserPlannerIo, errorMessage, eveningOf, interpolateTrack as interpolateMoons, type MoonPosition, type PlanetOrientation, type PlanetPeriod, type PlanetRate, type PlannerIo, playClock, scheduleLoad, screenOffset, setTime } from '../planetary/planetary'
+import { browserPlannerIo, errorMessage, eveningOf, interpolateTrack as interpolateMoons, type MoonPosition, type PlanetOrientation, type PlanetPeriod, type PlanetRate, type PlannerIo, playClock, scheduleLoad, screenOffset, setTime, syncSkyClock } from '../planetary/planetary'
 
 // Jupiter Observing Planner of the tab: the tool-local clock and period, the filters, the answers of the server (the view
 // at the clock's instant, the satellite tracks and the events over the period), and the mirror of the server's Great Red
 // Spot model. Every position, contact, and classification comes from the server; the tab only interpolates the sampled
 // tracks for display while the clock moves, and never derives a contact from them. The clock, periods, orientations and
-// track interpolation are the shared planetary planner pieces of ../planetary/planetary.ts. Nothing here changes the Sky
-// clock, a site, the profile, or a device. Times are Unix milliseconds (UTC); angles radians.
+// track interpolation are the shared planetary planner pieces of ../planetary/planetary.ts. Only Show in Sky changes the
+// Sky clock, to the tool's instant; nothing here changes a site, the profile, or a device. Times are Unix milliseconds
+// (UTC); angles radians.
 
 // A Galilean satellite, as the server names it.
 export type GalileanMoon = JupiterMoonState['moon']
@@ -99,6 +101,8 @@ export interface JupiterPlannerState {
 	time?: number
 	// Whether the clock plays.
 	playing: boolean
+	// Whether the clock follows real now, as it does when the tool opens and after Now.
+	following: boolean
 	// Rate of the clock while it plays.
 	rate: PlanetRate
 	// Kinds of events listed.
@@ -138,6 +142,7 @@ export function createJupiterPlannerState(): JupiterPlannerState {
 	return {
 		period: 3,
 		playing: false,
+		following: false,
 		rate: 600,
 		kinds: [...EVENT_KINDS],
 		moons: [...GALILEAN_MOONS],
@@ -304,9 +309,11 @@ export function play(state: JupiterPlannerState, reducedMotion: boolean, io: Pla
 	return playClock(state, reducedMotion, () => loadState(state, io), frame, cancel)
 }
 
-// Shows Jupiter in the Sky at the Sky's own time, through the Observing Planner's handoff, which changes no clock.
-export function showJupiterInSky(site: SiteLocation | undefined) {
-	showTargetInSky({ target: { kind: 'body', code: '599' }, name: 'Jupiter' }, site)
+// Shows Jupiter in the Sky at the tool's instant: the Sky clock takes the tool's (following real now when the tool
+// does), then the Observing Planner's handoff selects Jupiter.
+export function showJupiterInSky(clock: Readonly<Pick<JupiterPlannerState, 'time' | 'following'>>, site: SiteLocation | undefined, sky: SkyClock = skyClock, show: typeof showTargetInSky = showTargetInSky, io: Pick<PlannerIo, 'time'> = browserPlannerIo) {
+	syncSkyClock(clock, sky, io.time())
+	show({ target: { kind: 'body', code: '599' }, name: 'Jupiter' }, site)
 }
 
 // Mirror of the server's Great Red Spot model, with the save in flight and its conflict.

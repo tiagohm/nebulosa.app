@@ -1,14 +1,17 @@
+import { useEffect } from 'react'
 import { formatLongDateTime } from '../../format'
 import { IconButton } from '../../ui/IconButton'
 import { Select } from '../../ui/Select'
 import { Slider } from '../../ui/Slider'
 import { TextInput } from '../../ui/TextInput'
-import { adjacentEvent, inputInstant, localInput, PLANET_PERIODS, PLANET_RATES, type PlanetPeriod, type PlanetRate, type PlannerClock, RATE_LABELS, setTime, STEP_MS } from './planetary'
+import { adjacentEvent, FOLLOW_INTERVAL_MS, followNow, inputInstant, localInput, PLANET_PERIODS, PLANET_RATES, type PlanetPeriod, type PlanetRate, type PlannerClock, RATE_LABELS, setTime, STEP_MS } from './planetary'
 
 // Clock of a planetary planner, independent of the Sky clock: the evening the period starts and its length, the instant
 // shown, now, steps, the previous and next listed events, and play with its rate. Times are entered and shown in the
-// display zone. Every transport button has its own glyph, a media player's: the clock for now, skip for the events,
-// step for ten minutes; on a coarse pointer each is a 44 px target.
+// display zone. Now makes the clock follow real now: the button stays pressed and the clock reads real now again every
+// FOLLOW_INTERVAL_MS, and as soon as the tab is shown again, until another instant is chosen or play starts. Every
+// transport button has its own glyph, a media player's: the clock for now, skip for the events, step for ten minutes;
+// on a coarse pointer each is a 44 px target.
 
 // The clock and period of a planner.
 export interface PlannerTimeState extends PlannerClock {
@@ -46,6 +49,20 @@ export function TimeBar({ state, store, range, events, timeZone, now }: TimeBarP
 	const previous = adjacentEvent(events, time, -1)
 	const next = adjacentEvent(events, time, 1)
 
+	// A clock that follows real now reads it again at intervals and when the tab is shown again.
+	useEffect(() => {
+		if (!state.following) return undefined
+		const refresh = () => {
+			if (!document.hidden) followNow(store, now())
+		}
+		const timer = setInterval(refresh, FOLLOW_INTERVAL_MS)
+		document.addEventListener('visibilitychange', refresh)
+		return () => {
+			clearInterval(timer)
+			document.removeEventListener('visibilitychange', refresh)
+		}
+	}, [state.following, store, now])
+
 	return (
 		<div className="flex flex-col gap-2 rounded border border-line-100 bg-base-100 p-3">
 			<div className="flex flex-wrap items-end gap-2">
@@ -61,10 +78,19 @@ export function TimeBar({ state, store, range, events, timeZone, now }: TimeBarP
 					}}
 				/>
 				<span className="flex items-center gap-1">
-					<IconButton icon="clock" label="Now" className={BUTTON_CLASS} onClick={() => setTime(store, now())} />
+					<IconButton icon="clock" label={state.following ? 'Following now, updated every 30 s' : 'Now'} className={BUTTON_CLASS} pressed={state.following} onClick={() => followNow(store, now())} />
 					<IconButton icon="skipToStart" label="Previous event" className={BUTTON_CLASS} disabled={!previous} onClick={() => previous && setTime(store, previous.maximum)} />
 					<IconButton icon="stepBack" label="Back 10 minutes" className={BUTTON_CLASS} onClick={() => setTime(store, time - STEP_MS)} />
-					<IconButton icon={state.playing ? 'pause' : 'play'} label={state.playing ? 'Pause' : 'Play'} className={BUTTON_CLASS} pressed={state.playing} onClick={() => (store.playing = !state.playing)} />
+					<IconButton
+						icon={state.playing ? 'pause' : 'play'}
+						label={state.playing ? 'Pause' : 'Play'}
+						className={BUTTON_CLASS}
+						pressed={state.playing}
+						onClick={() => {
+							store.playing = !state.playing
+							store.following = false
+						}}
+					/>
 					<IconButton icon="stepForward" label="Forward 10 minutes" className={BUTTON_CLASS} onClick={() => setTime(store, time + STEP_MS)} />
 					<IconButton icon="skipToEnd" label="Next event" className={BUTTON_CLASS} disabled={!next} onClick={() => next && setTime(store, next.maximum)} />
 				</span>

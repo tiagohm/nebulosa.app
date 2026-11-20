@@ -16,7 +16,7 @@ import { SegmentedControl } from '../../ui/SegmentedControl'
 import { Select } from '../../ui/Select'
 import { StatusBadge } from '../../ui/StatusBadge'
 import { PanZoomSurface, usePanZoom } from '../planetary/PanZoom'
-import { browserPlannerIo, eveningOf, openKernelLibrary, ORIENTATION_LABELS, PLANET_ORIENTATIONS, type PlanetOrientation, periodRange, setTime } from '../planetary/planetary'
+import { browserPlannerIo, eveningOf, followNow, openKernelLibrary, ORIENTATION_LABELS, PLANET_ORIENTATIONS, type PlanetOrientation, periodRange, setTime } from '../planetary/planetary'
 import { TimeBar } from '../planetary/TimeBar'
 import { EventInspector, EventTimeline } from './EventTimeline'
 import { GrsSettings } from './GrsSettings'
@@ -50,7 +50,8 @@ import { MoonChart } from './MoonChart'
 
 // Jupiter Observing Planner tool: the view of Jupiter and its Galilean moons at the tool's own instant, the moons over the
 // period, and the period's phenomena with their visibility from the active site, all computed by the server from one
-// ephemeris source it names. The tool's clock is its own, never the Sky's; choosing an event moves that clock to its
+// ephemeris source it names. The tool's clock is its own, never the Sky's: it opens following real now (read again every
+// 30 s until another instant is chosen), and Show in Sky hands it to the Sky clock. Choosing an event moves it to its
 // maximum, frames the moons taking part in the viewer and rings them, and shows the event in the inspector beside the
 // list (from 64 rem of content, where the inspector stays in sight while the page scrolls) or under it (where choosing
 // brings it into view). On a phone the viewer comes first, then the clock and the chart; from 1024 px the clock spans
@@ -92,10 +93,10 @@ export function JupiterPlanner() {
 	const viewer = useRef<HTMLDivElement>(null)
 	const inspector = useRef<HTMLDivElement>(null)
 
-	// The clock starts at real now and the period at tonight, once.
+	// The clock starts following real now and the period at tonight, once.
 	useEffect(() => {
 		const now = browserPlannerIo.time()
-		jupiterPlannerState.time ??= now
+		if (jupiterPlannerState.time === undefined) followNow(jupiterPlannerState, now)
 		jupiterPlannerState.eveningDate ??= eveningOf(now, namingZone)
 	}, [])
 
@@ -224,7 +225,7 @@ export function JupiterPlanner() {
 
 	const actions = (
 		<Actions>
-			<Button variant="secondary" onClick={() => showJupiterInSky(site)}>
+			<Button variant="secondary" onClick={() => showJupiterInSky(jupiterPlannerState, site)} title="Shows Jupiter in the Sky at this tool's instant">
 				Show in Sky
 			</Button>
 		</Actions>

@@ -1,3 +1,4 @@
+import { CollapsibleSection } from '../../shell/CollapsibleSection'
 import { Notice } from '../../ui/Notice'
 import { FlipSection } from './MeridianFlipSection'
 
@@ -44,7 +45,7 @@ const STEPS: readonly GuideStep[] = [
 // How It Works section of the Meridian Flip tool.
 export function MeridianFlipGuide() {
 	return (
-		<FlipSection title="How It Works">
+		<CollapsibleSection className="p-0" id="meridian-flip.guide" title="How It Works" defaultOpen={false}>
 			<p className="m-0 text-sm leading-5 text-ink-200">
 				A German equatorial mount must turn to the other side of its pier once the target it tracks crosses the meridian, or the telescope runs into the pier. This tool follows that passage and flips the mount between frames, pausing and giving back imaging around it. Everything runs on the server, so closing
 				this tab or switching profile changes nothing.
@@ -61,6 +62,6 @@ export function MeridianFlipGuide() {
 				))}
 			</ol>
 			<Notice>The firmware limit is only what you enter in Flip Policy; it is never read from or written to the mount, so a firmware that flips by itself must not be active as well. No dome is slaved and no rotator is moved.</Notice>
-		</FlipSection>
+		</CollapsibleSection>
 	)
 }

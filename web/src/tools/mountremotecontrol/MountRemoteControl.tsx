@@ -8,6 +8,7 @@ import { EquipmentSetupButton } from '../../equipment/EquipmentSetupButton'
 import { useRoleDevice } from '../../equipment/useEquipment'
 import { activeProfile, mountRemoteBinding, profileCamera, profileState, setMountRemoteBinding } from '../../profile/profile'
 import { type CameraIdentity, MOUNT_REMOTE_PROTOCOLS } from '../../profile/schema'
+import { CollapsibleSection } from '../../shell/CollapsibleSection'
 import { WorkspaceLayout } from '../../shell/WorkspaceLayout'
 import { Button } from '../../ui/Button'
 import { DataList, DataRow } from '../../ui/DataRow'
@@ -224,8 +225,7 @@ const GUIDE: readonly GuideTopic[] = [
 // How It Works disclosure of the tool, closed until opened. Text only; it reads no state.
 function RemoteControlGuide() {
 	return (
-		<section className="flex min-w-0 flex-col gap-3 border-t border-line-100 pt-3">
-			<SectionHeading as="h2">How It Works</SectionHeading>
+		<CollapsibleSection className="p-0" id="mount-remote-control.guide" title="How It Works" defaultOpen={false}>
 			<ol className="m-0 grid list-none gap-x-8 gap-y-4 p-0 md:grid-cols-2">
 				{GUIDE.map((step, index) => (
 					<li key={step.title} className="flex min-w-0 gap-3">
@@ -237,6 +237,6 @@ function RemoteControlGuide() {
 					</li>
 				))}
 			</ol>
-		</section>
+		</CollapsibleSection>
 	)
 }

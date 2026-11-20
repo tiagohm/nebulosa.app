@@ -1,3 +1,4 @@
+import { cn } from 'cn'
 import type { ReactNode } from 'react'
 import { useSnapshot } from 'valtio'
 import { DisclosureSummary } from '../ui/DisclosureSummary'
@@ -20,14 +21,16 @@ export interface CollapsibleSectionProps {
 	readonly defaultOpen?: boolean
 	// Content.
 	readonly children: ReactNode
+	// Extra classes of the details.
+	readonly className?: string
 }
 
 // Collapsible titled group of controls inside a contextual panel.
-export function CollapsibleSection({ id, title, summary, defaultOpen = true, children }: CollapsibleSectionProps) {
+export function CollapsibleSection({ id, title, summary, defaultOpen = true, children, className }: CollapsibleSectionProps) {
 	const open = sectionOpen(useSnapshot(collapsibleSections), id, defaultOpen)
 
 	return (
-		<details open={open} onToggle={(e) => e.currentTarget.open !== open && setSectionOpen(collapsibleSections, id, e.currentTarget.open)} className="border-b border-line-100 px-4 last:border-b-0">
+		<details open={open} onToggle={(e) => e.currentTarget.open !== open && setSectionOpen(collapsibleSections, id, e.currentTarget.open)} className={cn('border-b border-line-100 px-4 last:border-b-0', className)}>
 			<DisclosureSummary title={title}>{!open && summary && <span className="ml-auto min-w-0 truncate text-xs text-ink-200">{summary}</span>}</DisclosureSummary>
 			<div className="-mt-1 flex pb-3 flex-col gap-2 text-sm leading-5 text-ink-200">{children}</div>
 		</details>

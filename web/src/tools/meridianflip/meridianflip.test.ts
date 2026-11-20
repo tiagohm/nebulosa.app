@@ -7,6 +7,7 @@ import {
 	enableMeridianFlip,
 	handleMeridianFlipEvent,
 	loadMeridianFlipTransitions,
+	formatFromNow,
 	formatTransitOffset,
 	MERIDIAN_FLIP_STALE_AFTER,
 	meridianFlipHeadline,
@@ -190,6 +191,9 @@ describe('passage', () => {
 		expect(formatTransitOffset(-370)).toBe('T+06:10')
 		expect(formatTransitOffset(0)).toBe('T+00:00')
 		expect(formatTransitOffset(3725)).toBe('T−01:02:05')
+		expect(formatFromNow(461000, 0)).toBe('in 07:41')
+		expect(formatFromNow(0, 192000)).toBe('03:12 ago')
+		expect(formatFromNow(5000, 5000)).toBe('in 00:00')
 	})
 
 	test('tells the approach apart before and after the transit', () => {

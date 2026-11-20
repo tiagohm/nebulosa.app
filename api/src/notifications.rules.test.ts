@@ -254,7 +254,7 @@ describe('meridian flip monitor', () => {
 	const classifier = new NotificationClassifier((_, deviceId) => (deviceId === 'mnt' ? 'EQ6' : undefined))
 
 	test('warns once per episode when a flip may be needed and when its window ends', () => {
-		expect(classifier.classify(transition('flipCandidate'))).toMatchObject([{ key: 'meridianFlip:m:p:flipCandidate', level: 'warning', code: 'meridianFlip.candidate', target: { kind: 'tool', tool: 'meridian-flip-monitor' }, source: { kind: 'meridianFlip', connectionId: 'c', deviceId: 'mnt' } }])
+		expect(classifier.classify(transition('flipCandidate'))).toMatchObject([{ key: 'meridianFlip:m:p:flipCandidate', level: 'warning', code: 'meridianFlip.candidate', target: { kind: 'tool', tool: 'meridian-flip' }, source: { kind: 'meridianFlip', connectionId: 'c', deviceId: 'mnt' } }])
 		expect(classifier.classify(transition('deadlineApproaching'))).toMatchObject([{ key: 'meridianFlip:m:p:deadlineApproaching', code: 'meridianFlip.deadlineApproaching' }])
 		expect(classifier.classify(transition('deadlinePassed', { phase: 'pastDeadline' }))).toMatchObject([{ key: 'meridianFlip:m:p:deadlinePassed', code: 'meridianFlip.deadlinePassed' }])
 		expect(classifier.classify(transition('flipCandidate'))[0].message).toContain('EQ6')

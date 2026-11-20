@@ -38,7 +38,7 @@ export const TOOL_IDS = [
 	'image-stacking',
 	'mount-remote-control',
 	'mount-pointing-model',
-	'meridian-flip-monitor',
+	'meridian-flip',
 	'observatory-cameras',
 	'spice-kernel-library',
 	'alpaca-server',

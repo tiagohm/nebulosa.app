@@ -312,6 +312,12 @@ export function formatTransitOffset(seconds: number) {
 	return `T${seconds > 0 ? '−' : '+'}${formatClockDuration(Math.abs(seconds))}`
 }
 
+// Wall-clock time from instant now to instant at, or since it, both Unix milliseconds: "in 07:41" for an instant still
+// ahead (now included), "03:12 ago" for one past.
+export function formatFromNow(at: number, now: number) {
+	return at >= now ? `in ${formatClockDuration((at - now) / 1000)}` : `${formatClockDuration((now - at) / 1000)} ago`
+}
+
 // Short status of a monitor at instant now (Unix milliseconds), for the status bar: its headline and, while a forecast is
 // current, the wall-clock time relative to the transit ("T−09:25", "T+06:10", formatTransitOffset).
 export function meridianFlipStatusText(monitor: Pick<MeridianFlipMonitor, 'availability' | 'timing' | 'mechanical' | 'sampledAt'>, now: number) {

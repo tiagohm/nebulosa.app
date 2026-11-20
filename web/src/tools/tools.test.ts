@@ -23,7 +23,7 @@ describe('registry', () => {
 			'image-stacking',
 			'mount-remote-control',
 			'mount-pointing-model',
-			'meridian-flip-monitor',
+			'meridian-flip',
 			'observatory-cameras',
 			'spice-kernel-library',
 			'alpaca-server',
@@ -41,7 +41,7 @@ describe('registry', () => {
 		expect(toolStatus(TOOL_DEFINITIONS['astro-weather'])).toBe('available')
 		expect(toolStatus(TOOL_DEFINITIONS['artificial-satellites'])).toBe('available')
 		expect(toolStatus(TOOL_DEFINITIONS['mount-remote-control'])).toBe('available')
-		expect(toolStatus(TOOL_DEFINITIONS['meridian-flip-monitor'])).toBe('available')
+		expect(toolStatus(TOOL_DEFINITIONS['meridian-flip'])).toBe('available')
 		expect(toolStatus({ view: () => null })).toBe('available')
 	})
 
@@ -84,7 +84,7 @@ describe('filter', () => {
 		expect(found('moon')).toContain('lunar-eclipse-map')
 		expect(found('blood moon')).toEqual(['lunar-eclipse-map'])
 		expect(found('iss')).toEqual(['artificial-satellites'])
-		expect(found('pier side')).toEqual(['meridian-flip-monitor'])
+		expect(found('pier side')).toEqual(['meridian-flip'])
 		expect(found('perseids')).toEqual(['meteor-showers'])
 		expect(found('retrograde')).toEqual(['planetary-events'])
 		expect(found('xisf')).toEqual(['calibration-library'])
@@ -101,14 +101,14 @@ describe('catalog groups', () => {
 	})
 
 	test('lifts running tools into a first group, out of their own', () => {
-		const running = (id: string) => id === 'meridian-flip-monitor' || id === 'mount-remote-control'
+		const running = (id: string) => id === 'meridian-flip' || id === 'mount-remote-control'
 		const groups = catalogGroups('', running)
-		expect(groups[0]).toEqual({ label: RUNNING_GROUP_LABEL, tools: ['meridian-flip-monitor', 'mount-remote-control'] })
+		expect(groups[0]).toEqual({ label: RUNNING_GROUP_LABEL, tools: ['meridian-flip', 'mount-remote-control'] })
 		expect(groups.find((group) => group.label === 'Rig & Observatory')?.tools).toEqual(['mount-pointing-model', 'observatory-cameras', 'alpaca-server'])
 	})
 
 	test('filters the running group like the others', () => {
-		const groups = catalogGroups('lx200', (id) => id === 'meridian-flip-monitor' || id === 'mount-remote-control')
+		const groups = catalogGroups('lx200', (id) => id === 'meridian-flip' || id === 'mount-remote-control')
 		expect(groups).toEqual([{ label: RUNNING_GROUP_LABEL, tools: ['mount-remote-control'] }])
 	})
 })

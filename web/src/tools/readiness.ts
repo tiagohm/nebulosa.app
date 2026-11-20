@@ -56,7 +56,7 @@ export function toolReadiness(id: ToolId, planned: boolean, context: ToolReadine
 	if (planned) return PLANNED
 
 	switch (id) {
-		case 'meridian-flip-monitor':
+		case 'meridian-flip':
 			if (context.mount !== 'connected') return { label: 'Needs mount', tone: 'muted', reason: MOUNT_ROLE_BLOCKERS[context.mount] }
 			return context.meridianFlip && meridianFlipReadiness(context.meridianFlip)
 		case 'mount-remote-control':

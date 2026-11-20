@@ -1,56 +1,32 @@
 import type { ExecutorEligibility, FlipStrategyChoice, MeridianFlipExecution, MeridianFlipExecutionRequest, MeridianFlipExecutorPolicy, MeridianFlipMonitor, MeridianFlipStepOutcome, OperationDevice } from 'api'
-import { type ReactNode, useState } from 'react'
+import { useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { autoFocusRequest, defaultStepSize } from '../../camera/autofocus'
 import { cameraKey, captureRunning, captureRuntime, captureSnoop } from '../../camera/capture'
 import { targetCenteringRequest } from '../../camera/targetcentering'
 import { controlRuntime, deviceStateOf, watchedDeviceState } from '../../equipment-control/control'
-import { DeviceLink } from '../../equipment-control/DeviceLink'
 import { type RoleDevice, useRoleDevice } from '../../equipment/useEquipment'
-import { formatClockDuration, formatDuration, formatLocalTime, MISSING } from '../../format'
+import { formatDuration, formatLocalTime, MISSING } from '../../format'
 import { useActiveTimeZone } from '../../location/useLocation'
-import { activeProfile, activeSetup, autoFocusSettings, cameraPlateSolving, exposureSettings, meridianFlipExecutorPolicy, profileCamera, profileState, setMeridianFlipExecutorPolicy, starDetectionSettings, targetCenteringSettings } from '../../profile/profile'
-import { CollapsibleSection } from '../../shell/CollapsibleSection'
+import { activeProfile, activeSetup, autoFocusSettings, cameraPlateSolving, exposureSettings, meridianFlipExecutorPolicy, profileCamera, profileState, starDetectionSettings, targetCenteringSettings } from '../../profile/profile'
 import { Actions } from '../../ui/Actions'
 import { Button } from '../../ui/Button'
-import { Checkbox } from '../../ui/Checkbox'
 import { ConfirmButton } from '../../ui/ConfirmButton'
 import { DataList, DataRow } from '../../ui/DataRow'
 import { Notice } from '../../ui/Notice'
-import { NumberInput } from '../../ui/NumberInput'
-import { Select } from '../../ui/Select'
-import { StatusBadge, type StatusTone } from '../../ui/StatusBadge'
+import { StatusBadge } from '../../ui/StatusBadge'
 import { Cell, Row, Table } from '../../ui/Table'
 import { useNow } from '../../useNow'
-import { MERIDIAN_AVAILABILITY_LABELS, MERIDIAN_PIER_SIDES, monitorKey, MOUNT_TYPE_LABELS } from './meridianflip'
-import {
-	cancelMeridianFlip,
-	capturePausedBy,
-	disarmMeridianFlip,
-	executeMeridianFlip,
-	FLIP_VERIFICATION_LABELS,
-	FLIP_VERIFICATION_MODE_LABELS,
-	latestExecution,
-	MERIDIAN_FLIP_STEP_LABELS,
-	meridianFlipEligibility,
-	meridianFlipExecutionHeadline,
-	meridianFlipExecutorState,
-	resumePausedCapture,
-} from './meridianflipexecutor'
+import { formatFromNow, MERIDIAN_AVAILABILITY_LABELS, MERIDIAN_PIER_SIDES, monitorKey } from './meridianflip'
+import { executeMeridianFlip, FLIP_VERIFICATION_LABELS, FLIP_VERIFICATION_MODE_LABELS, latestExecution, MERIDIAN_FLIP_STEP_LABELS, meridianFlipEligibility, meridianFlipExecutionHeadline, meridianFlipExecutorState } from './meridianflipexecutor'
 import { FlipSection } from './MeridianFlipSection'
-import { FlipToolSections } from './MeridianFlipToolSections'
 
-// Executor parts of the Meridian Flip tool: the strip of the flip of the MOUNT that runs, is armed, or left the capture
-// paused, shown above both sections with its Stop, Disarm, or Resume Capture; the Executor section, with what the server
-// would decide now, the requests (flip when the window opens, which runs unattended, and flip now), and the latest
-// execution with its steps and outcome; and the sections of the contextual panel with the policy the profile remembers
-// for that mount, the equipment of the Equipment Setup a flip uses, and the summaries of the camera tools it invokes
-// (MeridianFlipToolSections.tsx). Every decision and every command is the
-// server's; nothing here moves anything until the operator confirms a request, and closing the tab or switching
-// profile leaves a running execution or an arm alone.
-
-// Text of each strategy choice.
-const STRATEGIES: Readonly<Record<FlipStrategyChoice, string>> = { auto: 'Automatic', nativeFlip: 'Native flip', forcedGoto: 'Forced GoTo' }
+// Executor section of the Meridian Flip tool, for the MOUNT of the Equipment Setup and its monitor: when the window opens
+// and closes, what the server would decide now, the requests (flip when the window opens, which runs unattended, and
+// flip now), and the latest execution with its steps and outcome. A request is built from the Equipment Setup, the flip
+// policy the profile remembers for the mount, and the camera forms the profile keeps for the main camera. Every decision
+// and every command is the server's; nothing here moves anything until the operator confirms a request, and closing the
+// tab or switching profile leaves a running execution or an arm alone.
 
 // How each strategy choice moves the mount, said in the confirmation of a flip.
 const STRATEGY_MOTIONS: Readonly<Record<FlipStrategyChoice, string>> = { auto: "by the driver's own flip when it has one, else by a GoTo to the same target", nativeFlip: "by the driver's own flip", forcedGoto: 'by a GoTo to the same target' }
@@ -66,81 +42,8 @@ function operationDevice(role: RoleDevice): OperationDevice | undefined {
 	return role.device && { connectionId: role.device.connectionId, deviceId: role.device.id }
 }
 
-// Time to an instant from now (Unix milliseconds), or since it: "in 07:41", "03:12 ago".
-function formatFromNow(at: number, now: number) {
-	return at >= now ? `in ${formatClockDuration((at - now) / 1000)}` : `${formatClockDuration((now - at) / 1000)} ago`
-}
-
-// Live flip of the mount of the Equipment Setup, shown above both sections of the tool while one runs, is armed or
-// scheduled, or left the capture paused, with the one command each of those asks for; nothing otherwise.
-export function FlipStrip({ mount, monitor }: { readonly mount: RoleDevice; readonly monitor?: MeridianFlipMonitor }) {
-	const timeZone = useActiveTimeZone()
-	const state = useSnapshot(meridianFlipExecutorState)
-	const captures = useSnapshot(captureRuntime)
-	const device = mount.device
-	const execution = device ? latestExecution(state, device.connectionId, device.id) : undefined
-	const key = device ? monitorKey(device.connectionId, device.id) : undefined
-	const arm = key ? state.arms[key] : undefined
-	const pending = key ? !!state.pending[key] : false
-	const running = execution?.state === 'running'
-	const paused = capturePausedBy(execution, captures.sessions)
-	const now = useNow(running || arm !== undefined)
-
-	if (!device) return null
-
-	let badge: readonly [string, StatusTone]
-	let text: string
-	let action: ReactNode
-
-	if (running) {
-		const [headline] = meridianFlipExecutionHeadline(execution)
-		badge = ['Flipping', 'active']
-		text = `Step ${execution.steps.length}: ${headline} · started ${formatLocalTime(execution.startedAt, timeZone, now)}, ${formatClockDuration((now - execution.startedAt) / 1000)} elapsed`
-		action = (
-			<ConfirmButton
-				title="Stop the meridian flip?"
-				message={`The flip of ${execution.mountName} ends at its current step, and the operations it runs are cancelled. If the mount already moved across the meridian, the capture stays paused and guiding suspended for you; if it has not, imaging goes on as before.`}
-				confirmLabel="Stop Flip"
-				destructive
-				disabled={pending}
-				tooltip={pending ? 'Waiting for the server to answer the last request.' : undefined}
-				onConfirm={() => void cancelMeridianFlip(meridianFlipExecutorState, execution)}
-			>
-				Stop Flip
-			</ConfirmButton>
-		)
-	} else if (arm) {
-		const opensAt = monitor?.timing.windowOpensAt
-		badge = ['Scheduled', 'neutral']
-		text = arm.decision.decision === 'refuse' ? `${arm.decision.reason}.` : opensAt !== undefined && opensAt > now ? `Flips when the window opens at ${formatLocalTime(opensAt, timeZone, now)}, ${formatFromNow(opensAt, now)}.` : `Flips as soon as it is eligible: ${arm.decision.reason}.`
-		action = (
-			<Button variant="secondary" disabled={pending} title={pending ? 'Waiting for the server to answer the last request.' : 'Removes the arm; moves nothing.'} onClick={() => void disarmMeridianFlip(meridianFlipExecutorState, device.connectionId, device.id)}>
-				Disarm
-			</Button>
-		)
-	} else if (paused && execution) {
-		badge = meridianFlipExecutionHeadline(execution)
-		text = `The capture is paused since the flip ended at ${formatLocalTime(execution.endedAt ?? execution.startedAt, timeZone, now)}. Check the mount, the framing, and guiding before resuming it.`
-		action = (
-			<ConfirmButton title="Resume the paused capture?" message="The flip did not leave imaging ready. Resume the capture only once you checked the mount, the framing, and guiding." confirmLabel="Resume" disabled={pending} onConfirm={() => void resumePausedCapture(meridianFlipExecutorState, execution)}>
-				Resume Capture
-			</ConfirmButton>
-		)
-	} else {
-		return null
-	}
-
-	return (
-		<div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-md border border-line-100 bg-base-100 px-3 py-2">
-			<StatusBadge tone={badge[1]} label={badge[0]} />
-			<span className="order-last w-full min-w-0 text-sm leading-5 text-ink-200 tabular-nums sm:order-0 sm:w-auto sm:flex-1">{text}</span>
-			<div className="ml-auto flex">{action}</div>
-		</div>
-	)
-}
-
 // Executor section for the mount of the Equipment Setup and its monitor: the flip and the latest execution.
-export function MeridianFlipExecutorSections({ mount, monitor }: { readonly mount: RoleDevice; readonly monitor?: MeridianFlipMonitor }) {
+export function MeridianFlipExecutorView({ mount, monitor }: { readonly mount: RoleDevice; readonly monitor?: MeridianFlipMonitor }) {
 	const timeZone = useActiveTimeZone()
 	const profiles = useSnapshot(profileState)
 	const control = useSnapshot(controlRuntime)
@@ -363,107 +266,5 @@ function LatestFlip({ execution }: { readonly execution?: MeridianFlipExecution 
 				</Table>
 			)}
 		</FlipSection>
-	)
-}
-
-// Sections of the contextual panel the Executor reads: the policy of the mount, its advanced options, the equipment of
-// the Equipment Setup a flip uses, and the summaries of the camera tools it invokes.
-export function ExecutorPanelSections({ mount }: { readonly mount: RoleDevice }) {
-	const profiles = useSnapshot(profileState)
-	const control = useSnapshot(controlRuntime)
-	const state = useSnapshot(meridianFlipExecutorState)
-	const camera = useRoleDevice('MAIN_CAMERA')
-	const guideOutput = useRoleDevice('GUIDE_OUTPUT')
-	const focuser = useRoleDevice('FOCUSER')
-	const rotator = useRoleDevice('ROTATOR')
-	const profile = activeProfile(profiles)
-	const device = mount.device
-	const identity = profileCamera(profile, device?.id)
-	const policy = meridianFlipExecutorPolicy(profile.settings, identity)
-	const running = device ? latestExecution(state, device.connectionId, device.id)?.state === 'running' : false
-	const mountState = watchedDeviceState(control, 'mount', device)
-	const hasCamera = !!camera.device
-	const locked = running ? 'A flip of this mount is running with this policy.' : undefined
-	const assigned = [camera, guideOutput, focuser, rotator].filter((role) => role.device).length
-
-	// Updates fields of the policy of the mount.
-	function update(patch: Partial<MeridianFlipExecutorPolicy>) {
-		setMeridianFlipExecutorPolicy(profileState, identity, patch)
-	}
-
-	return (
-		<>
-			<CollapsibleSection id="meridianFlip.policy" title="Flip Policy" summary={STRATEGIES[policy.strategy]}>
-				<Select label="Strategy" options={['auto', 'nativeFlip', 'forcedGoto'] as const} value={policy.strategy} format={(value) => STRATEGIES[value]} disabled={running} onChange={(strategy) => update({ strategy })} />
-				<Notice>{policy.strategy === 'auto' ? "The driver's own flip when it has one, else a GoTo to the same target." : policy.strategy === 'nativeFlip' ? "Only the driver's own flip." : 'A GoTo to the same target, which the mount takes to the other side.'}</Notice>
-				<NumberInput label="Mount settle" value={policy.mountSettleSeconds} min={0} max={600} suffix="s" disabled={running} onChange={(mountSettleSeconds) => update({ mountSettleSeconds })} />
-				<FirmwareLimitInput minutes={policy.firmwareLimitSeconds === undefined ? undefined : policy.firmwareLimitSeconds / 60} disabled={running} onChange={(minutes) => update({ firmwareLimitSeconds: minutes === undefined ? undefined : minutes * 60 })} />
-				<Checkbox label="Recenter after the flip" checked={policy.recenterAfterFlip} disabled={running || !hasCamera} onChange={(recenterAfterFlip) => update({ recenterAfterFlip })} />
-				<Checkbox label="Auto Focus after the flip" checked={policy.autofocusAfterFlip} disabled={running || !hasCamera || !focuser.device} onChange={(autofocusAfterFlip) => update({ autofocusAfterFlip })} />
-				{!hasCamera && <Notice>Recentering and Auto Focus need a main camera in the Equipment Setup.</Notice>}
-				{locked && <Notice>{locked}</Notice>}
-			</CollapsibleSection>
-			<CollapsibleSection id="meridianFlip.advanced" title="Advanced Policy" summary={[policy.treatUnknownMountAsGem, policy.allowInferredAutoResume].some(Boolean) ? 'Changed' : 'Defaults'} defaultOpen={false}>
-				<Checkbox label="Treat an unknown mount type as German equatorial" checked={policy.treatUnknownMountAsGem} disabled={running} onChange={(treatUnknownMountAsGem) => update({ treatUnknownMountAsGem })} />
-				<Checkbox label="Resume imaging after an inferred flip" checked={policy.allowInferredAutoResume} disabled={running || !hasCamera} onChange={(allowInferredAutoResume) => update({ allowInferredAutoResume })} />
-				<Notice>A mount that reports no usable pier side, or a simulator, has its flip inferred: Target Centering solves the target before and after it and compares the turn of the field. A pier side the driver reports verifies the flip by itself, without these solves.</Notice>
-				{policy.allowInferredAutoResume && <Notice>An inferred flip rests on plate solutions taken before and after the motion, not on the mount's own report: a rotator, a changed optical train, or a flipped image can mimic it.</Notice>}
-			</CollapsibleSection>
-			<CollapsibleSection id="meridianFlip.equipment" title="Equipment" summary={device ? `${device.name} and ${assigned} of 4 more` : 'No mount'} defaultOpen={false}>
-				<DataList>
-					<DataRow label="Mount">
-						<DeviceLink device={device} fallback="Not assigned" />
-					</DataRow>
-					<DataRow label="Mount type">{mountState ? MOUNT_TYPE_LABELS[mountState.mountType] : MISSING}</DataRow>
-					<DataRow label="Pier side">{mountState ? (mountState.hasPierSide ? MERIDIAN_PIER_SIDES[mountState.pierSide] : 'Not reported') : MISSING}</DataRow>
-					<DataRow label="Commands">{mountState ? [mountState.canFlip && 'Native flip', mountState.canGoTo && 'GoTo'].filter(Boolean).join(', ') || 'None' : MISSING}</DataRow>
-					<DataRow label="Main camera">
-						<DeviceLink device={camera.device} fallback="Not assigned" />
-					</DataRow>
-					<DataRow label="Guide output">
-						<DeviceLink device={guideOutput.device} fallback="Not assigned" />
-					</DataRow>
-					<DataRow label="Focuser">
-						<DeviceLink device={focuser.device} fallback="Not assigned" />
-					</DataRow>
-					<DataRow label="Rotator">
-						<DeviceLink device={rotator.device} fallback="Not assigned" />
-					</DataRow>
-				</DataList>
-				<Notice>A flip uses these devices as they are when it starts, and the camera tool settings summarized below as they are when it is asked for or armed; a later change applies to the next request.</Notice>
-			</CollapsibleSection>
-			<FlipToolSections camera={camera} focuser={focuser} policy={policy} />
-		</>
-	)
-}
-
-interface FirmwareLimitInputProps {
-	// Limit after the transit in minutes; absent when it is not entered.
-	readonly minutes?: number
-	// Whether the field is disabled.
-	readonly disabled: boolean
-	// Called with the limit in minutes, or undefined once it is cleared.
-	readonly onChange: (minutes: number | undefined) => void
-}
-
-// Firmware limit of the mount after the transit, entered as the mount is set: a minute count, or nothing when it is not
-// known, never zero standing for unknown.
-function FirmwareLimitInput({ minutes, disabled, onChange }: FirmwareLimitInputProps) {
-	return (
-		<div className="flex flex-col gap-2">
-			{minutes === undefined ? (
-				<DataList>
-					<DataRow label="Firmware limit after transit">Not entered</DataRow>
-				</DataList>
-			) : (
-				<NumberInput label="Firmware limit after transit" value={minutes} min={1} max={360} suffix="min" disabled={disabled} onChange={(value) => onChange(Math.max(value, 1))} />
-			)}
-			<Actions>
-				<Button variant="secondary" disabled={disabled} onClick={() => onChange(minutes === undefined ? 15 : undefined)}>
-					{minutes === undefined ? 'Enter Limit' : 'Clear Limit'}
-				</Button>
-			</Actions>
-			<Notice>Enter it as the mount is set, such as the Meridian Treatment of an iOptron mount. It is never read from or written to the mount, and two automatic flippers must not both be active.</Notice>
-		</div>
 	)
 }

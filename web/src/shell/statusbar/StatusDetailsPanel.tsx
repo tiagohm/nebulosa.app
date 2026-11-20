@@ -166,7 +166,7 @@ function StatusDetailsPanel({ placement: { bottom, right, width }, onClose }: St
 
 	// Opens the Meridian Flip Monitor tool.
 	function openMeridianFlip() {
-		navigate(routeState, { workspace: 'tools', tool: 'meridian-flip-monitor' })
+		navigate(routeState, { workspace: 'tools', tool: 'meridian-flip' })
 		onClose()
 	}
 

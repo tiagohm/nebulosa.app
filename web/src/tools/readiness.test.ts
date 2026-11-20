@@ -15,22 +15,22 @@ describe('tool readiness', () => {
 
 	test('tools that need the mount say so with the reason of the role', () => {
 		const context = { ...READY, mount: 'disconnected' } as const
-		expect(toolReadiness('meridian-flip-monitor', false, context)).toEqual({ label: 'Needs mount', tone: 'muted', reason: 'The assigned mount is disconnected.' })
+		expect(toolReadiness('meridian-flip', false, context)).toEqual({ label: 'Needs mount', tone: 'muted', reason: 'The assigned mount is disconnected.' })
 		expect(toolReadiness('mount-remote-control', false, { ...READY, mount: 'notSelected' })).toEqual({ label: 'Needs mount', tone: 'muted', reason: 'No mount is assigned in Equipment Setup.' })
 		expect(toolReadiness('mount-pointing-model', false, context)).toBeUndefined()
 	})
 
 	test('a missing mount is said before what the monitor runs', () => {
 		const meridianFlip = { headline: ['Waiting for the mount', 'warning'] as const, armed: true }
-		expect(toolReadiness('meridian-flip-monitor', false, { ...READY, mount: 'disconnected', meridianFlip })?.label).toBe('Needs mount')
+		expect(toolReadiness('meridian-flip', false, { ...READY, mount: 'disconnected', meridianFlip })?.label).toBe('Needs mount')
 	})
 
 	test('an enabled monitor shows its step, Armed, or its headline, never in the success colour', () => {
 		const headline = ['Monitoring', 'success'] as const
-		expect(toolReadiness('meridian-flip-monitor', false, { ...READY, meridianFlip: { headline, armed: false } })).toMatchObject({ label: 'Monitoring', tone: 'active' })
-		expect(toolReadiness('meridian-flip-monitor', false, { ...READY, meridianFlip: { headline, armed: true } })).toMatchObject({ label: 'Armed', tone: 'active' })
-		expect(toolReadiness('meridian-flip-monitor', false, { ...READY, meridianFlip: { headline, step: 'Slewing', armed: true } })).toMatchObject({ label: 'Slewing', tone: 'active' })
-		expect(toolReadiness('meridian-flip-monitor', false, { ...READY, meridianFlip: { headline: ['Deadline passed', 'danger'], armed: false } })).toMatchObject({ label: 'Deadline passed', tone: 'danger', running: true })
+		expect(toolReadiness('meridian-flip', false, { ...READY, meridianFlip: { headline, armed: false } })).toMatchObject({ label: 'Monitoring', tone: 'active' })
+		expect(toolReadiness('meridian-flip', false, { ...READY, meridianFlip: { headline, armed: true } })).toMatchObject({ label: 'Armed', tone: 'active' })
+		expect(toolReadiness('meridian-flip', false, { ...READY, meridianFlip: { headline, step: 'Slewing', armed: true } })).toMatchObject({ label: 'Slewing', tone: 'active' })
+		expect(toolReadiness('meridian-flip', false, { ...READY, meridianFlip: { headline: ['Deadline passed', 'danger'], armed: false } })).toMatchObject({ label: 'Deadline passed', tone: 'danger', running: true })
 	})
 
 	test('a running listener of the mount is Serving', () => {
@@ -38,7 +38,7 @@ describe('tool readiness', () => {
 	})
 
 	test('only running work is running: setup gaps, failures, and planned tools are not', () => {
-		expect(toolReadiness('meridian-flip-monitor', false, { ...READY, mount: 'disconnected' })?.running).toBeUndefined()
+		expect(toolReadiness('meridian-flip', false, { ...READY, mount: 'disconnected' })?.running).toBeUndefined()
 		expect(toolReadiness('observatory-cameras', false, { ...READY, gateway: { status: 'unavailable' } })?.running).toBeUndefined()
 		expect(toolReadiness('alpaca-server', true, READY)?.running).toBeUndefined()
 	})

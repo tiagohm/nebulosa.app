@@ -11,7 +11,7 @@ import { FramingView } from './framing/FramingView'
 import { ImageStacking } from './imagestacking/ImageStacking'
 import { JupiterPlanner } from './jupiter/JupiterPlannerView'
 import { LunarEclipseMap } from './lunareclipse/LunarEclipseMap'
-import { MeridianFlipMonitorView } from './meridianflip/MeridianFlipMonitorView'
+import { MeridianFlipView } from './meridianflip/MeridianFlipView'
 import { MeteorShowers } from './meteorshowers/MeteorShowersView'
 import { MountPointingModel } from './mountpointing/MountPointingModel'
 import { MountRemoteControl } from './mountremotecontrol/MountRemoteControl'
@@ -263,14 +263,14 @@ export const TOOL_DEFINITIONS: Readonly<Record<ToolId, ToolDefinition>> = {
 		icon: 'pointingModel',
 		view: MountPointingModel,
 	},
-	'meridian-flip-monitor': {
-		id: 'meridian-flip-monitor',
+	'meridian-flip': {
+		id: 'meridian-flip',
 		label: 'Meridian Flip',
 		summary: 'Watches the meridian, flips the mount.',
 		description: 'Follows the tracked target through the meridian and flips the mount when asked, pausing and resuming the capture and guiding around it.',
 		keywords: ['flip', 'meridian flip', 'pier side', 'meridian', 'transit', 'hour angle', 'German equatorial', 'GEM', 'time to flip', 'pause', 'resume'],
 		icon: 'meridian',
-		view: MeridianFlipMonitorView,
+		view: MeridianFlipView,
 	},
 	'observatory-cameras': {
 		id: 'observatory-cameras',
@@ -320,7 +320,7 @@ export const TOOL_GROUPS: readonly ToolGroup[] = [
 		label: 'Planning',
 		tools: ['astro-weather', 'observing-planner', 'framing', 'planetary-events', 'meteor-showers', 'jupiter-observing-planner', 'saturn-observing-planner', 'artificial-satellites', 'close-approaches', 'solar-eclipse-map', 'lunar-eclipse-map'],
 	},
-	{ label: 'Rig & Observatory', tools: ['meridian-flip-monitor', 'mount-remote-control', 'mount-pointing-model', 'observatory-cameras', 'alpaca-server'] },
+	{ label: 'Rig & Observatory', tools: ['meridian-flip', 'mount-remote-control', 'mount-pointing-model', 'observatory-cameras', 'alpaca-server'] },
 	{ label: 'Frames', tools: ['calibration-library', 'image-stacking'] },
 	{ label: 'Reference', tools: ['calculator', 'astronomical-time-converter', 'orbital-mechanics-explorer', 'spice-kernel-library'] },
 ]

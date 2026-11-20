@@ -186,10 +186,10 @@ describe('navigate', () => {
 		const history = fakeHistory()
 
 		openWorkspace(state, 'tools', history)
-		navigate(state, { workspace: 'tools', tool: 'meridian-flip-monitor' }, history)
+		navigate(state, { workspace: 'tools', tool: 'meridian-flip' }, history)
 		openWorkspace(state, 'images', history)
 		openWorkspace(state, 'tools', history)
-		expect(state.route).toEqual({ workspace: 'tools', tool: 'meridian-flip-monitor' })
+		expect(state.route).toEqual({ workspace: 'tools', tool: 'meridian-flip' })
 
 		openWorkspace(state, 'tools', history)
 		expect(state.route).toEqual({ workspace: 'tools' })
@@ -197,7 +197,7 @@ describe('navigate', () => {
 		openWorkspace(state, 'sky', history)
 		openWorkspace(state, 'tools', history)
 		expect(state.route).toEqual({ workspace: 'tools' })
-		expect(history.paths).toEqual(['/tools', '/tools/meridian-flip-monitor', '/images', '/tools/meridian-flip-monitor', '/tools', '/sky', '/tools'])
+		expect(history.paths).toEqual(['/tools', '/tools/meridian-flip', '/images', '/tools/meridian-flip', '/tools', '/sky', '/tools'])
 	})
 
 	test('a redirected Tools route is the place the rail reopens', () => {

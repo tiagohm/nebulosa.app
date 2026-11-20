@@ -22,7 +22,7 @@ import { Notice } from '../../ui/Notice'
 // on the camera tab of the Images workspace, which commands nothing. The values are the camera's in the profile, the
 // ones a flip copies into its request when it is asked for or armed.
 
-interface FlipToolSectionsProps {
+interface MeridianFlipToolSectionsProps {
 	// Main camera of the Equipment Setup; nothing is shown without one.
 	readonly camera: RoleDevice
 	// Focuser of the Equipment Setup; Auto Focus is shown only with one.
@@ -32,7 +32,7 @@ interface FlipToolSectionsProps {
 }
 
 // Summaries of the camera tools a flip invokes.
-export function FlipToolSections({ camera, focuser, policy }: FlipToolSectionsProps) {
+export function MeridianFlipToolSections({ camera, focuser, policy }: MeridianFlipToolSectionsProps) {
 	const profile = activeProfile(useSnapshot(profileState))
 	const control = useSnapshot(controlRuntime)
 	const images = useSnapshot(imagesState)

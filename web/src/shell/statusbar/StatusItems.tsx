@@ -165,7 +165,7 @@ export function MeridianFlipItem({ monitor, name, executor }: MeridianFlipItemPr
 	const title = `Meridian Flip Monitor${name ? ` of ${name}` : ''}: ${text}`
 
 	return (
-		<button type="button" data-fixed title={`${title} · Open the tool`} onClick={() => navigate(routeState, { workspace: 'tools', tool: 'meridian-flip-monitor' })} className={cn('flex flex-none items-center gap-1', BUTTON_CLASS)}>
+		<button type="button" data-fixed title={`${title} · Open the tool`} onClick={() => navigate(routeState, { workspace: 'tools', tool: 'meridian-flip' })} className={cn('flex flex-none items-center gap-1', BUTTON_CLASS)}>
 			<Icon name="meridian" className="size-3.5 text-ink-300" />
 			<span className="sr-only">{title}</span>
 			<span className={cn('tabular-nums', TONE_TEXT[tone])}>{text}</span>

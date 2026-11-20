@@ -49,7 +49,7 @@ export type NotificationTarget =
 	| {
 			readonly kind: 'tool'
 			// Tool of the Tools workspace to open.
-			readonly tool: 'calibration-library' | 'meridian-flip-monitor'
+			readonly tool: 'calibration-library' | 'meridian-flip'
 			// Group it shows, for the Calibration Library.
 			readonly group?: string
 	  }
@@ -278,7 +278,7 @@ export class NotificationClassifier {
 		if ((kind === 'flipCandidate' || kind === 'deadlineApproaching') && (this.#flipArmed.has(key) || this.#flipRunning.has(key))) return []
 		const name = this.deviceName(connectionId, deviceId) ?? 'The mount'
 		const source: NotificationSource = { kind: 'meridianFlip', connectionId, endpoint: this.#endpoints.get(connectionId), deviceId }
-		const base = { key: `meridianFlip:${monitorId}:${episodeId}:${kind}`, level: 'warning', source, target: { kind: 'tool', tool: 'meridian-flip-monitor' } } as const
+		const base = { key: `meridianFlip:${monitorId}:${episodeId}:${kind}`, level: 'warning', source, target: { kind: 'tool', tool: 'meridian-flip' } } as const
 
 		switch (kind) {
 			case 'flipCandidate':
@@ -310,7 +310,7 @@ export class NotificationClassifier {
 		this.#flipRunning.delete(key)
 
 		const source: NotificationSource = { kind: 'meridianFlip', connectionId, endpoint: this.#endpoints.get(connectionId), deviceId }
-		const base = { key: `meridianFlipExecutor:${sessionId}`, source, target: { kind: 'tool', tool: 'meridian-flip-monitor' } } as const
+		const base = { key: `meridianFlipExecutor:${sessionId}`, source, target: { kind: 'tool', tool: 'meridian-flip' } } as const
 		const paused = outcome?.captureRestoration === 'leftSuspended' ? ' The capture stays paused until you resume or stop it.' : ''
 
 		switch (state) {

@@ -53,7 +53,7 @@ Reading order for a new contributor: the [Glossary](#glossary) and the [Architec
 Server state reaches every tab through `GET` snapshots plus the `/api/ws` event stream (`ServerEvent` in `api/src/websocket.ts`).
 A tab refreshes its snapshots on every socket open (`onOpen` in `web/src/main.tsx`), so a reload never loses running work;
 a socket that drops an event under backpressure is closed by the server (`broadcast` of `api/src/websocket.ts`), so its tab reconnects and refreshes instead of mirroring a state that lost an event;
-likewise, once a new run of the server took over in place (`bun --hot`), it closes the sockets of the previous run (`closeSockets`, called by `app/src/main.ts`), which would receive no event of it.
+likewise, once a new run of the server took over in place (`bun --hot`), it closes the sockets of the previous run (`closeSockets`, called by `app/src/server.ts`), which would receive no event of it.
 Each web store that mirrors server state is listed once in `SERVER_STORES` (`web/src/main.tsx`) with its event handler and its refresh.
 Events keep arriving while a snapshot is fetched, so an event may be applied before the response of an older snapshot: the stores of the open connections (`web/src/connection/connection.ts`), the operations, the captures, the sessions of the camera operations (Auto Focus, TPPA, iPolar, DARV, Flat Wizard, Dark Library Wizard, Guiding, Target Centering), Live Stacking, the held mount nudges and dome rotations (`refreshPressSessions` of `web/src/press.ts`), and the mount pointing models and sessions record, through `SnapshotRefreshes` (`web/src/refresh.ts`), the keys their events change during a refresh, and the snapshot leaves those as the events set them (`merge`), so a session that ended during the request is never shown running again.
 The workspace (`WorkspaceSync` of `web/src/profile/sync.ts`) follows the same rule by record: a saved connection, an observing site, or a profile an event changed while `/api/workspace` was read keeps what the event set, and an event received before the first load is applied once the workspace loaded.
@@ -73,10 +73,10 @@ The control states of the devices of the active profile's connection are mirrore
 A view that follows one device, such as the Sky mount (`mountView`), Mount Nudge, the camera capabilities of Camera Acquisition and Auto Focus, or the sensor geometry of the camera roles that the framings and the Calculator use (`CameraCapabilities.sensor`, `liveSensors` and `roleSensors` of `web/src/sky/sensors.ts`), reads that mirror (`watchedDeviceState`) and never fetches or tracks the device's state apart.
 
 Each `api` service exposes its routes through a `create<Name>Routes(service)` factory in its own module; `api/src/index.ts` only composes the services, spreads their routes, and serves `/api/health` and `/api/ws`.
-One route is composed by `app/src/main.ts` instead: `createAboutRoutes` (`api/src/about.ts`) serves the identity of the distribution, which `app` owns (its package version, and the commits and compile time `app/build.ts` inlines into the executable), so `api` never imports `app`.
+One route is composed by `app/src/server.ts` instead: `createAboutRoutes` (`api/src/about.ts`) serves the identity of the distribution, which `app` owns (its package version, and the commits and compile time `app/build.ts` inlines into the executable), so `api` never imports `app`.
 
 Every error response of `api` is `{ error, code }` (`ApiError` and `errorResponse` in `api/src/http.ts`): a message meant for people and a stable code a client branches on, never the message;
-a failure a route lets through, such as a database error, is logged and answered 500 `internal` by the error handler of the server (`unhandledErrorResponse`, passed to `Bun.serve` by `app/src/main.ts`).
+a failure a route lets through, such as a database error, is logged and answered 500 `internal` by the error handler of the server (`unhandledErrorResponse`, passed to `Bun.serve` by `app/src/server.ts`).
 Each service names its codes in a `<Name>ErrorCode` union (`CommandErrorCode` of `api/src/commands.ts` for the device commands, `StarDetectionErrorCode`, `PlateSolveErrorCode`, `CaptureFrameErrorCode`, …), and a route may add documented fields, such as the current state after a `conflict`.
 
 ## Adding a Feature

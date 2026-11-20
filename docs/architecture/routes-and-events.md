@@ -5,7 +5,7 @@ Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
 Route prefixes, each owned by the module named:
 
 - `/api/health`, `/api/ws`: `api/src/index.ts`
-- `/api/about`: `about.ts`, composed by `app/src/main.ts` (version, build commits and time, server runtime and platform)
+- `/api/about`: `about.ts`, composed by `app/src/server.ts` (version, build commits and time, server runtime and platform)
 - `/api/connections` (including `/:id/devices`, `/:id/states`): `connection.ts`
 - `/api/connections/:id/indi`: `indi.ts` (directory of the physical INDI devices of a connection, and the writes of their vectors)
 - `/api/connections/:id/<device type>/:deviceId[/<command>]`: one commands module per device type: `mounts`, `guide-outputs`, `focusers`, `wheels`, `rotators`, `covers`, `flat-panels`, `dew-heaters`, `domes`, `cameras` (`mounts.ts` … `cameras.ts`);

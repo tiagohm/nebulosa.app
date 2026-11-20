@@ -57,9 +57,9 @@ The IERS tables, files of an external provider, are written atomically (`writeAt
 The server opens its operational database (`startDatabase` of `api/src/index.ts`) before anything else and stops, saying why, when it cannot;
 opening it creates the Default profile when there is none and records as interrupted the operations and the pointing model acquisitions a previous process left running (or paused).
 Then `startStores` opens the Calibration Library, Image Stacking, and Live Stacking in the background, before the server serves.
-SIGINT, SIGTERM, and SIGHUP end the process (`app/src/main.ts`) once the running device operations were stopped and the database was closed (`closeDatabase` of `api/src/index.ts`; see [Operation Lifecycle Rules](operation-lifecycle-rules.md));
+SIGINT, SIGTERM, and SIGHUP end the process (`app/src/server.ts`) once the running device operations were stopped and the database was closed (`closeDatabase` of `api/src/index.ts`; see [Operation Lifecycle Rules](operation-lifecycle-rules.md));
 nothing waits to be written, since every write committed when it was made.
-Every durable path of the server derives from the data directory, `NEBULOSA_HOME` or `~/Nebulosa` (`DEFAULT_DATA_DIRECTORY` of `api/src/database/index.ts`);
+Every durable path of the server derives from the data directory, `--home` of the command line, else `NEBULOSA_HOME`, else `~/Nebulosa` (`DEFAULT_DATA_DIRECTORY` of `api/src/database/index.ts`; the entry point `app/src/main.ts` sets `NEBULOSA_HOME` from `--home`, resolved against the working directory, before it imports the server and with it `api`);
 the auxiliary files of the plate solver, the star detector, and the camera operations go to the system temporary directory.
 
 The workspace (`api/src/workspace.ts`, `GET /api/workspace`) holds the saved connections, the observing sites (a name, a geodetic latitude and longitude in degrees, a height above the ellipsoid in meters, and an IANA time zone), the cameras and telescopes of the Equipment Catalog (see [Equipment Catalog Contract](equipment-catalog.md)), and the profiles: each profile's name, connection, active site, and position, its equipment setup on each saved connection, its preferences (one JSON value per `ProfilePreferenceKey`), the forms of each camera, and its Mount Remote Control bindings.

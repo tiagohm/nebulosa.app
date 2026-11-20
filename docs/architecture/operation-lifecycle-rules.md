@@ -23,7 +23,7 @@ Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
   no screen shows it yet.
 - Operations are owned by the server.
   Switching workspace, profile, camera tab, or mode, collapsing a panel, or unmounting a component never ends one.
-- A server stopped by a signal (`app/src/main.ts`) first cancels every running operation and waits, at most 3 s (`stopOperations` of `api/src/index.ts`, `OperationRegistry.stop`), for their cleanups to stop what they commanded, then closes the database: a driver keeps a motion once its client is gone, so exiting at once would leave a mount moving under a held nudge.
+- A server stopped by a signal (`app/src/server.ts`) first cancels every running operation and waits, at most 3 s (`stopOperations` of `api/src/index.ts`, `OperationRegistry.stop`), for their cleanups to stop what they commanded, then closes the database: a driver keeps a motion once its client is gone, so exiting at once would leave a mount moving under a held nudge.
   A second signal ends the process at once.
   A hot reload of `bun dev` evaluates the server code again in the same process, which would keep the previous run alive beside the new one;
   the new run first stops the previous one in place (`stopServer` of `api/src/index.ts`, which says what it releases) and opens again the connections it had open (`reopenConnections`).

@@ -11,7 +11,8 @@ import { BASELINE_EPOCH, BASELINE_VERSION, BaselineChangedError, MIGRATIONS, mig
 // of the stores; scientific files stay files beside it, in the data directory.
 
 // Directory of the durable data of the server: the operational database, the captured frames, the calibration library,
-// and the Earth orientation tables. NEBULOSA_HOME moves it, as the tests do; ~/Nebulosa otherwise.
+// and the Earth orientation tables. NEBULOSA_HOME moves it, as the tests and the --home argument of the app do;
+// ~/Nebulosa otherwise.
 export const DEFAULT_DATA_DIRECTORY = process.env.NEBULOSA_HOME || join(homedir(), 'Nebulosa')
 
 // Operational database of the server, in the data directory.

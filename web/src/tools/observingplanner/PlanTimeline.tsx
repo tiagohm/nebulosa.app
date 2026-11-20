@@ -122,7 +122,7 @@ export function PlanTimeline({ plan, preview, timeZone, now, selected, onSelect,
 	}
 
 	return (
-		<div tabIndex={0} onKeyDown={onKeyDown} className="overflow-hidden rounded-md border border-line-100 bg-base-100 outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent">
+		<div tabIndex={0} onKeyDown={onKeyDown} className="overflow-hidden rounded-md border border-line-100 bg-base-100 outline-hidden focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-offset-2 focus-visible:outline-accent">
 			<div className="grid grid-cols-[7rem_minmax(0,1fr)] sm:grid-cols-[11rem_minmax(0,1fr)]">
 				<div className="border-r border-b border-line-100" />
 				<div className="relative h-7 border-b border-line-100 text-xs tabular-nums">

@@ -275,7 +275,7 @@ export function FileExplorerModal(props: FileExplorerModalProps) {
 				) : listing && entries.length === 0 ? (
 					<p className="m-0 p-6 text-center text-sm text-ink-300">{loading ? 'Loading…' : choosingDirectory ? 'No folders here.' : 'No folders or images here.'}</p>
 				) : (
-					<ul ref={listRef} tabIndex={0} onKeyDown={handleListKeyDown} className={cn('m-0 list-none p-1 outline-none focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent', loading && 'opacity-60')}>
+					<ul ref={listRef} tabIndex={0} onKeyDown={handleListKeyDown} className={cn('m-0 list-none p-1 outline-hidden focus-visible:outline-2 focus-visible:outline-solid focus-visible:-outline-offset-2 focus-visible:outline-accent', loading && 'opacity-60')}>
 						{entries.map((entry) => (
 							<li key={entry.path}>
 								<button

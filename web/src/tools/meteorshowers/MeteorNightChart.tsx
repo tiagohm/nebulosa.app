@@ -149,7 +149,7 @@ export function MeteorNightChart({ night, name, minimumAltitude, timeZone }: Met
 	return (
 		<figure className="m-0 flex flex-col gap-2">
 			<div ref={frame} className="w-full">
-				<svg viewBox={`0 0 ${width} ${HEIGHT}`} width={width} height={HEIGHT} tabIndex={0} onClick={onClick} onKeyDown={onKeyDown} className="block max-w-full cursor-pointer outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent">
+				<svg viewBox={`0 0 ${width} ${HEIGHT}`} width={width} height={HEIGHT} tabIndex={0} onClick={onClick} onKeyDown={onKeyDown} className="block max-w-full cursor-pointer outline-hidden focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-offset-2 focus-visible:outline-accent">
 					<title>{`Altitude of the radiant of the ${name} and of the Moon over the night; shaded stretches are the observing windows. Arrow keys move the cursor 10 minutes, Page Up and Page Down an hour.`}</title>
 					<defs>
 						<pattern id="meteor-window" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">

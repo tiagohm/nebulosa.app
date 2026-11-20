@@ -344,7 +344,7 @@ function Chart({ forecast, night, evaluation, timeZone, cursor, onCursor, now, w
 
 	return (
 		<>
-			<svg width={width} height={height} tabIndex={0} onClick={onClick} onKeyDown={onKeyDown} className="block cursor-pointer text-xs outline-none focus-visible:outline-2 focus-visible:outline-accent">
+			<svg width={width} height={height} tabIndex={0} onClick={onClick} onKeyDown={onKeyDown} className="block cursor-pointer text-xs outline-hidden focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-accent">
 				<title>Forecast timeline of the night: use the arrow keys to choose an hour</title>
 				{skyBands(night).map((band) => (
 					<rect key={band.start} x={scale.x(band.start)} y={AXIS_HEIGHT} width={Math.max(0, scale.x(band.end) - scale.x(band.start))} height={height - AXIS_HEIGHT} fill={SKY_FILLS[band.band]}>

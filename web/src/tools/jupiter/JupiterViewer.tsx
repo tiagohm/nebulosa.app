@@ -11,7 +11,7 @@ import { type GalileanMoon, GALILEAN_MOONS, MOON_COLORS, MOON_INITIALS, MOON_LAB
 // equatorial radii, from the server; the faint belts are decoration, not observed cloud features. Moon positions may be
 // interpolated from the tracks while the clock plays; states, shadows, and the spot are the exact view's. The moons of
 // the selected event (and the spot of a selected transit) are ringed in the accent. Marks and labels are sized in CSS
-// pixels, so they read the same at every zoom and width; the compass is drawn beside the view (JupiterCompass), never
+// pixels, so they read the same at every zoom and width; the compass is drawn beside the view (PlanetCompass), never
 // over a moon. Colours are the jupiter-* and moon-* tokens of web/src/index.css.
 
 // Smallest drawn radius of a moon and of a shadow, in CSS pixels, so they stay visible at any zoom.
@@ -145,36 +145,6 @@ export function JupiterViewer({ state, positions, orientation, box, radiiPerPixe
 			</g>
 			{spot && highlightSpot && <ellipse cx={spot[0]} cy={spot[1]} rx={GRS_AXES[0] + RING_GAP_PX * pixel} ry={GRS_AXES[1] + RING_GAP_PX * pixel} transform={`rotate(${rotation} ${spot[0]} ${spot[1]})`} fill="none" stroke="var(--color-accent)" strokeWidth={RING_STROKE_PX * pixel} />}
 			{front.map(moonMark)}
-		</svg>
-	)
-}
-
-// Size of the compass, in CSS pixels.
-const COMPASS_PX = 40
-
-// Compass of the viewer: where north and east lie on the screen in an orientation, drawn beside the view.
-export function JupiterCompass({ orientation }: { readonly orientation: PlanetOrientation }) {
-	const [northX, northY] = screenOffset(0, 1, orientation)
-	const [eastX, eastY] = screenOffset(1, 0, orientation)
-	const centre = COMPASS_PX / 2
-	const arm = 9
-	const text = 15
-
-	return (
-		<svg viewBox={`0 0 ${COMPASS_PX} ${COMPASS_PX}`} className="size-10 flex-none text-ink-300">
-			<title>{`Compass: north ${northY < 0 ? 'up' : 'down'}, east ${eastX < 0 ? 'left' : 'right'}`}</title>
-			<g stroke="currentColor" strokeWidth={1.5} strokeLinecap="round">
-				<line x1={centre} y1={centre} x2={centre + northX * arm} y2={centre + northY * arm} />
-				<line x1={centre} y1={centre} x2={centre + eastX * arm} y2={centre + eastY * arm} />
-			</g>
-			<g fill="currentColor" fontSize={11} textAnchor="middle" dominantBaseline="central">
-				<text x={centre + northX * text} y={centre + northY * text}>
-					N
-				</text>
-				<text x={centre + eastX * text} y={centre + eastY * text}>
-					E
-				</text>
-			</g>
 		</svg>
 	)
 }

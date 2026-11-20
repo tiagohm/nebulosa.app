@@ -3,7 +3,7 @@ import { type KeyboardEvent, type MouseEvent, useEffect, useRef, useState } from
 import { formatClockTime, formatDate } from '../../format'
 import { zonedWallTime } from '../../location/zone'
 import { moveIndex } from '../../ui/navigation'
-import { equatorOffset, type PlanetOrientation } from '../planetary/planetary'
+import { equatorOffset, midnights, type PlanetOrientation } from '../planetary/planetary'
 import { type GalileanMoon, GALILEAN_MOONS, MOON_COLORS, MOON_INITIALS, MOON_LABELS } from './jupiter'
 
 // Chart of the Galilean moons over the period, the way observers print it: time runs down, and each moon's offset along
@@ -61,17 +61,6 @@ export interface MoonChartProps {
 	readonly timeZone: string
 	// Receives an instant chosen on the chart.
 	readonly onTime: (time: number) => void
-}
-
-// Instants of the local midnights between start and end in a zone, found hour by hour, so a daylight-saving change
-// cannot skip one.
-function midnights(start: number, end: number, timeZone: string) {
-	const out: number[] = []
-	for (let t = Math.ceil(start / HOUR_MS) * HOUR_MS; t <= end; t += HOUR_MS) {
-		const { hour, minute } = zonedWallTime(t, timeZone)
-		if (hour === 0 && minute === 0) out.push(t)
-	}
-	return out
 }
 
 // Paths of one moon: the solid stretches and the faint ones inside the umbra, broken where it is behind the disk.
@@ -167,7 +156,7 @@ export function MoonChart({ track, poleAngle, orientation, moons, nights, select
 					onClick={onClick}
 					onKeyDown={onKeyDown}
 					fontSize={TEXT_PX}
-					className="block max-w-full cursor-pointer rounded border border-line-100 bg-base-000 outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+					className="block max-w-full cursor-pointer rounded border border-line-100 bg-base-000 outline-hidden focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-offset-2 focus-visible:outline-accent"
 				>
 					<title>{`Offsets of the Galilean moons along Jupiter's equator over the period, time running down and east on the ${east < 0 ? 'left' : 'right'}; gaps are the moons behind the planet and faint stretches the moons in its shadow. Click or use the arrow keys to move the clock.`}</title>
 					{windows.map((window) => (

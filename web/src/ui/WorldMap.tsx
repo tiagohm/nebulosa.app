@@ -453,7 +453,7 @@ export function WorldMap({ selected, onSelect, onHover, wrap = true, graticule =
 			onPointerLeave={(e) => e.pointerType === 'mouse' && hover(undefined)}
 			onDoubleClick={(e) => controller.zoomTo(ZOOM_STEP, viewportPoint(e))}
 			onKeyDown={handleKeyDown}
-			className={cn('relative min-h-0 touch-none overflow-hidden bg-base-000 outline-none select-none focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent active:cursor-grabbing', onSelect ? 'cursor-crosshair' : 'cursor-grab', className)}
+			className={cn('relative min-h-0 touch-none overflow-hidden bg-base-000 outline-hidden select-none focus-visible:outline-2 focus-visible:outline-solid focus-visible:-outline-offset-2 focus-visible:outline-accent active:cursor-grabbing', onSelect ? 'cursor-crosshair' : 'cursor-grab', className)}
 		>
 			<canvas ref={(canvas) => void (controller.canvas = canvas)} className="absolute inset-0 block size-full" />
 			<svg ref={(svg) => void (controller.svg = svg)} className="absolute inset-0 block size-full">

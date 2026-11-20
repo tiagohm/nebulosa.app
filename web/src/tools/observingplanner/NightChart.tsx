@@ -124,7 +124,7 @@ export function NightChart({ analysis, timeZone, cursor, onCursor, now }: NightC
 	return (
 		<div className="flex flex-col gap-3">
 			<div ref={frame}>
-				<svg viewBox={`0 0 ${width} ${HEIGHT}`} tabIndex={0} onClick={onClick} onKeyDown={onKeyDown} className="block h-auto w-full cursor-pointer text-xs outline-none focus-visible:outline-2 focus-visible:outline-accent">
+				<svg viewBox={`0 0 ${width} ${HEIGHT}`} tabIndex={0} onClick={onClick} onKeyDown={onKeyDown} className="block h-auto w-full cursor-pointer text-xs outline-hidden focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-accent">
 					<title>{`Altitude of ${analysis.name} and of the Moon over the night; shaded stretches are the observing windows.`}</title>
 					<defs>
 						<pattern id="observing-window" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">

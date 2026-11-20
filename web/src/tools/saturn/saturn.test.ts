@@ -3,9 +3,10 @@ import type { SaturnElongations, SaturnEvent, SaturnRingTimeline, SaturnSignatur
 import { proxy } from 'valtio'
 import { skyClock } from '../../sky/clock'
 import type { PlannerIo } from '../planetary/planetary'
-import { chartExtent, gridStep } from './MoonChart'
-import { createSaturnPlannerState, describeSource, historyRange, listedEvents, listedId, listedPhenomena, loadEvents, loadState, phenomenonName, selectEvent, selectPhenomenon } from './saturn'
-import { annulusPath, farHalfSign } from './SaturnViewer'
+import { chartExtent, gridStep, labeledGridLines, stackLabels } from './MoonChart'
+import { calendarTicks } from './RingHistoryChart'
+import { createSaturnPlannerState, describeSource, frameHalfWidth, historyRange, listedEvents, listedId, listedPhenomena, loadEvents, loadState, PLANET_HALF_WIDTH, phenomenonName, selectEvent, selectPhenomenon, shownPhenomena } from './saturn'
+import { annulusPath, farHalfSign, placeLabels } from './SaturnViewer'
 
 const DAY = 86_400_000
 
@@ -127,8 +128,8 @@ describe('helpers', () => {
 })
 
 describe('phenomena', () => {
-	function phenomenon(id: string, kind: SaturnEvent['kind'], moons: SaturnEvent['moons']): SaturnEvent {
-		return { id, kind, moons, start: 0, maximum: 1000, end: 2000, contacts: {}, startsBeforeRange: false, endsAfterRange: false, grazing: false, ringInterference: false, overlaps: [], visibility: { status: 'unknownNoSite', windows: [], longestMs: 0, reasons: [] } }
+	function phenomenon(id: string, kind: SaturnEvent['kind'], moons: SaturnEvent['moons'], start: number = 0, visibility: Partial<SaturnEvent['visibility']> = {}): SaturnEvent {
+		return { id, kind, moons, start, maximum: start + 1000, end: start + 2000, contacts: {}, startsBeforeRange: false, endsAfterRange: false, grazing: false, ringInterference: false, overlaps: [], visibility: { status: 'unknownNoSite', windows: [], longestMs: 0, reasons: [], ...visibility } }
 	}
 
 	test('are asked for whole, with the site, and listed by kind and moon', async () => {
@@ -148,10 +149,67 @@ describe('phenomena', () => {
 	test('selecting one moves only the tool clock', () => {
 		const state = proxy(createSaturnPlannerState())
 		const sky = { ...skyClock }
-		selectPhenomenon(state, { id: 'a', maximum: 1000 })
+		selectPhenomenon(state, { id: 'a', maximum: 1000, moons: ['titan', 'rhea'] })
 		expect(state.selectedEvent).toBe('a')
+		expect(state.highlight).toEqual(['titan', 'rhea'])
 		expect(state.time).toBe(1000)
 		expect({ ...skyClock }).toEqual(sky)
+	})
+
+	test('the watchable filter keeps what the site can watch, and rank puts the best first', () => {
+		const events = [
+			phenomenon('late', 'satelliteTransit', ['titan'], 3000, { status: 'observable', rank: 2 }),
+			phenomenon('hidden', 'satelliteTransit', ['rhea'], 1000, { status: 'notObservable' }),
+			phenomenon('rings', 'shadowTransit', ['dione'], 2000, { status: 'uncertainRingInterference', rank: 1 }),
+			phenomenon('early', 'satelliteEclipse', ['tethys'], 0, { status: 'partial', rank: 3 }),
+		]
+		expect(shownPhenomena(events, 'watchable', true, 'time').map((e) => e.id)).toEqual(['early', 'rings', 'late'])
+		expect(shownPhenomena(events, 'watchable', true, 'rank').map((e) => e.id)).toEqual(['rings', 'late', 'early'])
+		expect(shownPhenomena(events, 'watchable', false, 'time').map((e) => e.id)).toEqual(['early', 'hidden', 'rings', 'late'])
+		expect(shownPhenomena(events, 'all', true, 'rank').map((e) => e.id)).toEqual(['rings', 'late', 'early', 'hidden'])
+	})
+
+	test('framing shows the moons taking part with a margin, never closer than the planet', () => {
+		const series = (east: number) => ({ east: [east, east], north: [0, 0], depth: [0, 0], disk: [], eclipse: [], ringOverlap: [] })
+		const moons = { mimas: series(3), enceladus: series(0), tethys: series(0), dione: series(0), rhea: series(0), titan: series(-20), iapetus: series(0) }
+		const track = { times: [0, 1000], moons } as unknown as Parameters<typeof frameHalfWidth>[2]
+		expect(frameHalfWidth([], 500, track, 'north', 2)).toBe(PLANET_HALF_WIDTH)
+		expect(frameHalfWidth(['mimas'], 500, track, 'north', 2)).toBe(5)
+		expect(frameHalfWidth(['mimas', 'titan'], 500, track, 'north', 2)).toBe(22)
+		expect(frameHalfWidth(['titan'], 5000, track, 'north', 2)).toBeUndefined()
+	})
+})
+
+describe('labels', () => {
+	test('a label that would cover another moves beside its moon', () => {
+		const places = placeLabels(
+			[
+				{ x: 0, y: 0, r: 1 },
+				{ x: 1, y: 0, r: 1 },
+			],
+			4,
+			2,
+			0.5,
+		)
+		expect(places[0]).toEqual({ x: 0, y: -2.5 })
+		expect(places[1]).toEqual({ x: 1, y: 2.5 })
+	})
+
+	test('end labels spread apart and stay inside the plot', () => {
+		expect(stackLabels([50, 52, 10], 12, 0, 100)).toEqual([50, 62, 10])
+		expect(stackLabels([98, 99], 12, 0, 100)).toEqual([88, 100])
+	})
+
+	test('offset labels thin out from the centre line when the grid is dense', () => {
+		expect(labeledGridLines(5, 2, 60)).toEqual([true, true, true, true, true])
+		expect(labeledGridLines(7, 3, 25)).toEqual([false, true, false, true, false, true, false])
+	})
+
+	test('ring history ticks fall on calendar boundaries', () => {
+		const start = Date.UTC(2026, 4, 17)
+		expect(calendarTicks(start, Date.UTC(2027, 4, 17), 100).map((tick) => tick.label)).toEqual(['2026-06', '2026-07', '2026-08', '2026-09', '2026-10', '2026-11', '2026-12', '2027-01', '2027-02', '2027-03', '2027-04', '2027-05'])
+		expect(calendarTicks(start, Date.UTC(2036, 4, 17), 10).map((tick) => tick.label)).toEqual(['2027', '2028', '2029', '2030', '2031', '2032', '2033', '2034', '2035', '2036'])
+		expect(calendarTicks(start, Date.UTC(2056, 0, 1), 1).map((tick) => tick.label)).toEqual(['2030', '2035', '2040', '2045', '2050', '2055'])
 	})
 })
 

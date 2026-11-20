@@ -106,6 +106,25 @@
 	--color-moon-callisto: oklch(0.68 0.025 65);
 }
 
+/* Colours of the Saturn Observing Planner's viewer, moon chart, and ring history (web/src/tools/saturn): the schematic
+   disk and rings toned down like Jupiter's, so the planet is never the brightest fill of a night screen; the seven major
+   moons at the map hues' low chroma, a step apart in lightness where their hues are near (warm gray Mimas, icy Enceladus,
+   khaki Tethys, mauve Dione, gray-teal Rhea, ochre-haze Titan, slate Iapetus), kept away from the signal colours and
+   from the ember accent, which rings the moons of the selected event; and the solar opening of the ring history, a
+   muted Sun gold beside the Earth opening's Starlight Cream. */
+@theme static {
+	--color-saturn-disk: oklch(0.7 0.04 85);
+	--color-saturn-ring: oklch(0.66 0.035 80);
+	--color-saturn-sun: oklch(0.74 0.08 90);
+	--color-moon-mimas: oklch(0.7 0.015 80);
+	--color-moon-enceladus: oklch(0.86 0.025 230);
+	--color-moon-tethys: oklch(0.76 0.07 115);
+	--color-moon-dione: oklch(0.72 0.08 305);
+	--color-moon-rhea: oklch(0.72 0.06 195);
+	--color-moon-titan: oklch(0.72 0.075 65);
+	--color-moon-iapetus: oklch(0.64 0.07 255);
+}
+
 @layer base {
 	html {
 		color-scheme: dark;

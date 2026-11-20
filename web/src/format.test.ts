@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { arcmin, arcsec, deg, hour } from 'nebulosa/src/math/units/angle'
 import {
 	dateTimeFormat,
+	formatCivilDate,
 	formatAngularSize,
 	formatCount,
 	formatSampleValue,
@@ -235,6 +236,11 @@ describe('positions, distances, and instants', () => {
 		expect(formatKilometers(12.46, 1)).toBe('12.5 km')
 		expect(formatKilometers(-0.2)).toBe('0 km')
 		expect(formatKilometers(Number.POSITIVE_INFINITY)).toBe(MISSING)
+	})
+
+	test('a civil date reads like the date of a long date and time, whatever the browser zone', () => {
+		expect(formatCivilDate('2026-11-05')).toBe('Nov 05, 2026')
+		expect(formatCivilDate('2027-01-31')).toBe('Jan 31, 2027')
 	})
 
 	test('an instant in a zone names the zone unless it is the active site zone', () => {

@@ -116,6 +116,17 @@ export function eveningOf(time: number, timeZone: string) {
 	return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
 }
 
+// Instants (Unix milliseconds) of the local midnights between start and end in a zone, found hour by hour, so a
+// daylight-saving change cannot skip one; the moon charts draw a line and the date at each.
+export function midnights(start: number, end: number, timeZone: string) {
+	const out: number[] = []
+	for (let t = Math.ceil(start / HOUR_MS) * HOUR_MS; t <= end; t += HOUR_MS) {
+		const { hour, minute } = zonedWallTime(t, timeZone)
+		if (hour === 0 && minute === 0) out.push(t)
+	}
+	return out
+}
+
 // The period of an evening date: from its local noon in the zone, for `days` days. A noon the clocks skip falls back to
 // UTC noon of the date.
 export function periodRange(eveningDate: string, days: number, timeZone: string) {

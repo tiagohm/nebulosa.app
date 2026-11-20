@@ -322,7 +322,11 @@ export function ImageViewer({ image, loading = false, error, empty, view, onView
 				onKeyDown={handleKeyDown}
 				onKeyUp={handleKeyUp}
 				onBlur={() => setSpaceHeld(false)}
-				className={image ? cn('relative min-h-0 flex-1 touch-none overflow-hidden outline-none select-none focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent', spaceHeld || panning ? 'cursor-grab' : 'cursor-crosshair') : 'relative min-h-0 flex-1 overflow-hidden'}
+				className={
+					image
+						? cn('relative min-h-0 flex-1 touch-none overflow-hidden outline-hidden select-none focus-visible:outline-2 focus-visible:outline-solid focus-visible:-outline-offset-2 focus-visible:outline-accent', spaceHeld || panning ? 'cursor-grab' : 'cursor-crosshair')
+						: 'relative min-h-0 flex-1 overflow-hidden'
+				}
 			>
 				{image && (
 					<div className="absolute top-0 left-0 origin-top-left" style={{ width, height, transform: `translate(${transform.x}px, ${transform.y}px) scale(${transform.scale})` }}>

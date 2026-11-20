@@ -1,6 +1,6 @@
 import type { PlanetEventVisibility } from 'api'
 import { Fragment, type ReactNode } from 'react'
-import { formatClockTime, formatDateTime, formatDegrees, formatHours, formatFixed, formatLongDateTime, formatSpan } from '../../format'
+import { formatCivilDate, formatClockTime, formatDateTime, formatDegrees, formatHours, formatFixed, formatLongDateTime, formatSpan } from '../../format'
 import { DataRow } from '../../ui/DataRow'
 import { StatusBadge, type StatusTone } from '../../ui/StatusBadge'
 import { Cell, GroupRow, Row, SortHeader, Table, type TableColumn } from '../../ui/Table'
@@ -118,7 +118,12 @@ function EventRow<E extends PlanetEventRow>({ event, selected, timeZone, name, d
 			</Cell>
 			<Cell>
 				{name(event)}
-				{event.overlaps.length > 0 && <span className="text-ink-300"> · overlaps {event.overlaps.length}</span>}
+				{event.overlaps.length > 0 && (
+					<span className="text-ink-300" title={`Happens at the same time as ${event.overlaps.length} other event${event.overlaps.length === 1 ? '' : 's'} of the period; the inspector names them`}>
+						{' '}
+						· overlaps {event.overlaps.length}
+					</span>
+				)}
 				{event.grazing && <span className="text-ink-300"> · grazing</span>}
 			</Cell>
 			<Cell className={NARROW_HIDDEN}>{formatClockTime(event.maximum, timeZone)}</Cell>
@@ -174,7 +179,7 @@ export function VisibilityRows<R extends string>({ visibility, status, planet, r
 	return (
 		<>
 			<DataRow label="From the site">{status}</DataRow>
-			{visibility.eveningDate && <DataRow label="Night of">{visibility.eveningDate}</DataRow>}
+			{visibility.eveningDate && <DataRow label="Night of">{formatCivilDate(visibility.eveningDate)}</DataRow>}
 			{visibility.longestMs > 0 && <DataRow label="Longest watchable part">{formatHours(visibility.longestMs)}</DataRow>}
 			{visibility.peakAltitude !== undefined && <DataRow label={`${planet}'s highest altitude`}>{formatDegrees(visibility.peakAltitude, 1)}</DataRow>}
 			{visibility.peakAirmass !== undefined && <DataRow label="Airmass there">{formatFixed(visibility.peakAirmass, 2)}</DataRow>}

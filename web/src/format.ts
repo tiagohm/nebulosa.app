@@ -363,6 +363,13 @@ export function formatLocalTime(time: number, timeZone: string, reference: numbe
 	return dateTimeFormat({ timeZone, hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZoneName: namesZone(timeZone) ? 'short' : undefined, ...(dated && { month: 'short', day: 'numeric' }) }).format(time)
 }
 
+// Returns a civil date given as YYYY-MM-DD (a night's evening, which belongs to no zone) in the style of
+// formatLongDateTime's date: "Nov 05, 2026".
+export function formatCivilDate(date: string) {
+	const [year, month, day] = date.split('-').map(Number)
+	return dateTimeFormat({ timeZone: 'UTC', year: 'numeric', month: 'short', day: '2-digit' }).format(Date.UTC(year, month - 1, day))
+}
+
 // Returns an instant (Unix milliseconds) as its date and time to the second in an IANA time zone, with the zone named
 // unless it is the active site's, so a time past midnight shows its day: "Sep 16, 1997, 18:47:11 UTC", or MISSING when it
 // is not finite.

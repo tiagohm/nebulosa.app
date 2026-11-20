@@ -6,9 +6,10 @@ import { type SkyClock, skyClock } from '../../sky/clock'
 import { createRequestGuard } from '../../sky/selection'
 import type { StatusTone } from '../../ui/StatusBadge'
 import { planningSite, showTargetInSky } from '../observingplanner/observingplanner'
-import { browserPlannerIo, errorMessage, interpolateTrack as interpolateMoons, type MoonPosition, type PlanetOrientation, type PlanetPeriod, type PlanetRate, type PlannerIo, playClock, scheduleLoad, setTime, syncSkyClock, VISIBILITY_LABELS } from '../planetary/planetary'
+import { browserPlannerIo, errorMessage, eveningOf, interpolateTrack as interpolateMoons, type MoonPosition, type PlanetOrientation, type PlanetPeriod, type PlanetRate, type PlannerIo, playClock, scheduleLoad, screenOffset, setTime, syncSkyClock, VISIBILITY_LABELS } from '../planetary/planetary'
 
-// Saturn Observing Planner of the tab: the tool-local clock and period, the moons drawn, the view, and the answers of the
+// Saturn Observing Planner of the tab: the tool-local clock and period, the moons drawn, the view, which phenomena are
+// listed and in what order, the moons of the event chosen last, which the viewer frames and rings, and the answers of the
 // server (the rings and moons at the clock's instant, the ring openings and ring-plane events over a season, the moon
 // tracks and their greatest separations over the period, and the kernel readiness of the rings and the moons). Every
 // position, opening, event, and classification comes from the server; the tab only interpolates the sampled tracks for
@@ -24,8 +25,31 @@ export const MOON_LABELS: Readonly<Record<SaturnMoon, string>> = { mimas: 'Mimas
 // Short label of each moon, drawn beside it.
 export const MOON_INITIALS: Readonly<Record<SaturnMoon, string>> = { mimas: 'Mi', enceladus: 'En', tethys: 'Te', dione: 'Di', rhea: 'Rh', titan: 'Ti', iapetus: 'Ia' }
 
-// Colour of each moon's curve and marker.
-export const MOON_COLORS: Readonly<Record<SaturnMoon, string>> = { mimas: '#9aa4b1', enceladus: '#7fd1e6', tethys: '#e0a030', dione: '#c78ad9', rhea: '#5bbf7a', titan: '#e0763a', iapetus: '#4a8fdf' }
+// Colour of each moon's curve and marker: the moon tokens of web/src/index.css.
+export const MOON_COLORS: Readonly<Record<SaturnMoon, string>> = {
+	mimas: 'var(--color-moon-mimas)',
+	enceladus: 'var(--color-moon-enceladus)',
+	tethys: 'var(--color-moon-tethys)',
+	dione: 'var(--color-moon-dione)',
+	rhea: 'var(--color-moon-rhea)',
+	titan: 'var(--color-moon-titan)',
+	iapetus: 'var(--color-moon-iapetus)',
+}
+
+// Which phenomena the list shows by their visibility from the site: those that can be watched at least in part, or all.
+export type SaturnVisibilityFilter = 'watchable' | 'all'
+
+// Every visibility filter, in display order.
+export const VISIBILITY_FILTERS: readonly SaturnVisibilityFilter[] = ['watchable', 'all']
+
+// Order of the phenomena: chronological by start, or by the server's rank of the watchable ones.
+export type SaturnEventOrder = 'time' | 'rank'
+
+// Half-width of the close-up of Saturn and its rings, in Saturn radii: the outer A ring (2.27) with a margin.
+export const PLANET_HALF_WIDTH = 2.8
+
+// Margin around the moons of a framed event, in Saturn radii, so their labels and the accent rings stay inside the view.
+const FRAME_MARGIN = 2
 
 // Name of each ring-plane event kind.
 export const RING_EVENT_LABELS: Readonly<Record<SaturnRingEvent['kind'], string>> = {
@@ -130,6 +154,12 @@ export interface SaturnPlannerState {
 	moons: SaturnMoon[]
 	// Kinds of phenomena listed.
 	kinds: SaturnEventKind[]
+	// Which phenomena the list shows by their visibility from the site; without a site every phenomenon is shown.
+	visibilityFilter: SaturnVisibilityFilter
+	// Order of the phenomena.
+	order: SaturnEventOrder
+	// Moons taking part in the event chosen last, a phenomenon or a greatest separation, which the viewer rings.
+	highlight: SaturnMoon[]
 	// Orientation of the viewer.
 	orientation: PlanetOrientation
 	// Whether the ring annuli are drawn.
@@ -179,6 +209,9 @@ export function createSaturnPlannerState(): SaturnPlannerState {
 		rate: 600,
 		moons: [...SATURN_MOONS],
 		kinds: [...EVENT_KINDS],
+		visibilityFilter: 'watchable',
+		order: 'time',
+		highlight: [],
 		eventsLoading: false,
 		orientation: 'north',
 		showRings: true,
@@ -321,9 +354,51 @@ export function phenomenonName(event: Pick<SaturnEvent, 'kind' | 'moons'>) {
 	return `${MOON_LABELS[event.moons[0]]} ${KIND_LABELS[event.kind].toLowerCase()}`
 }
 
-// Selects a phenomenon and moves the tool's clock to its maximum; the Sky clock, the site, and the devices are left alone.
-export function selectPhenomenon(state: SaturnPlannerState, event: Pick<SaturnEvent, 'id' | 'maximum'>) {
+// Whether a phenomenon can be watched from the site, at least in part; one the rings may hide still can.
+export function watchable(event: Pick<SaturnEvent, 'visibility'>) {
+	const { status } = event.visibility
+	return status === 'observable' || status === 'partial' || status === 'uncertainRingInterference'
+}
+
+// The phenomena the list shows, from the listed ones: only the watchable ones when the filter asks for them and a site
+// judged them, in the chosen order. Chronological is by start, the order the When column reads; by rank puts the
+// watchable ones first from rank 1, then the others chronologically.
+export function shownPhenomena(events: readonly SaturnEvent[], filter: SaturnVisibilityFilter, hasSite: boolean, order: SaturnEventOrder) {
+	const kept = filter === 'watchable' && hasSite ? events.filter(watchable) : [...events]
+	const byTime = (a: SaturnEvent, b: SaturnEvent) => a.start - b.start || a.maximum - b.maximum
+	if (order === 'time') return kept.sort(byTime)
+	return kept.sort((a, b) => (a.visibility.rank ?? Number.POSITIVE_INFINITY) - (b.visibility.rank ?? Number.POSITIVE_INFINITY) || byTime(a, b))
+}
+
+// Civil date of the night a phenomenon belongs to, which groups the list: the server's night of the site, else the
+// evening of its maximum in the display zone.
+export function phenomenonNight(event: Pick<SaturnEvent, 'visibility' | 'maximum'>, timeZone: string) {
+	return event.visibility.eveningDate ?? eveningOf(event.maximum, timeZone)
+}
+
+// Half-width of the view, in Saturn radii, that shows the given moons at an instant around the centred planet, from
+// the sampled tracks: the farthest of them on the screen, either axis (the vertical one scaled by the view's width over
+// height), plus a margin, and never closer than the close-up of the planet and its rings. The close-up when no moon is
+// given; undefined when the tracks do not reach the instant.
+export function frameHalfWidth(moons: readonly SaturnMoon[], time: number, track: Pick<SaturnTrack, 'times' | 'moons'> | undefined, orientation: PlanetOrientation, aspect: number) {
+	if (moons.length === 0) return PLANET_HALF_WIDTH
+	const positions = interpolateTrack(track, time)
+	if (!positions) return undefined
+	let farthest = 0
+
+	for (const moon of moons) {
+		const [x, y] = screenOffset(positions[moon].east, positions[moon].north, orientation)
+		farthest = Math.max(farthest, Math.abs(x), Math.abs(y) * aspect)
+	}
+
+	return Math.max(PLANET_HALF_WIDTH, farthest + FRAME_MARGIN)
+}
+
+// Selects a phenomenon, moves the tool's clock to its maximum, and rings its moons in the viewer; the Sky clock, the
+// site, and the devices are left alone.
+export function selectPhenomenon(state: SaturnPlannerState, event: Pick<SaturnEvent, 'id' | 'maximum' | 'moons'>) {
 	state.selectedEvent = event.id
+	state.highlight = [...event.moons]
 	setTime(state, event.maximum)
 }
 
@@ -356,9 +431,16 @@ export function listedEvents(timeline: SaturnRingTimeline | undefined, elongatio
 	return out.sort((a, b) => a.time - b.time)
 }
 
-// Selects a listed event and moves the tool's clock to it; the Sky clock, the site, and the devices are left alone.
+// Moons taking part in a listed event: the moon of a greatest separation; none for a ring-plane event.
+export function listedMoons(event: SaturnListedEvent): SaturnMoon[] {
+	return event.type === 'separation' ? [event.moon] : []
+}
+
+// Selects a listed event, moves the tool's clock to it, and rings its moon in the viewer; the Sky clock, the site, and
+// the devices are left alone.
 export function selectEvent(state: SaturnPlannerState, event: SaturnListedEvent) {
 	state.selected = listedId(event)
+	state.highlight = listedMoons(event)
 	setTime(state, event.time)
 }
 

@@ -17,6 +17,7 @@ import { Select } from '../../ui/Select'
 import { StatusBadge } from '../../ui/StatusBadge'
 import { PanZoomSurface, usePanZoom } from '../planetary/PanZoom'
 import { browserPlannerIo, eveningOf, followNow, openKernelLibrary, ORIENTATION_LABELS, PLANET_ORIENTATIONS, type PlanetOrientation, periodRange, setTime } from '../planetary/planetary'
+import { PlanetCompass } from '../planetary/PlanetCompass'
 import { TimeBar } from '../planetary/TimeBar'
 import { EventInspector, EventTimeline } from './EventTimeline'
 import { GrsSettings } from './GrsSettings'
@@ -45,7 +46,7 @@ import {
 	showJupiterInSky,
 	VISIBILITY_FILTERS,
 } from './jupiter'
-import { JupiterCompass, JupiterViewer } from './JupiterViewer'
+import { JupiterViewer } from './JupiterViewer'
 import { MoonChart } from './MoonChart'
 
 // Jupiter Observing Planner tool: the view of Jupiter and its Galilean moons at the tool's own instant, the moons over the
@@ -254,7 +255,7 @@ export function JupiterPlanner() {
 					)}
 					<div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
 						<div ref={viewer} className="flex min-w-0 scroll-mt-4 flex-col gap-2 lg:col-start-1 lg:row-start-2">
-							<PanZoomSurface zoom={zoom} planetHalfWidth={PLANET_HALF_WIDTH} planet="Jupiter" legend={<JupiterCompass orientation={state.orientation} />}>
+							<PanZoomSurface zoom={zoom} planetHalfWidth={PLANET_HALF_WIDTH} planet="Jupiter" legend={<PlanetCompass orientation={state.orientation} />}>
 								<JupiterViewer state={state.state} positions={positions} orientation={state.orientation} box={zoom.box} radiiPerPixel={zoom.radiiPerPixel} moons={state.moons} highlight={selected?.moons} highlightSpot={selected?.kind === 'grsTransit'} />
 							</PanZoomSurface>
 							{state.stateError && <Notice error>{state.stateError}</Notice>}

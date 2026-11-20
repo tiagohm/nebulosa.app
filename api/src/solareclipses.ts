@@ -2,11 +2,13 @@ import type { SolarEclipse } from 'nebulosa/src/astronomy/bodies/sun'
 import type { SunMoonProvider } from 'nebulosa/src/astronomy/events/eclipse/eclipse'
 import {
 	computeLocalSolarEclipseCircumstances,
+	computeLocalSolarEclipseInstant,
 	computeLocalSolarEclipseViewGeometry,
 	type CentralLineSide,
 	type LocalCentralPhaseKind,
 	type LocalEclipseContactKind,
 	type LocalSolarEclipseCircumstances,
+	type LocalSolarEclipseInstant,
 	type LocalSolarEclipseSvgShape,
 	type LocalSunMotion,
 	type LocalViewHandedness,
@@ -103,8 +105,9 @@ export type LocalSolarEclipseDetails = LocalSolarEclipseCircumstances['details']
 
 // Presentation of the Local View: the Sun and the Moon as seen from a place at a contact.
 export interface SolarEclipseViewOptions {
-	// Contact drawn; MAX, then the first contact, when the place lacks it.
-	readonly event: LocalEclipseContactKind
+	// Contact drawn, MAX, then the first contact, when the place lacks it; or a fraction in [0, 1] of the local
+	// eclipse, 0 being C1 and 1 being C4, drawn between the contacts (MAX's view without C1 and C4).
+	readonly event: LocalEclipseContactKind | number
 	// Whether up is the zenith or celestial north.
 	readonly orientation: LocalViewOrientationMode
 	// Whether east is to the right or to the left.
@@ -119,8 +122,10 @@ export interface SolarEclipseLocalView {
 	readonly width: number
 	// Height, in pixels.
 	readonly height: number
-	// Contact drawn, absent when the place has none.
+	// Contact drawn, absent when the place has none or an instant between the contacts is drawn.
 	readonly selectedEvent?: LocalEclipseContactKind
+	// Instant drawn, in Unix milliseconds (UTC); absent when the place has no contact.
+	readonly time?: number
 	// Shapes in painting order.
 	readonly shapes: readonly LocalSolarEclipseSvgShape[]
 }
@@ -193,8 +198,9 @@ export interface SolarEclipseServiceOptions {
 	readonly kernels?: PlanetaryKernels
 }
 
-// Returns the circumstances of an eclipse from a place, with its Local View drawn as view asks.
-export function localSolarEclipse(eclipse: SolarEclipse, location: EclipseLocation, view: SolarEclipseViewOptions, local: LocalSolarEclipseCircumstances, ephemeris: EphemerisProvenance): LocalSolarEclipse {
+// Returns the circumstances of an eclipse from a place, with its Local View drawn as view asks: at instant when
+// given (the state at view's fraction), otherwise at view's contact.
+export function localSolarEclipse(eclipse: SolarEclipse, location: EclipseLocation, view: SolarEclipseViewOptions, local: LocalSolarEclipseCircumstances, ephemeris: EphemerisProvenance, instant?: LocalSolarEclipseInstant): LocalSolarEclipse {
 	const events: LocalSolarEclipseContact[] = []
 
 	for (const kind of CONTACT_ORDER) {
@@ -215,7 +221,8 @@ export function localSolarEclipse(eclipse: SolarEclipse, location: EclipseLocati
 		})
 	}
 
-	const geometry = computeLocalSolarEclipseViewGeometry(local, { selectedEvent: view.event, orientationMode: view.orientation, handedness: view.handedness, includeGhostDisks: view.ghosts, includeHorizon: true })
+	const geometry = computeLocalSolarEclipseViewGeometry(local, { selectedEvent: typeof view.event === 'number' ? 'MAX' : view.event, instant, orientationMode: view.orientation, handedness: view.handedness, includeGhostDisks: view.ghosts, includeHorizon: true, height: 300 })
+	const drawn = instant ?? (geometry.selectedEvent && local.events[geometry.selectedEvent])
 	const { kind, text, hasGeometricEclipse, hasObservableEclipse, hasCentralPhase, centralPhaseKind, sunMotion, completeness } = local.visibility
 
 	return {
@@ -224,7 +231,7 @@ export function localSolarEclipse(eclipse: SolarEclipse, location: EclipseLocati
 		visibility: { kind, text, hasGeometricEclipse, hasObservableEclipse, hasCentralPhase, centralPhaseKind, sunMotion, completeness },
 		details: local.details,
 		events,
-		view: { width: geometry.width, height: geometry.height, selectedEvent: geometry.selectedEvent, shapes: geometry.shapes },
+		view: { width: geometry.width, height: geometry.height, selectedEvent: geometry.selectedEvent, time: drawn ? timeToUnixMillis(drawn.time) : undefined, shapes: geometry.shapes },
 		ephemeris,
 	}
 }
@@ -317,19 +324,22 @@ export class SolarEclipseService {
 		const eclipse = resolveSolarEclipse(id, snapshot)
 		if (!eclipse) return undefined
 
-		const { result: local, provenance } = eclipseEphemeris(snapshot, eclipse.maximalTime).run((sunMoon, source) => {
+		const { result, provenance } = eclipseEphemeris(snapshot, eclipse.maximalTime).run((sunMoon, source) => {
 			const key = `${source}:${solarEclipseId(eclipse)}:${location.longitude}:${location.latitude}`
+			const pbe = this.#elementsOf(eclipse, sunMoon, source)
 			let circumstancesHere = this.#locals.get(key)
 
 			if (!circumstancesHere) {
-				circumstancesHere = circumstances(this.#elementsOf(eclipse, sunMoon, source), location, sunMoon)
+				circumstancesHere = circumstances(pbe, location, sunMoon)
 				this.#locals.set(key, circumstancesHere)
 			}
 
-			return circumstancesHere
+			// The state at a fraction of the local eclipse, on the same elements and Sun and Moon as its contacts.
+			const instant = typeof view.event === 'number' ? computeLocalSolarEclipseInstant(pbe, deg(location.longitude), deg(location.latitude), circumstancesHere.events, view.event, { sunMoonPosition: sunMoon, horizonAltitude: 0 }) : undefined
+			return { local: circumstancesHere, instant }
 		})
 
-		return localSolarEclipse(eclipse, location, view, local, provenance)
+		return localSolarEclipse(eclipse, location, view, result.local, provenance, result.instant)
 	}
 
 	// Terminates the idle worker; a map still running terminates its worker once it ends, and maps still queued reject.
@@ -390,13 +400,14 @@ function startSolarEclipseMapWorker(): SolarEclipseMapWorker {
 	return worker
 }
 
-// Reads the presentation of the Local View from the `event`, `orientation`, `handedness`, and `ghosts` query
-// parameters, each defaulting to DEFAULT_VIEW_OPTIONS.
+// Reads the presentation of the Local View from the `event` (a contact, or a fraction of the local eclipse in [0, 1]),
+// `orientation`, `handedness`, and `ghosts` query parameters, each defaulting to DEFAULT_VIEW_OPTIONS.
 function viewParams(params: URLSearchParams): SolarEclipseViewOptions {
 	const ghosts = params.get('ghosts')
+	const event = params.get('event')
 
 	return {
-		event: (params.get('event') as LocalEclipseContactKind | null) ?? DEFAULT_VIEW_OPTIONS.event,
+		event: event === null ? DEFAULT_VIEW_OPTIONS.event : CONTACT_ORDER.includes(event as LocalEclipseContactKind) ? (event as LocalEclipseContactKind) : Number(event),
 		orientation: (params.get('orientation') as LocalViewOrientationMode | null) ?? DEFAULT_VIEW_OPTIONS.orientation,
 		handedness: (params.get('handedness') as LocalViewHandedness | null) ?? DEFAULT_VIEW_OPTIONS.handedness,
 		ghosts: ghosts === null ? DEFAULT_VIEW_OPTIONS.ghosts : ghosts === 'true',

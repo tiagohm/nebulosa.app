@@ -168,6 +168,26 @@ test('draws the central line by kind and the limits on the degree plane', async 
 	expect(Math.abs(hybrid.greatestDuration!.centralDuration! - 76)).toBeLessThan(5)
 })
 
+test('draws the Local View at a fraction of the local eclipse, 0 and 1 being C1 and C4', async () => {
+	const at = async (event: string) => ((await local(TOTAL.id, `longitude=-96.8&latitude=32.78&event=${event}`).json()) as LocalSolarEclipse).view
+	const start = await at('0')
+	const middle = await at('0.5')
+	const end = await at('1')
+	const dallas = (await local(TOTAL.id, 'longitude=-96.8&latitude=32.78').json()) as LocalSolarEclipse
+	const [c1, , , , c4] = dallas.events
+
+	expect(start.selectedEvent).toBe('C1')
+	expect(start.time).toBe(c1.time)
+	expect(end.selectedEvent).toBe('C4')
+	expect(end.time).toBe(c4.time)
+	expect(middle.selectedEvent).toBeUndefined()
+	expect(Math.abs(middle.time! - (c1.time + c4.time) / 2)).toBeLessThan(1)
+	// Every contact is a ghost behind an instant between them.
+	expect(middle.shapes.filter((shape) => shape.role === 'ghostMoonDisk')).toHaveLength(5)
+	// A contact is still drawn by name, with its own time.
+	expect((await at('C2')).time).toBe(dallas.events[1].time)
+})
+
 test('computes the circumstances and the Local View of a place', async () => {
 	// Dallas was inside the path of totality on 2024-04-08; NASA gives it 3m51s of totality.
 	const dallas = (await local(TOTAL.id, 'longitude=-96.8&latitude=32.78').json()) as LocalSolarEclipse

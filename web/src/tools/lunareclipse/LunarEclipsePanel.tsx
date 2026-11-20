@@ -1,5 +1,6 @@
 import type { LocalLunarViewHandedness, LocalLunarViewOrientationMode } from 'api'
 import { cn } from 'cn'
+import { useRef } from 'react'
 import { useSnapshot } from 'valtio'
 import { formatLongDateTime, formatLongDuration } from '../../format'
 import { useDisplayZone, useToolLocation } from '../../location/useLocation'
@@ -9,9 +10,10 @@ import { Checkbox } from '../../ui/Checkbox'
 import { DataRow } from '../../ui/DataRow'
 import { Notice } from '../../ui/Notice'
 import { SegmentedControl } from '../../ui/SegmentedControl'
-import { formatEclipseAngle, formatEclipseMagnitude } from '../eclipse/eclipse'
+import { Slider } from '../../ui/Slider'
+import { formatEclipseAngle, formatEclipseMagnitude, viewFractionOf } from '../eclipse/eclipse'
 import { EclipseLocationSection, EclipseZoneSelect, LocalContent } from '../eclipse/EclipsePanelParts'
-import { CONTACT_NAMES, ECLIPSE_TYPE_NAMES, isStaleLocal, loadLocal, lunarEclipseState, phaseDurations, selectEvent, setViewSettings } from './lunareclipse'
+import { CONTACT_NAMES, ECLIPSE_TYPE_NAMES, isStaleLocal, loadLocal, lunarEclipseState, phaseDurations, selectEvent, setViewFraction, setViewSettings } from './lunareclipse'
 import { LunarEclipseLocalView } from './LunarEclipseLocalView'
 
 // Local Circumstances panel of the Lunar Eclipse Map: the location (the shared Location section), the visibility of
@@ -29,14 +31,27 @@ const HANDEDNESS: readonly LocalLunarViewHandedness[] = ['eastRight', 'eastLeft'
 // Local Circumstances panel.
 export function LunarEclipsePanel() {
 	const state = useSnapshot(lunarEclipseState)
-	const { eclipse, place, local, localLoading, localError, selectedEvent, view } = state
+	const { eclipse, place, local, localError, selectedEvent, view } = state
 	const location = useToolLocation(state.location)
 	const displayZone = useDisplayZone(location, state.zone)
 	const timeZone = displayZone.zone
 	const events = new Map(local?.events.map((event) => [event.kind, event]))
-	const selectedLocal = events.get(selectedEvent)
+	// Contact the Local View draws; none while it draws an instant between the contacts.
+	const drawnEvent = local?.view.selectedEvent
+	const selectedLocal = drawnEvent && events.get(drawnEvent)
+	// Stage of the eclipse the Local View draws, as the slider holds it while its answer is on the way.
+	const fraction = state.viewFraction ?? (local && viewFractionOf(local, 'P1', 'P4'))
 	const durations = eclipse && phaseDurations(eclipse)
 	const stale = isStaleLocal(local, place)
+	const viewFractionTimer = useRef<Timer | undefined>(undefined)
+
+	function handleViewFraction(percent: number) {
+		const fraction = percent / 100
+		if (lunarEclipseState.viewFraction === fraction) return
+		lunarEclipseState.viewFraction = fraction
+		clearTimeout(viewFractionTimer.current)
+		viewFractionTimer.current = setTimeout(loadLocal, 500, lunarEclipseState)
+	}
 
 	return (
 		<>
@@ -48,7 +63,6 @@ export function LunarEclipsePanel() {
 						{local && !local.visibility.hasObservableEclipse && <Notice>The Moon stays below the horizon here from P1 to P4; the contact times still hold for everyone.</Notice>}
 						{local && local.visibility.kind === 'totalVisible' && <Notice>The Moon is above the horizon during at least part of totality, but not during the whole eclipse.</Notice>}
 					</LocalContent>
-					{localLoading && <Notice>Computing the local circumstances…</Notice>}
 					{localError && (
 						<>
 							<Notice error>{localError}</Notice>
@@ -65,7 +79,7 @@ export function LunarEclipsePanel() {
 					<EclipseZoneSelect value={state.zone} zone={displayZone} location={location} selectedSite={state.location.mode !== 'active'} onChange={(zone) => (lunarEclipseState.zone = zone)} />
 					{eclipse.contacts.map((contact) => {
 						const event = events.get(contact.kind)
-						const selected = contact.kind === selectedEvent
+						const selected = state.viewFraction === undefined && contact.kind === selectedEvent
 
 						return (
 							<button
@@ -99,8 +113,10 @@ export function LunarEclipsePanel() {
 				<CollapsibleSection id="lunarEclipse.localView" title="Local View">
 					<LocalContent stale={stale}>
 						<LunarEclipseLocalView view={local.view} />
+						{fraction !== undefined && <Slider label="From P1 to P4, %" value={Math.round(fraction * 1000) / 10} min={0} max={100} step={0.1} onChange={handleViewFraction} />}
+						{local.view.time !== undefined && <DataRow label="Drawn at">{formatLongDateTime(local.view.time, timeZone)}</DataRow>}
 						{selectedLocal && (
-							<DataRow label={`Position / zenith angle at ${selectedEvent}`}>
+							<DataRow label={`Position / zenith angle at ${selectedLocal.kind}`}>
 								{formatEclipseAngle(selectedLocal.positionAngle)} / {formatEclipseAngle(selectedLocal.zenithAngle)}
 							</DataRow>
 						)}
@@ -109,8 +125,8 @@ export function LunarEclipsePanel() {
 					<SegmentedControl label="East" options={HANDEDNESS} value={view.handedness} onChange={(handedness) => void setViewSettings(lunarEclipseState, { handedness })} format={(value) => (value === 'eastRight' ? 'Right' : 'Left')} />
 					<Checkbox label="Moon at the other contacts" checked={view.ghosts} onChange={(ghosts) => void setViewSettings(lunarEclipseState, { ghosts })} />
 					<Notice>
-						The Moon at {local.view.selectedEvent ?? selectedEvent} crossing the Earth's penumbra and umbra; the red band is below the horizon. The position angle places the contact on the Moon's limb from celestial north through east, the zenith angle from the direction of the zenith. A geometric diagram,
-						not a photorealistic rendering.
+						The Moon at {local.view.selectedEvent ?? 'the instant drawn'} crossing the Earth's penumbra and umbra, anywhere from P1 to P4 with the slider; the red band is below the horizon. The position angle places the contact on the Moon's limb from celestial north through east, the zenith angle from the
+						direction of the zenith. A geometric diagram, not a photorealistic rendering.
 					</Notice>
 				</CollapsibleSection>
 			)}

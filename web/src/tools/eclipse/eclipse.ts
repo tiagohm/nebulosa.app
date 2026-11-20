@@ -75,3 +75,21 @@ export function formatEclipseMagnitude(magnitude: number | undefined) {
 export function errorMessage(error: unknown) {
 	return error instanceof Error ? error.message : 'Request failed'
 }
+
+// Local circumstances as the eclipse maps' Local View fraction needs them: the contacts' times and the instant drawn,
+// in Unix milliseconds.
+export interface LocalViewTimes {
+	// Contacts, by kind, with their instants.
+	readonly events: readonly { readonly kind: string; readonly time: number }[]
+	// Instant the Local View draws; absent without one.
+	readonly view: { readonly time?: number }
+}
+
+// Returns the fraction of a local eclipse its Local View shows, from the instant drawn: 0 at the first contact and 1 at
+// the last (C1 and C4, or P1 and P4), clamped to [0, 1]; undefined without both contacts or an instant.
+export function viewFractionOf({ events, view }: LocalViewTimes, first: string, last: string): number | undefined {
+	const start = events.find((event) => event.kind === first)?.time
+	const end = events.find((event) => event.kind === last)?.time
+	if (start === undefined || end === undefined || view.time === undefined || end <= start) return undefined
+	return Math.min(1, Math.max(0, (view.time - start) / (end - start)))
+}

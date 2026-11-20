@@ -2,7 +2,20 @@ import { expect, test } from 'bun:test'
 import { MISSING } from '../../format'
 import { ACTIVE_TOOL_LOCATION, resolveToolLocation } from '../../location/site'
 import { DEFAULT_ZONE_OVERRIDE, resolveDisplayZone } from '../../location/zone'
-import { formatEclipseAngle, formatEclipseMagnitude, mapLocation, samePlace, utcDate, utcDateStart } from './eclipse'
+import { formatEclipseAngle, formatEclipseMagnitude, mapLocation, samePlace, utcDate, utcDateStart, viewFractionOf } from './eclipse'
+
+test('tells the stage of the eclipse a Local View draws, from its first to its last contact', () => {
+	const events = [
+		{ kind: 'C1', time: 1000 },
+		{ kind: 'MAX', time: 1600 },
+		{ kind: 'C4', time: 2000 },
+	]
+	expect(viewFractionOf({ events, view: { time: 1000 } }, 'C1', 'C4')).toBe(0)
+	expect(viewFractionOf({ events, view: { time: 1600 } }, 'C1', 'C4')).toBeCloseTo(0.6, 12)
+	expect(viewFractionOf({ events, view: { time: 2000 } }, 'C1', 'C4')).toBe(1)
+	expect(viewFractionOf({ events, view: {} }, 'C1', 'C4')).toBeUndefined()
+	expect(viewFractionOf({ events: events.slice(1), view: { time: 1600 } }, 'C1', 'C4')).toBeUndefined()
+})
 
 test('a click on the map keeps the zone of the coordinates entered before, or UTC after a site', () => {
 	expect(mapLocation(ACTIVE_TOOL_LOCATION, { longitude: 10, latitude: 20 })).toEqual({ mode: 'manual', latitude: 20, longitude: 10, elevation: 0, timeZone: 'UTC' })

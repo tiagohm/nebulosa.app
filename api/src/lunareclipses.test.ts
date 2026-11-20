@@ -154,6 +154,21 @@ test('computes the circumstances and the Local View of a place', async () => {
 	expect(view.events).toEqual(up.events)
 })
 
+test('draws the Local View at a fraction of the eclipse, 0 and 1 being P1 and P4', async () => {
+	const at = async (event: string) => (await local(TOTAL.id, `longitude=77&latitude=-3&event=${event}`).json()) as LocalLunarEclipse
+	const start = await at('0')
+	const middle = await at('0.5')
+	const p1 = start.events.find((event) => event.kind === 'P1')!
+	const p4 = start.events.find((event) => event.kind === 'P4')!
+
+	expect(start.view.selectedEvent).toBe('P1')
+	expect(start.view.time).toBe(p1.time)
+	expect((await at('1')).view.time).toBe(p4.time)
+	expect(middle.view.selectedEvent).toBeUndefined()
+	expect(Math.abs(middle.view.time! - (p1.time + p4.time) / 2)).toBeLessThan(1)
+	expect(middle.view.shapes.some((shape) => shape.kind === 'circle' && shape.role === 'moonDisk')).toBe(true)
+})
+
 test('omits the durations a penumbral eclipse lacks', async () => {
 	const result = (await local(PENUMBRAL.id, 'longitude=-46.6&latitude=-23.5').json()) as LocalLunarEclipse
 

@@ -2,9 +2,11 @@ import { type LunarEclipse, type LunarEclipseType, nearestLunarEclipse } from 'n
 import type { SunMoonProvider } from 'nebulosa/src/astronomy/events/eclipse/eclipse'
 import {
 	computeLocalLunarEclipseCircumstances,
+	computeLocalLunarEclipseInstant,
 	computeLocalLunarEclipseViewGeometry,
 	type LocalLunarEclipseCircumstances,
 	type LocalLunarEclipseDetails,
+	type LocalLunarEclipseInstant,
 	type LocalLunarEclipseSvgShape,
 	type LocalLunarEclipseVisibilityKind,
 	type LocalLunarViewHandedness,
@@ -115,8 +117,9 @@ export interface LocalLunarEclipseVisibility {
 
 // Presentation of the Local View: the Moon's path through the Earth's shadow as seen from a place.
 export interface LunarEclipseViewOptions {
-	// Contact whose Moon disk is drawn; MAX, then the first contact, when the eclipse lacks it.
-	readonly event: LunarEclipseContactKind
+	// Contact whose Moon disk is drawn, MAX, then the first contact, when the eclipse lacks it; or a fraction in [0, 1]
+	// of the eclipse, 0 being P1 and 1 being P4, drawn between the contacts.
+	readonly event: LunarEclipseContactKind | number
 	// Whether up is the zenith or celestial north.
 	readonly orientation: LocalLunarViewOrientationMode
 	// Whether east is to the right or to the left.
@@ -131,8 +134,10 @@ export interface LunarEclipseLocalView {
 	readonly width: number
 	// Height, in pixels.
 	readonly height: number
-	// Contact whose Moon disk is drawn, absent when the eclipse has none.
+	// Contact whose Moon disk is drawn, absent when the eclipse has none or an instant between the contacts is drawn.
 	readonly selectedEvent?: LunarEclipseContactKind
+	// Instant drawn, in Unix milliseconds (UTC); absent when the eclipse has no contact.
+	readonly time?: number
 	// Shapes in painting order.
 	readonly shapes: readonly LocalLunarEclipseSvgShape[]
 }
@@ -168,6 +173,9 @@ const CACHE_LIMIT = 8
 
 // Default presentation of the Local View.
 const DEFAULT_VIEW_OPTIONS: LunarEclipseViewOptions = { event: 'MAX', orientation: 'zenith', handedness: 'eastRight', ghosts: true }
+
+// Contacts of a lunar eclipse, which the `event` query parameter names; anything else is a fraction of the eclipse.
+const LUNAR_CONTACT_KINDS: ReadonlySet<LunarEclipseContactKind> = new Set(['P1', 'U1', 'U2', 'MAX', 'U3', 'U4', 'P4'])
 
 // Id of an eclipse: the Unix milliseconds of its greatest eclipse, truncated.
 function eclipseId(eclipse: LunarEclipse): string {
@@ -234,8 +242,9 @@ function circumstances(eclipse: LunarEclipse, { longitude, latitude }: EclipseLo
 	return computeLocalLunarEclipseCircumstances(eclipse, deg(longitude), deg(latitude), sunMoon, { altitudeSamples })
 }
 
-// Returns the circumstances of an eclipse from a place, local, with its Local View drawn as view asks.
-export function localLunarEclipse(eclipse: LunarEclipse, location: EclipseLocation, view: LunarEclipseViewOptions, local: LocalLunarEclipseCircumstances, ephemeris: EphemerisProvenance): LocalLunarEclipse {
+// Returns the circumstances of an eclipse from a place, local, with its Local View drawn as view asks: at instant when
+// given (the state at view's fraction), otherwise at view's contact.
+export function localLunarEclipse(eclipse: LunarEclipse, location: EclipseLocation, view: LunarEclipseViewOptions, local: LocalLunarEclipseCircumstances, ephemeris: EphemerisProvenance, instant?: LocalLunarEclipseInstant): LocalLunarEclipse {
 	const events: LocalLunarEclipseContact[] = []
 
 	for (const contact of lunarEclipseEvents(eclipse)) {
@@ -245,7 +254,8 @@ export function localLunarEclipse(eclipse: LunarEclipse, location: EclipseLocati
 		events.push({ kind, time: timeToUnixMillis(event.time), observable, altitude: toDeg(altitude), azimuth: toDeg(azimuth), positionAngle: toDeg(positionAngle), zenithAngle: toDeg(zenithAngle), umbralMagnitude, penumbralMagnitude })
 	}
 
-	const geometry = computeLocalLunarEclipseViewGeometry(local, eclipse, { selectedEvent: view.event, orientationMode: view.orientation, handedness: view.handedness, includeGhostDisks: view.ghosts, includeHorizon: true, horizonAltitude: 0 })
+	const geometry = computeLocalLunarEclipseViewGeometry(local, eclipse, { selectedEvent: typeof view.event === 'number' ? 'MAX' : view.event, instant, orientationMode: view.orientation, handedness: view.handedness, includeGhostDisks: view.ghosts, includeHorizon: true, horizonAltitude: 0 })
+	const drawn = instant ?? (geometry.selectedEvent && local.events[geometry.selectedEvent])
 	const { kind, text, hasObservableEclipse } = local.visibility
 
 	return {
@@ -254,7 +264,7 @@ export function localLunarEclipse(eclipse: LunarEclipse, location: EclipseLocati
 		visibility: { kind, text, hasObservableEclipse },
 		details: local.details,
 		events,
-		view: { width: geometry.width, height: geometry.height, selectedEvent: geometry.selectedEvent, shapes: geometry.shapes },
+		view: { width: geometry.width, height: geometry.height, selectedEvent: geometry.selectedEvent, time: drawn ? timeToUnixMillis(drawn.time) : undefined, shapes: geometry.shapes },
 		ephemeris,
 	}
 }
@@ -330,7 +340,7 @@ export class LunarEclipseService {
 		const eclipse = resolveLunarEclipse(id, snapshot)
 		if (!eclipse) return undefined
 
-		const { result: local, provenance } = eclipseEphemeris(snapshot, eclipse.maximalTime).run((sunMoon, source) => {
+		const { result, provenance } = eclipseEphemeris(snapshot, eclipse.maximalTime).run((sunMoon, source) => {
 			const key = `${source}:${eclipseId(eclipse)}:${location.longitude}:${location.latitude}`
 			let circumstancesHere = this.#locals.get(key)
 
@@ -339,20 +349,23 @@ export class LunarEclipseService {
 				this.#locals.set(key, circumstancesHere)
 			}
 
-			return circumstancesHere
+			// The state at a fraction of the eclipse, on the same Sun and Moon as its contacts.
+			const instant = typeof view.event === 'number' ? computeLocalLunarEclipseInstant(eclipse, deg(location.longitude), deg(location.latitude), circumstancesHere.events, view.event, sunMoon) : undefined
+			return { local: circumstancesHere, instant }
 		})
 
-		return localLunarEclipse(eclipse, location, view, local, provenance)
+		return localLunarEclipse(eclipse, location, view, result.local, provenance, result.instant)
 	}
 }
 
-// Reads the presentation of the Local View from the `event`, `orientation`, `handedness`, and `ghosts` query
-// parameters, each defaulting to DEFAULT_VIEW_OPTIONS.
+// Reads the presentation of the Local View from the `event` (a contact, or a fraction of the eclipse in [0, 1]),
+// `orientation`, `handedness`, and `ghosts` query parameters, each defaulting to DEFAULT_VIEW_OPTIONS.
 function viewParams(params: URLSearchParams): LunarEclipseViewOptions {
 	const ghosts = params.get('ghosts')
+	const event = params.get('event')
 
 	return {
-		event: (params.get('event') as LunarEclipseContactKind | null) ?? DEFAULT_VIEW_OPTIONS.event,
+		event: event === null ? DEFAULT_VIEW_OPTIONS.event : LUNAR_CONTACT_KINDS.has(event as LunarEclipseContactKind) ? (event as LunarEclipseContactKind) : Number(event),
 		orientation: (params.get('orientation') as LocalLunarViewOrientationMode | null) ?? DEFAULT_VIEW_OPTIONS.orientation,
 		handedness: (params.get('handedness') as LocalLunarViewHandedness | null) ?? DEFAULT_VIEW_OPTIONS.handedness,
 		ghosts: ghosts === null ? DEFAULT_VIEW_OPTIONS.ghosts : ghosts === 'true',

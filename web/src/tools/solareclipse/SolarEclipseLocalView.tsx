@@ -16,7 +16,7 @@ const SHAPE_CLASSES: Readonly<Record<LocalSolarEclipseSvgShape['role'], string>>
 	ghostSunDisk: 'fill-none stroke-ink-300 [stroke-dasharray:2_2]',
 	ghostMoonDisk: 'fill-none stroke-ink-300 [stroke-dasharray:2_2]',
 	sunDisk: 'fill-map-sun/45 stroke-map-sun',
-	moonDisk: 'fill-base-000 stroke-ink-300',
+	moonDisk: 'fill-base-000/95 stroke-ink-300',
 	solarLimb: 'fill-none stroke-map-sun',
 	lunarLimb: 'fill-none stroke-ink-300',
 	trajectoryLine: 'stroke-ink-300 [stroke-dasharray:4_3]',

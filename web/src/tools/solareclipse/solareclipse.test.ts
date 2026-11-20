@@ -19,6 +19,7 @@ import {
 	selectMapPlace,
 	selectPoint,
 	setLayer,
+	setViewFraction,
 	setViewSettings,
 	showEclipse,
 	type SolarEclipseState,
@@ -204,6 +205,27 @@ test('a visible-only search that finds nothing keeps the eclipse shown and says 
 	expect(state.notice).toBe('No solar eclipse visible here within 48 eclipses')
 	expect(state.error).toBeUndefined()
 	expect(state.loading).toBe(false)
+})
+
+test('the Local View draws a fraction of the eclipse until a contact is chosen, and keeps it for another place', () => {
+	const state = newState()
+	state.eclipse = A
+	const { io, requested } = fakeApi()
+
+	void syncPlace(state, { latitude: 0, longitude: 10, elevation: 0 }, io)
+	void setViewFraction(state, 0.25, io)
+	expect(requested.at(-1)).toContain('&event=0.25&')
+	void setViewFraction(state, 0.25, io)
+	expect(requested.length).toBe(2)
+
+	void selectMapPlace(state, { longitude: 30, latitude: 0 }, io)
+	expect(requested.at(-1)).toContain('longitude=30&latitude=0&event=0.25&')
+
+	void selectEvent(state, state.selectedEvent, io)
+	expect(state.viewFraction).toBeUndefined()
+	expect(requested.at(-1)).toContain(`&event=${state.selectedEvent}&`)
+	void selectEvent(state, 'C2', io)
+	expect(requested.at(-1)).toContain('&event=C2&')
 })
 
 test('a new place keeps the circumstances shown until its own arrive, and drops them if those fail', async () => {

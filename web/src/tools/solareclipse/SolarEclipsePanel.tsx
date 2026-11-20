@@ -1,5 +1,6 @@
 import type { LocalViewHandedness, LocalViewOrientationMode } from 'api'
 import { cn } from 'cn'
+import { useRef } from 'react'
 import { useSnapshot } from 'valtio'
 import { formatGeographic, formatKilometers, formatLongDateTime, formatLongDuration } from '../../format'
 import { useDisplayZone, useToolLocation } from '../../location/useLocation'
@@ -9,7 +10,8 @@ import { Checkbox } from '../../ui/Checkbox'
 import { DataRow } from '../../ui/DataRow'
 import { Notice } from '../../ui/Notice'
 import { SegmentedControl } from '../../ui/SegmentedControl'
-import { formatEclipseAngle, formatEclipseMagnitude } from '../eclipse/eclipse'
+import { Slider } from '../../ui/Slider'
+import { formatEclipseAngle, formatEclipseMagnitude, viewFractionOf } from '../eclipse/eclipse'
 import { EclipseLocationSection, EclipseZoneSelect, LocalContent } from '../eclipse/EclipsePanelParts'
 import { GlobalPointIcon } from './GlobalPointMarker'
 import { centralLineText, contactName, ECLIPSE_TYPE_NAMES, GLOBAL_POINTS, type GlobalPoint, globalPoints, loadLocal, selectEvent, selectMapPlace, selectPoint, setViewSettings, solarEclipseState, isStaleLocal, visibilityHeadline } from './solareclipse'
@@ -75,7 +77,7 @@ function GlobalPointRow({ point, selected, timeZone }: GlobalPointRowProps) {
 // Local Circumstances panel.
 export function SolarEclipsePanel() {
 	const state = useSnapshot(solarEclipseState)
-	const { eclipse, map, place, local, localLoading, localError, selectedEvent, selectedPoint, view } = state
+	const { eclipse, map, place, local, localError, selectedPoint, view } = state
 	const location = useToolLocation(state.location)
 	const displayZone = useDisplayZone(location, state.zone)
 	const timeZone = displayZone.zone
@@ -84,8 +86,19 @@ export function SolarEclipsePanel() {
 	const greatest = map?.greatestEclipse
 	const duration = map?.greatestDuration
 	const maximum = local?.events.find((event) => event.kind === 'MAX')
-	const shown = local?.events.find((event) => event.kind === (local.view.selectedEvent ?? selectedEvent))
+	const shown = local?.events.find((event) => event.kind === local.view.selectedEvent)
+	// Stage of the eclipse the Local View draws, as the slider holds it while its answer is on the way.
+	const fraction = state.viewFraction ?? (local && viewFractionOf(local, 'C1', 'C4'))
 	const stale = isStaleLocal(local, place)
+	const viewFractionTimer = useRef<Timer | undefined>(undefined)
+
+	function handleViewFraction(percent: number) {
+		const fraction = percent / 100
+		if (solarEclipseState.viewFraction === fraction) return
+		solarEclipseState.viewFraction = fraction
+		clearTimeout(viewFractionTimer.current)
+		viewFractionTimer.current = setTimeout(loadLocal, 500, solarEclipseState)
+	}
 
 	return (
 		<>
@@ -102,7 +115,6 @@ export function SolarEclipsePanel() {
 						{visibility && visibility.hasObservableEclipse && visibility.sunMotion !== 'none' && <Notice>The Sun is {visibility.sunMotion === 'rising' ? 'climbing' : 'descending'} during the eclipse.</Notice>}
 						{visibility?.hasGeometricEclipse && (!visibility.completeness.partialContactsComplete || !visibility.completeness.centralContactsComplete) && <Notice>Some contacts could not be found; the visibility rests on those that were.</Notice>}
 					</LocalContent>
-					{localLoading && <Notice>Computing the local circumstances…</Notice>}
 					{localError && (
 						<>
 							<Notice error>{localError}</Notice>
@@ -121,7 +133,7 @@ export function SolarEclipsePanel() {
 					<LocalContent stale={stale}>
 						{local && local.events.length === 0 && <Notice>The eclipse does not reach this place.</Notice>}
 						{local?.events.map((event) => {
-							const selected = event.kind === (local.view.selectedEvent ?? selectedEvent)
+							const selected = event.kind === local.view.selectedEvent
 
 							return (
 								<button
@@ -155,6 +167,8 @@ export function SolarEclipsePanel() {
 				<CollapsibleSection id="solarEclipse.localView" title="Local View">
 					<LocalContent stale={stale}>
 						<SolarEclipseLocalView view={local.view} />
+						{fraction !== undefined && <Slider label="From C1 to C4, %" value={Math.round(fraction * 1000) / 10} min={0} max={100} step={0.1} onChange={handleViewFraction} />}
+						{local.view.time !== undefined && <DataRow label="Drawn at">{formatLongDateTime(local.view.time, timeZone)}</DataRow>}
 						{shown?.positionAngle !== undefined && shown.zenithAngle !== undefined && (
 							<DataRow label={`Position / zenith angle at ${shown.kind}`}>
 								{formatEclipseAngle(shown.positionAngle)} / {formatEclipseAngle(shown.zenithAngle)}
@@ -165,8 +179,8 @@ export function SolarEclipsePanel() {
 					<SegmentedControl label="East" options={HANDEDNESS} value={view.handedness} onChange={(handedness) => void setViewSettings(solarEclipseState, { handedness })} format={(value) => (value === 'eastRight' ? 'Right' : 'Left')} />
 					<Checkbox label="Moon at the other contacts" checked={view.ghosts} onChange={(ghosts) => void setViewSettings(solarEclipseState, { ghosts })} />
 					<Notice>
-						The Moon over the Sun at {local.view.selectedEvent ?? selectedEvent}; the red band is below the horizon. The position angle places the contact on the Sun's limb from celestial north through east, the zenith angle from the direction of the zenith. A geometric diagram, not a photorealistic
-						rendering.
+						The Moon over the Sun at {local.view.selectedEvent ?? 'the instant drawn'}, anywhere from C1 to C4 with the slider; the red band is below the horizon. The position angle places the contact on the Sun's limb from celestial north through east, the zenith angle from the direction of the zenith. A
+						geometric diagram, not a photorealistic rendering.
 					</Notice>
 				</CollapsibleSection>
 			)}

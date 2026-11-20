@@ -78,6 +78,10 @@ export interface SolarEclipseState {
 	selectedPoint?: GlobalPointKind
 	// Contact drawn in the Local View.
 	selectedEvent: LocalEclipseContactKind
+	// Fraction of the local eclipse drawn in the Local View in place of selectedEvent, 0 being C1 and 1 being C4;
+	// absent while a contact is drawn. It is kept for another place or eclipse, so they can be compared at the same
+	// stage.
+	viewFraction?: number
 	// Where the tool observes from; the active profile's site until another is chosen.
 	location: ToolLocation
 	// Coordinates of the location whose local circumstances are asked for, kept by syncPlace; absent without one.
@@ -405,7 +409,7 @@ export async function loadLocal(state: SolarEclipseState, io: EclipseIo = browse
 	state.localError = undefined
 
 	try {
-		const query = `longitude=${place.longitude}&latitude=${place.latitude}&event=${state.selectedEvent}&orientation=${view.orientation}&handedness=${view.handedness}&ghosts=${view.ghosts}`
+		const query = `longitude=${place.longitude}&latitude=${place.latitude}&event=${state.viewFraction ?? state.selectedEvent}&orientation=${view.orientation}&handedness=${view.handedness}&ghosts=${view.ghosts}`
 		const local = await fetchJson<LocalSolarEclipse>(io, `/api/eclipses/solar/${eclipse.id}/local?${query}`, { signal: request.signal })
 		if (!request.current()) return
 		state.local = local
@@ -446,10 +450,20 @@ export function selectMapPlace(state: SolarEclipseState, point: EclipsePlace, io
 	return syncPlace(state, location, io)
 }
 
-// Draws a contact in the Local View; the global map is not loaded again.
+// Draws a contact in the Local View; the global map is not loaded again. A fraction drawn before gives way to the
+// contact.
 export function selectEvent(state: SolarEclipseState, kind: LocalEclipseContactKind, io: EclipseIo = browserEclipseIo) {
-	if (state.selectedEvent === kind) return
+	if (state.selectedEvent === kind && state.viewFraction === undefined) return
 	state.selectedEvent = kind
+	state.viewFraction = undefined
+	return loadLocal(state, io)
+}
+
+// Draws the Local View at a fraction of the local eclipse, 0 being C1 and 1 being C4, between its contacts;
+// only the local circumstances are asked for again.
+export function setViewFraction(state: SolarEclipseState, fraction: number, io: EclipseIo = browserEclipseIo) {
+	if (state.viewFraction === fraction) return
+	state.viewFraction = fraction
 	return loadLocal(state, io)
 }
 

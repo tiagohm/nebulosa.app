@@ -51,10 +51,10 @@ export function EclipseMapLegend({ children, passThrough = false, ref }: Eclipse
 
 	return (
 		<>
-			{!open && <IconButton icon="layers" label="Show legend" onClick={() => setOpen(true)} className="absolute bottom-9 left-3 border border-line-100 bg-base-100/80 sm:hidden" />}
-			<div ref={ref} className={cn('absolute bottom-9 left-3 flex max-w-[calc(100%-1.5rem)] items-start gap-2 rounded-sm border border-line-100 bg-base-100/80 px-2.5 py-2 text-xs leading-4 text-ink-200', !open && 'max-sm:hidden', passThrough && 'sm:pointer-events-none')}>
+			{!open && <IconButton icon="layers" label="Show legend" onClick={() => setOpen(true)} className="absolute bottom-9 left-3 border border-line-100 bg-base-100/80" />}
+			<div ref={ref} className={cn('absolute bottom-9 left-3 flex max-w-[calc(100%-1.5rem)] items-start gap-2 rounded-sm border border-line-100 bg-base-100/80 px-2.5 py-2 text-xs leading-4 text-ink-200', !open && 'hidden', passThrough && 'sm:pointer-events-none')}>
 				<div className="flex min-w-0 flex-col gap-1">{children}</div>
-				<IconButton icon="close" label="Hide legend" onClick={() => setOpen(false)} className="-my-1.5 -mr-1.5 sm:hidden" />
+				<IconButton icon="close" label="Hide legend" onClick={() => setOpen(false)} className="-my-1.5 -mr-1.5" />
 			</div>
 		</>
 	)

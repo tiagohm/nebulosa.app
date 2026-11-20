@@ -39,6 +39,10 @@ export interface LunarEclipseState {
 	notice?: string
 	// Contact highlighted on the map and drawn in the Local View.
 	selectedEvent: LunarEclipseContactKind
+	// Fraction of the local eclipse drawn in the Local View in place of selectedEvent, 0 being P1 and 1 being P4;
+	// absent while a contact is drawn. It is kept for another place or eclipse, so they can be compared at the same
+	// stage.
+	viewFraction?: number
 	// Where the tool observes from; the active profile's site until another is chosen.
 	location: ToolLocation
 	// Coordinates of the location whose local circumstances are asked for, kept by syncPlace; absent without one.
@@ -204,7 +208,7 @@ export async function loadLocal(state: LunarEclipseState, io: EclipseIo = browse
 	state.localError = undefined
 
 	try {
-		const query = `longitude=${place.longitude}&latitude=${place.latitude}&event=${state.selectedEvent}&orientation=${view.orientation}&handedness=${view.handedness}&ghosts=${view.ghosts}`
+		const query = `longitude=${place.longitude}&latitude=${place.latitude}&event=${state.viewFraction ?? state.selectedEvent}&orientation=${view.orientation}&handedness=${view.handedness}&ghosts=${view.ghosts}`
 		const local = await fetchJson<LocalLunarEclipse>(io, `/api/eclipses/lunar/${eclipse.id}/local?${query}`, { signal: request.signal })
 		if (!request.current()) return
 		state.local = local
@@ -245,10 +249,20 @@ export function selectMapPlace(state: LunarEclipseState, point: EclipsePlace, io
 	return syncPlace(state, location, io)
 }
 
-// Highlights a contact on the map and draws it in the Local View; the global map is not loaded again.
+// Highlights a contact on the map and draws it in the Local View; the global map is not loaded again. A fraction drawn before gives way to the
+// contact.
 export function selectEvent(state: LunarEclipseState, kind: LunarEclipseContactKind, io: EclipseIo = browserEclipseIo) {
-	if (state.selectedEvent === kind) return
+	if (state.selectedEvent === kind && state.viewFraction === undefined) return
 	state.selectedEvent = kind
+	state.viewFraction = undefined
+	return loadLocal(state, io)
+}
+
+// Draws the Local View at a fraction of the local eclipse, 0 being P1 and 1 being P4, between its contacts;
+// only the local circumstances are asked for again.
+export function setViewFraction(state: LunarEclipseState, fraction: number, io: EclipseIo = browserEclipseIo) {
+	if (state.viewFraction === fraction) return
+	state.viewFraction = fraction
 	return loadLocal(state, io)
 }
 

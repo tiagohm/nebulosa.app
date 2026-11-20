@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test'
 import type { NotificationRecord, ServerEvent } from 'api'
 import { proxy } from 'valtio'
 import type { ConnectionInput } from '../connection/connection'
-import { dismissNotifications, dismissToast, handleNotificationEvent, inScope, MAX_TOASTS, markNotificationsRead, notificationAge, type NotificationsState, refreshNotifications, setServerLink, unreadCount, visibleNotifications } from './notifications'
+import { dismissNotifications, dismissToast, handleNotificationEvent, inScope, MAX_TOASTS, markNotificationsRead, notificationAge, type NotificationsState, refreshNotifications, setServerLink, toastDuration, unreadCount, visibleNotifications } from './notifications'
 
 const pi: ConnectionInput = { name: 'Pi', type: 'INDI', host: 'PI.local', port: 7624 }
 
@@ -85,15 +85,62 @@ test('live notifications become toasts once, at most MAX_TOASTS, info never', as
 	handleNotificationEvent(state, created(notification('x', 1)))
 	handleNotificationEvent(state, created(notification('info', 2, { level: 'info' })))
 	expect(state.records).toHaveLength(2)
-	expect(state.toasts.map((t) => t.id)).toEqual(['x'])
+	expect(state.toasts.map((t) => t.record.id)).toEqual(['x'])
 
-	for (let i = 0; i < 4; i++) handleNotificationEvent(state, created(notification(`n${i}`, 10 + i, { level: 'success' })))
-	expect(state.toasts.map((t) => t.id)).toEqual(['n1', 'n2', 'n3'])
+	for (let i = 0; i < 4; i++) handleNotificationEvent(state, created(notification(`n${i}`, 10 + i, { level: 'success', message: `Frame ${i}.` })))
+	expect(state.toasts.map((t) => t.record.id)).toEqual(['x', 'n2', 'n3'])
 	expect(state.toasts).toHaveLength(MAX_TOASTS)
 
 	dismissToast(state, 'n2')
-	expect(state.toasts.map((t) => t.id)).toEqual(['n1', 'n3'])
+	expect(state.toasts.map((t) => t.record.id)).toEqual(['x', 'n3'])
 	expect(state.records.some((r) => r.id === 'n2')).toBeTrue()
+})
+
+test('a full stack drops successes before errors and warnings, and the oldest toast only when none is a success', async () => {
+	const state = newState()
+	await refreshNotifications(state, respond())
+
+	handleNotificationEvent(state, created(notification('s', 1, { level: 'success', message: 'Done.' })))
+	handleNotificationEvent(state, created(notification('e1', 2, { message: 'First.' })))
+	handleNotificationEvent(state, created(notification('w', 3, { level: 'warning', message: 'Needs you.' })))
+	handleNotificationEvent(state, created(notification('e2', 4, { message: 'Second.' })))
+	expect(state.toasts.map((t) => t.record.id)).toEqual(['e1', 'w', 'e2'])
+
+	handleNotificationEvent(state, created(notification('s2', 5, { level: 'success', message: 'Done again.' })))
+	expect(state.toasts.map((t) => t.record.id)).toEqual(['e1', 'w', 'e2'])
+
+	handleNotificationEvent(state, created(notification('e3', 6, { message: 'Third.' })))
+	expect(state.toasts.map((t) => t.record.id)).toEqual(['w', 'e2', 'e3'])
+})
+
+test('notifications that read the same share one toast, which moves to the end', async () => {
+	const state = newState()
+	await refreshNotifications(state, respond())
+
+	handleNotificationEvent(state, created(notification('a', 1, { level: 'success' })))
+	handleNotificationEvent(state, created(notification('other', 2, { message: 'Other.' })))
+	handleNotificationEvent(state, created(notification('b', 3, { level: 'success' })))
+	expect(state.toasts.map((t) => [t.record.id, t.ids])).toEqual([
+		['other', ['other']],
+		['b', ['a', 'b']],
+	])
+
+	// Another connection reads apart.
+	handleNotificationEvent(state, created(notification('c', 4, { level: 'success', source: { kind: 'capture', connectionId: 'd' } })))
+	expect(state.toasts).toHaveLength(3)
+
+	// A merged notification dismissed elsewhere leaves the toast; its latest one takes the toast with it.
+	handleNotificationEvent(state, { type: 'notification:dismissed', ids: ['a'] })
+	expect(state.toasts.find((t) => t.record.id === 'b')?.ids).toEqual(['b'])
+	handleNotificationEvent(state, { type: 'notification:dismissed', ids: ['b'] })
+	expect(state.toasts.map((t) => t.record.id)).toEqual(['other', 'c'])
+})
+
+test('a success stays for its reading time, and errors and warnings until hidden', () => {
+	expect(toastDuration({ level: 'success', title: 'Capture completed', message: 'Camera Simulator captured 1 frame.' })).toBe(2000 + 40 * 51)
+	expect(toastDuration({ level: 'success', title: 'x'.repeat(80), message: 'x'.repeat(240) })).toBe(8000)
+	expect(toastDuration({ level: 'error', title: 'Capture failed', message: 'Failed.' })).toBeUndefined()
+	expect(toastDuration({ level: 'warning', title: 'Flat Wizard needs you', message: 'Cover the telescope.' })).toBeUndefined()
 })
 
 test('a reconnect never toasts the history again', async () => {
@@ -132,7 +179,7 @@ test('applies what any tab read or dismissed, removing the dismissed toasts', as
 	const state = newState()
 	await refreshNotifications(state, respond())
 	handleNotificationEvent(state, created(notification('a', 1)))
-	handleNotificationEvent(state, created(notification('b', 2)))
+	handleNotificationEvent(state, created(notification('b', 2, { message: 'Other.' })))
 
 	handleNotificationEvent(state, { type: 'notification:read', ids: ['a'] })
 	expect(state.records.map((r) => [r.id, r.read])).toEqual([
@@ -142,7 +189,7 @@ test('applies what any tab read or dismissed, removing the dismissed toasts', as
 
 	handleNotificationEvent(state, { type: 'notification:dismissed', ids: ['b'] })
 	expect(state.records.map((r) => r.id)).toEqual(['a'])
-	expect(state.toasts.map((t) => t.id)).toEqual(['a'])
+	expect(state.toasts.map((t) => t.record.id)).toEqual(['a'])
 })
 
 test('reading and dismissing are asked of the server, never applied before its event', async () => {

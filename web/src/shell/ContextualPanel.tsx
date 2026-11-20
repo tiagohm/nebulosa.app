@@ -6,7 +6,8 @@ import { SectionHeading } from '../ui/SectionHeading'
 // Collapsible right-hand panel of a workspace with the controls of its current context. On wide screens
 // it is a docked column that takes no space when collapsed; on narrow screens it slides over the
 // workspace as a drawer. The panel only presents controls: collapsing or replacing it never stops what
-// those controls started, so it holds no operational state of its own.
+// those controls started, so it holds no operational state of its own. While docked and open it carries
+// data-docked-panel, which the notification toasts read to stay beside it.
 
 export interface ContextualPanelProps {
 	// Heading of the panel's current content.
@@ -30,6 +31,7 @@ export function ContextualPanel({ title, actions, open, docked, onClose, childre
 			{!docked && open && <button type="button" title="Close panel" onClick={onClose} className="absolute inset-0 z-20 cursor-default border-0 bg-scrim/60 p-0" />}
 			<aside
 				inert={!open}
+				data-docked-panel={docked && open ? '' : undefined}
 				onKeyDown={(e) => !docked && e.key === 'Escape' && onClose()}
 				className={cn(
 					'flex-none overflow-hidden bg-base-000 motion-reduce:transition-none',

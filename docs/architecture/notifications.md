@@ -32,7 +32,12 @@ Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
   The history and its read states are the same for every tab: `POST /api/notifications/read` marks notifications read and publishes `notification:read` with the ids that were unread, and `POST /api/notifications/dismiss` removes them from the history and publishes `notification:dismissed` with the ids it held (both take `NotificationIdsRequest`, ignore unknown ids, publish nothing when nothing changed, and answer 204).
 - Web: `notificationsState` (`web/src/notifications/notifications.ts`, in `SERVER_STORES`) mirrors the events and refetches the history on every socket open, replaying the notification events received during the request.
   Reading and dismissing (`markNotificationsRead`, `dismissNotifications`) are asked of the server and applied when their events arrive, so every tab follows them; a dismissed notification also leaves the toasts.
-  Only notifications arriving live after the first fetch become toasts (`NotificationToasts`, mounted once by the shell; at most 3, success for 2 s, warning for 4 s, error for 5 s; info never).
+  Only notifications arriving live after the first fetch become toasts (`NotificationToasts`, mounted once by the shell; info never).
+  A toast writes its severity as a word, and notifications with the same code, title, message, and connection share one toast with a count.
+  A success hides itself after its reading time (`toastDuration`: 2 s plus 40 ms per character of title and message, at most 8 s), which stops while the toast is hovered or focused; an error or a warning stays until hidden or viewed.
+  At most 3 toasts show: a new one drops the oldest success first, and the oldest toast only when none is a success, so a burst of successes never hides an error.
+  Hiding a toast never marks it read; when its target can be opened now, the whole toast is the View action, which marks every notification of the toast read.
+  The stack sits above the status bar at the bottom right, left of the contextual panel while it is docked and open (`data-docked-panel`).
   The same host shows a toast of the tab itself when its event socket stays closed for 5 s after it was open (`onClose` of `web/src/events.ts`, `NotificationsState.server`), then a short reconnected toast when it reopens;
   the server cannot report its own loss, so this toast never enters the history.
 - Scope: the bell counts and the panel lists the notifications of the active profile's saved connection, matched by endpoint so they still count after it closed, plus application-wide ones; the panel can show every connection.

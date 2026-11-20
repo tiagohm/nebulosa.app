@@ -13,7 +13,7 @@ import { notificationAge } from './notifications'
 export const LEVEL_ICON_CLASS: Readonly<Record<NotificationLevel, string>> = {
 	info: 'text-info',
 	success: 'text-success',
-	warning: 'text-accent',
+	warning: 'text-warning',
 	error: 'text-danger',
 }
 

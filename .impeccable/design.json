@@ -1,6 +1,6 @@
 {
 	"schemaVersion": 2,
-	"generatedAt": "2026-11-20T11:58:05.113Z",
+	"generatedAt": "2026-11-20T12:20:20.389Z",
 	"title": "Design System: Nebulosa",
 	"extensions": {
 		"colorMeta": {
@@ -335,6 +335,14 @@
 			"description": "An entry of the Tools catalog: icon tile, name, availability, description.",
 			"html": "<button class=\"ds-tool-card\"><span class=\"ds-tool-icon\"><svg viewBox=\"0 0 24 24\" width=\"17.5\" height=\"17.5\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M12 3l2.6 5.5l6 .8l-4.4 4.2l1.1 6L12 16.6l-5.3 2.9l1.1-6l-4.4-4.2l6-.8z\"/></svg></span><span class=\"ds-tool-body\"><span class=\"ds-tool-head\"><span class=\"ds-tool-name\">Observing Planner</span><span class=\"ds-tool-pill\">Available</span></span><span class=\"ds-tool-desc\">Finds the best targets of a night, explains why, and keeps manual night plans.</span></span></button>",
 			"css": ".ds-tool-card { font-family: var(--font-mono, 'JetBrains Mono', ui-monospace, monospace); display: flex; align-items: flex-start; gap: 10.5px; width: 300px; padding: 10.5px; border: 1px solid var(--color-line-100); border-radius: 10px; background: var(--color-base-000); color: inherit; text-align: left; cursor: pointer; transition: border-color 150ms; } .ds-tool-card:hover { border-color: var(--color-line-200); } .ds-tool-card:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; } .ds-tool-icon { display: flex; flex: none; align-items: center; justify-content: center; width: 31.5px; height: 31.5px; border-radius: 6px; background: var(--color-base-200); color: var(--color-ink-200); } .ds-tool-body { display: flex; flex-direction: column; gap: 3.5px; min-width: 0; } .ds-tool-head { display: flex; align-items: center; justify-content: space-between; gap: 7px; } .ds-tool-name { font-size: 12.25px; line-height: 17.5px; font-weight: 600; color: var(--color-ink-100); } .ds-tool-pill { flex: none; padding: 1px 7px; border: 1px solid color-mix(in srgb, var(--color-success) 40%, transparent); border-radius: 9999px; font-size: 10.5px; line-height: 14px; font-weight: 500; letter-spacing: 0.04em; text-transform: uppercase; color: var(--color-success); } .ds-tool-desc { font-size: 10.5px; line-height: 14px; color: var(--color-ink-200); }"
+		},
+		{
+			"name": "Toast",
+			"kind": "card",
+			"refersTo": "toast",
+			"description": "Floating notice above the status bar: severity word, title, message; the whole body is the View action; errors and warnings stay until hidden.",
+			"html": "<div class=\"ds-toast ds-toast-error\"><button class=\"ds-toast-body\"><span class=\"ds-toast-level\">Error</span><span class=\"ds-toast-title\">Capture failed</span><span class=\"ds-toast-message\">Capture with Camera Simulator failed: a device disconnected.</span></button><button class=\"ds-toast-hide\" title=\"Hide\">×</button></div>",
+			"css": ".ds-toast { font-family: var(--font-mono, 'JetBrains Mono', ui-monospace, monospace); display: flex; align-items: flex-start; gap: 3.5px; width: 360px; padding: 3.5px; border-radius: 10px; border: 1px solid var(--color-line-100); background: var(--color-base-200); color: var(--color-ink-100); box-shadow: 0 12px 32px rgb(0 0 0 / 0.45); } .ds-toast-error { border-color: color-mix(in srgb, var(--color-danger) 50%, transparent); } .ds-toast-body { display: flex; flex: 1; flex-direction: column; gap: 1.75px; padding: 7px; border: 0; border-radius: 6px; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; transition: background-color 150ms; } .ds-toast-body:hover { background: var(--color-base-300); } .ds-toast-body:focus-visible { outline: 2px solid var(--color-accent); outline-offset: -2px; } .ds-toast-level { font-size: 10.5px; line-height: 14px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-danger); } .ds-toast-title { font-size: 12.25px; line-height: 17.5px; font-weight: 600; } .ds-toast-message { font-size: 10.5px; line-height: 14px; color: var(--color-ink-200); } .ds-toast-hide { width: 33.25px; height: 33.25px; border: 0; border-radius: 6px; background: transparent; color: var(--color-ink-200); cursor: pointer; } .ds-toast-hide:hover { background: var(--color-base-300); color: var(--color-ink-100); }"
 		},
 		{
 			"name": "Navigation Rail",

@@ -8,7 +8,8 @@ import { type ApiFetch, browserFetch, jsonInit } from '../http'
 // whole retained history, replaying the events that arrived while that request was in flight. Reading and dismissing
 // are asked of the server, so they reach every tab, and the tab applies them when their events arrive. Only
 // notifications that arrive live after the first synchronization become toasts, so a reload or a reconnect never
-// replays them. The store also follows the event socket itself, so the tab can tell when it lost the server, which no
+// replays them. Toasts that read the same merge into one with a count; errors and warnings stay until hidden or viewed,
+// and a full stack drops a success before either of them. The store also follows the event socket itself, so the tab can tell when it lost the server, which no
 // server notification can report.
 
 // Notifications known to the tab and the toasts it shows.
@@ -17,8 +18,8 @@ export interface NotificationsState {
 	records: NotificationRecord[]
 	// Whether the history was fetched at least once; earlier events never become toasts.
 	synchronized: boolean
-	// Notifications shown as toasts, oldest first; at most MAX_TOASTS.
-	toasts: NotificationRecord[]
+	// Toasts shown, oldest first; at most MAX_TOASTS.
+	toasts: NotificationToast[]
 	// Whether the event socket is open (online) or closed after it was open (offline); absent before it first opened.
 	server?: ServerLink
 }
@@ -26,11 +27,56 @@ export interface NotificationsState {
 // State of the event socket of the tab.
 export type ServerLink = 'online' | 'offline'
 
-// Most toasts shown at once; the oldest is dropped first.
+// Toast of one or more notifications that read the same: same code, title, message, and connection.
+export interface NotificationToast {
+	// Latest notification merged into the toast; its id keys the toast.
+	readonly record: NotificationRecord
+	// Ids of every notification merged into the toast, oldest first; never empty.
+	readonly ids: readonly string[]
+}
+
+// Most toasts shown at once; the oldest success is dropped first, and the oldest toast only when none is a success.
 export const MAX_TOASTS = 3
 
 // Severities shown as toasts; info notifications stay in the history only.
 const TOAST_LEVELS: ReadonlySet<NotificationLevel> = new Set<NotificationLevel>(['success', 'warning', 'error'])
+
+// Shortest time a success toast stays, in milliseconds.
+const SUCCESS_TOAST_BASE = 2000
+
+// Time added to a success toast per character of its title and message, in milliseconds: a slow reading pace for an
+// operator glancing over from the rig.
+const SUCCESS_TOAST_PER_CHARACTER = 40
+
+// Longest time a success toast stays, in milliseconds.
+const SUCCESS_TOAST_MAX = 8000
+
+// Time a toast stays before it hides itself, in milliseconds while nobody hovers or focuses it, or undefined when it
+// stays until hidden or viewed: errors and warnings, which ask for attention, never time out.
+export function toastDuration(record: Pick<NotificationRecord, 'level' | 'title' | 'message'>): number | undefined {
+	if (record.level === 'error' || record.level === 'warning') return undefined
+	return Math.min(SUCCESS_TOAST_MAX, SUCCESS_TOAST_BASE + SUCCESS_TOAST_PER_CHARACTER * (record.title.length + record.message.length))
+}
+
+// Identity of what a toast reads: notifications with the same one merge.
+function toastKey({ code, title, message, source }: NotificationRecord) {
+	return JSON.stringify([code, title, message, source.connectionId])
+}
+
+// Shows a notification as a toast: merged into the toast that reads the same, which moves to the end, or added at the
+// end, dropping the oldest success (or the oldest toast when none is one) beyond MAX_TOASTS.
+function pushToast(state: NotificationsState, notification: NotificationRecord) {
+	const key = toastKey(notification)
+	const merged = state.toasts.find((toast) => toastKey(toast.record) === key)
+	const toasts = [...state.toasts.filter((toast) => toast !== merged), { record: notification, ids: [...(merged?.ids ?? []), notification.id] }]
+
+	while (toasts.length > MAX_TOASTS) {
+		const success = toasts.findIndex((toast) => toast.record.level === 'success')
+		toasts.splice(Math.max(success, 0), 1)
+	}
+
+	state.toasts = toasts
+}
 
 // Notifications known to the tab.
 export const notificationsState = proxy<NotificationsState>({ records: [], synchronized: false, toasts: [] })
@@ -54,7 +100,7 @@ function applyNotificationEvent(state: NotificationsState, event: NotificationEv
 			const { notification } = event
 			if (state.records.some((record) => record.id === notification.id)) return
 			state.records = [notification, ...state.records].sort(newestFirst)
-			if (toast && state.synchronized && TOAST_LEVELS.has(notification.level)) state.toasts = [...state.toasts, notification].slice(-MAX_TOASTS)
+			if (toast && state.synchronized && TOAST_LEVELS.has(notification.level)) pushToast(state, notification)
 			return
 		}
 		case 'notification:read': {
@@ -65,7 +111,7 @@ function applyNotificationEvent(state: NotificationsState, event: NotificationEv
 		case 'notification:dismissed': {
 			const ids = new Set(event.ids)
 			state.records = state.records.filter((record) => !ids.has(record.id))
-			state.toasts = state.toasts.filter((record) => !ids.has(record.id))
+			state.toasts = state.toasts.filter((toast) => !ids.has(toast.record.id)).map((toast) => ({ record: toast.record, ids: toast.ids.filter((id) => !ids.has(id)) }))
 		}
 	}
 }
@@ -128,9 +174,9 @@ export function setServerLink(state: NotificationsState, link: ServerLink) {
 	state.server = link
 }
 
-// Removes a toast; its notification stays in the history, read or not.
+// Hides the toast of a notification; its notifications stay in the history, read or not.
 export function dismissToast(state: NotificationsState, id: string) {
-	state.toasts = state.toasts.filter((toast) => toast.id !== id)
+	state.toasts = state.toasts.filter((toast) => toast.record.id !== id)
 }
 
 // Whether a notification concerns the saved connection of the active profile: application-wide ones always do, and

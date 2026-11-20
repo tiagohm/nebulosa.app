@@ -66,7 +66,7 @@ export function SatelliteEphemeris({ observer, zone }: SatelliteEphemerisProps) 
 					<Button variant="secondary" disabled={rows.length === 0} title={rows.length === 0 ? 'Compute an ephemeris first.' : 'Saves the rows shown as a CSV file.'} onClick={() => downloadEphemerisCsv(rows, timeZone, `${name} ephemeris`)}>
 						Export CSV
 					</Button>
-					<Button type="submit" disabled={ephemerisLoading || !selectedId || !!inputError} title={!selectedId ? 'Select a satellite in the catalog.' : inputError}>
+					<Button type="submit" disabled={ephemerisLoading || !selectedId || !!inputError} title={!selectedId ? 'Search for a satellite first.' : inputError}>
 						Compute
 					</Button>
 				</div>
@@ -76,7 +76,7 @@ export function SatelliteEphemeris({ observer, zone }: SatelliteEphemerisProps) 
 					<Notice error>{inputError}</Notice>
 				</div>
 			)}
-			{!selectedId && <EmptyState title="No satellite selected" description="Select a satellite in the catalog." />}
+			{!selectedId && <EmptyState title="No satellite selected" description="Search for a satellite in the toolbar, or choose a pass tonight." />}
 			{ephemerisError && <EmptyState title="No ephemeris could be computed" description={ephemerisError} action={<Button onClick={() => void loadSatelliteEphemeris(artificialSatellitesState, observer)}>Retry</Button>} />}
 			{ephemerisLoading && <EmptyState title="Computing" />}
 			{ephemeris && !ephemerisLoading && (

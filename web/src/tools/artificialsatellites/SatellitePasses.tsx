@@ -54,7 +54,7 @@ function PassForm({ observer }: { readonly observer?: GeographicLocation }) {
 			<span className="flex h-9.5 items-center">
 				<Checkbox label="Daylight passes too" checked={passDraft.showAll} onChange={(value) => (draft.showAll = value)} />
 			</span>
-			<Button type="submit" className="ml-auto" disabled={passesLoading || !selectedId || !observer} title={!selectedId ? 'Select a satellite in the catalog.' : !observer ? 'Set the observing site of the profile.' : undefined}>
+			<Button type="submit" className="ml-auto" disabled={passesLoading || !selectedId || !observer} title={!selectedId ? 'Search for a satellite first.' : !observer ? 'Set the observing site of the profile.' : undefined}>
 				Find Passes
 			</Button>
 		</form>
@@ -203,7 +203,7 @@ export function SatellitePasses({ observer, zone }: SatellitePassesProps) {
 	return (
 		<div className="flex h-full min-h-0 flex-col overflow-y-auto">
 			<PassForm observer={observer} />
-			{!selectedId && <EmptyState title="No satellite selected" description="Select a satellite in the catalog." />}
+			{!selectedId && <EmptyState title="No satellite selected" description="Search for a satellite in the toolbar, or choose a pass tonight." />}
 			{selectedId && !observer && <EmptyState title="No observing site" description="Passes are predicted for the observing site of the profile." action={<Button onClick={() => openObservingSites()}>Set Location</Button>} />}
 			{passesError && <EmptyState title="No passes could be predicted" description={passesError} action={<Button onClick={retry}>Retry</Button>} />}
 			{passesLoading && <EmptyState title="Predicting passes" />}

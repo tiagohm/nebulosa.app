@@ -19,8 +19,9 @@ import {
 	loadSatelliteGroundTrack,
 	loadSatellitePasses,
 	loadTonight,
+	tonightKey,
 	type SatelliteSkyHandoff,
-	searchSatellites,
+	searchSatelliteList,
 	selectSatellite,
 	showSatelliteInSky,
 	tickSatelliteGroundTrack,
@@ -57,24 +58,14 @@ function state() {
 	return proxy<ArtificialSatellitesState>(initialArtificialSatellitesState())
 }
 
-test('an older search never replaces a newer one, and favorites are searched by id', async () => {
-	const tool = state()
-	const { io, calls } = deferredIo()
-	tool.query = 'iss'
-	const first = searchSatellites(tool, [], 0, io)
-	tool.favoritesOnly = true
-	const second = searchSatellites(tool, ['25544', '800000001'], 50, io)
-	expect(calls[1].url).toBe('/api/satellites?limit=50&offset=50&q=iss&ids=25544%2C800000001')
-	calls[1].resolve(Response.json(page('25544')))
-	await second
-	calls[0].resolve(Response.json(page('1', '2')))
-	await first
-	expect(tool.results?.items.map((item) => item.noradId)).toEqual(['25544'])
-	expect(tool.offset).toBe(50)
-
-	// Favorites only without favorites asks nothing.
-	await searchSatellites(tool, [], 0, io)
-	expect(tool.results).toEqual({ items: [], total: 0 })
+test('the search lists the catalog, or the favorites by id, and asks nothing without favorites', async () => {
+	const { io, calls } = routedIo(() => Response.json(page('25544')))
+	const signal = new AbortController().signal
+	expect((await searchSatelliteList(' iss ', undefined, signal, io)).items[0].noradId).toBe('25544')
+	expect(calls[0].url).toBe('/api/satellites?limit=20&q=iss')
+	await searchSatelliteList('', ['25544', '800000001'], signal, io)
+	expect(calls[1].url).toBe('/api/satellites?limit=20&ids=25544%2C800000001')
+	expect(await searchSatelliteList('x', [], signal, io)).toEqual({ items: [], total: 0 })
 	expect(calls).toHaveLength(2)
 })
 
@@ -370,7 +361,7 @@ test('tonight is the next night once the morning twilight is past, and lists the
 		return Response.json({ error: 'Satellite 1 has no orbital elements', code: 'noElements' }, { status: 404 })
 	})
 
-	await loadTonight(tool, ['25544', '48274', '1'], OBSERVER, 'k', io)
+	await loadTonight(tool, '', ['25544', '48274', '1'], OBSERVER, 'k', io)
 	expect(calls[0].body).toEqual({ observer: { latitude: -23.5, longitude: -46.6, elevation: 760 }, timeZone: 'America/Sao_Paulo', time: NOW })
 	expect(calls[1].body).toMatchObject({ time: NOW + HOUR })
 	// The window runs from the noon starting the next night to the one ending it.
@@ -387,22 +378,24 @@ test('tonight is the next night once the morning twilight is past, and lists the
 
 test('tonight searches nothing when the Sun never goes below the twilight limit, and waits for a site and a favorite', async () => {
 	const tool = state()
-	const { io, calls } = routedIo(() => Response.json(night(NOW - 6 * HOUR, undefined, undefined, 'continuousAbove')))
-	await loadTonight(tool, ['25544'], OBSERVER, 'k', io)
-	expect(calls.map((call) => call.url)).toEqual(['/api/astro-weather/night'])
+	const { io, calls } = routedIo((url) => Response.json(url.startsWith('/api/satellites?') ? page('25544') : night(NOW - 6 * HOUR, undefined, undefined, 'continuousAbove')))
+	await loadTonight(tool, '', ['25544'], OBSERVER, 'k', io)
+	expect(calls.map((call) => call.url)).toEqual(['/api/astro-weather/night', '/api/satellites?ids=25544&limit=50'])
 	expect(tool.tonight?.passes).toEqual([])
 	expect(tool.tonight?.start).toBe(NOW)
 
 	// Shown for the same inputs and a night not over, it is not read again; another key reads it again.
-	ensureTonight(tool, ['25544'], OBSERVER, 'k', io)
-	expect(calls).toHaveLength(1)
-	ensureTonight(tool, ['25544'], OBSERVER, 'other', io)
-	await Promise.resolve()
+	ensureTonight(tool, '', ['25544'], OBSERVER, 'k', io)
 	expect(calls).toHaveLength(2)
+	ensureTonight(tool, '', ['25544'], OBSERVER, 'other', io)
+	await Bun.sleep(0)
+	expect(calls).toHaveLength(4)
+	expect(tool.tonightKey).toBe('other')
 
-	await loadTonight(tool, [], OBSERVER, 'k', io)
-	await loadTonight(tool, ['25544'], undefined, 'k', io)
-	expect(calls).toHaveLength(2)
+	// Without a favorite or a site nothing is asked.
+	await loadTonight(tool, '', [], OBSERVER, 'k', io)
+	await loadTonight(tool, '', ['25544'], undefined, 'k', io)
+	expect(calls).toHaveLength(4)
 })
 
 test('the next visible pass is the first one with a visible part not over, or null', async () => {
@@ -448,4 +441,23 @@ test('the passes are searched when their view shows a satellite with elements an
 	expect(tool.passesLoading).toBe(false)
 	for (const call of calls.slice(1)) call.resolve(Response.json({ error: 'gone', code: 'notFound' }, { status: 404 }))
 	await selection
+})
+
+test('tonight lists the first members of a group, counting the others, and keys a group apart from the favorites', async () => {
+	const tool = state()
+	const { io, calls } = routedIo((url) => {
+		if (url === '/api/astro-weather/night') return Response.json(night(NOW - 6 * HOUR, NOW + 6 * HOUR, NOW + 16 * HOUR))
+		if (url.startsWith('/api/satellites?')) return Response.json({ ...page('25544'), total: 60 })
+		return Response.json({ passes: [pass(NOW + 7 * HOUR, NOW + 7.1 * HOUR, [[NOW + 7 * HOUR, NOW + 7.1 * HOUR]])], truncated: false, quality: QUALITY })
+	})
+
+	await loadTonight(tool, 'gp:GROUP:STATIONS', [], OBSERVER, 'k', io)
+	expect(calls[1].url).toBe('/api/satellites?group=gp%3AGROUP%3ASTATIONS&limit=50')
+	expect(tool.tonight).toMatchObject({ source: 'gp:GROUP:STATIONS', predicted: 1, leftOut: 59 })
+	expect(tool.tonight?.passes.map((entry) => entry.name)).toEqual(['SAT 25544'])
+
+	// The favorites do not key a group; the place and the catalog revision do.
+	expect(tonightKey('gp:GROUP:STATIONS', ['1'], OBSERVER, 3)).toBe(tonightKey('gp:GROUP:STATIONS', ['2'], OBSERVER, 3))
+	expect(tonightKey('', ['1'], OBSERVER, 3)).not.toBe(tonightKey('', ['2'], OBSERVER, 3))
+	expect(tonightKey('gp:GROUP:STATIONS', [], OBSERVER, 3)).not.toBe(tonightKey('gp:GROUP:STATIONS', [], OBSERVER, 4))
 })

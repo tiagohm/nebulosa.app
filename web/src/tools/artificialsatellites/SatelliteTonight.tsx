@@ -1,3 +1,4 @@
+import type { SatelliteGroupStatus } from 'api'
 import { useSnapshot } from 'valtio'
 import { formatCivilDate, formatClockTime, formatDegrees, formatDuration, formatSpan } from '../../format'
 import { openObservingSites, type SiteLocation } from '../../location/site'
@@ -9,12 +10,13 @@ import { NumberInput } from '../../ui/NumberInput'
 import { Select } from '../../ui/Select'
 import { Cell, Row, Table, type TableColumn } from '../../ui/Table'
 import { useNow } from '../../useNow'
-import { artificialSatellitesState, highestVisiblePoint, loadTonight, selectSatellite, showSatelliteInSky, TONIGHT_LIMIT, type TonightPass, type TonightResult, TWILIGHT_LABELS, TWILIGHT_LIMITS, type TwilightLimit } from './artificialsatellites'
+import { artificialSatellitesState, highestVisiblePoint, loadTonight, selectSatellite, showSatelliteInSky, TONIGHT_LIMIT, type TonightPass, type TonightResult, type TonightSource, TWILIGHT_LABELS, TWILIGHT_LIMITS, type TwilightLimit } from './artificialsatellites'
 
-// Tonight view of Artificial Satellites, the one the tool opens on: the passes of the profile's favorites that can be
-// seen tonight from the observing site of the active profile (sunlit while the Sun is below the twilight limit), in the
-// order they appear, each with how long until it does. Choosing a pass selects its satellite, whose details are the
-// contextual panel; its passes over more days are one view away. Times are in the display zone.
+// Tonight view of Artificial Satellites, the one the tool opens on: the passes of the profile's favorites, or of the
+// members of a downloaded group, that can be seen tonight from the observing site of the active profile (sunlit while
+// the Sun is below the twilight limit), in the order they appear, each with how long until it does. What is listed is
+// chosen at once; the altitude and the twilight wait for Find Passes. Choosing a pass selects its satellite, whose
+// details are the contextual panel; its passes over more days are one view away. Times are in the display zone.
 
 // Interval of the countdowns, in milliseconds: the nearest minute is enough to plan by.
 const COUNTDOWN_INTERVAL_MS = 30_000
@@ -24,6 +26,27 @@ const TWILIGHTS = Object.keys(TWILIGHT_LIMITS) as TwilightLimit[]
 
 // Columns of the table of tonight's passes.
 const TONIGHT_COLUMNS: readonly TableColumn[] = ['Satellite', 'When', 'Visible', { key: 'highest', label: 'Highest', numeric: true }, { key: 'altitude', label: 'Alt', numeric: true }, { key: 'startAzimuth', label: 'Start Az', numeric: true }, { key: 'endAzimuth', label: 'End Az', numeric: true }]
+
+// A group Tonight can list: a downloaded group that is not large.
+export interface TonightGroup {
+	// GP source key of the group (gp:GROUP:<name>).
+	readonly key: string
+	// Name of the group.
+	readonly label: string
+	// Objects the group lists.
+	readonly members: number
+}
+
+// Groups Tonight can list, of the groups of the catalog's sources: those downloaded and not large, whose members it
+// predicts at most TONIGHT_LIMIT of.
+export function tonightGroups(groups: readonly SatelliteGroupStatus[] | undefined): TonightGroup[] {
+	return (groups ?? []).filter((group) => group.members > 0 && !group.large).map((group) => ({ key: `gp:GROUP:${group.group}`, label: group.label, members: group.members }))
+}
+
+// Count of the satellites of a source in words: "6 favorites", "17 satellites of Space stations".
+function countText(count: number, label: string | undefined) {
+	return label === undefined ? `${count} ${count === 1 ? 'favorite' : 'favorites'}` : `${count} ${count === 1 ? 'satellite' : 'satellites'} of ${label}`
+}
 
 // When a pass can be seen, against now (Unix milliseconds): over, now, or in how long.
 function whenText({ pass }: TonightPass, now: number) {
@@ -91,21 +114,27 @@ interface SatelliteTonightProps {
 	readonly zone: DisplayZone
 	// Favorites of the active profile, by NORAD id.
 	readonly favorites: readonly string[]
+	// Satellites listed: the favorites or a group of `groups`.
+	readonly source: TonightSource
+	// Groups that can be listed.
+	readonly groups: readonly TonightGroup[]
 	// Key of the inputs the passes shown must be for (tonightKey).
 	readonly inputKey: string
 }
 
 // Tonight view.
-export function SatelliteTonight({ observer, zone, favorites, inputKey }: SatelliteTonightProps) {
+export function SatelliteTonight({ observer, zone, favorites, source, groups, inputKey }: SatelliteTonightProps) {
 	const { tonightDraft, tonight, tonightLoading, tonightError, tonightSelected } = useSnapshot(artificialSatellitesState)
 	const now = useNow(!!tonight, COUNTDOWN_INTERVAL_MS)
 	const draft = artificialSatellitesState.tonightDraft
 	const timeZone = zone.zone
-	const find = () => void loadTonight(artificialSatellitesState, favorites, observer, inputKey)
+	const find = () => void loadTonight(artificialSatellitesState, source, favorites, observer, inputKey)
 	const selected = tonightSelected === undefined ? undefined : tonight?.passes[tonightSelected]
+	const labelOf = (key: TonightSource) => (key ? (groups.find((group) => group.key === key)?.label ?? key) : undefined)
+	const shownLabel = tonight && labelOf(tonight.source)
+	const noFavorites = !source && favorites.length === 0
 
 	if (!observer) return <EmptyState title="No observing site" description="Tonight's passes are predicted for the observing site of the profile." action={<Button onClick={() => openObservingSites()}>Set Location</Button>} />
-	if (favorites.length === 0) return <EmptyState title="No favorite satellites" description="Mark satellites as favorites in the catalog to see which of them pass visibly tonight." action={<Button onClick={() => (artificialSatellitesState.tab = 'catalog')}>Open Catalog</Button>} />
 
 	return (
 		<div className="flex h-full min-h-0 flex-col overflow-y-auto">
@@ -116,15 +145,23 @@ export function SatelliteTonight({ observer, zone, favorites, inputKey }: Satell
 				}}
 				className="flex flex-none flex-wrap items-end gap-2 border-b border-line-100 bg-base-100 px-4 py-3"
 			>
+				<Select label="List" className="w-56 max-w-full flex-none" options={['', ...groups.map((group) => group.key)]} value={source} format={(key) => labelOf(key) ?? 'Favorites'} onChange={(key) => (artificialSatellitesState.tonightSource = key)} />
 				<NumberInput label="Minimum altitude" suffix="°" className="w-36" min={0} max={89} value={tonightDraft.minAltitude} onChange={(value) => (draft.minAltitude = value)} />
 				<Select label="Twilight" className="w-52 max-w-full flex-none" options={TWILIGHTS} value={tonightDraft.twilight} format={(value) => TWILIGHT_LABELS[value]} onChange={(value) => (draft.twilight = value)} />
-				<Button type="submit" className="ml-auto" disabled={tonightLoading}>
+				<Button type="submit" className="ml-auto" disabled={tonightLoading || noFavorites} title={noFavorites ? 'Mark satellites as favorites first, or list a group.' : undefined}>
 					Find Passes
 				</Button>
 			</form>
-			{tonightError && <EmptyState title="Tonight's passes could not be predicted" description={tonightError} action={<Button onClick={find}>Retry</Button>} />}
-			{tonightLoading && <EmptyState title="Predicting tonight's passes" description={`${Math.min(favorites.length, TONIGHT_LIMIT)} favorites`} />}
-			{tonight && !tonightLoading && !tonightError && (
+			{noFavorites && (
+				<EmptyState
+					title="No favorite satellites"
+					description="Search for satellites above and mark them with their star, or list a downloaded group."
+					action={groups.length > 0 ? <Button onClick={() => (artificialSatellitesState.tonightSource = groups[0].key)}>{`List ${groups[0].label}`}</Button> : undefined}
+				/>
+			)}
+			{!noFavorites && tonightError && <EmptyState title="Tonight's passes could not be predicted" description={tonightError} action={<Button onClick={find}>Retry</Button>} />}
+			{!noFavorites && tonightLoading && <EmptyState title="Predicting tonight's passes" description={source ? labelOf(source) : countText(Math.min(favorites.length, TONIGHT_LIMIT), undefined)} />}
+			{!noFavorites && tonight && !tonightLoading && !tonightError && (
 				<div className="flex flex-col gap-3 px-4 py-3">
 					<div className="text-xs text-ink-300">
 						Night of {formatCivilDate(tonight.night.sun.localDate)} · {darkText(tonight, timeZone)} · times {describeDisplayZone(zone)}
@@ -133,12 +170,13 @@ export function SatelliteTonight({ observer, zone, favorites, inputKey }: Satell
 						<Notice>The Sun stays above the {TWILIGHT_LABELS[tonight.twilight].toLowerCase()} limit tonight, so no satellite can be seen in a dark sky. Choose a brighter twilight limit.</Notice>
 					) : tonight.passes.length === 0 ? (
 						<Notice>
-							{tonight.predicted === 1 ? 'Your favorite has' : `None of your ${tonight.predicted} favorites has`} a visible pass tonight above {tonight.minAltitude}°: each pass is in daylight or in the Earth's shadow. Lower the minimum altitude, or open a satellite's Passes to search the next days.
+							{shownLabel === undefined ? (tonight.predicted === 1 ? 'Your favorite has' : `None of your ${tonight.predicted} favorites has`) : `None of the ${countText(tonight.predicted, shownLabel)} has`} a visible pass tonight above {tonight.minAltitude}°: each pass is in daylight or in the Earth's
+							shadow. Lower the minimum altitude, or open a satellite's Passes to search the next days.
 						</Notice>
 					) : (
 						<>
 							<div className="text-sm text-ink-100">
-								{tonight.passes.length} visible {tonight.passes.length === 1 ? 'pass' : 'passes'} among {tonight.predicted} {tonight.predicted === 1 ? 'favorite' : 'favorites'}
+								{tonight.passes.length} visible {tonight.passes.length === 1 ? 'pass' : 'passes'} among {countText(tonight.predicted, shownLabel)}
 							</div>
 							<Table columns={TONIGHT_COLUMNS} className="whitespace-nowrap">
 								{tonight.passes.map((entry, index) => (
@@ -158,7 +196,7 @@ export function SatelliteTonight({ observer, zone, favorites, inputKey }: Satell
 						</>
 					)}
 					{tonight.failures.length > 0 && <Notice error>Not predicted: {tonight.failures.map((failure) => `${failure.name} (${failure.error})`).join('; ')}.</Notice>}
-					{tonight.leftOut > 0 && <Notice>{`${tonight.leftOut} more ${tonight.leftOut === 1 ? 'favorite was' : 'favorites were'} left out: tonight predicts the first ${TONIGHT_LIMIT}.`}</Notice>}
+					{tonight.leftOut > 0 && <Notice>{`${countText(tonight.leftOut, shownLabel)} ${tonight.leftOut === 1 ? 'was' : 'were'} left out: tonight predicts the first ${TONIGHT_LIMIT}.`}</Notice>}
 					<p className="m-0 max-w-3xl text-xs leading-4 text-pretty text-ink-300">Visible means sunlit while the Sun is below the twilight limit; altitudes are geometric and brightness is unknown, so a faint satellite may not be seen.</p>
 				</div>
 			)}

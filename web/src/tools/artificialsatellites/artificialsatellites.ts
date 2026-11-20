@@ -24,9 +24,10 @@ import { setSkyTime, type SkyClock, skyClock, skyTime } from '../../sky/clock'
 import { createRequestGuard } from '../../sky/selection'
 import { browserSkyIo, selectSkyObject, type SkyIo, type SkyState, skyState } from '../../sky/sky'
 
-// State of the Artificial Satellites tool, tab-lived and never persisted: the visible passes of the profile's favorites
-// tonight, the catalog search, the satellite selected with its details, position, and next visible pass, the windows of
-// its passes, ephemeris, and ground track, and an import being typed.
+// State of the Artificial Satellites tool, tab-lived and never persisted: the visible passes tonight of the profile's
+// favorites or of a downloaded group, the satellite selected with its details, position, and next visible pass, the
+// windows of its passes, ephemeris, and ground track, and an import being typed. The search that selects a satellite
+// keeps its text and list in its own component; searchSatelliteList reads the catalog for it.
 // Every prediction is for the observing site of the active profile, or the Earth's center without one; the tool has no
 // place of its own, and the ground track needs none. The catalog, its downloads, and every prediction are the server's;
 // each kind of answer has a request guard of its own, so an old answer never replaces a newer one, and only the
@@ -44,8 +45,8 @@ const DAY_MS = 86_400_000
 // the umbra it answers with come from a search kept for 1.5 orbits.
 export const POSITION_REFRESH_MS = 5000
 
-// Rows of a page of the catalog.
-export const CATALOG_PAGE_SIZE = 50
+// Most satellites the search lists at once; the others are counted and found by typing more.
+export const SEARCH_LIST_LIMIT = 20
 
 // Longest pass window, in days, which keeps a search within a couple of seconds of the server.
 export const MAX_PASS_DAYS = 7
@@ -58,15 +59,19 @@ export const MAX_EPHEMERIS_ROWS = 5000
 export const MAX_GROUND_TRACK_ORBITS = 5
 
 // Views of the tool; Tonight is the one it opens on.
-export const SATELLITE_TABS = ['tonight', 'catalog', 'passes', 'groundTrack', 'ephemeris'] as const
+export const SATELLITE_TABS = ['tonight', 'passes', 'groundTrack', 'ephemeris'] as const
 
 // View of the tool.
 export type SatelliteTab = (typeof SATELLITE_TABS)[number]
 
 // Name of each view.
-export const SATELLITE_TAB_LABELS: Readonly<Record<SatelliteTab, string>> = { tonight: 'Tonight', catalog: 'Catalog', passes: 'Passes', groundTrack: 'Ground Track', ephemeris: 'Ephemeris' }
+export const SATELLITE_TAB_LABELS: Readonly<Record<SatelliteTab, string>> = { tonight: 'Tonight', passes: 'Passes', groundTrack: 'Ground Track', ephemeris: 'Ephemeris' }
 
-// Most favorites Tonight predicts, the first of the profile's list: SATELLITE_TRACKS_LIMIT of the Sky, which keeps the
+// Satellites Tonight predicts: the profile's favorites (an empty key), or the members of a downloaded group by its GP
+// source key (gp:GROUP:<name>), never a large group.
+export type TonightSource = string
+
+// Most satellites Tonight predicts, the first of the favorites or of the group: SATELLITE_TRACKS_LIMIT of the Sky, which keeps the
 // searches of a night within a few seconds of the server.
 export const TONIGHT_LIMIT = 50
 
@@ -126,7 +131,7 @@ export interface TonightPass {
 	readonly quality: SatelliteQuality
 }
 
-// A favorite whose passes could not be predicted tonight, and why.
+// A satellite whose passes could not be predicted tonight, and why.
 export interface TonightFailure {
 	readonly noradId: string
 	readonly name: string
@@ -134,8 +139,10 @@ export interface TonightFailure {
 	readonly error: string
 }
 
-// Visible passes of the favorites over one night of the observing site.
+// Visible passes of the favorites, or of a group, over one night of the observing site.
 export interface TonightResult {
+	// Satellites predicted: the favorites or a group.
+	readonly source: TonightSource
 	// The night: the Sun from noon to noon, with its twilight crossings.
 	readonly night: AstroWeatherNight
 	// Window searched, Unix milliseconds (UTC): the rest of the night from the instant asked, to its closing noon.
@@ -144,9 +151,9 @@ export interface TonightResult {
 	// Twilight limit and minimum altitude (degrees) of the search.
 	readonly twilight: TwilightLimit
 	readonly minAltitude: number
-	// Visible passes of every favorite predicted, by the start of their first visible part.
+	// Visible passes of every satellite predicted, by the start of their first visible part.
 	readonly passes: readonly TonightPass[]
-	// Favorites predicted, those that could not be, and those beyond TONIGHT_LIMIT left out.
+	// Satellites predicted, those that could not be, and those beyond TONIGHT_LIMIT left out.
 	readonly predicted: number
 	readonly failures: readonly TonightFailure[]
 	readonly leftOut: number
@@ -194,27 +201,16 @@ export interface GroundTrackLayers {
 export interface ArtificialSatellitesState {
 	// View shown.
 	tab: SatelliteTab
-	// Search of tonight's passes being edited, the latest answer, the inputs it was made for (favorites, place, catalog
-	// revision), the pass chosen in it by its position, and its state.
+	// Satellites Tonight predicts, chosen at once; the search of tonight's passes being edited, the latest answer, the
+	// inputs it was made for (source, favorites, place, catalog revision), the pass chosen in it by its position, and its
+	// state.
+	tonightSource: TonightSource
 	tonightDraft: TonightDraft
 	tonight?: TonightResult
 	tonightKey?: string
 	tonightSelected?: number
 	tonightLoading: boolean
 	tonightError?: string
-	// Text of the search, as typed.
-	query: string
-	// Source key of the group searched; empty for every object.
-	group: string
-	// Whether only the profile's favorites are searched.
-	favoritesOnly: boolean
-	// First object of the page, from 0.
-	offset: number
-	// Latest page received.
-	results?: SatelliteSearchPage
-	// Whether a page is being read, and why the latest could not be.
-	searching: boolean
-	searchError?: string
 	// NORAD id of the satellite selected.
 	selectedId?: string
 	// Details of the satellite selected, its position at the latest instant asked for, and their states.
@@ -276,7 +272,6 @@ export interface ArtificialSatellitesIo {
 const browserIo: ArtificialSatellitesIo = { fetch: browserFetch, now: () => Date.now(), skyTime: () => skyTime(skyClock, Date.now()) }
 
 // Requests of each kind of answer; a newer request of a kind supersedes the older.
-const searchGuard = createRequestGuard()
 const detailsGuard = createRequestGuard()
 const positionGuard = createRequestGuard()
 const passesGuard = createRequestGuard()
@@ -289,14 +284,10 @@ const nextPassGuard = createRequestGuard()
 export function initialArtificialSatellitesState(): ArtificialSatellitesState {
 	return {
 		tab: 'tonight',
+		tonightSource: '',
 		tonightDraft: { minAltitude: 10, twilight: 'civil' },
 		tonightLoading: false,
 		nextPassLoading: false,
-		query: '',
-		group: '',
-		favoritesOnly: false,
-		offset: 0,
-		searching: false,
 		passDraft: { start: 'now', days: 2, minAltitude: 10, twilight: 'civil', showAll: false },
 		passesLoading: false,
 		ephemerisDraft: { start: 'now', hours: 2, stepSeconds: 60 },
@@ -317,35 +308,15 @@ function messageOf(error: unknown) {
 	return error instanceof Error ? error.message : String(error)
 }
 
-// Searches the catalog with the text, group, and favorites of the state, from `offset`. Favorites only with no favorite
-// answers an empty page without asking.
-export async function searchSatellites(state: ArtificialSatellitesState, favorites: readonly string[], offset = 0, io: ArtificialSatellitesIo = browserIo) {
-	const request = searchGuard.begin()
-	state.offset = offset
-	state.searching = true
-	state.searchError = undefined
-
-	if (state.favoritesOnly && favorites.length === 0) {
-		state.results = { items: [], total: 0 }
-		state.searching = false
-		return
-	}
-
-	const params = new URLSearchParams({ limit: `${CATALOG_PAGE_SIZE}`, offset: `${offset}` })
-	if (state.query.trim()) params.set('q', state.query.trim())
-	if (state.group) params.set('group', state.group)
-	if (state.favoritesOnly) params.set('ids', favorites.join(','))
-
-	try {
-		const results = await fetchJson<SatelliteSearchPage>(io, `/api/satellites?${params}`, { signal: request.signal })
-		if (!request.current()) return
-		state.results = results
-	} catch (error) {
-		if (!request.current() || aborted(error)) return
-		state.searchError = messageOf(error)
-	}
-
-	state.searching = false
+// Lists the satellites of the catalog (never CelesTrak) whose name, NORAD id, or COSPAR id matches the text (every one
+// for an empty text), among `ids` when given, at most SEARCH_LIST_LIMIT, with how many match in all. An empty list of
+// ids asks nothing.
+export function searchSatelliteList(text: string, ids: readonly string[] | undefined, signal: AbortSignal, io: Pick<ArtificialSatellitesIo, 'fetch'> = browserIo): Promise<SatelliteSearchPage> {
+	if (ids?.length === 0) return Promise.resolve({ items: [], total: 0 })
+	const params = new URLSearchParams({ limit: `${SEARCH_LIST_LIMIT}` })
+	if (text.trim()) params.set('q', text.trim())
+	if (ids) params.set('ids', ids.join(','))
+	return fetchJson<SatelliteSearchPage>(io, `/api/satellites?${params}`, { signal })
 }
 
 // Drops the passes and the ephemeris shown and cancels those being read, so a view that shows them reads them again.
@@ -475,10 +446,10 @@ export function tickNextVisiblePass(state: ArtificialSatellitesState, observer: 
 	if (last && last.end <= io.now() && !state.nextPassLoading) void loadNextVisiblePass(state, observer, io)
 }
 
-// Key of the inputs tonight's passes are made for: the favorites predicted, the place of the site, and the catalog
-// revision; another key makes the passes shown stale.
-export function tonightKey(favorites: readonly string[], observer: GeographicLocation | undefined, revision: number) {
-	return `${favorites.slice(0, TONIGHT_LIMIT).join(',')}|${locationKey(observer)}|${revision}`
+// Key of the inputs tonight's passes are made for: the source, the favorites predicted (for the favorites), the place of
+// the site, and the catalog revision; another key makes the passes shown stale.
+export function tonightKey(source: TonightSource, favorites: readonly string[], observer: GeographicLocation | undefined, revision: number) {
+	return `${source}|${source ? '' : favorites.slice(0, TONIGHT_LIMIT).join(',')}|${locationKey(observer)}|${revision}`
 }
 
 // Reads the night of the site containing an instant, its civil date named in an IANA zone.
@@ -496,18 +467,17 @@ async function eachLimited<T>(items: readonly T[], limit: number, task: (item: T
 	await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker))
 }
 
-// Searches tonight's visible passes of the favorites (the first TONIGHT_LIMIT) for the observing site, with the draft.
-// Tonight is the night of the site (noon to noon, the Sun of the server) containing now, or the next one once its
-// morning twilight at the limit is past; the window runs from now to its closing noon, and only passes with a visible
-// part are kept. A favorite that cannot be predicted is listed with the server's reason, never hidden. Needs a site and
-// at least one favorite; the night is named in the site's own zone, whatever zone times are shown in. key records the
-// inputs (tonightKey) the answer is for.
-export async function loadTonight(state: ArtificialSatellitesState, favorites: readonly string[], observer: SiteLocation | undefined, key: string, io: ArtificialSatellitesIo = browserIo) {
+// Searches tonight's visible passes of a source (the favorites or the members of a group, the first TONIGHT_LIMIT) for the
+// observing site, with the draft. Tonight is the night of the site (noon to noon, the Sun of the server) containing
+// now, or the next one once its morning twilight at the limit is past; the window runs from now to its closing noon, and
+// only passes with a visible part are kept. A satellite that cannot be predicted is listed with the server's reason,
+// never hidden. Needs a site, and at least one favorite for the favorites; the night is named in the site's own zone,
+// whatever zone times are shown in. key records the inputs (tonightKey) the answer is for.
+export async function loadTonight(state: ArtificialSatellitesState, source: TonightSource, favorites: readonly string[], observer: SiteLocation | undefined, key: string, io: ArtificialSatellitesIo = browserIo) {
 	const site = siteObserver(observer)
-	if (!observer || !site || favorites.length === 0) return
+	if (!observer || !site || (!source && favorites.length === 0)) return
 	const request = tonightGuard.begin()
 	const { minAltitude, twilight } = state.tonightDraft
-	const ids = favorites.slice(0, TONIGHT_LIMIT)
 	const now = io.now()
 	state.tonightKey = key
 	state.tonightLoading = true
@@ -521,11 +491,15 @@ export async function loadTonight(state: ArtificialSatellitesState, favorites: r
 		const end = night.sun.end
 		const passes: TonightPass[] = []
 		const failures: TonightFailure[] = []
+		// The satellites listed, by their names, and how many the source holds in all.
+		const query: Record<string, string> = source ? { group: source, limit: `${TONIGHT_LIMIT}` } : { ids: favorites.slice(0, TONIGHT_LIMIT).join(','), limit: `${TONIGHT_LIMIT}` }
+		const page = await fetchJson<SatelliteSearchPage>(io, `/api/satellites?${new URLSearchParams(query)}`, { signal: request.signal })
+		const ids = source ? page.items.map((item) => item.noradId) : favorites.slice(0, TONIGHT_LIMIT)
+		const total = source ? page.total : favorites.length
+		const names = new Map(page.items.map((item) => [item.noradId, item.name]))
 
 		// A Sun that never goes below the limit leaves no dark sky to see a satellite in, so nothing is searched.
 		if (night.sun[twilight].state !== 'continuousAbove') {
-			const page = await fetchJson<SatelliteSearchPage>(io, `/api/satellites?${new URLSearchParams({ ids: ids.join(','), limit: `${ids.length}` })}`, { signal: request.signal })
-			const names = new Map(page.items.map((item) => [item.noradId, item.name]))
 			const body = { observer: site, start, end, minAltitude: (minAltitude * Math.PI) / 180, maxSunAltitude: (TWILIGHT_LIMITS[twilight] * Math.PI) / 180 } satisfies SatellitePassesRequest
 
 			await eachLimited(ids, TONIGHT_CONCURRENCY, async (noradId) => {
@@ -543,7 +517,7 @@ export async function loadTonight(state: ArtificialSatellitesState, favorites: r
 		if (!request.current()) return
 		passes.sort((a, b) => a.pass.visible[0].start - b.pass.visible[0].start)
 		failures.sort((a, b) => ids.indexOf(a.noradId) - ids.indexOf(b.noradId))
-		state.tonight = { night, start, end, twilight, minAltitude, passes, predicted: ids.length, failures, leftOut: Math.max(0, favorites.length - ids.length) }
+		state.tonight = { source, night, start, end, twilight, minAltitude, passes, predicted: ids.length, failures, leftOut: Math.max(0, total - ids.length) }
 		// No pass is chosen until the operator chooses one, which also selects its satellite.
 		state.tonightSelected = undefined
 	} catch (error) {
@@ -557,11 +531,11 @@ export async function loadTonight(state: ArtificialSatellitesState, favorites: r
 
 // Reads tonight's passes when the view shows them and the answer shown, if any, is for other inputs (key) or for a night
 // already over; a failed read waits for Retry.
-export function ensureTonight(state: ArtificialSatellitesState, favorites: readonly string[], observer: SiteLocation | undefined, key: string, io: ArtificialSatellitesIo = browserIo) {
-	if (state.tab !== 'tonight' || state.tonightLoading || favorites.length === 0 || !observer) return
+export function ensureTonight(state: ArtificialSatellitesState, source: TonightSource, favorites: readonly string[], observer: SiteLocation | undefined, key: string, io: ArtificialSatellitesIo = browserIo) {
+	if (state.tab !== 'tonight' || state.tonightLoading || (!source && favorites.length === 0) || !observer) return
 	if (state.tonightError && state.tonightKey === key) return
 	if (state.tonight && state.tonightKey === key && state.tonight.end > io.now()) return
-	void loadTonight(state, favorites, observer, key, io)
+	void loadTonight(state, source, favorites, observer, key, io)
 }
 
 // Start of a window, Unix milliseconds: the real current time, or the instant the Sky shows.

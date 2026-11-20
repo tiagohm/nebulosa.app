@@ -120,7 +120,7 @@ export function SatelliteGroundTrack({ observer, zone }: SatelliteGroundTrackPro
 		mapRef.current?.centerOn(point.subpoint)
 	}, [selectedId, point === undefined])
 
-	if (!selectedId) return <EmptyState title="No satellite selected" description="Select a satellite in the catalog." />
+	if (!selectedId) return <EmptyState title="No satellite selected" description="Search for a satellite in the toolbar, or choose a pass tonight." />
 	if (details && !details.elements) return <EmptyState title="No orbital elements" description={`${name} has no orbital elements to predict a ground track with.`} />
 
 	const following = anchor?.start === 'now' && cursor === undefined

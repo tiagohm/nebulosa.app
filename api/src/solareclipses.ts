@@ -126,6 +126,12 @@ export interface SolarEclipseLocalView {
 	readonly selectedEvent?: LocalEclipseContactKind
 	// Instant drawn, in Unix milliseconds (UTC); absent when the place has no contact.
 	readonly time?: number
+	// Position angle at the instant drawn, in degrees from celestial north through east, [0, 360): of the contact point on
+	// the solar limb at a contact, or between the contacts of the limb point nearest the Moon's center; absent when
+	// undefined, as at a perfectly central maximum.
+	readonly positionAngle?: number
+	// The same angle measured from the direction of the zenith, in degrees, [0, 360); absent like positionAngle.
+	readonly zenithAngle?: number
 	// Shapes in painting order.
 	readonly shapes: readonly LocalSolarEclipseSvgShape[]
 }
@@ -231,7 +237,15 @@ export function localSolarEclipse(eclipse: SolarEclipse, location: EclipseLocati
 		visibility: { kind, text, hasGeometricEclipse, hasObservableEclipse, hasCentralPhase, centralPhaseKind, sunMotion, completeness },
 		details: local.details,
 		events,
-		view: { width: geometry.width, height: geometry.height, selectedEvent: geometry.selectedEvent, time: drawn ? timeToUnixMillis(drawn.time) : undefined, shapes: geometry.shapes },
+		view: {
+			width: geometry.width,
+			height: geometry.height,
+			selectedEvent: geometry.selectedEvent,
+			time: drawn ? timeToUnixMillis(drawn.time) : undefined,
+			positionAngle: drawn?.positionAngle === undefined ? undefined : toDeg(drawn.positionAngle),
+			zenithAngle: drawn?.zenithAngle === undefined ? undefined : toDeg(drawn.zenithAngle),
+			shapes: geometry.shapes,
+		},
 		ephemeris,
 	}
 }

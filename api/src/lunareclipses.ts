@@ -138,6 +138,12 @@ export interface LunarEclipseLocalView {
 	readonly selectedEvent?: LunarEclipseContactKind
 	// Instant drawn, in Unix milliseconds (UTC); absent when the eclipse has no contact.
 	readonly time?: number
+	// Position angle at the instant drawn, in degrees from celestial north through east, [0, 360): of the contact point on
+	// the lunar limb at a contact, or between the contacts of the limb point nearest the shadow's center; absent without
+	// an instant.
+	readonly positionAngle?: number
+	// The same angle measured from the direction of the zenith, in degrees, [0, 360); absent like positionAngle.
+	readonly zenithAngle?: number
 	// Shapes in painting order.
 	readonly shapes: readonly LocalLunarEclipseSvgShape[]
 }
@@ -264,7 +270,7 @@ export function localLunarEclipse(eclipse: LunarEclipse, location: EclipseLocati
 		visibility: { kind, text, hasObservableEclipse },
 		details: local.details,
 		events,
-		view: { width: geometry.width, height: geometry.height, selectedEvent: geometry.selectedEvent, time: drawn ? timeToUnixMillis(drawn.time) : undefined, shapes: geometry.shapes },
+		view: { width: geometry.width, height: geometry.height, selectedEvent: geometry.selectedEvent, time: drawn ? timeToUnixMillis(drawn.time) : undefined, positionAngle: drawn ? toDeg(drawn.positionAngle) : undefined, zenithAngle: drawn ? toDeg(drawn.zenithAngle) : undefined, shapes: geometry.shapes },
 		ephemeris,
 	}
 }

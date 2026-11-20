@@ -184,8 +184,15 @@ test('draws the Local View at a fraction of the local eclipse, 0 and 1 being C1 
 	expect(Math.abs(middle.time! - (c1.time + c4.time) / 2)).toBeLessThan(1)
 	// Every contact is a ghost behind an instant between them.
 	expect(middle.shapes.filter((shape) => shape.role === 'ghostMoonDisk')).toHaveLength(5)
-	// A contact is still drawn by name, with its own time.
-	expect((await at('C2')).time).toBe(dallas.events[1].time)
+	// A contact is still drawn by name, with its own time and angles; an instant has the Moon's center's.
+	const c2 = await at('C2')
+	expect(c2.time).toBe(dallas.events[1].time)
+	expect(c2.positionAngle).toBe(dallas.events[1].positionAngle)
+	expect(c2.zenithAngle).toBe(dallas.events[1].zenithAngle)
+	expect(middle.positionAngle).toBeGreaterThanOrEqual(0)
+	expect(middle.positionAngle).toBeLessThan(360)
+	expect(middle.zenithAngle).toBeGreaterThanOrEqual(0)
+	expect(middle.zenithAngle).toBeLessThan(360)
 })
 
 test('computes the circumstances and the Local View of a place', async () => {

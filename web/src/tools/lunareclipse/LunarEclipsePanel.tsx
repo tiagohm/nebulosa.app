@@ -36,9 +36,6 @@ export function LunarEclipsePanel() {
 	const displayZone = useDisplayZone(location, state.zone)
 	const timeZone = displayZone.zone
 	const events = new Map(local?.events.map((event) => [event.kind, event]))
-	// Contact the Local View draws; none while it draws an instant between the contacts.
-	const drawnEvent = local?.view.selectedEvent
-	const selectedLocal = drawnEvent && events.get(drawnEvent)
 	// Stage of the eclipse the Local View draws, as the slider holds it while its answer is on the way.
 	const fraction = state.viewFraction ?? (local && viewFractionOf(local, 'P1', 'P4'))
 	const durations = eclipse && phaseDurations(eclipse)
@@ -115,9 +112,9 @@ export function LunarEclipsePanel() {
 						<LunarEclipseLocalView view={local.view} />
 						{fraction !== undefined && <Slider label="From P1 to P4, %" value={Math.round(fraction * 1000) / 10} min={0} max={100} step={0.1} onChange={handleViewFraction} />}
 						{local.view.time !== undefined && <DataRow label="Drawn at">{formatLongDateTime(local.view.time, timeZone)}</DataRow>}
-						{selectedLocal && (
-							<DataRow label={`Position / zenith angle at ${selectedLocal.kind}`}>
-								{formatEclipseAngle(selectedLocal.positionAngle)} / {formatEclipseAngle(selectedLocal.zenithAngle)}
+						{local.view.positionAngle !== undefined && local.view.zenithAngle !== undefined && (
+							<DataRow label={local.view.selectedEvent ? `Position / zenith angle at ${local.view.selectedEvent}` : 'Position / zenith angle'}>
+								{formatEclipseAngle(local.view.positionAngle)} / {formatEclipseAngle(local.view.zenithAngle)}
 							</DataRow>
 						)}
 					</LocalContent>
@@ -125,8 +122,8 @@ export function LunarEclipsePanel() {
 					<SegmentedControl label="East" options={HANDEDNESS} value={view.handedness} onChange={(handedness) => void setViewSettings(lunarEclipseState, { handedness })} format={(value) => (value === 'eastRight' ? 'Right' : 'Left')} />
 					<Checkbox label="Moon at the other contacts" checked={view.ghosts} onChange={(ghosts) => void setViewSettings(lunarEclipseState, { ghosts })} />
 					<Notice>
-						The Moon at {local.view.selectedEvent ?? 'the instant drawn'} crossing the Earth's penumbra and umbra, anywhere from P1 to P4 with the slider; the red band is below the horizon. The position angle places the contact on the Moon's limb from celestial north through east, the zenith angle from the
-						direction of the zenith. A geometric diagram, not a photorealistic rendering.
+						The Moon at {local.view.selectedEvent ?? 'the instant drawn'} crossing the Earth's penumbra and umbra, anywhere from P1 to P4 with the slider; the red band is below the horizon. The position angle places the contact on the Moon's limb, or between contacts the point of the limb nearest the
+						shadow's center, from celestial north through east; the zenith angle from the direction of the zenith. A geometric diagram, not a photorealistic rendering.
 					</Notice>
 				</CollapsibleSection>
 			)}

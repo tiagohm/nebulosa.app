@@ -86,7 +86,6 @@ export function SolarEclipsePanel() {
 	const greatest = map?.greatestEclipse
 	const duration = map?.greatestDuration
 	const maximum = local?.events.find((event) => event.kind === 'MAX')
-	const shown = local?.events.find((event) => event.kind === local.view.selectedEvent)
 	// Stage of the eclipse the Local View draws, as the slider holds it while its answer is on the way.
 	const fraction = state.viewFraction ?? (local && viewFractionOf(local, 'C1', 'C4'))
 	const stale = isStaleLocal(local, place)
@@ -169,9 +168,9 @@ export function SolarEclipsePanel() {
 						<SolarEclipseLocalView view={local.view} />
 						{fraction !== undefined && <Slider label="From C1 to C4, %" value={Math.round(fraction * 1000) / 10} min={0} max={100} step={0.1} onChange={handleViewFraction} />}
 						{local.view.time !== undefined && <DataRow label="Drawn at">{formatLongDateTime(local.view.time, timeZone)}</DataRow>}
-						{shown?.positionAngle !== undefined && shown.zenithAngle !== undefined && (
-							<DataRow label={`Position / zenith angle at ${shown.kind}`}>
-								{formatEclipseAngle(shown.positionAngle)} / {formatEclipseAngle(shown.zenithAngle)}
+						{local.view.positionAngle !== undefined && local.view.zenithAngle !== undefined && (
+							<DataRow label={local.view.selectedEvent ? `Position / zenith angle at ${local.view.selectedEvent}` : 'Position / zenith angle'}>
+								{formatEclipseAngle(local.view.positionAngle)} / {formatEclipseAngle(local.view.zenithAngle)}
 							</DataRow>
 						)}
 					</LocalContent>
@@ -179,8 +178,8 @@ export function SolarEclipsePanel() {
 					<SegmentedControl label="East" options={HANDEDNESS} value={view.handedness} onChange={(handedness) => void setViewSettings(solarEclipseState, { handedness })} format={(value) => (value === 'eastRight' ? 'Right' : 'Left')} />
 					<Checkbox label="Moon at the other contacts" checked={view.ghosts} onChange={(ghosts) => void setViewSettings(solarEclipseState, { ghosts })} />
 					<Notice>
-						The Moon over the Sun at {local.view.selectedEvent ?? 'the instant drawn'}, anywhere from C1 to C4 with the slider; the red band is below the horizon. The position angle places the contact on the Sun's limb from celestial north through east, the zenith angle from the direction of the zenith. A
-						geometric diagram, not a photorealistic rendering.
+						The Moon over the Sun at {local.view.selectedEvent ?? 'the instant drawn'}, anywhere from C1 to C4 with the slider; the red band is below the horizon. The position angle places the contact on the Sun's limb, or between contacts the point of the limb nearest the Moon's center, from celestial
+						north through east; the zenith angle from the direction of the zenith. A geometric diagram, not a photorealistic rendering.
 					</Notice>
 				</CollapsibleSection>
 			)}

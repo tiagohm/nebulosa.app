@@ -167,6 +167,11 @@ test('draws the Local View at a fraction of the eclipse, 0 and 1 being P1 and P4
 	expect(middle.view.selectedEvent).toBeUndefined()
 	expect(Math.abs(middle.view.time! - (p1.time + p4.time) / 2)).toBeLessThan(1)
 	expect(middle.view.shapes.some((shape) => shape.kind === 'circle' && shape.role === 'moonDisk')).toBe(true)
+	// A contact keeps its own angles; an instant has those of the limb point nearest the shadow's center.
+	expect(start.view.positionAngle).toBe(p1.positionAngle)
+	expect(start.view.zenithAngle).toBe(p1.zenithAngle)
+	expect(middle.view.positionAngle).toBeGreaterThanOrEqual(0)
+	expect(middle.view.positionAngle).toBeLessThan(360)
 })
 
 test('omits the durations a penumbral eclipse lacks', async () => {

@@ -1,7 +1,6 @@
 import { expect, spyOn, test } from 'bun:test'
-import { AppDatabase } from './database'
 import { ServerEventDispatcher } from './events'
-import { type NotificationCreatedEvent, NotificationService } from './notifications'
+import { type NotificationEvent, NotificationService } from './notifications'
 import type { NotificationDraft } from './notifications.rules'
 import type { ServerEvent } from './websocket'
 
@@ -87,8 +86,8 @@ test('an extra observer, failing or not, changes nothing of the notification his
 
 	// History created from a dispatcher with the notifications alone, or followed by extra observers.
 	const history = (extra: boolean) => {
-		const created: NotificationCreatedEvent[] = []
-		const notifications = new NotificationService((e) => created.push(e), { database: AppDatabase.memory(), now: () => 1000, classifier })
+		const created: NotificationEvent[] = []
+		const notifications = new NotificationService((e) => created.push(e), { now: () => 1000, classifier })
 		const events = new ServerEventDispatcher()
 		events.subscribe((e) => notifications.consume(e))
 

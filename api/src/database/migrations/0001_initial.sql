@@ -295,41 +295,6 @@ CREATE TABLE profile_mount_bindings (
 	PRIMARY KEY (profile_id, saved_connection_id, device_id, protocol)
 ) STRICT;
 
--- Notification history of the server (NotificationService): at most 500 records younger than 30 days, the oldest
--- deleted first. The sequence orders them and is never used again.
-CREATE TABLE notifications (
-	-- Order of creation.
-	sequence INTEGER PRIMARY KEY AUTOINCREMENT,
-	-- Id of the notification, published to clients.
-	id TEXT NOT NULL UNIQUE,
-	-- Identity of the occurrence it reports, so one occurrence is notified once; never published.
-	key TEXT NOT NULL UNIQUE,
-	-- When it was created, Unix milliseconds (UTC).
-	created_at INTEGER NOT NULL,
-	-- Severity.
-	level TEXT NOT NULL CHECK (level IN ('info', 'success', 'warning', 'error')),
-	-- Stable code of the occurrence, such as capture.completed.
-	code TEXT NOT NULL,
-	-- Title and explanation meant for people.
-	title TEXT NOT NULL,
-	message TEXT NOT NULL,
-	-- What it is about (NotificationSource), and the context the UI may open (NotificationTarget) or NULL.
-	source TEXT NOT NULL CHECK (json_valid(source)),
-	target TEXT CHECK (target IS NULL OR json_valid(target))
-) STRICT;
-
-CREATE INDEX notifications_created ON notifications (created_at);
-
--- Notifications a profile read or dismissed, deleted with the notification or the profile.
-CREATE TABLE profile_notification_state (
-	profile_id TEXT NOT NULL REFERENCES profiles (id) ON DELETE CASCADE,
-	notification_id TEXT NOT NULL REFERENCES notifications (id) ON DELETE CASCADE,
-	-- When it was read and dismissed, Unix milliseconds (UTC); dismissed_at is NULL while listed.
-	read_at INTEGER NOT NULL,
-	dismissed_at INTEGER,
-	PRIMARY KEY (profile_id, notification_id)
-) STRICT;
-
 -- Saved frames of every camera (CaptureFrameRegistry): one row per frame whose file was written, kept until deleted,
 -- whatever the Images workspace shows of them. Never pixels; previewed-only frames are never written.
 CREATE TABLE capture_frames (

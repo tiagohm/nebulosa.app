@@ -994,7 +994,7 @@ export type {
 	TargetCenteringTarget,
 } from './targetcentering'
 export type { GuidingProfileCut, GuidingStarProfile } from './guidingprofile'
-export type { NotificationCreatedEvent, NotificationRecord, NotificationSnapshot } from './notifications'
+export type { NotificationCreatedEvent, NotificationDismissedEvent, NotificationEvent, NotificationIdsRequest, NotificationReadEvent, NotificationRecord, NotificationSnapshot } from './notifications'
 export type { NotificationCameraTool, NotificationLevel, NotificationSource, NotificationTarget } from './notifications.rules'
 export type { ClientMessage, ServerEvent } from './websocket'
 export type { BoundDevice, CameraBinding, CameraBindingEvent, CameraBindingRequest, CameraBindingsSnapshot, EquipmentCatalogErrorCode } from './equipmentcatalog'
@@ -1020,7 +1020,6 @@ export type {
 	WorkspaceErrorCode,
 	WorkspaceEvent,
 	WorkspaceMountBinding,
-	WorkspaceNotificationState,
 	WorkspaceSnapshot,
 	WorkspaceValue,
 	WorkspaceValueSaveRequest,
@@ -1067,9 +1066,9 @@ function deviceName(connectionId: string, deviceId: string) {
 	return connections.devices.get(connections.client(connectionId), deviceId)?.name
 }
 
-// History of the notifications, created from the events of the connections, the operations, and the sessions; its
-// own notification:created events are broadcast directly, so they are never classified again.
-const notifications = new NotificationService(broadcast, { database, classifier: new NotificationClassifier(deviceName) })
+// History of the notifications in memory, created from the events of the connections, the operations, and the sessions;
+// its own events are broadcast directly, so they are never classified again.
+const notifications = new NotificationService(broadcast, { classifier: new NotificationClassifier(deviceName) })
 
 // History of the device operations: when each one started and how it ended.
 const operationHistory = new OperationRecorder(database, deviceName)

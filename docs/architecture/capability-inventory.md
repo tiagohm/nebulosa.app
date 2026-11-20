@@ -110,7 +110,7 @@ Status: **Implemented** (works end to end), **Integration Required** (exists in 
 - **Target Centering** (Implemented): `api/src/targetcentering.ts` over `centerTarget` (`core/src/observation/mount/centering.ts`);
   Images Target Centering tool `web/src/images/TargetCenteringTool.tsx` over `web/src/camera/TargetCenteringPanel.tsx`, store `web/src/camera/targetcentering.ts`
 - **Sequencer** (Planned): No engine exists in `core` or `api`
-- **Notifications** (Implemented): `api/src/notifications.ts` (history, persistence, `GET /api/notifications`, `notification:created`), `api/src/notifications.rules.ts` (classifier), `web/src/notifications/` (store, bell, panel, toasts, targets)
+- **Notifications** (Implemented): `api/src/notifications.ts` (in-memory history, `GET /api/notifications`, `POST /api/notifications/read` and `/dismiss`, `notification:created`, `notification:read`, `notification:dismissed`), `api/src/notifications.rules.ts` (classifier), `web/src/notifications/` (store, bell, panel, toasts, targets)
 - **Meridian flip and mount limits** (Partial): `core/src/observation/mount/meridian.flip.ts` classifies the window of the read-only Meridian Flip Monitor (`api/src/meridianflip.ts`), and the Meridian Flip Executor (`api/src/meridianflipexecutor.ts`) flips by native flip or forced GoTo with verified, inferred, or unverified evidence;
   `limits.ts` is not integrated
 - **Mosaic planning and night scheduling** (Integration Required): `core/src/observation/framing/mosaic.plan.ts`, `core/src/observation/scheduler.ts`

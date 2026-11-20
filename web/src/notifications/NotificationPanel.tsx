@@ -3,19 +3,18 @@ import { type KeyboardEvent, useRef, useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { deviceState } from '../equipment/equipment'
 import { imagesState } from '../images/images'
-import { dismissNotifications, markNotificationsRead, profileState } from '../profile/profile'
 import { routeState } from '../shell/route'
 import { Checkbox } from '../ui/Checkbox'
 import { SegmentedControl } from '../ui/SegmentedControl'
 import { NotificationItem } from './NotificationItem'
-import { isUnread, notificationsState, visibleNotifications } from './notifications'
+import { dismissNotifications, markNotificationsRead, notificationsState, visibleNotifications } from './notifications'
 import { openNotificationTarget, targetAvailable } from './target'
 import { useNotificationScope } from './useNotificationScope'
 
 // Floating panel of the bell: the notifications of the active profile's connection (or of every connection), newest
-// first, filtered to the unread ones on demand. Dismiss all hides what the list shows, so the filter and the scope
-// choose what it reaches. Reading, dismissing, and opening a context change only the profile's preferences and what
-// the tab shows; the server history and every device are left as they are.
+// first, filtered to the unread ones on demand. Dismiss all removes what the list shows, so the filter and the scope
+// choose what it reaches. Reading and dismissing change the server history, so they reach every tab; opening a context
+// changes only what the tab shows. Every device is left as it is.
 
 // Filter of the list.
 type NotificationFilter = 'all' | 'unread'
@@ -45,20 +44,20 @@ export function NotificationPanel({ top, right, width, onClose }: NotificationPa
 	const { records } = useSnapshot(notificationsState)
 	const { documents } = useSnapshot(imagesState)
 	const { devices } = useSnapshot(deviceState)
-	const { connection, preferences } = useNotificationScope()
+	const { connection } = useNotificationScope()
 	const [filter, setFilter] = useState<NotificationFilter>('all')
 	const [allConnections, setAllConnections] = useState(false)
 	// Instant the ages are measured to; the panel is short-lived, so it is taken when it opens.
 	const [now] = useState(() => Date.now())
 	const listRef = useRef<HTMLUListElement>(null)
 
-	const listed = visibleNotifications(records, preferences, connection, allConnections)
-	const unread = listed.filter((record) => isUnread(record, preferences))
+	const listed = visibleNotifications(records, connection, allConnections)
+	const unread = listed.filter((record) => !record.read)
 	const shown = filter === 'unread' ? unread : listed
 
 	// Marks a notification read and opens its context, closing the panel when it opened.
 	function choose(record: NotificationRecord) {
-		markNotificationsRead(profileState, [record.id])
+		if (!record.read) void markNotificationsRead([record.id])
 		if (openNotificationTarget(record.target, { images: imagesState, route: routeState, devices: deviceState.devices })) onClose()
 	}
 
@@ -78,30 +77,10 @@ export function NotificationPanel({ top, right, width, onClose }: NotificationPa
 				<h4 className="m-0 text-sm font-semibold text-ink-100">Notifications</h4>
 				<span className="text-xs text-ink-300 tabular-nums">{unread.length} unread</span>
 				<div className="ml-auto flex items-center gap-1">
-					<button
-						type="button"
-						disabled={unread.length === 0}
-						onClick={() =>
-							markNotificationsRead(
-								profileState,
-								unread.map((record) => record.id),
-							)
-						}
-						className={HEADER_ACTION_CLASS}
-					>
+					<button type="button" disabled={unread.length === 0} onClick={() => void markNotificationsRead(unread.map((record) => record.id))} className={HEADER_ACTION_CLASS}>
 						Mark all as read
 					</button>
-					<button
-						type="button"
-						disabled={shown.length === 0}
-						onClick={() =>
-							dismissNotifications(
-								profileState,
-								shown.map((record) => record.id),
-							)
-						}
-						className={HEADER_ACTION_CLASS}
-					>
+					<button type="button" disabled={shown.length === 0} onClick={() => void dismissNotifications(shown.map((record) => record.id))} className={HEADER_ACTION_CLASS}>
 						Dismiss all
 					</button>
 				</div>
@@ -113,7 +92,7 @@ export function NotificationPanel({ top, right, width, onClose }: NotificationPa
 			{shown.length > 0 ? (
 				<ul ref={listRef} className="m-0 -mx-1 flex min-h-0 list-none flex-col overflow-y-auto p-0">
 					{shown.map((record) => (
-						<NotificationItem key={record.id} record={record} unread={isUnread(record, preferences)} available={targetAvailable(record.target, { documents, devices })} now={now} onChoose={() => choose(record)} onDismiss={() => dismissNotifications(profileState, [record.id])} onKeyDown={handleItemKeyDown} />
+						<NotificationItem key={record.id} record={record} unread={!record.read} available={targetAvailable(record.target, { documents, devices })} now={now} onChoose={() => choose(record)} onDismiss={() => void dismissNotifications([record.id])} onKeyDown={handleItemKeyDown} />
 					))}
 				</ul>
 			) : (

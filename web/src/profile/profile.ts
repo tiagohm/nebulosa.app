@@ -68,7 +68,6 @@ import {
 	type MountDitherSettings,
 	DEFAULT_MOUNT_REMOTE_BINDINGS,
 	type MountRemoteBinding,
-	MAX_NOTIFICATION_IDS,
 	DEFAULT_TARGET_CENTERING_SETTINGS,
 	SATELLITE_FAVORITES_MAXIMUM,
 	SKY_FAVORITES_MAXIMUM,
@@ -792,38 +791,4 @@ export function setMountDitherSettings(state: ProfileState, mount: CameraIdentit
 	const current = mountDitherSettings(profile.settings, mount)
 	profile.settings.mountDither ??= {}
 	nestedObject(profile.settings.mountDither, mount.connectionId)[mount.deviceId] = { ...current, ...patch }
-}
-
-// Marks notifications as read in the active profile, which the synchronization adds to what the server keeps for it.
-// Reading never changes the server history.
-export function markNotificationsRead(state: ProfileState, ids: readonly string[]) {
-	const profile = activeProfile(state)
-	const preferences = (profile.settings.notifications ??= { readIds: [], dismissedIds: [] })
-	const unread = Array.from(new Set(ids)).filter((id) => !preferences.readIds.includes(id))
-	if (unread.length === 0) return
-	preferences.readIds = [...preferences.readIds, ...unread].slice(-MAX_NOTIFICATION_IDS)
-}
-
-// Hides notifications from the lists of the active profile, marking them as read. The server history keeps them.
-export function dismissNotifications(state: ProfileState, ids: readonly string[]) {
-	markNotificationsRead(state, ids)
-	const profile = activeProfile(state)
-	const preferences = profile.settings.notifications
-	if (!preferences) return
-	const listed = Array.from(new Set(ids)).filter((id) => !preferences.dismissedIds.includes(id))
-	if (listed.length === 0) return
-	preferences.dismissedIds = [...preferences.dismissedIds, ...listed].slice(-MAX_NOTIFICATION_IDS)
-}
-
-// Drops from every profile the read and dismissed ids of notifications the server history no longer retains, which
-// the server already dropped with them. retained must be the whole history, never a part of it.
-export function pruneNotificationPreferences(state: ProfileState, retained: readonly string[]) {
-	const ids = new Set(retained)
-
-	for (const profile of state.profiles) {
-		const preferences = profile.settings.notifications
-		if (!preferences) continue
-		if (preferences.readIds.some((id) => !ids.has(id))) preferences.readIds = preferences.readIds.filter((id) => ids.has(id))
-		if (preferences.dismissedIds.some((id) => !ids.has(id))) preferences.dismissedIds = preferences.dismissedIds.filter((id) => ids.has(id))
-	}
 }

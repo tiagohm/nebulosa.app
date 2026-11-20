@@ -4,20 +4,19 @@ import { useEffect, useRef, useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { deviceState } from '../equipment/equipment'
 import { imagesState } from '../images/images'
-import { markNotificationsRead, profileState } from '../profile/profile'
 import { workspaceSyncState } from '../profile/sync'
 import { routeState } from '../shell/route'
 import { Icon } from '../ui/Icon'
 import { IconButton } from '../ui/IconButton'
 import { LEVEL_ICON_CLASS } from './NotificationItem'
-import { dismissToast, inScope, notificationsState } from './notifications'
+import { dismissToast, inScope, markNotificationsRead, notificationsState } from './notifications'
 import { openNotificationTarget, targetAvailable } from './target'
 import { useNotificationScope } from './useNotificationScope'
 
 // Toasts of the notifications that arrived live for the active profile's connection, stacked at the bottom right
 // above the status bar, at most MAX_TOASTS. Each disappears after its duration or when closed, without marking its
 // notification read; View opens its context and marks it read. A toast never offers to confirm a device action.
-// Toasts of other connections, or of notifications the profile dismissed, are dropped unseen.
+// Toasts of other connections are dropped unseen; a notification dismissed in any tab leaves the toasts with the history.
 //
 // Above them, a toast of the tab itself reports a lost server: shown once the event socket stayed closed for
 // LOST_GRACE, so a quick restart shows nothing, and replaced by a short reconnected toast when it opens again. It is
@@ -75,14 +74,14 @@ export function NotificationToasts() {
 	const [serverToast, closeServerToast] = useServerToast()
 	const { message: workspaceMessage } = useSnapshot(workspaceSyncState)
 	const { toasts } = useSnapshot(notificationsState)
-	const { connection, preferences } = useNotificationScope()
-	const shown = toasts.filter((toast) => inScope(toast, connection) && !preferences?.dismissedIds.includes(toast.id))
+	const { connection } = useNotificationScope()
+	const shown = toasts.filter((toast) => inScope(toast, connection))
 
 	useEffect(() => {
 		for (const toast of toasts) {
-			if (!inScope(toast, connection) || preferences?.dismissedIds.includes(toast.id)) dismissToast(notificationsState, toast.id)
+			if (!inScope(toast, connection)) dismissToast(notificationsState, toast.id)
 		}
-	}, [toasts, connection, preferences])
+	}, [toasts, connection])
 
 	if (shown.length === 0 && !serverToast && !workspaceMessage) return null
 
@@ -130,7 +129,7 @@ function Toast({ record }: ToastProps) {
 
 	// Opens the context of the notification and marks it read.
 	function view() {
-		markNotificationsRead(profileState, [record.id])
+		void markNotificationsRead([record.id])
 		openNotificationTarget(record.target, { images: imagesState, route: routeState, devices: deviceState.devices })
 		dismissToast(notificationsState, record.id)
 	}

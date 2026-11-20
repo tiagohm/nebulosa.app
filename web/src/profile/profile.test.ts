@@ -94,9 +94,6 @@ import {
 	streakDetectionSettings,
 	imageDisplaySettings,
 	setImageDisplaySettings,
-	dismissNotifications,
-	markNotificationsRead,
-	pruneNotificationPreferences,
 	setTargetCenteringSettings,
 	targetCenteringSettings,
 } from './profile'
@@ -591,24 +588,6 @@ describe('camera forms', () => {
 		const settings = { ...DEFAULT_STREAK_SETTINGS, minLength: 30 } as const
 		setStreakDetectionSettings(state, settings)
 		expect(streakDetectionSettings(state.profiles[0].settings)).toEqual(settings)
-	})
-
-	test('the notifications read and dismissed are the profile ones, persisted, and pruned', () => {
-		const state = load()
-		const other = createProfile(state, 'Other')!
-
-		markNotificationsRead(state, ['a', 'b', 'a'])
-		dismissNotifications(state, ['c'])
-		expect(activeProfile(state).settings.notifications).toEqual({ readIds: ['a', 'b', 'c'], dismissedIds: ['c'] })
-		expect(other.settings.notifications).toBeUndefined()
-		expect(state.profiles[0].settings.notifications).toEqual({ readIds: ['a', 'b', 'c'], dismissedIds: ['c'] })
-
-		// Dismissing several at once reads them too and keeps each id once.
-		dismissNotifications(state, ['c', 'd', 'e', 'd'])
-		expect(activeProfile(state).settings.notifications).toEqual({ readIds: ['a', 'b', 'c', 'd', 'e'], dismissedIds: ['c', 'd', 'e'] })
-
-		pruneNotificationPreferences(state, ['b', 'c'])
-		expect(activeProfile(state).settings.notifications).toEqual({ readIds: ['b', 'c'], dismissedIds: ['c'] })
 	})
 
 	test('the appearance of the astrometric aids is kept, merging partial changes', () => {

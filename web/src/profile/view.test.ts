@@ -42,7 +42,7 @@ const BLOCKED = {
 }
 
 function record(id: string, patch: Partial<ProfileRecord> = {}): ProfileRecord {
-	return { id, name: id, sortOrder: 0, revision: 1, createdAt: 0, equipment: {}, preferences: {}, cameras: {}, mountBindings: {}, notifications: { readIds: [], dismissedIds: [] }, ...patch }
+	return { id, name: id, sortOrder: 0, revision: 1, createdAt: 0, equipment: {}, preferences: {}, cameras: {}, mountBindings: {}, ...patch }
 }
 
 const WORKSPACE: WorkspaceSnapshot = { connections: [], sites: [], cameras: [], telescopes: [], profiles: [record('p1'), record('p2', { sortOrder: 1 })] }

@@ -5,9 +5,9 @@ import { Icon } from '../ui/Icon'
 import { IconButton } from '../ui/IconButton'
 import { notificationAge } from './notifications'
 
-// One notification of the notification panel: severity, title, explanation, age, and whether the profile read it.
-// Choosing it is reported to the panel, which marks it read and opens its context; dismissing it hides it from the
-// lists of the profile. Neither ever commands a device.
+// One notification of the notification panel: severity, title, explanation, age, and whether it was read. Choosing it
+// is reported to the panel, which marks it read and opens its context; dismissing it removes it from the server
+// history. Neither ever commands a device.
 
 // Text color of the icon of each severity.
 export const LEVEL_ICON_CLASS: Readonly<Record<NotificationLevel, string>> = {
@@ -27,7 +27,7 @@ export const LEVEL_TEXT: Readonly<Record<NotificationLevel, string>> = {
 
 export interface NotificationItemProps {
 	readonly record: NotificationRecord
-	// Whether the profile has not read it.
+	// Whether it was not read yet.
 	readonly unread: boolean
 	// Whether it has a context that can be opened now.
 	readonly available: boolean
@@ -35,7 +35,7 @@ export interface NotificationItemProps {
 	readonly now: number
 	// Called when the notification is chosen.
 	readonly onChoose: () => void
-	// Called to hide the notification from the lists of the profile.
+	// Called to remove the notification from the server history.
 	readonly onDismiss: () => void
 	// Handles the keys of the item, such as moving within the list.
 	readonly onKeyDown: (event: KeyboardEvent<HTMLButtonElement>) => void

@@ -11,8 +11,8 @@ import { type CameraSettings, type MountRemoteBinding, type Profile, PROFILE_SET
 // Equipment Catalog, and the profiles) with the server, which keeps it for every tab and browser. The tab changes its
 // stores at once, as before; this module compares what the tab holds with what the server last confirmed, unit by unit (a
 // saved connection, an observing site, a camera or a telescope of the catalog, the name, connection,
-// and active site of a profile, an equipment setup, a preference, a camera form, a Mount Remote Control binding, the
-// notifications it read or dismissed), and writes each unit that changed, a moment after the latest change
+// and active site of a profile, an equipment setup, a preference, a camera form, a Mount Remote Control binding), and
+// writes each unit that changed, a moment after the latest change
 // and one request at a time. A unit with a revision is written from the revision it was
 // edited from; when another tab saved it first the server refuses it, and the tab shows what the server kept and says
 // so. The others are written as they are, the last write winning. What the server publishes applies to every unit the
@@ -49,7 +49,6 @@ type Unit =
 	| { readonly kind: 'preference'; readonly profileId: string; readonly key: ProfilePreferenceKey }
 	| { readonly kind: 'camera'; readonly profileId: string; readonly connectionId: string; readonly deviceId: string; readonly form: ProfileCameraForm }
 	| { readonly kind: 'binding'; readonly profileId: string; readonly connectionId: string; readonly deviceId: string; readonly protocol: MountRemoteProtocol }
-	| { readonly kind: 'notifications'; readonly profileId: string }
 
 // A unit the tab holds and its value, as written to the server.
 interface LocalUnit {
@@ -194,8 +193,6 @@ function localUnits(connections: readonly Connection[], sites: readonly Observin
 				for (const [protocol, binding] of Object.entries(protocols)) add({ kind: 'binding', profileId, connectionId, deviceId, protocol: protocol as MountRemoteProtocol }, binding)
 			}
 		}
-
-		add({ kind: 'notifications', profileId }, settings.notifications)
 	}
 
 	return units
@@ -224,8 +221,6 @@ function unitPath(unit: Unit): string {
 			return `/api/profiles/${e(unit.profileId)}/cameras/${e(unit.connectionId)}/${e(unit.deviceId)}/${unit.form}`
 		case 'binding':
 			return `/api/profiles/${e(unit.profileId)}/mount-bindings/${e(unit.connectionId)}/${e(unit.deviceId)}/${unit.protocol}`
-		case 'notifications':
-			return `/api/profiles/${e(unit.profileId)}/notifications`
 	}
 }
 
@@ -796,11 +791,6 @@ export class WorkspaceSync {
 			const protocols = nestedObject(nestedObject(settings.mountRemoteControl, connectionId), deviceId)
 			if (stored) protocols[protocol] = { host: stored.host, port: stored.port } satisfies MountRemoteBinding
 			else delete protocols[protocol]
-		}
-
-		if (!this.#busy(unitKey({ kind: 'notifications', profileId }))) {
-			const { readIds, dismissedIds } = record.notifications
-			settings.notifications = readIds.length > 0 || dismissedIds.length > 0 ? { readIds: [...readIds], dismissedIds: [...dismissedIds] } : undefined
 		}
 	}
 

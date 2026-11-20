@@ -1,16 +1,15 @@
-import type { NotificationLevel, NotificationRecord, NotificationSnapshot, ServerEvent } from 'api'
+import type { NotificationEvent, NotificationIdsRequest, NotificationLevel, NotificationRecord, NotificationSnapshot, ServerEvent } from 'api'
 import { proxy } from 'valtio'
 import { type ConnectionInput, sameEndpoint } from '../connection/connection'
-import { type ApiFetch, browserFetch } from '../http'
-import type { NotificationPreferences } from '../profile/schema'
+import { type ApiFetch, browserFetch, jsonInit } from '../http'
 
-// Notification history of the server as this tab knows it. The server owns the history and the same records reach
-// every tab: this store mirrors it from notification:created events and, on every socket (re)open, from the whole
-// retained history, keeping the events that arrived while that request was in flight. Which records are read or
-// dismissed belongs to the active profile (ProfileSettings.notifications), which the server keeps for every tab of it.
-// Only notifications that arrive live after the first synchronization become toasts, so a reload or a reconnect
-// never replays them. The store also follows the event socket itself, so the tab can tell when it lost the server,
-// which no server notification can report.
+// Notification history of the server as this tab knows it. The server owns the history, in memory, and the same
+// records reach every tab: this store mirrors it from the notification events and, on every socket (re)open, from the
+// whole retained history, replaying the events that arrived while that request was in flight. Reading and dismissing
+// are asked of the server, so they reach every tab, and the tab applies them when their events arrive. Only
+// notifications that arrive live after the first synchronization become toasts, so a reload or a reconnect never
+// replays them. The store also follows the event socket itself, so the tab can tell when it lost the server, which no
+// server notification can report.
 
 // Notifications known to the tab and the toasts it shows.
 export interface NotificationsState {
@@ -39,48 +38,88 @@ export const notificationsState = proxy<NotificationsState>({ records: [], synch
 // Counter of refreshes; a response is applied only if no later refresh started.
 let generation = 0
 
-// Ids of the notifications received as events since the latest refresh started.
-let received = new Set<string>()
+// Notification events received since the latest refresh started, replayed on its response; absent while none is in flight.
+let pending: NotificationEvent[] | undefined
 
 // Orders notifications newest first.
 function newestFirst(a: NotificationRecord, b: NotificationRecord) {
 	return b.createdAt - a.createdAt || b.sequence - a.sequence
 }
 
-// Applies a notification event; any other event is ignored. A new notification becomes a toast when it is
-// worth one and the history was already fetched.
-export function handleNotificationEvent(state: NotificationsState, event: ServerEvent) {
-	if (event.type !== 'notification:created') return
-
-	const { notification } = event
-	received.add(notification.id)
-	if (state.records.some((record) => record.id === notification.id)) return
-
-	state.records = [notification, ...state.records].sort(newestFirst)
-	if (state.synchronized && TOAST_LEVELS.has(notification.level)) state.toasts = [...state.toasts, notification].slice(-MAX_TOASTS)
+// Applies a notification event to the state. A new notification becomes a toast when toast is set, it is worth one,
+// and the history was already fetched; a dismissed one leaves the history and the toasts.
+function applyNotificationEvent(state: NotificationsState, event: NotificationEvent, toast: boolean) {
+	switch (event.type) {
+		case 'notification:created': {
+			const { notification } = event
+			if (state.records.some((record) => record.id === notification.id)) return
+			state.records = [notification, ...state.records].sort(newestFirst)
+			if (toast && state.synchronized && TOAST_LEVELS.has(notification.level)) state.toasts = [...state.toasts, notification].slice(-MAX_TOASTS)
+			return
+		}
+		case 'notification:read': {
+			const ids = new Set(event.ids)
+			state.records = state.records.map((record) => (!record.read && ids.has(record.id) ? { ...record, read: true } : record))
+			return
+		}
+		case 'notification:dismissed': {
+			const ids = new Set(event.ids)
+			state.records = state.records.filter((record) => !ids.has(record.id))
+			state.toasts = state.toasts.filter((record) => !ids.has(record.id))
+		}
+	}
 }
 
-// Replaces the history with the server's, keeping the notifications received while the request was in flight.
-// Notifications the server no longer retains are dropped. Returns the ids of every notification known afterwards, or
-// undefined when the server is unreachable or another refresh started meanwhile.
-export async function refreshNotifications(state: NotificationsState, request: ApiFetch = browserFetch): Promise<string[] | undefined> {
+// Applies a notification event; any other event is ignored.
+export function handleNotificationEvent(state: NotificationsState, event: ServerEvent) {
+	if (event.type !== 'notification:created' && event.type !== 'notification:read' && event.type !== 'notification:dismissed') return
+	pending?.push(event)
+	applyNotificationEvent(state, event, true)
+}
+
+// Replaces the history with the server's, then replays the notification events received while the request was in
+// flight. Notifications the server no longer retains are dropped. Keeps the history when the server is unreachable or
+// another refresh started meanwhile.
+export async function refreshNotifications(state: NotificationsState, request: ApiFetch = browserFetch) {
 	const current = ++generation
-	received = new Set()
+	pending = []
 
 	try {
 		const response = await request('/api/notifications')
-		if (!response.ok || current !== generation) return undefined
+		if (!response.ok || current !== generation) return
 		const { items } = (await response.json()) as NotificationSnapshot
-		if (current !== generation) return undefined
+		if (current !== generation) return
 
-		const retained = new Set(items.map((item) => item.id))
-		const live = state.records.filter((record) => received.has(record.id) && !retained.has(record.id))
-		state.records = [...live, ...items].sort(newestFirst)
+		state.records = [...items]
+		for (const event of pending) applyNotificationEvent(state, event, false)
 		state.synchronized = true
-		return state.records.map((record) => record.id)
 	} catch {
 		// The server is unreachable; the next socket open refreshes the history.
-		return undefined
+	} finally {
+		if (current === generation) pending = undefined
+	}
+}
+
+// Asks the server to mark notifications as read for every tab; the tab applies it when notification:read arrives.
+// A failure leaves them unread.
+export async function markNotificationsRead(ids: readonly string[], request: ApiFetch = browserFetch) {
+	await postIds('/api/notifications/read', ids, request)
+}
+
+// Asks the server to remove notifications from the history for every tab; the tab applies it when
+// notification:dismissed arrives. A failure leaves them listed.
+export async function dismissNotifications(ids: readonly string[], request: ApiFetch = browserFetch) {
+	await postIds('/api/notifications/dismiss', ids, request)
+}
+
+// Posts the ids of notifications to a route of the history, unless there are none. Never throws.
+async function postIds(path: string, ids: readonly string[], request: ApiFetch) {
+	if (ids.length === 0) return
+
+	try {
+		await request(path, jsonInit('POST', { ids } satisfies NotificationIdsRequest))
+	} catch {
+		// The server is unreachable; nothing changed.
 	}
 }
 
@@ -101,19 +140,14 @@ export function inScope(record: NotificationRecord, connection: ConnectionInput 
 	return !!connection && !!record.source.endpoint && sameEndpoint(record.source.endpoint, connection)
 }
 
-// Whether a profile has not read a notification.
-export function isUnread(record: NotificationRecord, preferences: Readonly<NotificationPreferences> | undefined) {
-	return !preferences?.readIds.includes(record.id)
+// Returns the notifications listed in scope, newest first.
+export function visibleNotifications(records: readonly NotificationRecord[], connection: ConnectionInput | undefined, all = false): NotificationRecord[] {
+	return records.filter((record) => inScope(record, connection, all))
 }
 
-// Returns the notifications a profile lists: not dismissed and in scope, newest first.
-export function visibleNotifications(records: readonly NotificationRecord[], preferences: Readonly<NotificationPreferences> | undefined, connection: ConnectionInput | undefined, all = false): NotificationRecord[] {
-	return records.filter((record) => !preferences?.dismissedIds.includes(record.id) && inScope(record, connection, all))
-}
-
-// Number of notifications of the active profile's connection a profile has not read nor dismissed.
-export function unreadCount(records: readonly NotificationRecord[], preferences: Readonly<NotificationPreferences> | undefined, connection: ConnectionInput | undefined) {
-	return visibleNotifications(records, preferences, connection).filter((record) => isUnread(record, preferences)).length
+// Number of unread notifications of the active profile's connection.
+export function unreadCount(records: readonly NotificationRecord[], connection: ConnectionInput | undefined) {
+	return visibleNotifications(records, connection).filter((record) => !record.read).length
 }
 
 // Age of a notification at now, as shown in the lists: "now", minutes, hours, or days, both in Unix milliseconds (UTC).

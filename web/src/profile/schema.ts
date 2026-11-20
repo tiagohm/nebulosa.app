@@ -112,9 +112,6 @@ export interface ProfileSettings {
 	// Guide pulse settings of the Mount dithers of each mount, by saved connection id, then mount id; absent until edited,
 	// and then DEFAULT_MOUNT_DITHER_SETTINGS holds. A preference only: a running capture keeps the snapshot of its request.
 	mountDither?: Record<string, Record<string, MountDitherSettings>>
-	// Notifications of the server history the profile read or dismissed; absent until the first one is read. The server
-	// keeps one history for every profile and these states for each one (profile_notification_state), which only grow.
-	notifications?: NotificationPreferences
 	// Appearance of the astrometric aids of solved images in Images (coordinates, grid, crosshair, scale bar, orientation);
 	// absent until edited, and then DEFAULT_IMAGE_ASTROMETRY holds. Whether a document shows its grid is the document's.
 	imageAstrometry?: ImageAstrometrySettings
@@ -311,18 +308,6 @@ export interface StatusBarPreferences {
 
 // Clock of a profile that has not edited it: the local apparent sidereal time, with seconds.
 export const DEFAULT_ASTRONOMICAL_CLOCK_PREFERENCES: AstronomicalClockPreferences = { enabled: true, primary: 'last', secondary: 'none', showSeconds: true }
-
-// Notifications of the server history a profile read or dismissed, by notification id. Ids the history no longer
-// retains are dropped, so each list holds at most MAX_NOTIFICATION_IDS ids.
-export interface NotificationPreferences {
-	// Notifications read; a dismissed notification is read too.
-	readIds: readonly string[]
-	// Notifications hidden from the lists of the profile.
-	dismissedIds: readonly string[]
-}
-
-// Most ids kept in each list of NotificationPreferences, the size of the server history.
-export const MAX_NOTIFICATION_IDS = 500
 
 // Protocols of the Mount Remote Control listeners, in the order the tool shows them.
 export const MOUNT_REMOTE_PROTOCOLS: readonly MountRemoteProtocol[] = ['lx200', 'stellarium']

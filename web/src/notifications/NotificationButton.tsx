@@ -6,7 +6,7 @@ import { NotificationPanel } from './NotificationPanel'
 import { notificationsState, unreadCount } from './notifications'
 import { useNotificationScope } from './useNotificationScope'
 
-// Bell of the top bar: the number of notifications of the active profile's connection the profile has not read, and
+// Bell of the top bar: the number of unread notifications of the active profile's connection, and
 // the notification panel it opens below itself, aligned with its right edge. The panel closes when the bell is pressed
 // again, on a press outside both, on Escape (returning the focus to the bell), when the window resizes, and after it
 // opened the context of a notification.
@@ -38,11 +38,11 @@ export interface NotificationButtonProps {
 // Bell button with an unread-count badge and the notification panel.
 export function NotificationButton({ className }: NotificationButtonProps) {
 	const { records } = useSnapshot(notificationsState)
-	const { connection, preferences } = useNotificationScope()
+	const { connection } = useNotificationScope()
 	const [placement, setPlacement] = useState<PanelPlacement>()
 	const rootRef = useRef<HTMLSpanElement>(null)
 	const buttonRef = useRef<HTMLButtonElement>(null)
-	const count = unreadCount(records, preferences, connection)
+	const count = unreadCount(records, connection)
 	const open = !!placement
 
 	// Places the panel under the bell, aligned with its right edge but kept inside the viewport.

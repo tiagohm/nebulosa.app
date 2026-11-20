@@ -30,7 +30,7 @@ import type { PointingActivationEvent } from './mountpointing.corrections'
 import type { MountPointingEvent } from './mountpointing.sessions'
 import type { MountRemoteControlEvent } from './mountremotecontrol'
 import type { MountNudgeEvent } from './mounts'
-import type { NotificationCreatedEvent } from './notifications'
+import type { NotificationEvent } from './notifications'
 import type { ObservatoryCameraEvent } from './observatorycameras'
 import type { ObservingPlanEvent } from './observingplanner'
 import type { OperationEvent } from './operations'
@@ -91,7 +91,7 @@ export type ServerEvent =
 	| ImageProcessingEvent
 	| FocuserBacklashEvent
 	| GuidingServerEvent
-	| NotificationCreatedEvent
+	| NotificationEvent
 	| SatellitesChangedEvent
 	| SpiceKernelEvent
 	| ObservingPlanEvent

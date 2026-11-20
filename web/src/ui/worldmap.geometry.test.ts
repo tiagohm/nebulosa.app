@@ -11,6 +11,7 @@ import {
 	interpolateWorldMapView,
 	MAX_WORLD_MAP_ZOOM,
 	minWorldMapScale,
+	onWorldMap,
 	panWorldMap,
 	project,
 	smallCirclePoints,
@@ -47,6 +48,16 @@ describe('projection', () => {
 		expect(point.latitude).toBeCloseTo(-23.5505, 9)
 		expect(unproject(project(190, 0)).longitude).toBeCloseTo(-170, 9)
 		expect(unproject({ x: 0, y: -10 }).latitude).toBe(90)
+	})
+
+	test('tells points on the map from points beyond its poles, and beyond its sides only when it does not wrap', () => {
+		expect(onWorldMap(project(0, 90), false)).toBe(true)
+		expect(onWorldMap(project(0, -90), false)).toBe(true)
+		expect(onWorldMap({ x: 10, y: -1 }, true)).toBe(false)
+		expect(onWorldMap({ x: 10, y: WORLD_MAP_HEIGHT + 1 }, true)).toBe(false)
+		expect(onWorldMap({ x: -10, y: 10 }, true)).toBe(true)
+		expect(onWorldMap({ x: -10, y: 10 }, false)).toBe(false)
+		expect(onWorldMap({ x: WORLD_MAP_WIDTH + 10, y: 10 }, false)).toBe(false)
 	})
 
 	test('wraps longitudes into [-180, 180)', () => {

@@ -12,9 +12,9 @@ import { Checkbox } from '../../ui/Checkbox'
 import { IconButton } from '../../ui/IconButton'
 import { TextInput } from '../../ui/TextInput'
 import { WorldMap, type WorldMapHandle, WorldMapSymbol } from '../../ui/WorldMap'
-import { DEGREE_PLANE_TRANSFORM, type ViewportPadding } from '../../ui/worldmap.geometry'
+import { DEGREE_PLANE_TRANSFORM } from '../../ui/worldmap.geometry'
 import { utcDate } from '../eclipse/eclipse'
-import { EclipseHeading, EclipseMapLegend } from '../eclipse/EclipseMapParts'
+import { EclipseHeading, EclipseMapLegend, FRAME_MAX_ZOOM, framePadding } from '../eclipse/EclipseMapParts'
 import { GlobalPointIcon, GlobalPointMarker } from './GlobalPointMarker'
 import { ECLIPSE_TYPE_NAMES, eclipseBounds, findEclipseFrom, GLOBAL_POINTS, type GlobalPointKind, globalPoints, labelRows, limitName, nextEclipse, openSolarEclipseMap, previousEclipse, retryEclipse, type SolarEclipseLayers, selectMapPlace, setLayer, showEclipse, solarEclipseState, syncPlace } from './solareclipse'
 import { SolarEclipsePanel } from './SolarEclipsePanel'
@@ -39,17 +39,6 @@ interface EclipseOverlayProps {
 
 // Height of a row of point labels, in screen pixels.
 const LABEL_ROW_HEIGHT = 12
-
-// Room kept free around an eclipse framed on the map, in viewport pixels: the zoom buttons on the right, the coordinate
-// readout at the bottom, and room for the labels of the points at the edges.
-const FRAME_PADDING: ViewportPadding = { top: 24, right: 72, bottom: 36, left: 32 }
-
-// Room between the legend and an eclipse framed beside or above it, in viewport pixels.
-const LEGEND_GAP = 16
-
-// Largest zoom of an eclipse framed on the map, as a multiple of the whole map, so a small region keeps its
-// surroundings.
-const FRAME_MAX_ZOOM = 12
 
 // Map layers of an eclipse, in painting order: the partial limits, the sunrise/sunset curves, the central limits,
 // the central line, and the global points with their labels, the highlighted one ringed. Labels of points that
@@ -164,24 +153,10 @@ export function SolarEclipseMap() {
 	const central = map && (map.paths.total || map.paths.annular)
 	const limits = map && (map.paths.umbraNorth || map.paths.umbraSouth)
 
-	// Shows the region of the eclipse whole on the map, beside the legend while it is shown: the legend covers the
-	// bottom-left corner, so the region keeps out of it on the side that leaves the larger area.
+	// Shows the region of the eclipse whole on the map, beside the legend while it is shown (framePadding).
 	function frame() {
 		const bounds = map && eclipseBounds(map)
-		if (!bounds) return
-		const legend = legendRef.current
-		const box = legend?.parentElement
-		let padding = FRAME_PADDING
-
-		if (legend?.offsetParent && box) {
-			const width = legend.offsetLeft + legend.offsetWidth + LEGEND_GAP
-			const height = box.clientHeight - legend.offsetTop + LEGEND_GAP
-			const beside = (box.clientWidth - width - FRAME_PADDING.right) * (box.clientHeight - FRAME_PADDING.top - FRAME_PADDING.bottom)
-			const above = (box.clientWidth - FRAME_PADDING.left - FRAME_PADDING.right) * (box.clientHeight - height - FRAME_PADDING.top)
-			padding = beside > above ? { ...FRAME_PADDING, left: width } : { ...FRAME_PADDING, bottom: height }
-		}
-
-		mapRef.current?.fit(bounds, padding, FRAME_MAX_ZOOM)
+		if (bounds) mapRef.current?.fit(bounds, framePadding(legendRef.current), FRAME_MAX_ZOOM)
 	}
 
 	// Keeps a URL that names an eclipse naming the one shown once a search steps to another eclipse.
@@ -218,7 +193,13 @@ export function SolarEclipseMap() {
 							Find
 						</Button>
 					</form>
-					<Checkbox label="Visible here only" checked={visibleOnly} disabled={!place} onChange={(checked) => (solarEclipseState.visibleOnly = checked)} />
+					<Checkbox
+						label="Skip eclipses not visible here"
+						checked={visibleOnly}
+						disabled={!place}
+						title={place ? 'Previous and Next step only to eclipses with the Sun above the horizon here' : 'Choose a location to skip the eclipses it does not see'}
+						onChange={(checked) => (solarEclipseState.visibleOnly = checked)}
+					/>
 				</div>
 				<div className="relative isolate min-h-0 flex-1">
 					<WorldMap ref={mapRef} className="size-full" selected={place} tools={<IconButton icon="solarEclipse" label="Frame the eclipse" disabled={!map} onClick={frame} />} onSelect={(point) => void selectMapPlace(solarEclipseState, { longitude: point.longitude, latitude: point.latitude })}>

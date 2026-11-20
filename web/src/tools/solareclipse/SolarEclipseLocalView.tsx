@@ -21,8 +21,8 @@ const SHAPE_CLASSES: Readonly<Record<LocalSolarEclipseSvgShape['role'], string>>
 	lunarLimb: 'fill-none stroke-ink-300',
 	trajectoryLine: 'stroke-ink-300 [stroke-dasharray:4_3]',
 	trajectoryPath: 'fill-none stroke-ink-300 [stroke-dasharray:4_3]',
-	horizonBand: 'fill-danger/10',
-	horizonLine: 'stroke-danger',
+	horizonBand: 'fill-green-500/15',
+	horizonLine: 'stroke-green-500/35',
 }
 
 // Draws one shape.

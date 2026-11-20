@@ -2,7 +2,7 @@
 
 Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
 
-- `WorldMap` (`web/src/ui/WorldMap.tsx`) draws the basemap `web/assets/world.map.svg` (equirectangular, 2520.631 × 1260.315 map units, longitude −180° at x = 0 and latitude +90° at y = 0) with zoom (wheel, pinch, double click, `+`/`-`, buttons, from the whole map up to `MAX_WORLD_MAP_ZOOM` = 64×) and pan (drag, arrows), and reports a click, never a drag or a pinch, as a geographic position through `onSelect`;
+- `WorldMap` (`web/src/ui/WorldMap.tsx`) draws the basemap `web/assets/world.map.svg` (equirectangular, 2520.631 × 1260.315 map units, longitude −180° at x = 0 and latitude +90° at y = 0) with zoom (wheel, pinch, double click, `+`/`-`, buttons, from the whole map up to `MAX_WORLD_MAP_ZOOM` = 64×) and pan (drag, arrows), and reports a click on the map, never a drag, a pinch, or a click off the map (the empty band beyond a pole, or beyond the sides of a map that does not wrap, `onWorldMap`), as a geographic position through `onSelect`, while the pointer readout shows no position off the map;
   the owner keeps the selection and passes it back as `selected`, drawn as a marker.
   Geographic positions are degrees, longitude east positive.
   The owner moves the view through the `WorldMapHandle` ref (`centerOn`, `zoomBy`, `reset`, `fit` to show a `GeoBounds` box whole inside the viewport less a padding, at a capped zoom, and `reveal` to center a position only when it is off screen), and may add buttons of its own under the zoom buttons (`tools`).

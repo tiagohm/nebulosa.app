@@ -166,13 +166,10 @@ export function SolarEclipsePanel() {
 				<CollapsibleSection id="solarEclipse.localView" title="Local View">
 					<LocalContent stale={stale}>
 						<SolarEclipseLocalView view={local.view} />
-						{fraction !== undefined && <Slider label="From C1 to C4, %" value={Math.round(fraction * 1000) / 10} min={0} max={100} step={0.1} onChange={handleViewFraction} />}
+						{fraction !== undefined && <Slider label="Instant drawn, % from C1 to C4" value={Math.round(fraction * 1000) / 10} min={0} max={100} step={0.1} onChange={handleViewFraction} />}
 						{local.view.time !== undefined && <DataRow label="Drawn at">{formatLongDateTime(local.view.time, timeZone)}</DataRow>}
-						{local.view.positionAngle !== undefined && local.view.zenithAngle !== undefined && (
-							<DataRow label={local.view.selectedEvent ? `Position / zenith angle at ${local.view.selectedEvent}` : 'Position / zenith angle'}>
-								{formatEclipseAngle(local.view.positionAngle)} / {formatEclipseAngle(local.view.zenithAngle)}
-							</DataRow>
-						)}
+						{local.view.positionAngle !== undefined && <DataRow label={`Position angle${local.view.selectedEvent ? ` at ${local.view.selectedEvent}` : ''}`}>{formatEclipseAngle(local.view.positionAngle)}</DataRow>}
+						{local.view.zenithAngle !== undefined && <DataRow label={`Zenith angle${local.view.selectedEvent ? ` at ${local.view.selectedEvent}` : ''}`}>{formatEclipseAngle(local.view.zenithAngle)}</DataRow>}
 					</LocalContent>
 					<SegmentedControl label="Up" options={ORIENTATIONS} value={view.orientation} onChange={(orientation) => void setViewSettings(solarEclipseState, { orientation })} format={(value) => (value === 'zenith' ? 'Zenith' : 'North')} />
 					<SegmentedControl label="East" options={HANDEDNESS} value={view.handedness} onChange={(handedness) => void setViewSettings(solarEclipseState, { handedness })} format={(value) => (value === 'eastRight' ? 'Right' : 'Left')} />

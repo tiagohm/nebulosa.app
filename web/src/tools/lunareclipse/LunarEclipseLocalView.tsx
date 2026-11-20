@@ -10,15 +10,16 @@ export interface LunarEclipseLocalViewProps {
 	readonly view: LocalViewGeometry
 }
 
-// Classes of each shape, by role.
+// Classes of each shape, by role: the horizon in the map's horizon hue (a reference line, not a failure), the
+// shadows in the warm scrim, and the Moon a muted gray so the close-up never glares in the dark.
 const SHAPE_CLASSES: Readonly<Record<LocalLunarEclipseSvgShape['role'], string>> = {
-	horizonBand: 'fill-danger/10',
+	horizonBand: 'fill-green-500/15',
 	trajectoryPath: 'fill-none stroke-ink-300 [stroke-dasharray:4_3]',
 	ghostMoonDisk: 'fill-none stroke-ink-300 [stroke-dasharray:2_2]',
-	moonDisk: 'fill-ink-200 stroke-ink-100',
-	penumbra: 'fill-black/25 stroke-ink-300',
-	umbra: 'fill-black/55 stroke-ink-200',
-	horizonLine: 'stroke-danger',
+	moonDisk: 'fill-ink-300 stroke-ink-200',
+	penumbra: 'fill-scrim/25 stroke-ink-300',
+	umbra: 'fill-scrim/55 stroke-ink-200',
+	horizonLine: 'stroke-green-500/35',
 }
 
 // Draws one shape.

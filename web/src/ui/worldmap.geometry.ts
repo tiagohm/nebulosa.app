@@ -53,6 +53,13 @@ export function project(longitude: number, latitude: number): Point {
 	return { x: (longitude + 180) * UNITS_PER_LONGITUDE, y: (90 - latitude) * UNITS_PER_LATITUDE }
 }
 
+// Returns whether a map point (map units) lies on the map: between its top and bottom edges, the poles, and on a map
+// that does not wrap also between its left and right edges, the antimeridian. A wrapping map repeats sideways, so
+// every longitude is on it.
+export function onWorldMap(point: Point, wrap: boolean): boolean {
+	return point.y >= 0 && point.y <= WORLD_MAP_HEIGHT && (wrap || (point.x >= 0 && point.x <= WORLD_MAP_WIDTH))
+}
+
 // Returns the geographic position of a map point, the longitude wrapped into [−180, 180) and the latitude
 // clamped to [−90, 90].
 export function unproject(point: Point): GeoPoint {

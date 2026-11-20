@@ -144,6 +144,10 @@ test('computes the circumstances and the Local View of a place', async () => {
 	expect(down.events.some((event) => event.observable)).toBe(false)
 	expect(down.details.observableDuration).toBe(0)
 
+	// The Moon stays up from P1 to P4 at one place and never rises at the other.
+	expect(up.windows).toEqual([{ start: up.events[0].time, end: up.events.at(-1)!.time, rise: false, set: false }])
+	expect(down.windows).toEqual([])
+
 	expect(up.view.selectedEvent).toBe('MAX')
 	expect(up.view.shapes.some((shape) => shape.kind === 'circle' && shape.role === 'umbra')).toBe(true)
 	expect(up.view.shapes.some((shape) => shape.kind === 'circle' && shape.role === 'ghostMoonDisk')).toBe(true)
@@ -172,6 +176,48 @@ test('draws the Local View at a fraction of the eclipse, 0 and 1 being P1 and P4
 	expect(start.view.zenithAngle).toBe(p1.zenithAngle)
 	expect(middle.view.positionAngle).toBeGreaterThanOrEqual(0)
 	expect(middle.view.positionAngle).toBeLessThan(360)
+})
+
+test('finds the moonset of a place that loses the Moon during the eclipse', async () => {
+	// A quarter turn east of the sublunar point of greatest eclipse the Moon sets about then.
+	const result = (await local(TOTAL.id, 'longitude=167&latitude=-3').json()) as LocalLunarEclipse
+	const p1 = result.events[0]
+	const max = result.events.find((event) => event.kind === 'MAX')!
+	const [window] = result.windows
+
+	expect(result.windows).toHaveLength(1)
+	expect(window.start).toBe(p1.time)
+	expect(window.rise).toBe(false)
+	expect(window.set).toBe(true)
+	expect(Math.abs(window.end - max.time)).toBeLessThan(30 * 60 * 1000)
+	// The stretch is the observable time of the toolkit, measured independently from its altitude samples.
+	expect((window.end - window.start) / 1000).toBeCloseTo(result.details.observableDuration, -2)
+
+	// Every contact inside the stretch has the Moon up, and every one after it down.
+	for (const event of result.events) expect(event.observable).toBe(event.time <= window.end)
+})
+
+test('draws the global map and the Moon at the instant of a fraction, and only there', async () => {
+	const at = async (event: string) => (await local(TOTAL.id, `longitude=77&latitude=-3&event=${event}`).json()) as LocalLunarEclipse
+	const contact = await at('MAX')
+	const middle = await at('0.5')
+	const max = contact.events.find((event) => event.kind === 'MAX')!
+
+	expect(contact.view.map).toBeUndefined()
+	expect(contact.view.altitude).toBe(max.altitude)
+	expect(contact.view.azimuth).toBe(max.azimuth)
+	expect(contact.view.observable).toBe(true)
+
+	const drawn = middle.view.map!
+	expect(drawn.line.startsWith('M')).toBe(true)
+	expect(drawn.fill.endsWith('Z')).toBe(true)
+	expect(middle.view.altitude).toBeGreaterThan(0)
+	expect(middle.view.observable).toBe(true)
+
+	// The sublunar point at the middle of the eclipse lies near the one of greatest eclipse, west as time goes on.
+	const maxMap = ((await map(TOTAL.id).json()) as LunarEclipseMap).events.find((event) => event.kind === 'MAX')!.sublunar
+	expect(Math.abs(drawn.sublunar.latitude - maxMap.latitude)).toBeLessThan(1)
+	expect(Math.abs(drawn.sublunar.longitude - maxMap.longitude)).toBeLessThan(15)
 })
 
 test('omits the durations a penumbral eclipse lacks', async () => {

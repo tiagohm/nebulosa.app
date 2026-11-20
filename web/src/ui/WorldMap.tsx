@@ -4,7 +4,7 @@ import worldMapUrl from '../../assets/world.map.svg'
 import { MISSING, formatGeographic } from '../format'
 import type { Point, Size } from '../viewer/transform'
 import { IconButton } from './IconButton'
-import { constrainWorldMapView, fitWorldMapView, type GeoBounds, type GeoPoint, graticulePath, interpolateWorldMapView, panWorldMap, project, unproject, WORLD_MAP_HOME, WORLD_MAP_WIDTH, type ViewportPadding, type WorldMapView, worldMapShows, worldMapTransform, zoomWorldMapAt } from './worldmap.geometry'
+import { constrainWorldMapView, fitWorldMapView, type GeoBounds, type GeoPoint, graticulePath, interpolateWorldMapView, onWorldMap, panWorldMap, project, unproject, WORLD_MAP_HOME, WORLD_MAP_WIDTH, type ViewportPadding, type WorldMapView, worldMapShows, worldMapTransform, zoomWorldMapAt } from './worldmap.geometry'
 import { permanentTiles, TileCache, tileKey } from './worldmap.tiles'
 import { startTileWorker, type TileWorkerMessage, type TileWorkerWant } from './worldmap.worker'
 
@@ -47,9 +47,9 @@ export interface WorldMapHandle {
 export interface WorldMapProps {
 	// Selected geographic position, shown by a marker; absent shows none.
 	readonly selected?: GeoPoint
-	// Called with the geographic position under a click (never a drag or a pinch).
+	// Called with the geographic position under a click on the map (never a drag, a pinch, or a click off the map).
 	readonly onSelect?: (point: GeoPoint) => void
-	// Called with the geographic position under the pointer as it moves, and undefined when it leaves.
+	// Called with the geographic position under the pointer as it moves, and undefined when it leaves the map.
 	readonly onHover?: (point: GeoPoint | undefined) => void
 	// Whether the map repeats across the antimeridian, so panning east or west never ends. On by default.
 	readonly wrap?: boolean
@@ -280,10 +280,12 @@ class WorldMapController {
 		this.animate(zoomWorldMapAt(this.view, factor, at ?? { x: width / 2, y: height / 2 }, this.viewport, this.wrap))
 	}
 
-	// Returns the geographic position under a viewport point.
-	geoAt(at: Point): GeoPoint {
+	// Returns the geographic position under a viewport point, or undefined off the map, such as in the empty band
+	// above or below it, where a point would otherwise read as a pole.
+	geoAt(at: Point): GeoPoint | undefined {
 		const { scale, x, y } = worldMapTransform(this.view, this.viewport, this.wrap)
-		return unproject({ x: (at.x - x) / scale, y: (at.y - y) / scale })
+		const point = { x: (at.x - x) / scale, y: (at.y - y) / scale }
+		return onWorldMap(point, this.wrap) ? unproject(point) : undefined
 	}
 }
 
@@ -418,7 +420,9 @@ export function WorldMap({ selected, onSelect, onHover, wrap = true, graticule =
 		gesture.pointers.delete(e.pointerId)
 		if (gesture.pointers.size < 2) gesture.pinch = undefined
 		gesture.drag = undefined
-		if (gesture.press?.id === e.pointerId && e.type === 'pointerup') callbacks.current.onSelect?.(controller.geoAt(viewportPoint(e)))
+		// A click off the map, such as in the band above or below it, selects nothing.
+		const point = gesture.press?.id === e.pointerId && e.type === 'pointerup' ? controller.geoAt(viewportPoint(e)) : undefined
+		if (point) callbacks.current.onSelect?.(point)
 		gesture.press = undefined
 		if (e.pointerType !== 'mouse' && gesture.pointers.size === 0) hover(undefined)
 	}

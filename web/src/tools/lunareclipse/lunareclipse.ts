@@ -4,6 +4,7 @@ import { aborted, ApiResponseError, fetchJson } from '../../http'
 import { ACTIVE_TOOL_LOCATION, type GeographicLocation, type ToolLocation } from '../../location/site'
 import { DEFAULT_ZONE_OVERRIDE, type DisplayZoneOverride } from '../../location/zone'
 import { createRequestGuard } from '../../sky/selection'
+import type { GeoBounds } from '../../ui/worldmap.geometry'
 import { browserEclipseIo, type EclipseIo, type EclipsePlace, eclipsePlace, errorMessage, mapLocation, samePlace, utcDateStart } from '../eclipse/eclipse'
 
 // State of the Lunar Eclipse Map tool and its requests to /api/eclipses/lunar: the eclipse shown and its global
@@ -11,6 +12,8 @@ import { browserEclipseIo, type EclipseIo, type EclipsePlace, eclipsePlace, erro
 // zone of the times. The location follows eclipse.ts: it is the active profile's site until another site,
 // coordinates, or a point of the map is chosen, which never changes the profile; choosing a zone asks for nothing.
 // The state lives as long as the tab, so leaving and reopening the tool keeps it; nothing is stored on the server.
+// It also holds the pure helpers the map and panel share: the phase of an instant, the visibility headline, the box
+// framed on the map, and where the moonrise/moonset lines cross the equator, where they are named.
 // Times are Unix milliseconds (UTC), geographic positions degrees, longitude east positive.
 
 // Presentation of the Local View.
@@ -59,11 +62,13 @@ export interface LunarEclipseState {
 	zone: DisplayZoneOverride
 	// Whether stepping between eclipses skips those whose Moon stays below the place's horizon.
 	visibleOnly: boolean
+	// Whether the map's legend is shown; kept across eclipses, collapsed at first.
+	legendOpen: boolean
 }
 
 // Initial state of the tool.
 export function initialLunarEclipseState(): LunarEclipseState {
-	return { loading: false, unknownLink: false, selectedEvent: 'MAX', location: ACTIVE_TOOL_LOCATION, localLoading: false, view: { orientation: 'zenith', handedness: 'eastRight', ghosts: true }, zone: DEFAULT_ZONE_OVERRIDE, visibleOnly: false }
+	return { loading: false, unknownLink: false, selectedEvent: 'MAX', location: ACTIVE_TOOL_LOCATION, localLoading: false, view: { orientation: 'zenith', handedness: 'eastRight', ghosts: true }, zone: DEFAULT_ZONE_OVERRIDE, visibleOnly: false, legendOpen: false }
 }
 
 // Lunar Eclipse Map state of the tab.
@@ -280,6 +285,79 @@ export interface LunarEclipsePhaseDurations {
 	readonly partial?: number
 	// From U2 to U3.
 	readonly total?: number
+}
+
+// Phase of an eclipse at an instant: the Moon in the penumbra only, partly in the umbra, or wholly in it.
+export type LunarEclipsePhase = 'penumbral' | 'partial' | 'total'
+
+// Words of each phase, as the end of "during …".
+export const PHASE_NAMES: Readonly<Record<LunarEclipsePhase, string>> = { penumbral: 'the penumbral phase', partial: 'the partial phase', total: 'totality' }
+
+// Returns the phase of an eclipse at an instant (Unix milliseconds) between its P1 and P4, from its contacts: total
+// from U2 to U3, partial from U1 to U4 outside it, penumbral otherwise.
+export function phaseAt(eclipse: LunarEclipseSummary, time: number): LunarEclipsePhase {
+	const at = (kind: LunarEclipseContactKind) => eclipse.contacts.find((contact) => contact.kind === kind)?.time
+	const within = (from: LunarEclipseContactKind, to: LunarEclipseContactKind) => {
+		const start = at(from)
+		const end = at(to)
+		return start !== undefined && end !== undefined && time >= start && time <= end
+	}
+
+	return within('U2', 'U3') ? 'total' : within('U1', 'U4') ? 'partial' : 'penumbral'
+}
+
+// Returns the headline of what a place sees of an eclipse: the toolkit's text, except that a penumbral eclipse seen
+// only in part reads as such, since its only phase is the penumbral one.
+export function visibilityHeadline(type: LunarEclipseType, visibility: LocalLunarEclipse['visibility']): string {
+	return type === 'PENUMBRAL' && visibility.kind === 'penumbralOnlyVisible' ? 'Part of the eclipse visible' : visibility.text
+}
+
+// Returns the box to frame on the map for an eclipse: the hemisphere where the Moon is up at greatest eclipse, 180°
+// of longitude centered on its sublunar point from pole to pole, widened to hold the place when it lies outside, on
+// the nearer side; undefined without the greatest eclipse. Degrees, east positive.
+export function moonUpBounds(map: LunarEclipseMap, place?: EclipsePlace): GeoBounds | undefined {
+	const max = map.events.find((event) => event.kind === 'MAX')
+	if (!max) return undefined
+
+	let west = max.sublunar.longitude - 90
+	let east = west + 180
+
+	if (place) {
+		// Degrees east of the western edge, in [0, 360): beyond 180 the place is outside, nearer one side or the other.
+		const offset = (((place.longitude - west) % 360) + 360) % 360
+		if (offset > 180) {
+			if (offset - 180 <= 360 - offset) east = west + offset
+			else west -= 360 - offset
+		}
+	}
+
+	const wrapped = ((((west + 180) % 360) + 360) % 360) - 180
+	return { west: wrapped, east: wrapped + (east - west), south: -90, north: 90 }
+}
+
+// A vertex of SVG path data on the degree plane: the command (M starts a subpath, L continues it) and x, y.
+const PATH_VERTEX = /([ML])\s*(-?[\d.]+)[\s,]+(-?[\d.]+)/g
+
+// Returns the longitudes, in degrees in [−180, 180), where a line of the map (SVG path data on the degree plane,
+// x = longitude + 180 and y = 90 − latitude) crosses the equator, interpolated between its vertices, in path order;
+// the moonrise/moonset line of a contact crosses it twice, once where the Moon rises and once where it sets.
+export function equatorCrossings(path: string): number[] {
+	const longitudes: number[] = []
+	let previous: { readonly x: number; readonly y: number } | undefined
+
+	for (const [, command, x, y] of path.matchAll(PATH_VERTEX)) {
+		const point = { x: +x, y: +y }
+
+		if (command === 'L' && previous && (previous.y - 90) * (point.y - 90) <= 0 && previous.y !== point.y) {
+			const t = (90 - previous.y) / (point.y - previous.y)
+			// A vertex exactly on the equator ends one segment and starts the next; it counts once.
+			if (t > 0 || longitudes.length === 0) longitudes.push(((((previous.x + t * (point.x - previous.x)) % 360) + 360) % 360) - 180)
+		}
+
+		previous = point
+	}
+
+	return longitudes
 }
 
 // Returns the durations of the phases of an eclipse from its contacts, the same for every observer.

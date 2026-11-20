@@ -5,6 +5,7 @@ import {
 	computeLocalLunarEclipseInstant,
 	computeLocalLunarEclipseViewGeometry,
 	type LocalLunarEclipseCircumstances,
+	moonAltitudeAt,
 	type LocalLunarEclipseDetails,
 	type LocalLunarEclipseInstant,
 	type LocalLunarEclipseSvgShape,
@@ -12,8 +13,9 @@ import {
 	type LocalLunarViewHandedness,
 	type LocalLunarViewOrientationMode,
 } from 'nebulosa/src/astronomy/events/eclipse/lunar/local'
-import { computeLunarEclipseMapGeometry, type LunarEclipseContactKind, lunarEclipseEvents, lunarEclipseMapToSvgPaths, refineLunarEclipse } from 'nebulosa/src/astronomy/events/eclipse/lunar/map'
-import { timeToUnixMillis, timeUnix } from 'nebulosa/src/astronomy/time/time'
+import { computeLunarEclipseMapGeometry, computeLunarEclipseMapInstant, type LunarEclipseContactKind, lunarEclipseEvents, lunarEclipseMapInstantToSvgPaths, lunarEclipseMapToSvgPaths, refineLunarEclipse } from 'nebulosa/src/astronomy/events/eclipse/lunar/map'
+import { searchIntervals } from 'nebulosa/src/astronomy/events/search'
+import { type Time, timeSubtract, timeToUnixMillis, timeUnix } from 'nebulosa/src/astronomy/time/time'
 import { deg, toDeg } from 'nebulosa/src/math/units/angle'
 import { DEGREE_PLANE, type EclipseDirection, eclipseEphemeris, type EclipseLocation, eclipseNotFound, findRefinedEclipse, locationParams, MAP_PRECISION, type RefinedEclipseSearch, resolveRefinedEclipse } from './eclipses'
 import { type EphemerisProvenance, NO_EPHEMERIS_KERNELS } from './ephemeris.chain'
@@ -128,6 +130,29 @@ export interface LunarEclipseViewOptions {
 	readonly ghosts: boolean
 }
 
+// A stretch of an eclipse, between P1 and P4, with the Moon's center at or above the horizon of a place.
+export interface LunarEclipseObservableWindow {
+	// Start, in Unix milliseconds (UTC): P1, or the moonrise when rise is true.
+	readonly start: number
+	// End, in Unix milliseconds (UTC): P4, or the moonset when set is true.
+	readonly end: number
+	// Whether the window starts at a moonrise during the eclipse rather than at P1.
+	readonly rise: boolean
+	// Whether the window ends at a moonset during the eclipse rather than at P4.
+	readonly set: boolean
+}
+
+// The global map at the instant the Local View draws between the contacts, drawn like the contacts of
+// LunarEclipseMap on the degree plane.
+export interface LunarEclipseInstantMap {
+	// Line where the Moon is on the horizon; split at the antimeridian.
+	readonly line: string
+	// Region where the Moon is above the horizon, closed along the map edges; drawn with fill-rule evenodd.
+	readonly fill: string
+	// Place that has the Moon at the zenith, in degrees.
+	readonly sublunar: EclipseLocation
+}
+
 // Geometry of the Local View, a schematic diagram in pixels with the origin at the top-left corner and y down.
 export interface LunarEclipseLocalView {
 	// Width, in pixels.
@@ -144,6 +169,15 @@ export interface LunarEclipseLocalView {
 	readonly positionAngle?: number
 	// The same angle measured from the direction of the zenith, in degrees, [0, 360); absent like positionAngle.
 	readonly zenithAngle?: number
+	// Topocentric altitude of the Moon at the instant drawn, in degrees, without refraction; absent like positionAngle.
+	readonly altitude?: number
+	// Azimuth of the Moon at the instant drawn, in degrees, north through east, [0, 360); absent like positionAngle.
+	readonly azimuth?: number
+	// Whether the Moon's center is at or above the horizon at the instant drawn; absent like positionAngle.
+	readonly observable?: boolean
+	// The global map at the instant drawn when a fraction of the eclipse is asked for; absent at a contact, whose map
+	// LunarEclipseMap already has.
+	readonly map?: LunarEclipseInstantMap
 	// Shapes in painting order.
 	readonly shapes: readonly LocalLunarEclipseSvgShape[]
 }
@@ -158,6 +192,10 @@ export interface LocalLunarEclipse {
 	readonly visibility: LocalLunarEclipseVisibility
 	// Magnitudes, and durations in seconds; those the eclipse type lacks are absent.
 	readonly details: LocalLunarEclipseDetails
+	// Stretches of the eclipse with the Moon above the horizon, in chronological order: none when the Moon stays
+	// below it, one from P1 to P4 when it stays above, and at most two otherwise. A stretch shorter than
+	// WINDOW_SEARCH_STEP may be missed, though visibility counts it.
+	readonly windows: readonly LunarEclipseObservableWindow[]
 	// Contacts, in chronological order.
 	readonly events: readonly LocalLunarEclipseContact[]
 	// Local View.
@@ -248,9 +286,54 @@ function circumstances(eclipse: LunarEclipse, { longitude, latitude }: EclipseLo
 	return computeLocalLunarEclipseCircumstances(eclipse, deg(longitude), deg(latitude), sunMoon, { altitudeSamples })
 }
 
-// Returns the circumstances of an eclipse from a place, local, with its Local View drawn as view asks: at instant when
-// given (the state at view's fraction), otherwise at view's contact.
-export function localLunarEclipse(eclipse: LunarEclipse, location: EclipseLocation, view: LunarEclipseViewOptions, local: LocalLunarEclipseCircumstances, ephemeris: EphemerisProvenance, instant?: LocalLunarEclipseInstant): LocalLunarEclipse {
+// Coarse step of the moonrise and moonset search, in days (10 minutes): the Moon's altitude changes by at most
+// about 2.5° in it, and over the few hours from P1 to P4 it has at most one extremum, so a crossing is never missed
+// unless the Moon only grazes the horizon for less than a step.
+const WINDOW_SEARCH_STEP = 1 / 144
+
+// Tolerance of a moonrise or moonset found at P1 or P4, in days (1 second): a stretch that begins or ends within it
+// of the contact begins or ends with the contact.
+const WINDOW_EDGE_TOLERANCE = 1 / 86400
+
+// Returns the stretches between P1 and P4 with the Moon's center at or above the 0° horizon of a place (degrees),
+// topocentric and without refraction like the contacts' visibility, each flagged by whether it begins at a moonrise
+// or ends at a moonset rather than at a contact; none for an eclipse without P1 or P4.
+export function observableWindows(local: LocalLunarEclipseCircumstances, { longitude, latitude }: EclipseLocation, sunMoon: SunMoonProvider): LunarEclipseObservableWindow[] {
+	const p1 = local.events.P1?.time
+	const p4 = local.events.P4?.time
+	if (!p1 || !p4) return []
+
+	const lon = deg(longitude)
+	const lat = deg(latitude)
+	const altitude = (time: Time) => moonAltitudeAt(time, lon, lat, sunMoon)
+
+	return searchIntervals([altitude], p1, p4, { step: WINDOW_SEARCH_STEP }).map(({ start, end }) => ({
+		start: timeToUnixMillis(start),
+		end: timeToUnixMillis(end),
+		rise: timeSubtract(start, p1) > WINDOW_EDGE_TOLERANCE,
+		set: timeSubtract(p4, end) > WINDOW_EDGE_TOLERANCE,
+	}))
+}
+
+// Returns the global map at an instant, drawn on the degree plane like the contacts of lunarEclipseMap.
+function instantMap(time: Time, sunMoon: SunMoonProvider): LunarEclipseInstantMap {
+	const instant = computeLunarEclipseMapInstant(time, sunMoon)
+	const line = lunarEclipseMapInstantToSvgPaths(instant, DEGREE_PLANE, { precision: MAP_PRECISION }).moonRiseSet
+	const fill = lunarEclipseMapInstantToSvgPaths(instant, DEGREE_PLANE, { fill: true, fillRegion: 'aboveHorizon', precision: MAP_PRECISION }).moonRiseSet
+	return { line, fill, sublunar: { longitude: toDeg(instant.sublunar.x), latitude: toDeg(instant.sublunar.y) } }
+}
+
+// Circumstances of an eclipse from a place, kept by the service: the toolkit's, and the stretches with the Moon up.
+interface LocalCircumstances {
+	// The toolkit's circumstances.
+	readonly local: LocalLunarEclipseCircumstances
+	// Stretches between P1 and P4 with the Moon above the horizon (see observableWindows).
+	readonly windows: readonly LunarEclipseObservableWindow[]
+}
+
+// Returns the circumstances of an eclipse from a place, local and its windows, with its Local View drawn as view asks:
+// at instant when given (the state at view's fraction, with the global map at it, map), otherwise at view's contact.
+export function localLunarEclipse(eclipse: LunarEclipse, location: EclipseLocation, view: LunarEclipseViewOptions, { local, windows }: LocalCircumstances, ephemeris: EphemerisProvenance, instant?: LocalLunarEclipseInstant, map?: LunarEclipseInstantMap): LocalLunarEclipse {
 	const events: LocalLunarEclipseContact[] = []
 
 	for (const contact of lunarEclipseEvents(eclipse)) {
@@ -269,8 +352,21 @@ export function localLunarEclipse(eclipse: LunarEclipse, location: EclipseLocati
 		location,
 		visibility: { kind, text, hasObservableEclipse },
 		details: local.details,
+		windows,
 		events,
-		view: { width: geometry.width, height: geometry.height, selectedEvent: geometry.selectedEvent, time: drawn ? timeToUnixMillis(drawn.time) : undefined, positionAngle: drawn ? toDeg(drawn.positionAngle) : undefined, zenithAngle: drawn ? toDeg(drawn.zenithAngle) : undefined, shapes: geometry.shapes },
+		view: {
+			width: geometry.width,
+			height: geometry.height,
+			selectedEvent: geometry.selectedEvent,
+			time: drawn ? timeToUnixMillis(drawn.time) : undefined,
+			positionAngle: drawn ? toDeg(drawn.positionAngle) : undefined,
+			zenithAngle: drawn ? toDeg(drawn.zenithAngle) : undefined,
+			altitude: drawn ? toDeg(drawn.altitude) : undefined,
+			azimuth: drawn ? toDeg(drawn.azimuth) : undefined,
+			observable: drawn ? drawn.observable : undefined,
+			map,
+			shapes: geometry.shapes,
+		},
 		ephemeris,
 	}
 }
@@ -286,7 +382,7 @@ export interface LunarEclipseServiceOptions {
 // The kernel snapshot is read once per request (once per candidate of a visible-only search).
 export class LunarEclipseService {
 	readonly #maps = new LruCache<LunarEclipseMap>(CACHE_LIMIT)
-	readonly #locals = new LruCache<LocalLunarEclipseCircumstances>(CACHE_LIMIT)
+	readonly #locals = new LruCache<LocalCircumstances>(CACHE_LIMIT)
 	// Kernels the ephemeris of every eclipse is chosen from.
 	readonly kernels: PlanetaryKernels
 
@@ -351,16 +447,17 @@ export class LunarEclipseService {
 			let circumstancesHere = this.#locals.get(key)
 
 			if (!circumstancesHere) {
-				circumstancesHere = circumstances(eclipse, location, sunMoon)
+				const local = circumstances(eclipse, location, sunMoon)
+				circumstancesHere = { local, windows: observableWindows(local, location, sunMoon) }
 				this.#locals.set(key, circumstancesHere)
 			}
 
-			// The state at a fraction of the eclipse, on the same Sun and Moon as its contacts.
-			const instant = typeof view.event === 'number' ? computeLocalLunarEclipseInstant(eclipse, deg(location.longitude), deg(location.latitude), circumstancesHere.events, view.event, sunMoon) : undefined
-			return { local: circumstancesHere, instant }
+			// The state at a fraction of the eclipse and the global map at it, on the same Sun and Moon as its contacts.
+			const instant = typeof view.event === 'number' ? computeLocalLunarEclipseInstant(eclipse, deg(location.longitude), deg(location.latitude), circumstancesHere.local.events, view.event, sunMoon) : undefined
+			return { local: circumstancesHere, instant, map: instant && instantMap(instant.time, sunMoon) }
 		})
 
-		return localLunarEclipse(eclipse, location, view, result.local, provenance, result.instant)
+		return localLunarEclipse(eclipse, location, view, result.local, provenance, result.instant, result.map)
 	}
 }
 

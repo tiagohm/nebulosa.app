@@ -2,7 +2,26 @@ import { expect, test } from 'bun:test'
 import type { LunarEclipseSummary } from 'api'
 import { proxy } from 'valtio'
 import type { EclipseIo } from '../eclipse/eclipse'
-import { findEclipse, findEclipseFrom, initialLunarEclipseState, isStaleLocal, type LunarEclipseState, nextEclipse, openLunarEclipseMap, phaseDurations, selectEvent, selectMapPlace, setViewFraction, setViewSettings, showLunarEclipse, syncPlace } from './lunareclipse'
+import {
+	equatorCrossings,
+	findEclipse,
+	findEclipseFrom,
+	initialLunarEclipseState,
+	isStaleLocal,
+	type LunarEclipseState,
+	moonUpBounds,
+	nextEclipse,
+	openLunarEclipseMap,
+	phaseAt,
+	phaseDurations,
+	selectEvent,
+	selectMapPlace,
+	setViewFraction,
+	setViewSettings,
+	showLunarEclipse,
+	syncPlace,
+	visibilityHeadline,
+} from './lunareclipse'
 
 // Fake API whose responses are released by the test, in any order.
 function fakeApi() {
@@ -268,6 +287,45 @@ test('a failed map is reported as an error', async () => {
 	expect(state.error).toBe('Lunar eclipse not found')
 	expect(state.notice).toBeUndefined()
 	expect(state.loading).toBe(false)
+})
+
+test('names the phase of an instant from the contacts', () => {
+	const at = (kind: string) => A.contacts.find((contact) => contact.kind === kind)!.time
+	expect(phaseAt(A, at('P1') + 1)).toBe('penumbral')
+	expect(phaseAt(A, at('U1') + 1)).toBe('partial')
+	expect(phaseAt(A, at('MAX'))).toBe('total')
+	expect(phaseAt(A, at('U3') + 1)).toBe('partial')
+	expect(phaseAt(A, at('P4') - 1)).toBe('penumbral')
+	expect(phaseAt(B, B.maximum)).toBe('partial')
+	expect(phaseAt(summary(0, 'PENUMBRAL'), 0)).toBe('penumbral')
+})
+
+test('a penumbral eclipse seen in part never reads as its penumbral phase only', () => {
+	const part = { kind: 'penumbralOnlyVisible', text: 'Only the penumbral phase visible', hasObservableEclipse: true } as const
+	expect(visibilityHeadline('PENUMBRAL', part)).toBe('Part of the eclipse visible')
+	expect(visibilityHeadline('TOTAL', part)).toBe('Only the penumbral phase visible')
+	expect(visibilityHeadline('PENUMBRAL', { kind: 'completelyVisible', text: 'Entire eclipse visible', hasObservableEclipse: true })).toBe('Entire eclipse visible')
+})
+
+test('frames the hemisphere of the Moon at greatest eclipse, widened to the place on its nearer side', () => {
+	const map = { ...mapOf(A), events: [{ kind: 'MAX' as const, time: A.maximum, sublunar: { longitude: 170, latitude: -5 } }] }
+	expect(moonUpBounds(map)).toEqual({ west: 80, east: 260, south: -90, north: 90 })
+	// Inside the hemisphere, across the antimeridian: nothing changes.
+	expect(moonUpBounds(map, { longitude: -120, latitude: 10 })).toEqual({ west: 80, east: 260, south: -90, north: 90 })
+	// Just east of it: the eastern edge moves; just west of it: the western one.
+	expect(moonUpBounds(map, { longitude: -90, latitude: 0 })).toEqual({ west: 80, east: 270, south: -90, north: 90 })
+	expect(moonUpBounds(map, { longitude: 60, latitude: 0 })).toEqual({ west: 60, east: 260, south: -90, north: 90 })
+	expect(moonUpBounds(mapOf(A))).toBeUndefined()
+})
+
+test('finds where a line of the map crosses the equator, once per crossing', () => {
+	// A circle around (0°, 0°) of 30° on the degree plane: x = longitude + 180, y = 90 − latitude.
+	expect(equatorCrossings('M180 60L210 90L180 120L150 90L180 60')).toEqual([30, -30])
+	// Split at the antimeridian: a jump between pieces (M) is no crossing; the one at two thirds of 350 → 360 is.
+	const split = equatorCrossings('M350 80L360 95M0 95L10 100')
+	expect(split).toHaveLength(1)
+	expect(split[0]).toBeCloseTo(176.667, 3)
+	expect(equatorCrossings('M10 10L20 20')).toEqual([])
 })
 
 test('durations of the phases come from the contacts', () => {

@@ -4,6 +4,7 @@ import { proxy } from 'valtio'
 import type { EclipseIo } from '../eclipse/eclipse'
 import {
 	centralLineText,
+	isStaleLocal,
 	contactName,
 	eclipseBounds,
 	findEclipse,
@@ -205,6 +206,28 @@ test('a visible-only search that finds nothing keeps the eclipse shown and says 
 	expect(state.loading).toBe(false)
 })
 
+test('a new place keeps the circumstances shown until its own arrive, and drops them if those fail', async () => {
+	const state = newState()
+	state.eclipse = A
+	const { io, release } = fakeApi()
+
+	void syncPlace(state, { latitude: 0, longitude: 10, elevation: 0 }, io)
+	await release((url) => url.includes('longitude=10&latitude=0'), localOf(A, 10))
+	expect(isStaleLocal(state.local, state.place)).toBe(false)
+
+	void selectMapPlace(state, { longitude: 30, latitude: 0 }, io)
+	expect(state.local?.location.longitude).toBe(10)
+	expect(isStaleLocal(state.local, state.place)).toBe(true)
+	await release((url) => url.includes('longitude=30&latitude=0'), localOf(A, 30))
+	expect(state.local?.location.longitude).toBe(30)
+	expect(isStaleLocal(state.local, state.place)).toBe(false)
+
+	void selectMapPlace(state, { longitude: 50, latitude: 0 }, io)
+	await release((url) => url.includes('longitude=50&latitude=0'), { error: 'The circumstances failed', code: 'computationFailed' }, 500)
+	expect(state.local).toBeUndefined()
+	expect(state.localError).toBe('The circumstances failed')
+})
+
 test('a new elevation, name, or zone of the same place, or a zone of the times, asks for nothing; a new place asks again', async () => {
 	const state = newState()
 	state.eclipse = A
@@ -224,12 +247,13 @@ test('a new elevation, name, or zone of the same place, or a zone of the times, 
 	// A click keeps the zone of the coordinates entered.
 	void selectMapPlace(state, { longitude: 30, latitude: 20 }, io)
 	expect(state.location).toEqual({ mode: 'manual', latitude: 20, longitude: 30, elevation: 0, timeZone: 'Asia/Tokyo' })
-	expect(state.local).toBeUndefined()
+	expect(state.local?.location.longitude).toBe(10)
 	expect(requested.at(-1)).toStartWith(`/api/eclipses/solar/${A.id}/local?longitude=30&latitude=20`)
 
 	// A location that gives no place, such as a deleted site, drops the request and the circumstances.
 	void syncPlace(state, undefined, io)
 	expect(state.place).toBeUndefined()
+	expect(state.local).toBeUndefined()
 	expect(state.localLoading).toBe(false)
 	expect(requested.length).toBe(2)
 })

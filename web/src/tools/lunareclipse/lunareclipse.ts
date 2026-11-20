@@ -188,7 +188,8 @@ export function openLunarEclipseMap(state: LunarEclipseState, location: Geograph
 }
 
 // Loads the local circumstances of the eclipse shown from the place, with the Local View of the selected contact;
-// does nothing without both. A newer request discards this one's late answer.
+// does nothing without both. A newer request discards this one's late answer. Those of the previous place stay shown
+// until the answer arrives (see isStaleLocal), and are cleared if it fails, so they never pass for this place's.
 export async function loadLocal(state: LunarEclipseState, io: EclipseIo = browserEclipseIo) {
 	const { eclipse, place, view } = state
 
@@ -212,7 +213,14 @@ export async function loadLocal(state: LunarEclipseState, io: EclipseIo = browse
 		if (!request.current() || aborted(error)) return
 		state.localError = errorMessage(error)
 		state.localLoading = false
+		if (isStaleLocal(state.local, place)) state.local = undefined
 	}
+}
+
+// Returns whether local circumstances are those of another place than the one asked for, shown only while the new
+// ones load; false without either.
+export function isStaleLocal(local: { readonly location: EclipsePlace } | undefined, place: EclipsePlace | undefined): boolean {
+	return local !== undefined && place !== undefined && !samePlace(local.location, place)
 }
 
 // Takes the place of location, the one state.location gives now (undefined when it gives none), and asks for its
@@ -222,7 +230,9 @@ export function syncPlace(state: LunarEclipseState, location: GeographicLocation
 	const place = eclipsePlace(location)
 	if (samePlace(state.place, place)) return
 	state.place = place
-	state.local = undefined
+	// The circumstances of the previous place stay until the new ones arrive, so the panel keeps its sections and its
+	// scroll; without a place there are none.
+	if (!place) state.local = undefined
 	state.localError = undefined
 	return loadLocal(state, io)
 }

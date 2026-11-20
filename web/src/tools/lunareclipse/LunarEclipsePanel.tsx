@@ -10,8 +10,8 @@ import { DataRow } from '../../ui/DataRow'
 import { Notice } from '../../ui/Notice'
 import { SegmentedControl } from '../../ui/SegmentedControl'
 import { formatEclipseAngle, formatEclipseMagnitude } from '../eclipse/eclipse'
-import { EclipseLocationSection, EclipseZoneSelect } from '../eclipse/EclipsePanelParts'
-import { CONTACT_NAMES, ECLIPSE_TYPE_NAMES, loadLocal, lunarEclipseState, phaseDurations, selectEvent, setViewSettings } from './lunareclipse'
+import { EclipseLocationSection, EclipseZoneSelect, LocalContent } from '../eclipse/EclipsePanelParts'
+import { CONTACT_NAMES, ECLIPSE_TYPE_NAMES, isStaleLocal, loadLocal, lunarEclipseState, phaseDurations, selectEvent, setViewSettings } from './lunareclipse'
 import { LunarEclipseLocalView } from './LunarEclipseLocalView'
 
 // Local Circumstances panel of the Lunar Eclipse Map: the location (the shared Location section), the visibility of
@@ -36,15 +36,18 @@ export function LunarEclipsePanel() {
 	const events = new Map(local?.events.map((event) => [event.kind, event]))
 	const selectedLocal = events.get(selectedEvent)
 	const durations = eclipse && phaseDurations(eclipse)
+	const stale = isStaleLocal(local, place)
 
 	return (
 		<>
 			<EclipseLocationSection id="lunarEclipse.location" value={state.location} location={location} onChange={(value) => (lunarEclipseState.location = value)} />
 			{place && (
 				<CollapsibleSection id="lunarEclipse.visibility" title="Visibility">
-					{local && <p className="m-0 font-medium text-ink-100">{local.visibility.text}</p>}
-					{local && !local.visibility.hasObservableEclipse && <Notice>The Moon stays below the horizon here from P1 to P4; the contact times still hold for everyone.</Notice>}
-					{local && local.visibility.kind === 'totalVisible' && <Notice>The Moon is above the horizon during at least part of totality, but not during the whole eclipse.</Notice>}
+					<LocalContent stale={stale}>
+						{local && <p className="m-0 font-medium text-ink-100">{local.visibility.text}</p>}
+						{local && !local.visibility.hasObservableEclipse && <Notice>The Moon stays below the horizon here from P1 to P4; the contact times still hold for everyone.</Notice>}
+						{local && local.visibility.kind === 'totalVisible' && <Notice>The Moon is above the horizon during at least part of totality, but not during the whole eclipse.</Notice>}
+					</LocalContent>
 					{localLoading && <Notice>Computing the local circumstances…</Notice>}
 					{localError && (
 						<>
@@ -80,7 +83,7 @@ export function LunarEclipsePanel() {
 								</span>
 								<span className="text-ink-100">{formatLongDateTime(contact.time, timeZone)}</span>
 								{event && (
-									<span className={cn('flex flex-wrap items-baseline justify-between gap-x-2', event.observable ? 'text-ink-200' : 'text-ink-300')}>
+									<span className={cn('flex flex-wrap items-baseline justify-between gap-x-2 transition-opacity duration-150 motion-reduce:transition-none', event.observable ? 'text-ink-200' : 'text-ink-300', stale && 'opacity-40')}>
 										<span>
 											Alt {formatEclipseAngle(event.altitude)} · Az {formatEclipseAngle(event.azimuth)}
 										</span>
@@ -94,12 +97,14 @@ export function LunarEclipsePanel() {
 			)}
 			{local && (
 				<CollapsibleSection id="lunarEclipse.localView" title="Local View">
-					<LunarEclipseLocalView view={local.view} />
-					{selectedLocal && (
-						<DataRow label={`Position / zenith angle at ${selectedEvent}`}>
-							{formatEclipseAngle(selectedLocal.positionAngle)} / {formatEclipseAngle(selectedLocal.zenithAngle)}
-						</DataRow>
-					)}
+					<LocalContent stale={stale}>
+						<LunarEclipseLocalView view={local.view} />
+						{selectedLocal && (
+							<DataRow label={`Position / zenith angle at ${selectedEvent}`}>
+								{formatEclipseAngle(selectedLocal.positionAngle)} / {formatEclipseAngle(selectedLocal.zenithAngle)}
+							</DataRow>
+						)}
+					</LocalContent>
 					<SegmentedControl label="Up" options={ORIENTATIONS} value={view.orientation} onChange={(orientation) => void setViewSettings(lunarEclipseState, { orientation })} format={(value) => (value === 'zenith' ? 'Zenith' : 'North')} />
 					<SegmentedControl label="East" options={HANDEDNESS} value={view.handedness} onChange={(handedness) => void setViewSettings(lunarEclipseState, { handedness })} format={(value) => (value === 'eastRight' ? 'Right' : 'Left')} />
 					<Checkbox label="Moon at the other contacts" checked={view.ghosts} onChange={(ghosts) => void setViewSettings(lunarEclipseState, { ghosts })} />
@@ -113,11 +118,19 @@ export function LunarEclipsePanel() {
 				<CollapsibleSection id="lunarEclipse.details" title="Details">
 					<DataRow label="Type">{ECLIPSE_TYPE_NAMES[eclipse.type]}</DataRow>
 					<DataRow label={eclipse.type === 'PENUMBRAL' ? 'Penumbral magnitude' : 'Umbral magnitude'}>{formatEclipseMagnitude(eclipse.magnitude)}</DataRow>
-					{local && eclipse.type !== 'PENUMBRAL' && <DataRow label="Penumbral magnitude">{formatEclipseMagnitude(local.details.maximalPenumbralMagnitude)}</DataRow>}
+					{local && eclipse.type !== 'PENUMBRAL' && (
+						<LocalContent stale={stale}>
+							<DataRow label="Penumbral magnitude">{formatEclipseMagnitude(local.details.maximalPenumbralMagnitude)}</DataRow>
+						</LocalContent>
+					)}
 					{durations.penumbral !== undefined && <DataRow label="Penumbral phase">{formatLongDuration(durations.penumbral)}</DataRow>}
 					{durations.partial !== undefined && <DataRow label="Partial phase">{formatLongDuration(durations.partial)}</DataRow>}
 					{durations.total !== undefined && <DataRow label="Totality">{formatLongDuration(durations.total)}</DataRow>}
-					{local && <DataRow label="Observable here">{formatLongDuration(local.details.observableDuration)}</DataRow>}
+					{local && (
+						<LocalContent stale={stale}>
+							<DataRow label="Observable here">{formatLongDuration(local.details.observableDuration)}</DataRow>
+						</LocalContent>
+					)}
 				</CollapsibleSection>
 			)}
 		</>

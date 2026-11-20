@@ -4,7 +4,8 @@ import { anchoredTransform, beginGesture, type GestureAnchor, type GesturePointe
 import type { ViewTransform } from '../../sky/celestial/types'
 import { IconButton } from '../../ui/IconButton'
 
-// Pan and zoom of a planetary viewer: one view that goes from the whole satellite system down to the planet's disk.
+// Pan and zoom of a planetary viewer, and of the Local Views of the eclipse maps: one view that goes from the whole
+// satellite system (or diagram) down to the planet's (or a disk's) close-up.
 // The wheel with Ctrl or ⌘ (or a trackpad pinch, which the browser sends so) zooms around the pointer while a plain
 // wheel scrolls the page, a drag pans, two fingers pinch and pan while one finger moving up or down scrolls the page,
 // and the buttons zoom around the centre or return to the planet and to the whole system. The view is a pixel ViewTransform of the
@@ -30,6 +31,15 @@ export interface ViewBox {
 	readonly width: number
 	readonly height: number
 }
+
+// A point of the viewer in planet radii from the centre of the whole view, x to the right and y down.
+export interface ViewPoint {
+	readonly x: number
+	readonly y: number
+}
+
+// The centre of the whole view, where the planet is.
+const ORIGIN: ViewPoint = { x: 0, y: 0 }
 
 // Limits and starting point of a viewer's zoom.
 export interface PanZoomOptions {
@@ -72,8 +82,8 @@ export interface PanZoom {
 	}
 	// Zooms by a factor around the centre of the view.
 	readonly zoomBy: (factor: number) => void
-	// Centres the planet with a half-width in planet radii.
-	readonly show: (halfWidth: number) => void
+	// Centres a point, the planet by default, with a half-width; both in planet radii.
+	readonly show: (halfWidth: number, center?: ViewPoint) => void
 	// Whether the view is at its closest or its widest.
 	readonly closest: boolean
 	readonly widest: boolean
@@ -159,9 +169,12 @@ export function usePanZoom({ maxHalfWidth, minHalfWidth, initialHalfWidth, aspec
 		setTransform((current) => anchoredTransform(current, rect.width / 2, rect.height / 2, rect.width / 2, rect.height / 2, clamp(current.k * factor, 1, maxZoom), rect.width, rect.height))
 	}
 
-	// Centres the planet with a half-width in planet radii.
-	function show(halfWidth: number) {
-		setTransform({ x: 0, y: 0, k: clamp(maxHalfWidth / halfWidth, 1, maxZoom) })
+	// Centres a point, the planet by default, with a half-width in planet radii: the inverse of panZoomViewBox's centre,
+	// so the transform's offset is the point times the pixels per radius at that zoom.
+	function show(halfWidth: number, center: ViewPoint = ORIGIN) {
+		const k = clamp(maxHalfWidth / halfWidth, 1, maxZoom)
+		const s = widthPx > 0 ? widthPx / (2 * maxHalfWidth) : 0
+		setTransform({ x: -center.x * s * k || 0, y: -center.y * s * k || 0, k })
 	}
 
 	const box = panZoomViewBox(transform, maxHalfWidth, aspect, widthPx)
@@ -183,6 +196,10 @@ export interface PanZoomSurfaceProps {
 	readonly planetHalfWidth: number
 	// Name of the planet, for the buttons.
 	readonly planet: string
+	// Centre of the close-up, in planet radii; the planet by default.
+	readonly focus?: ViewPoint
+	// Name of the whole view, for its button; "Whole system" by default.
+	readonly wholeLabel?: string
 	// The viewer's SVG.
 	readonly children: ReactNode
 	// What reads the view, such as its compass, at the end of the button row.
@@ -192,8 +209,9 @@ export interface PanZoomSurfaceProps {
 // Classes of the zoom buttons: the 44 px touch target on a coarse pointer.
 const BUTTON_CLASS = 'pointer-coarse:size-[44px]'
 
-// The viewer's surface with its zoom buttons: zoom in and out around the centre, the planet close up, the whole system.
-export function PanZoomSurface({ zoom, planetHalfWidth, planet, children, legend }: PanZoomSurfaceProps) {
+// The viewer's surface with its zoom buttons: zoom in and out around the centre, the planet (or focus) close up, the
+// whole system.
+export function PanZoomSurface({ zoom, planetHalfWidth, planet, focus, wholeLabel = 'Whole system', children, legend }: PanZoomSurfaceProps) {
 	return (
 		<div className="flex flex-col gap-1">
 			<div {...zoom.surface} title="Drag to pan; pinch, or turn the wheel with Ctrl or ⌘, to zoom" className="cursor-grab touch-pan-y select-none active:cursor-grabbing">
@@ -202,8 +220,8 @@ export function PanZoomSurface({ zoom, planetHalfWidth, planet, children, legend
 			<div className="flex flex-wrap items-center gap-1">
 				<IconButton icon="zoomOut" label="Zoom out" className={BUTTON_CLASS} disabled={zoom.widest} onClick={() => zoom.zoomBy(1 / BUTTON_ZOOM)} />
 				<IconButton icon="zoomIn" label="Zoom in" className={BUTTON_CLASS} disabled={zoom.closest} onClick={() => zoom.zoomBy(BUTTON_ZOOM)} />
-				<IconButton icon="actualSize" label={`${planet} close up`} className={BUTTON_CLASS} onClick={() => zoom.show(planetHalfWidth)} />
-				<IconButton icon="fit" label="Whole system" className={BUTTON_CLASS} disabled={zoom.widest} onClick={() => zoom.show(Number.POSITIVE_INFINITY)} />
+				<IconButton icon="actualSize" label={`${planet} close up`} className={BUTTON_CLASS} onClick={() => zoom.show(planetHalfWidth, focus)} />
+				<IconButton icon="fit" label={wholeLabel} className={BUTTON_CLASS} disabled={zoom.widest} onClick={() => zoom.show(Number.POSITIVE_INFINITY)} />
 				{legend && <span className="ml-auto flex items-center">{legend}</span>}
 			</div>
 		</div>

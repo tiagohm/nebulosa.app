@@ -1,3 +1,5 @@
+import { cn } from 'cn'
+import type { ReactNode } from 'react'
 import type { ResolvedLocation, ToolLocation } from '../../location/site'
 import { TimeZoneSelect } from '../../location/TimeZoneSelect'
 import { ToolLocationSection } from '../../location/ToolLocationSection'
@@ -5,8 +7,9 @@ import { describeDisplayZone, type DisplayZone, type DisplayZoneOverride } from 
 import { Notice } from '../../ui/Notice'
 
 // Pieces of the Local Circumstances panels of the eclipse map tools: the Location section, where the tool observes
-// from the active site, another saved site, or coordinates typed in or clicked on the map, and the selector of the
-// zone the times are shown in. Neither changes the profile, a site, or a request.
+// from the active site, another saved site, or coordinates typed in or clicked on the map, the selector of the zone
+// the times are shown in, and the wrapper that fades what is still the previous place's while a new place loads.
+// None changes the profile, a site, or a request.
 
 export interface EclipseLocationSectionProps {
 	// Identifier of the section, namespaced by the tool's panel.
@@ -45,4 +48,17 @@ export function EclipseZoneSelect({ value, zone, location, selectedSite, onChang
 			{zone.source === 'browserFallback' && <Notice>Times are in {describeDisplayZone(zone)}: the tool has no location.</Notice>}
 		</>
 	)
+}
+
+export interface LocalContentProps {
+	// Whether the content is still the previous place's, shown while the new place's loads.
+	readonly stale: boolean
+	// Rows drawn from the local circumstances.
+	readonly children: ReactNode
+}
+
+// Content of a panel section drawn from the local circumstances. While a new place loads it stays in place, faded,
+// so the panel keeps its sections, its Local View zoom, and its scroll instead of emptying and filling again.
+export function LocalContent({ stale, children }: LocalContentProps) {
+	return <div className={cn('flex flex-col gap-2 transition-opacity duration-150 motion-reduce:transition-none', stale && 'opacity-40')}>{children}</div>
 }

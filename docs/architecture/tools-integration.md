@@ -102,6 +102,8 @@ Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
   a click gives coordinates at 0 m in the zone of the coordinates before, or UTC after a site.
   Only a new longitude or latitude asks for the local circumstances again; a click asks only for them; choosing a contact or a Local View presentation asks only for them again, and zooming or panning asks for nothing.
   Stale answers are discarded through request guards.
+  While a new place's circumstances load, the previous place's stay in the panel, faded (`isStaleLocal`, `LocalContent`), so its sections, its scroll, and the Local View's zoom hold; they are dropped if the new request fails.
+  The Local View pans and zooms like the Jupiter and Saturn viewers (`EclipseLocalViewSurface` over `PanZoomSurface`: a drag pans, a pinch or the wheel with Ctrl or ⌘ zooms, and buttons zoom in and out, show the Sun, or the Moon at the contact drawn, close up, and show the whole diagram), with strokes that keep their width; the zoom is transient React state, kept across contacts and places and reset only when another eclipse is shown.
   Times show the date and the zone's name, in the zone `resolveDisplayZone` gives for the tool's `DisplayZoneOverride` (tab memory) and its location, whose change asks for nothing.
   The location and zone sections (`EclipseLocationSection`, `EclipseZoneSelect`), the map click (`mapLocation`), the time formatting, and the map's heading and legend are shared by the eclipse tools in `web/src/tools/eclipse/`;
   below the sm breakpoint the heading puts the eclipse type and date on two lines and the legend starts collapsed to a button.

@@ -94,7 +94,6 @@ export function LunarEclipseMap() {
 	// The map layers are drawn again only when the eclipse or the contact change, never on zoom or pan.
 	const overlay = useMemo(() => map && <EclipseOverlay map={map} selectedEvent={selectedEvent} />, [map, selectedEvent])
 	const selectedContact = eclipse?.contacts.find((contact) => contact.kind === selectedEvent)
-	const title = eclipse ? `${ECLIPSE_TYPE_NAMES[eclipse.type]} lunar eclipse · ${utcDate(eclipse.maximum)}` : 'Lunar eclipse'
 
 	// Keeps a URL that names an eclipse naming the one shown once a search steps to another eclipse.
 	function follow(search: Promise<void>) {
@@ -110,7 +109,7 @@ export function LunarEclipseMap() {
 	}
 
 	return (
-		<WorkspaceLayout workspace="tools" title="Lunar Eclipse Map" context={<span className="truncate text-xs text-ink-300 max-sm:hidden">{eclipse ? title : ''}</span>} panel={{ title: 'Local Circumstances', content: <LunarEclipsePanel /> }}>
+		<WorkspaceLayout workspace="tools" title="Lunar Eclipse Map" panel={{ title: 'Local Circumstances', content: <LunarEclipsePanel /> }}>
 			<div className="flex h-full flex-col bg-base-000">
 				<div className="flex flex-none flex-wrap items-center gap-2 border-b border-line-100 bg-base-100 px-2 py-1.5">
 					<div className="flex min-w-0 items-center gap-1">

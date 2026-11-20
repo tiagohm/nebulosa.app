@@ -15,9 +15,10 @@ import { GlobalPointIcon } from './GlobalPointMarker'
 import { contactName, ECLIPSE_TYPE_NAMES, GLOBAL_POINTS, type GlobalPoint, globalPoints, loadLocal, selectEvent, selectMapPlace, selectPoint, setViewSettings, solarEclipseState, visibilityHeadline } from './solareclipse'
 import { SolarEclipseLocalView } from './SolarEclipseLocalView'
 
-// Local Circumstances panel of the Solar Eclipse Map: the location (the shared Location section), the visibility of
-// the eclipse from it, its contacts in the zone shown (resolved with the location), the global and local details,
-// and the Local View of the selected contact, and the global points with the details of the one chosen. Contacts
+// Local Circumstances panel of the Solar Eclipse Map, in the order an observer needs it: the location (the shared
+// Location section), what the place sees of the eclipse and for how long, its contacts in the zone shown (resolved
+// with the location) with the solar filter warning, the Local View of the selected contact, the global and local
+// details, the global points (collapsed at first) with the details of the one chosen, and About. Contacts
 // and durations a place lacks are left out, never shown as zero, and the magnitude is a fraction of the solar
 // diameter, not of its area. Nothing here changes the profile or a site; the map component asks for the local
 // circumstances of the location chosen.
@@ -138,32 +139,7 @@ export function SolarEclipsePanel() {
 							</button>
 						)
 					})}
-				</CollapsibleSection>
-			)}
-			{eclipse && (
-				<CollapsibleSection id="solarEclipse.details" title="Details">
-					<DataRow label="Type">{ECLIPSE_TYPE_NAMES[eclipse.type]}</DataRow>
-					<DataRow label="Magnitude">{formatEclipseMagnitude(eclipse.magnitude)}</DataRow>
-					<DataRow label="Gamma">{formatEclipseMagnitude(eclipse.gamma)}</DataRow>
-					{greatest && <DataRow label="Greatest eclipse">{formatLongDateTime(greatest.time, timeZone)}</DataRow>}
-					{greatest && <DataRow label="Greatest eclipse at">{formatGeographic(greatest.latitude, greatest.longitude)}</DataRow>}
-					{duration?.centralDuration !== undefined && <DataRow label="Greatest duration">{formatLongDuration(duration.centralDuration)}</DataRow>}
-					{greatest?.pathWidth !== undefined && <DataRow label="Path width at greatest">{formatKilometers(greatest.pathWidth)}</DataRow>}
-					{local?.details.moonSunDiameterRatio !== undefined && <DataRow label="Moon/Sun diameter">{formatEclipseMagnitude(local.details.moonSunDiameterRatio)}</DataRow>}
-					{local?.details.pathWidthKm !== undefined && <DataRow label="Path width here">{formatKilometers(local.details.pathWidthKm)}</DataRow>}
-					{local?.details.shadowPathWidthKm !== undefined && <DataRow label="Shadow chord here">{formatKilometers(local.details.shadowPathWidthKm)}</DataRow>}
-					<Notice>
-						Magnitude is the fraction of the Sun's diameter covered by the Moon, not of its area. Path width is the distance between the limits of totality or annularity, across the central line. Shadow chord is the narrowest width of the shadow at one instant, which is smaller at a low Sun. Contacts assume
-						a smooth lunar limb and are good to about 5 s; the mountains of the limb matter most near the limits of the path.
-					</Notice>
-				</CollapsibleSection>
-			)}
-			{map && (
-				<CollapsibleSection id="solarEclipse.globalPoints" title="Global Points">
-					<Notice>Points of the eclipse as a whole, the same for everyone. Choose one to find it on the map.</Notice>
-					{globalPoints(map).map((point) => (
-						<GlobalPointRow key={point.kind} point={point} selected={point.kind === selectedPoint} timeZone={timeZone} />
-					))}
+					<Notice error>Never look at the Sun without a proper solar filter; only totality itself, never an annular or partial phase, is safe to watch without one.</Notice>
 				</CollapsibleSection>
 			)}
 			{local && local.events.length > 0 && (
@@ -183,9 +159,35 @@ export function SolarEclipsePanel() {
 					</Notice>
 				</CollapsibleSection>
 			)}
+			{eclipse && (
+				<CollapsibleSection id="solarEclipse.details" title="Details">
+					<DataRow label="Type">{ECLIPSE_TYPE_NAMES[eclipse.type]}</DataRow>
+					<DataRow label="Magnitude">{formatEclipseMagnitude(eclipse.magnitude)}</DataRow>
+					<DataRow label="Gamma">{formatEclipseMagnitude(eclipse.gamma)}</DataRow>
+					{greatest && <DataRow label="Greatest eclipse">{formatLongDateTime(greatest.time, timeZone)}</DataRow>}
+					{greatest && <DataRow label="Greatest eclipse at">{formatGeographic(greatest.latitude, greatest.longitude)}</DataRow>}
+					{duration?.centralDuration !== undefined && <DataRow label="Greatest duration">{formatLongDuration(duration.centralDuration)}</DataRow>}
+					{greatest?.pathWidth !== undefined && <DataRow label="Path width at greatest">{formatKilometers(greatest.pathWidth)}</DataRow>}
+					{local?.details.moonSunDiameterRatio !== undefined && <DataRow label="Moon/Sun diameter">{formatEclipseMagnitude(local.details.moonSunDiameterRatio)}</DataRow>}
+					{local?.details.pathWidthKm !== undefined && <DataRow label="Path width here">{formatKilometers(local.details.pathWidthKm)}</DataRow>}
+					{local?.details.shadowPathWidthKm !== undefined && <DataRow label="Shadow chord here">{formatKilometers(local.details.shadowPathWidthKm)}</DataRow>}
+					<Notice>
+						Magnitude is the fraction of the Sun's diameter covered by the Moon, not of its area.
+						{eclipse.central && ' Path width is the distance between the limits of totality or annularity, across the central line. Shadow chord is the narrowest width of the shadow at one instant, which is smaller at a low Sun.'}
+						{eclipse.central ? ' Contacts assume a smooth lunar limb and are good to about 5 s; the mountains of the limb matter most near the limits of the path.' : ' Contacts assume a smooth lunar limb and are good to about 5 s.'}
+					</Notice>
+				</CollapsibleSection>
+			)}
+			{map && (
+				<CollapsibleSection id="solarEclipse.globalPoints" title="Global Points" defaultOpen={false}>
+					<Notice>Points of the eclipse as a whole, the same for everyone. Choose one to find it on the map.</Notice>
+					{globalPoints(map).map((point) => (
+						<GlobalPointRow key={point.kind} point={point} selected={point.kind === selectedPoint} timeZone={timeZone} />
+					))}
+				</CollapsibleSection>
+			)}
 			<CollapsibleSection id="solarEclipse.about" title="About" defaultOpen={false}>
 				<Notice>A computed prediction from the toolkit's ephemerides, without the site's elevation, the terrain, or the profile of the lunar limb; times near the edges of the path are less certain.</Notice>
-				<Notice error>Never look at the Sun without a proper solar filter, except during totality itself.</Notice>
 			</CollapsibleSection>
 		</>
 	)

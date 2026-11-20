@@ -15,8 +15,8 @@ import { CONTACT_NAMES, ECLIPSE_TYPE_NAMES, loadLocal, lunarEclipseState, phaseD
 import { LunarEclipseLocalView } from './LunarEclipseLocalView'
 
 // Local Circumstances panel of the Lunar Eclipse Map: the location (the shared Location section), the visibility of
-// the eclipse from it, the contacts in the zone shown (resolved with the location), the magnitudes and durations,
-// and the Local View. The global contact times are shown even without a place or when the Moon is below its
+// the eclipse from it, the contacts in the zone shown (resolved with the location), the Local View, and the
+// magnitudes and durations. The global contact times are shown even without a place or when the Moon is below its
 // horizon. Nothing here changes the profile or a site; the map component asks for the local circumstances of the
 // location chosen.
 
@@ -89,17 +89,6 @@ export function LunarEclipsePanel() {
 					})}
 				</CollapsibleSection>
 			)}
-			{eclipse && durations && (
-				<CollapsibleSection id="lunarEclipse.details" title="Details">
-					<DataRow label="Type">{ECLIPSE_TYPE_NAMES[eclipse.type]}</DataRow>
-					<DataRow label={eclipse.type === 'PENUMBRAL' ? 'Penumbral magnitude' : 'Umbral magnitude'}>{formatEclipseMagnitude(eclipse.magnitude)}</DataRow>
-					{local && eclipse.type !== 'PENUMBRAL' && <DataRow label="Penumbral magnitude">{formatEclipseMagnitude(local.details.maximalPenumbralMagnitude)}</DataRow>}
-					{durations.penumbral !== undefined && <DataRow label="Penumbral phase">{formatLongDuration(durations.penumbral)}</DataRow>}
-					{durations.partial !== undefined && <DataRow label="Partial phase">{formatLongDuration(durations.partial)}</DataRow>}
-					{durations.total !== undefined && <DataRow label="Totality">{formatLongDuration(durations.total)}</DataRow>}
-					{local && <DataRow label="Observable here">{formatLongDuration(local.details.observableDuration)}</DataRow>}
-				</CollapsibleSection>
-			)}
 			{local && (
 				<CollapsibleSection id="lunarEclipse.localView" title="Local View">
 					<LunarEclipseLocalView view={local.view} />
@@ -115,6 +104,17 @@ export function LunarEclipsePanel() {
 						The Moon at {local.view.selectedEvent ?? selectedEvent} crossing the Earth's penumbra and umbra; the red band is below the horizon. The position angle places the contact on the Moon's limb from celestial north through east, the zenith angle from the direction of the zenith. A geometric diagram,
 						not a photorealistic rendering.
 					</Notice>
+				</CollapsibleSection>
+			)}
+			{eclipse && durations && (
+				<CollapsibleSection id="lunarEclipse.details" title="Details">
+					<DataRow label="Type">{ECLIPSE_TYPE_NAMES[eclipse.type]}</DataRow>
+					<DataRow label={eclipse.type === 'PENUMBRAL' ? 'Penumbral magnitude' : 'Umbral magnitude'}>{formatEclipseMagnitude(eclipse.magnitude)}</DataRow>
+					{local && eclipse.type !== 'PENUMBRAL' && <DataRow label="Penumbral magnitude">{formatEclipseMagnitude(local.details.maximalPenumbralMagnitude)}</DataRow>}
+					{durations.penumbral !== undefined && <DataRow label="Penumbral phase">{formatLongDuration(durations.penumbral)}</DataRow>}
+					{durations.partial !== undefined && <DataRow label="Partial phase">{formatLongDuration(durations.partial)}</DataRow>}
+					{durations.total !== undefined && <DataRow label="Totality">{formatLongDuration(durations.total)}</DataRow>}
+					{local && <DataRow label="Observable here">{formatLongDuration(local.details.observableDuration)}</DataRow>}
 				</CollapsibleSection>
 			)}
 		</>

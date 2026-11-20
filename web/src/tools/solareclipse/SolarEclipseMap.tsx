@@ -161,7 +161,6 @@ export function SolarEclipseMap() {
 	// The map layers are drawn again only when the eclipse, the layers, or the highlighted point change, never on
 	// zoom or pan.
 	const overlay = useMemo(() => map && <EclipseOverlay map={map} layers={layers} selectedPoint={selectedPoint} />, [map, layers, selectedPoint])
-	const title = eclipse ? `${ECLIPSE_TYPE_NAMES[eclipse.type]} solar eclipse · ${utcDate(eclipse.maximum)}` : 'Solar eclipse'
 	const central = map && (map.paths.total || map.paths.annular)
 	const limits = map && (map.paths.umbraNorth || map.paths.umbraSouth)
 
@@ -199,7 +198,7 @@ export function SolarEclipseMap() {
 	}
 
 	return (
-		<WorkspaceLayout workspace="tools" title="Solar Eclipse Map" context={<span className="truncate text-xs text-ink-300 max-sm:hidden">{eclipse ? title : ''}</span>} panel={{ title: 'Local Circumstances', content: <SolarEclipsePanel /> }}>
+		<WorkspaceLayout workspace="tools" title="Solar Eclipse Map" panel={{ title: 'Local Circumstances', content: <SolarEclipsePanel /> }}>
 			<div className="flex h-full flex-col bg-base-000">
 				<div className="flex flex-none flex-wrap items-center gap-2 border-b border-line-100 bg-base-100 px-2 py-1.5">
 					<div className="flex min-w-0 items-center gap-1">

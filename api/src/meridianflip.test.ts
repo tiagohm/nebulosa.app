@@ -5,7 +5,6 @@ import { PI, PIOVERTWO, SIDEREAL_DRIFT_RATE } from 'nebulosa/src/core/constants'
 import { type Angle, deg, normalizeAngle } from 'nebulosa/src/math/units/angle'
 import { ConnectionManager } from './connection'
 import {
-	assessMeridianExposure,
 	createMeridianFlipRoutes,
 	DEFAULT_MERIDIAN_FLIP_SETTINGS,
 	evaluateMeridianFlipMonitor,
@@ -401,49 +400,6 @@ test('repeated evaluations without change publish nothing new', () => {
 	expect(kinds[3]).toEqual([])
 })
 
-// Monitor of a scenario, for the exposure assessment.
-function monitorOf(seconds: number, overrides: Partial<MeridianMountSample> = {}): MeridianFlipMonitor {
-	const ra = raAt(seconds - 2)
-	const { memory } = run([
-		[T0, sample(ra, overrides)],
-		[T0 + 2000, sample(ra, overrides)],
-	])
-	const { availability, timing, mechanical, reason, expectedPierSide } = memory.view
-	return {
-		monitorId: 'm',
-		connectionId: 'c',
-		deviceId: 'd',
-		revision: 1,
-		settings: SETTINGS,
-		settingsRevision: 1,
-		sampledAt: T0 + 2000,
-		contextId: memory.context?.id,
-		episodeId: memory.episodeId,
-		mount: { mountType: 'EQ_GEM', pierSide: 'WEST', expectedPierSide, tracking: true, trackMode: 'SIDEREAL' },
-		availability,
-		timing,
-		mechanical,
-		reason,
-	}
-}
-
-test('an exposure is assessed against the preferred window', () => {
-	const now = T0 + 2000
-	const early = monitorOf(-3600)
-	const allowed = assessMeridianExposure(early, { exposureSeconds: 300, overheadSeconds: 10 }, now)
-	expect(allowed).toMatchObject({ decision: 'allowed', validForContextId: 'id1' })
-	expect(allowed.decision === 'allowed' && allowed.latestSafeStartAt).toBeCloseTo(early.timing.windowClosesAt! - 310000, 6)
-
-	expect(assessMeridianExposure(monitorOf(-300), { exposureSeconds: 1200, overheadSeconds: 10 }, now)).toMatchObject({ decision: 'defer', reevaluateAt: expect.any(Number) })
-	expect(assessMeridianExposure(monitorOf(800), { exposureSeconds: 300, overheadSeconds: 0 }, now)).toMatchObject({ decision: 'blocked' })
-	expect(assessMeridianExposure(monitorOf(800), { exposureSeconds: 60, overheadSeconds: 0 }, now)).toMatchObject({ decision: 'allowed' })
-	expect(assessMeridianExposure(monitorOf(800, { pierSide: 'EAST' }), { exposureSeconds: 3600, overheadSeconds: 0 }, now)).toMatchObject({ decision: 'allowed' })
-	expect(assessMeridianExposure(monitorOf(800, { pierSide: 'NEITHER' }), { exposureSeconds: 60, overheadSeconds: 0 }, now)).toMatchObject({ decision: 'unknown' })
-	expect(assessMeridianExposure(monitorOf(800, { mountType: 'ALTAZ' }), { exposureSeconds: 3600, overheadSeconds: 0 }, now)).toMatchObject({ decision: 'allowed' })
-	expect(assessMeridianExposure(early, { exposureSeconds: 60, overheadSeconds: 0, expectedContextId: 'other' }, now)).toMatchObject({ decision: 'unknown' })
-	expect(assessMeridianExposure({ ...early, availability: 'repositioning' }, { exposureSeconds: 60, overheadSeconds: 0 }, now)).toMatchObject({ decision: 'unknown' })
-})
-
 const disposables: Disposable[] = []
 
 afterEach(() => {
@@ -583,7 +539,7 @@ test('a disconnected mount waits, and a closed connection removes its monitor', 
 	expect(service.snapshot().monitors).toEqual([])
 })
 
-test('the routes answer the snapshot and an exposure assessment', async () => {
+test('the routes answer the snapshot and the transitions', async () => {
 	const { id, mountId, service } = await setup()
 	const routes = createMeridianFlipRoutes(service)
 	type Handler = (req: Request) => Response | Promise<Response>
@@ -596,9 +552,6 @@ test('the routes answer the snapshot and an exposure assessment', async () => {
 	expect((await call('/api/connections/:id/mounts/:deviceId/meridian-flip/enable', 'POST', FAST)).status).toBe(200)
 	const snapshot = (await (await call('/api/meridian-flip', 'GET')).json()) as { monitors: unknown[] }
 	expect(snapshot.monitors).toHaveLength(1)
-
-	const assessment = await (await call('/api/connections/:id/mounts/:deviceId/meridian-flip/assess-exposure', 'POST', { exposureSeconds: 60, overheadSeconds: 5 })).json()
-	expect(assessment).toMatchObject({ decision: 'unknown' })
 
 	expect((await call('/api/connections/:id/mounts/:deviceId/meridian-flip/transitions', 'GET')).status).toBe(200)
 	expect((await call('/api/connections/:id/mounts/:deviceId/meridian-flip/disable', 'POST')).status).toBe(204)

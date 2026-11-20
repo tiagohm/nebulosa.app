@@ -14,7 +14,7 @@ Route prefixes, each owned by the module named:
 - `/api/operations`: `operations.ts`
 - `/api/operations/history`: `operationhistory.ts` (the start and end of past operations, newest first, paged)
 - `/api/mount-remote-control`, `/api/connections/:id/mounts/:deviceId/remote-control/:protocol`: `mountremotecontrol.ts` (snapshot of the LX200 and Stellarium listeners; `/start`, `/stop`, and `DELETE /clients/:clientId`)
-- `/api/meridian-flip`, `/api/connections/:id/mounts/:deviceId/meridian-flip`: `meridianflip.ts` (snapshot of the Meridian Flip Monitors; `/enable`, `/disable`, `PATCH /settings`, `GET /transitions`, and the read-only `/assess-exposure`)
+- `/api/meridian-flip`, `/api/connections/:id/mounts/:deviceId/meridian-flip`: `meridianflip.ts` (snapshot of the Meridian Flip Monitors; `/enable`, `/disable`, `PATCH /settings`, and `GET /transitions`)
 - `/api/meridian-flip/executions`, `/api/connections/:id/mounts/:deviceId/meridian-flip/{execute,arm,disarm,eligibility}`: `meridianflipexecutor.ts` (snapshot and executions of the Meridian Flip Executor; `/executions/:sessionId/cancel`)
 - `/api/mounts/nudges`, `/api/domes/motions`: `mounts.ts` and `domes.ts` (the running held motions, `/:token/heartbeat`, `/:token/stop`), over the `LeasedMotions` of `leases.ts`
 - `/api/captures`, `/api/autofocus`, `/api/tppa`, `/api/ipolar`, `/api/target-centering`, `/api/darv`, `/api/flat-wizard`, `/api/dark-library-wizard`, `/api/guiding`: snapshots and sessions of `captures.ts`, `autofocus.ts`, `tppa.ts`, `ipolar.ts`, `targetcentering.ts`, `darv.ts`, `flatwizard.ts`, `darklibrarywizard.ts`, `guiding.ts`

@@ -244,29 +244,6 @@ export interface MeridianFlipSettingsRequest {
 	readonly expectedRevision: number
 }
 
-// Body of POST /api/connections/:id/mounts/:deviceId/meridian-flip/assess-exposure: a hypothetical next exposure.
-export interface MeridianExposureRequest {
-	// Exposure time, seconds ≥ 0.
-	readonly exposureSeconds: number
-	// Download, settle, and other overhead after the exposure, seconds ≥ 0.
-	readonly overheadSeconds: number
-	// Context the caller decided for; a different current context answers unknown.
-	readonly expectedContextId?: string
-}
-
-// Whether a hypothetical exposure starting now ends within the preferred window. A preference, never a guarantee that
-// the mount can track through it safely, and only valid for validForContextId at the instant it was answered:
-// - allowed: it ends before the window closes, or no flip is pending; latestSafeStartAt is the last instant it could
-//   start and still end before the window closes, when one applies.
-// - defer: it would end after the window closes and the window has not opened; evaluate again at reevaluateAt.
-// - blocked: the window is open or past with a flip candidate pending.
-// - unknown: there is no settled target, the evidence is insufficient, or the context changed.
-export type MeridianExposureAssessment =
-	| { readonly decision: 'allowed'; readonly validForContextId: string; readonly latestSafeStartAt?: number; readonly reason: string }
-	| { readonly decision: 'defer'; readonly validForContextId: string; readonly reevaluateAt?: number; readonly reason: string }
-	| { readonly decision: 'blocked'; readonly validForContextId: string; readonly reason: string }
-	| { readonly decision: 'unknown'; readonly reason: string }
-
 // Stable code of a refused monitor request:
 // - notFound: no such mount, or no monitor enabled for it.
 // - disconnected: the mount is not connected.
@@ -622,26 +599,6 @@ export function evaluateMeridianFlipMonitor(memory: MeridianFlipMemory, sample: 
 	return { memory: { context, episodeId, emitted, settling, interrupted, lost, last, view }, transitions }
 }
 
-// Answers whether a hypothetical exposure starting now ends within the preferred window of a monitor; pure and without
-// side effects. now is Unix milliseconds (UTC).
-export function assessMeridianExposure(monitor: MeridianFlipMonitor, { exposureSeconds, overheadSeconds, expectedContextId }: MeridianExposureRequest, now: number): MeridianExposureAssessment {
-	const { contextId, timing, mechanical } = monitor
-
-	if (expectedContextId !== undefined && expectedContextId !== contextId) return { decision: 'unknown', reason: 'The observed target changed since the decision was made' }
-	if (monitor.availability !== 'monitoring' || contextId === undefined) return { decision: 'unknown', reason: 'The mount is not tracking a settled target' }
-
-	if (mechanical === 'unsupportedMountType') return { decision: 'allowed', validForContextId: contextId, reason: 'This mount type needs no meridian flip' }
-	if (mechanical === 'alreadyOnExpectedSide') return { decision: 'allowed', validForContextId: contextId, reason: 'The mount already reports the pier side expected past the meridian' }
-	if (mechanical === 'unknown' || mechanical === 'verificationPending' || timing.windowClosesAt === undefined) return { decision: 'unknown', reason: 'The pier side or the forecast is not known well enough' }
-
-	const duration = (exposureSeconds + overheadSeconds) * 1000
-	const latestSafeStartAt = timing.windowClosesAt - duration
-
-	if (now <= latestSafeStartAt) return { decision: 'allowed', validForContextId: contextId, latestSafeStartAt, reason: 'It ends before the preferred flip window closes; this is a timing preference, not a tracking limit of the mount' }
-	if (!windowReached(timing.phase)) return { decision: 'defer', validForContextId: contextId, reevaluateAt: timing.windowOpensAt, reason: 'It would end after the preferred flip window closes' }
-	return { decision: 'blocked', validForContextId: contextId, reason: 'The preferred flip window is open or past with a flip candidate pending' }
-}
-
 // Timing of the service, in milliseconds, and its clock.
 export interface MeridianFlipOptions {
 	// Host clock, Unix milliseconds (UTC).
@@ -768,15 +725,6 @@ export class MeridianFlipService implements Disposable {
 		const entry = this.#find(connectionId, deviceId)
 		if (!entry) return monitorError('The meridian flip monitor of this mount is not enabled', 404, 'notFound')
 		return Response.json({ transitions: entry.transitions })
-	}
-
-	// Answers whether a hypothetical next exposure ends within the preferred window, evaluating the monitor now; starts,
-	// stops, and changes nothing. Responds 200 with MeridianExposureAssessment, or 404.
-	assessExposure(connectionId: string, deviceId: string, request: MeridianExposureRequest): Response {
-		const entry = this.#find(connectionId, deviceId)
-		if (!entry) return monitorError('The meridian flip monitor of this mount is not enabled', 404, 'notFound')
-		this.#evaluate(entry)
-		return Response.json(assessMeridianExposure(this.#monitor(entry), request, entry.sampledAt))
 	}
 
 	// Observes the events of the process: mount telemetry and motion operations evaluate the monitor of their mount, a
@@ -926,10 +874,6 @@ export function createMeridianFlipRoutes(service: MeridianFlipService) {
 		'/api/connections/:id/mounts/:deviceId/meridian-flip/transitions': {
 			// Recent transitions of an enabled monitor, oldest first, kept in memory only.
 			GET: (req) => service.transitions(req.params.id, req.params.deviceId),
-		},
-		'/api/connections/:id/mounts/:deviceId/meridian-flip/assess-exposure': {
-			// Read-only assessment of a hypothetical next exposure; starts nothing.
-			POST: async (req) => service.assessExposure(req.params.id, req.params.deviceId, (await req.json()) as MeridianExposureRequest),
 		},
 	} as const satisfies Bun.Serve.Routes<undefined, string>
 }

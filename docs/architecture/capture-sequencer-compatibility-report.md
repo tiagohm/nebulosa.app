@@ -35,7 +35,7 @@ Readiness of the services a sequencer would call:
 - **Mount, Filter Wheel** (ready): `MountCommands.admitGoTo` (the refusals and the single correction of the goto route) and `WheelCommands.admitMove` admit under an invocation;
   `MountCommands.admitMeridianFlip` admits a `mount.flip` by native flip or forced GoTo, always sent and never corrected, with its evidence as `result`;
   the other device commands stay manual until a caller needs them, the manual `MountCommands.flip` included.
-  The read-only Meridian Flip Monitor already offers what a caller deciding a flip reads: its snapshot, `meridianFlip:transition`, and `assessExposure`.
+  The read-only Meridian Flip Monitor already offers what a caller deciding a flip reads: its snapshot and `meridianFlip:transition`.
 - **Server events (`ServerEventDispatcher`, `api/src/events.ts`)** (ready): `publish` of `api/src/index.ts` goes through the dispatcher (see [Routes and Events](routes-and-events.md)); no event of a sequencer exists yet.
 - **TPPA, iPolar, DARV, Mount Pointing Model** (future): No in-process `admit` under an invocation: only their routes start them, and TPPA, iPolar, and DARV need a person adjusting the mount.
 - **Flat Wizard, Dark Library Wizard** (future): Their manual steps (`continue` of a pending step, a pause) wait for a person; unattended automation cannot assume they happen.

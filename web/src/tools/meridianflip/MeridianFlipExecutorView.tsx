@@ -39,12 +39,14 @@ import {
 	resumePausedCapture,
 } from './meridianflipexecutor'
 import { FlipSection } from './MeridianFlipSection'
+import { FlipToolSections } from './MeridianFlipToolSections'
 
 // Executor parts of the Meridian Flip tool: the strip of the flip of the MOUNT that runs, is armed, or left the capture
 // paused, shown above both sections with its Stop, Disarm, or Resume Capture; the Executor section, with what the server
 // would decide now, the requests (flip when the window opens, flip now, arm the automatic flip), and the latest
 // execution with its steps and outcome; and the sections of the contextual panel with the policy the profile remembers
-// for that mount and the equipment of the Equipment Setup a flip uses. Every decision and every command is the
+// for that mount, the equipment of the Equipment Setup a flip uses, and the summaries of the camera tools it invokes
+// (MeridianFlipToolSections.tsx). Every decision and every command is the
 // server's; nothing here moves anything until the operator confirms a request, and closing the tab or switching
 // profile leaves a running execution or an arm alone.
 
@@ -258,7 +260,20 @@ export function MeridianFlipExecutorSections({ mount, monitor }: { readonly moun
 				{decision && 'error' in decision && <Notice error>{decision.error}</Notice>}
 				{blocker && <Notice>{blocker}</Notice>}
 				<Actions>
-					<ConfirmButton variant="primary" title={waits ? 'Flip when the window opens?' : 'Flip as soon as it is eligible?'} message={<FlipWarning {...warning} when={whenOpen} />} confirmLabel="Schedule" disabled={!!flipBlocker} tooltip={flipBlocker} onConfirm={() => execute('whenEligible')}>
+					<ConfirmButton
+						variant="primary"
+						title={waits ? 'Flip when the window opens?' : 'Flip as soon as it is eligible?'}
+						message={
+							<>
+								<FlipWarning {...warning} when={whenOpen} />
+								<p className="mt-2">Scheduled once, for this passage only. It flips even when the flip can only be inferred from plate solutions or cannot be verified at all; a restart of the server forgets it.</p>
+							</>
+						}
+						confirmLabel="Schedule"
+						disabled={!!flipBlocker}
+						tooltip={flipBlocker}
+						onConfirm={() => execute('whenEligible')}
+					>
 						Flip When Eligible
 					</ConfirmButton>
 					<ConfirmButton title="Flip the mount now?" message={<FlipWarning {...warning} when="Right away" />} confirmLabel="Flip Now" disabled={!!flipBlocker} tooltip={flipBlocker} onConfirm={() => execute('now')}>
@@ -269,7 +284,10 @@ export function MeridianFlipExecutorSections({ mount, monitor }: { readonly moun
 						message={
 							<>
 								<FlipWarning {...warning} when={whenOpen} />
-								<p className="mt-2">The server flips this mount by itself, for this passage only, and stays armed until then; a restart of the server disarms it.</p>
+								<p className="mt-2">
+									Armed once, for this passage only, with the checks of an unattended flip: it is refused when the mount reports no usable pier side{policy.allowInferredVerification ? '' : ' (unless allowed in Advanced Policy)'} or when the preferred window closes after the firmware limit. A restart
+									of the server disarms it.
+								</p>
 							</>
 						}
 						confirmLabel="Arm"
@@ -283,6 +301,7 @@ export function MeridianFlipExecutorSections({ mount, monitor }: { readonly moun
 						Check
 					</Button>
 				</Actions>
+				<Notice>Flip When Eligible and Arm Automatic both wait for the window and flip this passage once. Arm Automatic adds the checks of an unattended flip: a pier side the driver reports, or inference allowed in Advanced Policy, and a window that closes before the firmware limit.</Notice>
 			</FlipSection>
 			<LatestFlip execution={execution} />
 		</div>
@@ -375,8 +394,8 @@ function LatestFlip({ execution }: { readonly execution?: MeridianFlipExecution 
 	)
 }
 
-// Sections of the contextual panel the Executor reads: the policy of the mount, its advanced options, and the equipment
-// of the Equipment Setup a flip uses.
+// Sections of the contextual panel the Executor reads: the policy of the mount, its advanced options, the equipment of
+// the Equipment Setup a flip uses, and the summaries of the camera tools it invokes.
 export function ExecutorPanelSections({ mount }: { readonly mount: RoleDevice }) {
 	const profiles = useSnapshot(profileState)
 	const control = useSnapshot(controlRuntime)
@@ -416,6 +435,7 @@ export function ExecutorPanelSections({ mount }: { readonly mount: RoleDevice })
 				<Checkbox label="Treat an unknown mount type as German equatorial" checked={policy.treatUnknownMountAsGem} disabled={running} onChange={(treatUnknownMountAsGem) => update({ treatUnknownMountAsGem })} />
 				<Checkbox label="Allow the automatic flip without a pier side (inferred)" checked={policy.allowInferredVerification} disabled={running || !hasCamera} onChange={(allowInferredVerification) => update({ allowInferredVerification })} />
 				<Checkbox label="Resume imaging after an inferred flip" checked={policy.allowInferredAutoResume} disabled={running || !hasCamera} onChange={(allowInferredAutoResume) => update({ allowInferredAutoResume })} />
+				<Notice>A mount that reports no usable pier side, or a simulator, has its flip inferred: Target Centering solves the target before and after it and compares the turn of the field. A pier side the driver reports verifies the flip by itself, without these solves.</Notice>
 				{policy.allowInferredAutoResume && <Notice>An inferred flip rests on plate solutions taken before and after the motion, not on the mount's own report: a rotator, a changed optical train, or a flipped image can mimic it.</Notice>}
 			</CollapsibleSection>
 			<CollapsibleSection id="meridianFlip.equipment" title="Equipment" summary={device ? `${device.name} and ${assigned} of 4 more` : 'No mount'} defaultOpen={false}>
@@ -439,8 +459,9 @@ export function ExecutorPanelSections({ mount }: { readonly mount: RoleDevice })
 						<DeviceLink device={rotator.device} fallback="Not assigned" />
 					</DataRow>
 				</DataList>
-				<Notice>A flip uses these devices as they are when it starts. Target Centering and Auto Focus use the settings of the main camera in their own tools.</Notice>
+				<Notice>A flip uses these devices as they are when it starts, and the camera tool settings summarized below as they are when it is asked for or armed; a later change applies to the next request.</Notice>
 			</CollapsibleSection>
+			<FlipToolSections camera={camera} focuser={focuser} policy={policy} />
 		</>
 	)
 }

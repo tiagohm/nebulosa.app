@@ -1,7 +1,6 @@
 import type { DeviceSummary, StarDetectorProvider } from 'api'
 import type { ReactNode } from 'react'
-import { cameraTabKey } from '../images/cameratabs'
-import { imagesState, selectImageTool } from '../images/images'
+import { openCameraTool } from '../images/opencameratool'
 import { CollapsibleSection } from '../shell/CollapsibleSection'
 import { Button } from '../ui/Button'
 import { Notice } from '../ui/Notice'
@@ -34,7 +33,7 @@ export function CameraStarDetectionSection({ id, device, provider, description }
 			<Notice>{description(<span className="text-accent">{label}</span>)}</Notice>
 			{provider === 'astap' && !astapConfigured && <Notice error>{label} is not configured.</Notice>}
 			{device && (
-				<Button variant="secondary" className="self-start" onClick={() => selectImageTool(imagesState, cameraTabKey(device.connectionId, device.id), 'star-detection')}>
+				<Button variant="secondary" className="self-start" onClick={() => openCameraTool(device.connectionId, device.id, 'star-detection')}>
 					Open Star Detection
 				</Button>
 			)}

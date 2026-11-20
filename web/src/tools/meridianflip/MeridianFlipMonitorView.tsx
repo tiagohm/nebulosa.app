@@ -1,4 +1,4 @@
-import type { DeviceSummary, MeridianExposureAssessment, MeridianFlipMonitor, MeridianFlipSettings, MeridianMechanicalAssessment, MeridianMonitorReason, MeridianTransitionKind } from 'api'
+import type { MeridianFlipMonitor, MeridianFlipSettings, MeridianMechanicalAssessment, MeridianMonitorReason, MeridianTransitionKind } from 'api'
 import { cn } from 'cn'
 import { toDeg } from 'nebulosa/src/math/units/angle'
 import { useEffect, useState } from 'react'
@@ -8,9 +8,9 @@ import { DeviceLink } from '../../equipment-control/DeviceLink'
 import { MOUNT_ROLE_BLOCKERS } from '../../equipment/equipment'
 import { EquipmentSetupButton } from '../../equipment/EquipmentSetupButton'
 import { type RoleDevice, useRoleDevice } from '../../equipment/useEquipment'
-import { formatClockDuration, formatClockTime, formatDuration, formatFixed, formatGeographic, formatHourAngle, formatLocalTime, MISSING } from '../../format'
+import { formatClockDuration, formatClockTime, formatFixed, formatGeographic, formatHourAngle, formatLocalTime, MISSING } from '../../format'
 import { useActiveSite, useActiveTimeZone } from '../../location/useLocation'
-import { activeProfile, exposureSettings, meridianFlipSettings, profileCamera, profileState, setMeridianFlipSettings } from '../../profile/profile'
+import { activeProfile, meridianFlipSettings, profileCamera, profileState, setMeridianFlipSettings } from '../../profile/profile'
 import { MERIDIAN_FLIP_MAXIMUM_SECONDS } from '../../profile/schema'
 import { CollapsibleSection } from '../../shell/CollapsibleSection'
 import { WorkspaceLayout } from '../../shell/WorkspaceLayout'
@@ -25,7 +25,6 @@ import { StatusBadge, type StatusTone } from '../../ui/StatusBadge'
 import { Cell, Row, Table } from '../../ui/Table'
 import { useNow } from '../../useNow'
 import {
-	assessMeridianExposure,
 	disableMeridianFlip,
 	enableMeridianFlip,
 	formatTransitOffset,
@@ -57,7 +56,7 @@ import { FlipSection } from './MeridianFlipSection'
 // flip that runs, is armed, or left the capture paused (MeridianFlipExecutorView.tsx), then the Monitor section (what
 // the server's monitor observes and the transitions it reported) or the Executor section (the flip and its latest
 // execution). The contextual panel holds what is set rather than read: the flip window, the flip policy, the
-// equipment, and the exposure forecast. The mount is never chosen here: a missing or unavailable one is reported and
+// equipment, and the summaries of the camera tools a flip invokes. The mount is never chosen here: a missing or unavailable one is reported and
 // Enable is disabled. The monitor is the server's, so changing profile, setup, or workspace, or closing the tab, leaves
 // it enabled for the mount it was enabled for; settings are applied explicitly and remembered by the profile per mount.
 // Nothing here commands the mount: the countdowns are only interpolated between the samples of the server, which takes
@@ -104,9 +103,6 @@ const TRANSITIONS: Readonly<Record<MeridianTransitionKind, string>> = {
 	monitorUnavailable: 'Mount telemetry lost',
 	monitorRecovered: 'Mount telemetry recovered',
 }
-
-// Text of each exposure decision.
-const DECISIONS: Readonly<Record<MeridianExposureAssessment['decision'], string>> = { allowed: 'Fits', defer: 'Defer', blocked: 'Does not fit', unknown: 'Unknown' }
 
 // Fill of each part of the timeline: the stretches of the bar and the marks of the transit and of now. The approach is
 // neutral, since nothing is due during it; only the window and its closing are tinted.
@@ -222,7 +218,6 @@ export function MeridianFlipMonitorView() {
 		<>
 			<WindowSection draft={draft} onChange={(settings) => setDraft(normalizeMeridianFlipSettings(settings))} monitor={monitor} saved={saved} pending={!!pending} onApply={apply} />
 			<ExecutorPanelSections mount={mount} />
-			<ExposureSection device={device} monitor={monitor} />
 		</>
 	)
 
@@ -465,51 +460,6 @@ function WindowSection({ draft, onChange, monitor, saved, pending, onApply }: Wi
 					{running ? 'Apply' : 'Remember'}
 				</Button>
 			</Actions>
-		</CollapsibleSection>
-	)
-}
-
-// Whether a hypothetical next exposure ends within the preferred window, asked of the server on demand, a section of the
-// contextual panel; the exposure starts from the one set for the main camera.
-function ExposureSection({ device, monitor }: { readonly device?: DeviceSummary; readonly monitor?: MeridianFlipMonitor }) {
-	const timeZone = useActiveTimeZone()
-	const profile = activeProfile(useSnapshot(profileState))
-	const camera = useRoleDevice('MAIN_CAMERA')
-	const [exposure, setExposure] = useState(() => exposureSettings(profile.settings, profileCamera(profile, camera.device?.id)).exposureTime)
-	const [overhead, setOverhead] = useState(10)
-	const [result, setResult] = useState<{ readonly assessment: MeridianExposureAssessment } | { readonly error: string }>()
-	const [busy, setBusy] = useState(false)
-
-	async function assess() {
-		if (!device) return
-		setBusy(true)
-		setResult(await assessMeridianExposure(device.connectionId, device.id, { exposureSeconds: exposure, overheadSeconds: overhead, expectedContextId: monitor?.contextId }))
-		setBusy(false)
-	}
-
-	const assessment = result && 'assessment' in result ? result.assessment : undefined
-
-	return (
-		<CollapsibleSection id="meridianFlip.exposure" title="Exposure Forecast" summary={assessment ? DECISIONS[assessment.decision] : undefined} defaultOpen={false}>
-			<NumberInput label="Exposure" value={exposure} min={0} max={86400} suffix="s" onChange={setExposure} />
-			<NumberInput label="Overhead" value={overhead} min={0} max={3600} suffix="s" onChange={setOverhead} />
-			<Actions>
-				<Button variant="secondary" disabled={!monitor || busy} title={monitor ? 'Asks the server; starts and changes nothing.' : 'Enable the monitor first.'} onClick={() => void assess()}>
-					{busy ? 'Assessing…' : 'Assess'}
-				</Button>
-			</Actions>
-			{result && 'error' in result && <Notice error>{result.error}</Notice>}
-			{assessment && (
-				<DataList>
-					<DataRow label="Next exposure" tone={assessment.decision === 'allowed' ? 'success' : assessment.decision === 'blocked' ? 'danger' : 'default'}>
-						{DECISIONS[assessment.decision]}
-					</DataRow>
-					{assessment.decision === 'allowed' && assessment.latestSafeStartAt !== undefined && <DataRow label="Latest start">{formatLocalTime(assessment.latestSafeStartAt, timeZone)}</DataRow>}
-					{assessment.decision === 'defer' && assessment.reevaluateAt !== undefined && <DataRow label="Ask again at">{formatLocalTime(assessment.reevaluateAt, timeZone)}</DataRow>}
-					<DataRow label="Duration">{formatDuration(exposure + overhead)}</DataRow>
-				</DataList>
-			)}
-			{assessment && <Notice>{assessment.reason}. It holds for the current target at the moment it was asked.</Notice>}
 		</CollapsibleSection>
 	)
 }

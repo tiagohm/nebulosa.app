@@ -1,4 +1,4 @@
-import type { MeridianAvailability, MeridianExposureAssessment, MeridianExposureRequest, MeridianFlipMonitor, MeridianFlipSettings, MeridianFlipSnapshot, MeridianFlipTransition, MeridianMountView, MeridianTiming, MeridianTimingPhase, ServerEvent } from 'api'
+import type { MeridianAvailability, MeridianFlipMonitor, MeridianFlipSettings, MeridianFlipSnapshot, MeridianFlipTransition, MeridianMountView, MeridianTiming, MeridianTimingPhase, ServerEvent } from 'api'
 import { PI, SIDEREAL_DRIFT_RATE, TAU } from 'nebulosa/src/core/constants'
 import type { MountType } from 'nebulosa/src/devices/indi/device'
 import { proxy } from 'valtio'
@@ -234,18 +234,6 @@ export async function updateMeridianFlipSettings(state: MeridianFlipState, conne
 		return false
 	} finally {
 		delete state.pending[key]
-	}
-}
-
-// Asks the server whether a hypothetical next exposure ends within the preferred window of a monitor; starts and changes
-// nothing. Returns the assessment, or the reason it could not be answered.
-export async function assessMeridianExposure(connectionId: string, deviceId: string, exposure: MeridianExposureRequest, request: ApiFetch = browserFetch): Promise<{ readonly assessment: MeridianExposureAssessment } | { readonly error: string }> {
-	try {
-		const response = await request(`${monitorUrl(connectionId, deviceId)}/assess-exposure`, jsonInit('POST', exposure))
-		if (!response.ok) return { error: await responseError(response, 'The exposure could not be assessed.') }
-		return { assessment: (await response.json()) as MeridianExposureAssessment }
-	} catch {
-		return { error: 'The server is unreachable.' }
 	}
 }
 

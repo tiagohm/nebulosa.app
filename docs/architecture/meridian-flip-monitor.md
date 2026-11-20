@@ -51,14 +51,6 @@ Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
     The snapshot (`GET /api/meridian-flip`) and the events carry an epoch per process and a revision per publication.
     A consumer subscribes, reads the snapshot, and checks `contextId`, `episodeId`, and the current state before acting, since nothing is replayed.
 
-- `POST …/assess-exposure` (`MeridianExposureRequest`, seconds) evaluates the monitor and answers `MeridianExposureAssessment`; it starts and changes nothing:
-    - `allowed` when the exposure ends before the window closes (with `latestSafeStartAt`) or no flip is pending;
-    - `defer` when it would end after the window closes and the window has not opened;
-    - `blocked` with a candidate pending in or past the window;
-    - `unknown` without a monitored target, without evidence, or for another `expectedContextId`.
-
-    The answer is valid for its context at that instant only.
-
 - Limitations: the monitor commands no flip (the Meridian Flip Executor does, and Equipment Control keeps its own manual flip), and no physical clearance limit exists.
   A static right ascension only approximates a non-sidereal target.
   The monitor cannot know the intended catalog object of an external GoTo.

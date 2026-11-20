@@ -342,8 +342,6 @@ export type {
 } from './mounts'
 export type {
 	MeridianAvailability,
-	MeridianExposureAssessment,
-	MeridianExposureRequest,
 	MeridianFlipErrorCode,
 	MeridianFlipEvent,
 	MeridianFlipKey,

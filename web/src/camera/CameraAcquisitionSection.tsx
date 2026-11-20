@@ -1,7 +1,6 @@
 import type { CameraCapabilities, DeviceSummary } from 'api'
 import type { ReactNode } from 'react'
-import { cameraTabKey } from '../images/cameratabs'
-import { imagesState, selectImageTool } from '../images/images'
+import { openCameraTool } from '../images/opencameratool'
 import type { CameraExposureSettings } from '../profile/schema'
 import { CollapsibleSection } from '../shell/CollapsibleSection'
 import { Button } from '../ui/Button'
@@ -26,17 +25,19 @@ interface CameraAcquisitionSectionProps {
 	readonly description: ReactNode
 	// Exposure controls of the operation, shown above the camera settings; absent when it has none.
 	readonly children?: ReactNode
+	// Whether the section starts expanded before the operator opens or closes it; true by default.
+	readonly defaultOpen?: boolean
 }
 
 // Section with the operation's exposure controls, the camera settings it applies, and a link to them.
-export function CameraAcquisitionSection({ id, device, exposure, capabilities, description, children }: CameraAcquisitionSectionProps) {
+export function CameraAcquisitionSection({ id, device, exposure, capabilities, description, children, defaultOpen }: CameraAcquisitionSectionProps) {
 	return (
-		<CollapsibleSection id={id} title="Acquisition">
+		<CollapsibleSection id={id} title="Acquisition" defaultOpen={defaultOpen}>
 			{children}
 			<CameraSummary exposure={exposure} capabilities={capabilities} />
 			<Notice>{description}</Notice>
 			{device && (
-				<Button variant="secondary" className="self-start" onClick={() => selectImageTool(imagesState, cameraTabKey(device.connectionId, device.id), 'camera-acquisition')}>
+				<Button variant="secondary" className="self-start" onClick={() => openCameraTool(device.connectionId, device.id, 'camera-acquisition')}>
 					Open Acquisition
 				</Button>
 			)}

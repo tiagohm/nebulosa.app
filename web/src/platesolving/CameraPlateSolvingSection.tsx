@@ -1,7 +1,6 @@
 import type { DeviceSummary } from 'api'
 import type { ReactNode } from 'react'
-import { cameraTabKey } from '../images/cameratabs'
-import { imagesState, selectImageTool } from '../images/images'
+import { openCameraTool } from '../images/opencameratool'
 import type { CameraPlateSolvingSettings } from '../profile/schema'
 import { CollapsibleSection } from '../shell/CollapsibleSection'
 import { Button } from '../ui/Button'
@@ -24,19 +23,21 @@ interface CameraPlateSolvingSectionProps {
 	// How the operation solves its frames and uses the solutions, given the highlighted solver name and whether the
 	// search is assisted.
 	readonly description: (solver: ReactNode, assisted: boolean) => ReactNode
+	// Whether the section starts expanded before the operator opens or closes it; true by default.
+	readonly defaultOpen?: boolean
 }
 
 // Section with the operation's use of the solver and a link to the settings.
-export function CameraPlateSolvingSection({ id, device, solving, description }: CameraPlateSolvingSectionProps) {
+export function CameraPlateSolvingSection({ id, device, solving, description, defaultOpen }: CameraPlateSolvingSectionProps) {
 	const configured = useSolverConfigured(solving.provider)
 	const label = PROVIDER_LABELS[solving.provider]
 
 	return (
-		<CollapsibleSection id={id} title="Plate Solving" summary={label}>
+		<CollapsibleSection id={id} title="Plate Solving" summary={label} defaultOpen={defaultOpen}>
 			<Notice>{description(<span className="text-accent">{label}</span>, solving.strategy === 'assisted')}</Notice>
 			{!configured && <Notice error>{label} is not configured.</Notice>}
 			{device && (
-				<Button variant="secondary" className="self-start" onClick={() => selectImageTool(imagesState, cameraTabKey(device.connectionId, device.id), 'plate-solver')}>
+				<Button variant="secondary" className="self-start" onClick={() => openCameraTool(device.connectionId, device.id, 'plate-solver')}>
 					Open Plate Solving
 				</Button>
 			)}

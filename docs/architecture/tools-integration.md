@@ -109,6 +109,7 @@ Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
 - Solar Eclipse Map (`web/src/tools/solareclipse/`): built like the Lunar Eclipse Map, with a tab-lived valtio proxy (`solarEclipseState`), the shared place and time zone rules, and request guards.
   Its global map does not depend on a contact or a place, so a click or a contact asks only for the local circumstances again, and showing or hiding a layer (central line, central limits, partial limits, sunrise/sunset curves, points, point names; all shown at first) asks for nothing.
   The central line is solid where total and dashed where annular, so a hybrid eclipse reads without color.
+  The Moon's shadow (the central line, the central limits, and the umbral points) is drawn in the Moon's map hue, as is the Lunar Eclipse Map's region where the Moon is up, so on both maps the accent marks only the place and the chosen point.
   Every global point is drawn with its name (a layer of its own), with a marker shape per family, and the names of points that nearly coincide are stacked.
   A global point is chosen in the panel's Global Points list, since a click on the map chooses the place;
   the map then rings it and centers on it, and the panel tells what it is, where and when, the Sun's altitude, and for the greatest eclipse and duration the Sun's azimuth, the central phase, its duration, and the path width, and can make it the place.

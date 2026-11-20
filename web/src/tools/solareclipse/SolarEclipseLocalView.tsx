@@ -3,7 +3,7 @@ import type { LocalSolarEclipseSvgShape, SolarEclipseLocalView as LocalViewGeome
 // Local View of a solar eclipse: the toolkit's schematic of the Moon over the Sun as seen from a place at a
 // contact, drawn from the shapes the API computed (in pixels, origin at the top-left corner, y down) without any
 // geometry of its own. The Moon disk is opaque over the Sun, so the covered part of the Sun is dark, and the
-// band below the horizon is drawn over both.
+// band below the horizon is drawn over both. The Sun is a dim gold, never the brightest thing on a night screen.
 
 export interface SolarEclipseLocalViewProps {
 	// Geometry to draw.
@@ -17,9 +17,9 @@ const MARGIN = 32
 const SHAPE_CLASSES: Readonly<Record<LocalSolarEclipseSvgShape['role'], string>> = {
 	ghostSunDisk: 'fill-none stroke-ink-300 [stroke-dasharray:2_2]',
 	ghostMoonDisk: 'fill-none stroke-ink-300 [stroke-dasharray:2_2]',
-	sunDisk: 'fill-ink-100 stroke-ink-100',
+	sunDisk: 'fill-map-sun/45 stroke-map-sun',
 	moonDisk: 'fill-base-000 stroke-ink-300',
-	solarLimb: 'fill-none stroke-ink-100',
+	solarLimb: 'fill-none stroke-map-sun',
 	lunarLimb: 'fill-none stroke-ink-300',
 	trajectoryLine: 'stroke-ink-300 [stroke-dasharray:4_3]',
 	trajectoryPath: 'fill-none stroke-ink-300 [stroke-dasharray:4_3]',

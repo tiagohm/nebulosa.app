@@ -53,9 +53,9 @@ function EclipseOverlay({ map, layers, selectedPoint }: EclipseOverlayProps) {
 			<g transform={DEGREE_PLANE_TRANSFORM}>
 				{layers.penumbralLimits && [paths.penumbraNorth, paths.penumbraSouth].map((d, i) => d && <path key={i} d={d} className="fill-none stroke-ink-200" strokeWidth={1} vectorEffect="non-scaling-stroke" />)}
 				{layers.riseSet && paths.riseSet && <path d={paths.riseSet} className="fill-none stroke-ink-300 [stroke-dasharray:3_3]" strokeWidth={1} vectorEffect="non-scaling-stroke" />}
-				{layers.umbralLimits && [paths.umbraNorth, paths.umbraSouth].map((d, i) => d && <path key={i} d={d} className="fill-none stroke-accent" strokeWidth={1.5} vectorEffect="non-scaling-stroke" />)}
-				{layers.centralLine && paths.total && <path d={paths.total} className="fill-none stroke-accent" strokeWidth={2.5} vectorEffect="non-scaling-stroke" />}
-				{layers.centralLine && paths.annular && <path d={paths.annular} className="fill-none stroke-accent [stroke-dasharray:6_4]" strokeWidth={2.5} vectorEffect="non-scaling-stroke" />}
+				{layers.umbralLimits && [paths.umbraNorth, paths.umbraSouth].map((d, i) => d && <path key={i} d={d} className="fill-none stroke-map-moon" strokeWidth={1.5} vectorEffect="non-scaling-stroke" />)}
+				{layers.centralLine && paths.total && <path d={paths.total} className="fill-none stroke-map-moon" strokeWidth={2.5} vectorEffect="non-scaling-stroke" />}
+				{layers.centralLine && paths.annular && <path d={paths.annular} className="fill-none stroke-map-moon [stroke-dasharray:6_4]" strokeWidth={2.5} vectorEffect="non-scaling-stroke" />}
 			</g>
 			{layers.points &&
 				points.map((point, i) => (
@@ -95,11 +95,11 @@ function LegendItem({ layer, label, swatch, checked }: LegendItemProps) {
 	)
 }
 
-// Swatch of a line: solid or dashed, in the accent or a muted color.
-function LineSwatch({ dashed, accent, thick }: { readonly dashed?: boolean; readonly accent?: boolean; readonly thick?: boolean }) {
+// Swatch of a line: solid or dashed, in the hue of the Moon's shadow or a muted color.
+function LineSwatch({ dashed, shadow, thick }: { readonly dashed?: boolean; readonly shadow?: boolean; readonly thick?: boolean }) {
 	return (
 		<svg width={16} height={6} className="flex-none">
-			<line x1={0} y1={3} x2={16} y2={3} className={accent ? 'stroke-accent' : 'stroke-ink-200'} strokeWidth={thick ? 2.5 : 1.5} strokeDasharray={dashed ? '4 3' : undefined} />
+			<line x1={0} y1={3} x2={16} y2={3} className={shadow ? 'stroke-map-moon' : 'stroke-ink-200'} strokeWidth={thick ? 2.5 : 1.5} strokeDasharray={dashed ? '4 3' : undefined} />
 		</svg>
 	)
 }
@@ -189,11 +189,11 @@ export function SolarEclipseMap() {
 								<LegendItem
 									layer="centralLine"
 									label={map.paths.total && map.paths.annular ? 'Central line, dashed where annular' : map.paths.annular ? 'Central line of annularity' : 'Central line of totality'}
-									swatch={<LineSwatch accent thick dashed={!map.paths.total} />}
+									swatch={<LineSwatch shadow thick dashed={!map.paths.total} />}
 									checked={layers.centralLine}
 								/>
 							)}
-							{limits && <LegendItem layer="umbralLimits" label={limitName(eclipse.type)} swatch={<LineSwatch accent />} checked={layers.umbralLimits} />}
+							{limits && <LegendItem layer="umbralLimits" label={limitName(eclipse.type)} swatch={<LineSwatch shadow />} checked={layers.umbralLimits} />}
 							<LegendItem layer="penumbralLimits" label="Limits of the partial eclipse" swatch={<LineSwatch />} checked={layers.penumbralLimits} />
 							{map.paths.riseSet && <LegendItem layer="riseSet" label="Eclipse at sunrise or sunset" swatch={<LineSwatch dashed />} checked={layers.riseSet} />}
 							<LegendItem layer="points" label="Global points (see the panel)" swatch={<GlobalPointIcon kind="MAX" />} checked={layers.points} />

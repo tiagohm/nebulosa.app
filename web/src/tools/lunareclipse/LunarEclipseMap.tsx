@@ -44,13 +44,13 @@ function EclipseOverlay({ map, selectedEvent }: EclipseOverlayProps) {
 	return (
 		<>
 			<g transform={DEGREE_PLANE_TRANSFORM}>
-				{fill && <path d={fill} fillRule="evenodd" className="fill-accent/15" />}
+				{fill && <path d={fill} fillRule="evenodd" className="fill-map-moon/15" />}
 				{map.events.map((event) => {
 					const line = map.lines[event.kind]
 					if (!line || event.kind === selectedEvent) return null
 					return <path key={event.kind} d={line} className="fill-none stroke-ink-300/70" strokeWidth={1} vectorEffect="non-scaling-stroke" />
 				})}
-				{map.lines[selectedEvent] && <path d={map.lines[selectedEvent]} className="fill-none stroke-accent" strokeWidth={2} vectorEffect="non-scaling-stroke" />}
+				{map.lines[selectedEvent] && <path d={map.lines[selectedEvent]} className="fill-none stroke-map-moon" strokeWidth={2} vectorEffect="non-scaling-stroke" />}
 			</g>
 			{max && (
 				<WorldMapSymbol longitude={max.sublunar.longitude} latitude={max.sublunar.latitude}>
@@ -60,7 +60,7 @@ function EclipseOverlay({ map, selectedEvent }: EclipseOverlayProps) {
 			)}
 			{selected && selected.kind !== 'MAX' && (
 				<WorldMapSymbol longitude={selected.sublunar.longitude} latitude={selected.sublunar.latitude}>
-					<circle r={4} className="fill-accent stroke-base-000" strokeWidth={1.5} />
+					<circle r={4} className="fill-map-moon stroke-base-000" strokeWidth={1.5} />
 				</WorldMapSymbol>
 			)}
 		</>
@@ -140,7 +140,7 @@ export function LunarEclipseMap() {
 					{map && selectedContact && (
 						<EclipseMapLegend passThrough>
 							<span className="flex items-center gap-2">
-								<span className="size-3 flex-none rounded-xs border border-accent bg-accent/15" />
+								<span className="size-3 flex-none rounded-xs border border-map-moon bg-map-moon/15" />
 								Moon above the horizon at {selectedEvent} · {formatLongDateTime(selectedContact.time, timeZone)}
 							</span>
 							<span className="flex items-center gap-2">

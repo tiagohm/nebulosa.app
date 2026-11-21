@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import type { CalibrationJobSummary, CalibrationLibrarySnapshot, ServerEvent } from 'api'
 import { proxy } from 'valtio'
-import { buildMaster, type CalibrationLibraryRuntime, handleCalibrationLibraryEvent, jobEnded, latestGroupJob, loadCalibrationGroups, loadCalibrationMaster, loadCalibrationSources, loadFlatCorrections, refreshCalibrationLibrary } from './calibrationlibrary'
+import { buildMaster, type CalibrationLibraryRuntime, deleteCalibrationMaster, handleCalibrationLibraryEvent, jobEnded, latestGroupJob, loadCalibrationGroups, loadCalibrationMaster, loadCalibrationSources, loadFlatCorrections, refreshCalibrationLibrary } from './calibrationlibrary'
 
 function runtime() {
 	return proxy<CalibrationLibraryRuntime>({ jobs: {}, changes: 0, loading: {}, pending: {}, errors: {} })
@@ -144,5 +144,25 @@ describe('details', () => {
 		await first
 
 		expect(state.master?.masterId).toBe(2)
+	})
+
+	test('a record this tab is deleting is not fetched again by the change its deletion causes', async () => {
+		const state = runtime()
+		const requested: string[] = []
+		const deletion = Promise.withResolvers<Response>()
+		const request = ((url: string, init?: RequestInit) => {
+			requested.push(`${init?.method ?? 'GET'} ${url}`)
+			return init?.method === 'DELETE' ? deletion.promise : Promise.resolve(Response.json({ masterId: 5 }))
+		}) as typeof fetch
+
+		await loadCalibrationMaster(state, 5, request)
+		const deleted = deleteCalibrationMaster(state, 5, request)
+		await loadCalibrationMaster(state, 5, request)
+		deletion.resolve(Response.json({}))
+		expect(await deleted).toEqual({})
+
+		expect(requested).toEqual(['GET /api/calibration-library/masters/5', 'DELETE /api/calibration-library/masters/5'])
+		expect(state.master?.masterId).toBe(5)
+		expect(state.pending).toEqual({})
 	})
 })

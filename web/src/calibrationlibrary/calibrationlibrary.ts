@@ -226,20 +226,41 @@ async function loadDetail<T>(key: string, load: (() => Promise<T | undefined>) |
 	return requests[key] === number ? { value } : undefined
 }
 
+// Key of the command that deletes a group.
+export function groupDeletionKey(groupId: string) {
+	return `delete:${groupId}`
+}
+
+// Key of the command that deletes a master.
+export function masterDeletionKey(masterId: number) {
+	return `master:${masterId}`
+}
+
+// Key of the command that deletes a frame, apart from the commands that review it, whose changes the frame shown must follow.
+export function sourceDeletionKey(sourceId: string) {
+	return `delete:source:${sourceId}`
+}
+
+// The loaders below skip a record this tab is deleting: the change its deletion causes arrives before the answer of the
+// deletion, and fetching the record then only finds it gone. The detail shown stays until the deletion answers.
+
 // Fetches a group and its frames; one the server does not know is forgotten.
 export async function loadCalibrationGroup(state: CalibrationLibraryRuntime, groupId: string | undefined, request: ApiFetch = browserFetch) {
+	if (groupId !== undefined && state.pending[groupDeletionKey(groupId)]) return
 	const answer = await loadDetail('group', groupId === undefined ? undefined : () => tryFetchJson<CalibrationGroupDetail>(`${BASE_URL}/groups/${encodeURIComponent(groupId)}`, request))
 	if (answer) state.group = answer.value
 }
 
 // Fetches a master; absent clears it.
 export async function loadCalibrationMaster(state: CalibrationLibraryRuntime, masterId: number | undefined, request: ApiFetch = browserFetch) {
+	if (masterId !== undefined && state.pending[masterDeletionKey(masterId)]) return
 	const answer = await loadDetail('master', masterId === undefined ? undefined : () => tryFetchJson<CalibrationMasterDetail>(`${BASE_URL}/masters/${masterId}`, request))
 	if (answer) state.master = answer.value
 }
 
 // Fetches a frame; absent clears it.
 export async function loadCalibrationSource(state: CalibrationLibraryRuntime, sourceId: string | undefined, request: ApiFetch = browserFetch) {
+	if (sourceId !== undefined && state.pending[sourceDeletionKey(sourceId)]) return
 	const answer = await loadDetail('source', sourceId === undefined ? undefined : () => tryFetchJson<CalibrationSource>(`${BASE_URL}/sources/${encodeURIComponent(sourceId)}`, request))
 	if (answer) state.source = answer.value
 }
@@ -284,17 +305,17 @@ export function buildMaster(state: CalibrationLibraryRuntime, key: string, body:
 
 // Deletes a master and its file.
 export function deleteCalibrationMaster(state: CalibrationLibraryRuntime, masterId: number, request: ApiFetch = browserFetch) {
-	return command(state, `master:${masterId}`, `${BASE_URL}/masters/${masterId}`, { method: 'DELETE' }, request)
+	return command(state, masterDeletionKey(masterId), `${BASE_URL}/masters/${masterId}`, { method: 'DELETE' }, request)
 }
 
 // Removes a frame from the library, and deletes its file from the disk when files is true.
 export function deleteCalibrationSource(state: CalibrationLibraryRuntime, sourceId: string, files: boolean, request: ApiFetch = browserFetch) {
-	return command<{ readonly deleted: number }>(state, `source:${sourceId}`, `${BASE_URL}/sources/${encodeURIComponent(sourceId)}?files=${files}`, { method: 'DELETE' }, request)
+	return command<{ readonly deleted: number }>(state, sourceDeletionKey(sourceId), `${BASE_URL}/sources/${encodeURIComponent(sourceId)}?files=${files}`, { method: 'DELETE' }, request)
 }
 
 // Removes a group from the library, and deletes the files of its frames from the disk when files is true.
 export function deleteCalibrationGroup(state: CalibrationLibraryRuntime, groupId: string, files: boolean, request: ApiFetch = browserFetch) {
-	return command<{ readonly deleted: number }>(state, `delete:${groupId}`, `${BASE_URL}/groups/${encodeURIComponent(groupId)}?files=${files}`, { method: 'DELETE' }, request)
+	return command<{ readonly deleted: number }>(state, groupDeletionKey(groupId), `${BASE_URL}/groups/${encodeURIComponent(groupId)}?files=${files}`, { method: 'DELETE' }, request)
 }
 
 // Cancels a build that has not started publishing its master; the job reports the end as an event.

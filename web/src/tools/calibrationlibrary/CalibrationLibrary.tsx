@@ -14,6 +14,7 @@ import {
 	deleteCalibrationMaster,
 	deleteCalibrationSource,
 	excludeCalibrationSource,
+	groupDeletionKey,
 	jobEnded,
 	latestGroupJob,
 	loadCalibrationGroup,
@@ -24,8 +25,10 @@ import {
 	loadCalibrationSources,
 	loadFlatCorrections,
 	loadImportCandidates,
+	masterDeletionKey,
 	overrideCalibrationSource,
 	refreshCalibrationFiles,
+	sourceDeletionKey,
 	startCalibrationImport,
 	validateRecipe,
 } from '../../calibrationlibrary/calibrationlibrary'
@@ -396,12 +399,14 @@ function GroupPanel({ onMaster, onDeleted }: { readonly onMaster: (masterId: num
 	const { cameras } = useSnapshot(catalogState)
 	if (!group) return <LoadingSection id="calibration.group" title="Group" />
 
-	const key = `delete:${group.groupId}`
+	const key = groupDeletionKey(group.groupId)
 	const job = latestGroupJob(jobs, group.groupId)
 	const building = job !== undefined && !jobEnded(job)
 
+	// A failed deletion may still have removed part of the group, which its loader skipped while it ran.
 	async function remove(groupId: string, files: boolean) {
 		if (await deleteCalibrationGroup(calibrationLibraryRuntime, groupId, files)) onDeleted()
+		else void loadCalibrationGroup(calibrationLibraryRuntime, groupId)
 	}
 
 	return (
@@ -619,7 +624,7 @@ function MasterPanel({ onGroup, onDeleted }: { readonly onGroup: (groupId: strin
 	const master = snapshot
 	if (!master) return <LoadingSection id="calibration.master" title="Master" />
 
-	const key = `master:${master.masterId}`
+	const key = masterDeletionKey(master.masterId)
 	const { diagnostics } = master
 	const warnings = masterWarnings(master)
 
@@ -701,17 +706,20 @@ function MasterPanel({ onGroup, onDeleted }: { readonly onGroup: (groupId: strin
 	)
 }
 
-// Frame, with how each value is known, what an operator may state about it, and its removal, last, whose failure the
-// review shows.
+// Frame, with how each value is known, what an operator may state about it, and its removal, last, which explains its
+// own failure.
 function SourcePanel({ onDeleted }: { readonly onDeleted: () => void }) {
-	const { source: snapshot, pending } = useSnapshot(calibrationLibraryRuntime)
+	const { source: snapshot, pending, errors } = useSnapshot(calibrationLibraryRuntime)
 	const { cameras } = useSnapshot(catalogState)
 	const source = snapshot
 	if (!source) return <LoadingSection id="calibration.source" title="Frame" />
 	const { metadata } = source
+	const removal = sourceDeletionKey(source.sourceId)
 
+	// A failed deletion fetches the frame again, which its loader skipped while it ran.
 	async function remove(sourceId: string, files: boolean) {
 		if (await deleteCalibrationSource(calibrationLibraryRuntime, sourceId, files)) onDeleted()
+		else void loadCalibrationSource(calibrationLibraryRuntime, sourceId)
 	}
 
 	return (
@@ -744,8 +752,9 @@ function SourcePanel({ onDeleted }: { readonly onDeleted: () => void }) {
 				<ReviewForm key={source.sourceId} source={source} />
 			</CollapsibleSection>
 			<CollapsibleSection id="calibration.remove" title="Remove" defaultOpen={false}>
+				{errors[removal] && <Notice error>{errors[removal]}</Notice>}
 				<Actions>
-					<RemoveFramesButton title="Remove this frame?" message="The frame leaves the library. Masters made with it stay." files="Also delete its file from the disk, wherever it is" disabled={pending[`source:${source.sourceId}`] === true} onConfirm={(files) => void remove(source.sourceId, files)}>
+					<RemoveFramesButton title="Remove this frame?" message="The frame leaves the library. Masters made with it stay." files="Also delete its file from the disk, wherever it is" disabled={pending[removal] === true} onConfirm={(files) => void remove(source.sourceId, files)}>
 						Remove Frame
 					</RemoveFramesButton>
 				</Actions>

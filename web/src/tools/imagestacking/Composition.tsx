@@ -8,6 +8,7 @@ import { navigate, routeState } from '../../shell/route'
 import { EmptyState } from '../../shell/WorkspaceLayout'
 import { Button } from '../../ui/Button'
 import { ConfirmButton } from '../../ui/ConfirmButton'
+import { Field } from '../../ui/Field'
 import { Notice } from '../../ui/Notice'
 import { NumberInput } from '../../ui/NumberInput'
 import { SectionHeading } from '../../ui/SectionHeading'
@@ -20,13 +21,17 @@ import { JobProgress } from './JobProgress'
 import { COMPOSITION_PRESETS, CUSTOM_PRESET, resolvePreset, weightOf, withoutSource, withWeight } from './presets'
 import { cancelStackingComposition, deleteStackingComposite, imageStackingRuntime, jobEnded, loadCompositionPreview, loadCompositionValidation, loadStackingComposite, startStackingComposition } from './projects'
 
-// Color composition of an Image Stacking project: a preset or a hand-edited mix of its linear masters into RGB, with an
-// optional luminance, previewed first as the server stretches it, validated by the server, and composed into a linear
-// composite. No light frame is read; changing the mix never integrates again. Composites are listed by their preset and
+// Color composition of an Image Stacking project: a preset or a hand-edited mix of its linear masters into RGB, one row
+// of fields for each master that wraps on a narrow screen and never clips its open lists, with an optional luminance,
+// previewed first as the server stretches it, validated by the server, and composed into a linear composite. No light
+// frame is read; changing the mix never integrates again. Composites are listed by their preset and
 // masters with their state, opened in Images, and deleted.
 
-// Output channels, in the order of the weight columns.
+// Output channels, in the order of the weight fields.
 const CHANNELS = ['red', 'green', 'blue'] as const
+
+// Label of the weight field of each output channel.
+const CHANNEL_LABELS: Readonly<Record<(typeof CHANNELS)[number], string>> = { red: 'Red', green: 'Green', blue: 'Blue' }
 
 // Delay before a changed composition is previewed, in milliseconds, so editing a weight sends one request.
 const PREVIEW_DELAY = 400
@@ -159,48 +164,41 @@ export function CompositionView({ projectId }: { readonly projectId: string }) {
 				</figure>
 			)}
 			{composition && composition.sources.length > 0 && (
-				<Table className="shrink-0" columns={['Master', 'Channel', 'Gain', 'Red', 'Green', 'Blue', '']}>
+				<div className="flex flex-col divide-y divide-line-100 rounded-md border border-line-100">
 					{composition.sources.map((source, index) => {
 						const master = masters.find((product) => product.productId === source.productId)
 
 						return (
-							<Row key={`${index}:${source.productId}`}>
-								<Cell>
-									<Select
-										className="w-52 flex-none"
-										options={masters.map((product) => product.productId)}
-										value={source.productId}
-										format={(id) => {
-											const product = masters.find((item) => item.productId === id)
-											return product ? masterLabel(product, timeZone) : 'Unknown master'
-										}}
-										onChange={(productId) => setSource(index, { productId, plane: 0 })}
-									/>
-								</Cell>
-								<Cell>
-									{master && master.channels > 1 ? (
-										<Select className="w-24 flex-none" options={PLANE_LABELS.slice(0, master.channels).map((_, plane) => String(plane))} value={String(source.plane)} format={(plane) => PLANE_LABELS[Number(plane)]} onChange={(plane) => setSource(index, { plane: Number(plane) })} />
-									) : (
-										'Mono'
-									)}
-								</Cell>
-								<Cell>
-									<NumberInput className="w-40 min-w-0 flex-none" value={source.gain} min={0.05} max={20} step={0.05} onChange={(gain) => setSource(index, { gain })} />
-								</Cell>
+							<div key={`${index}:${source.productId}`} className="flex flex-wrap items-end gap-3 p-3">
+								<Select
+									label="Master"
+									className="w-60 max-w-full flex-none"
+									options={masters.map((product) => product.productId)}
+									value={source.productId}
+									format={(id) => {
+										const product = masters.find((item) => item.productId === id)
+										return product ? masterLabel(product, timeZone) : 'Unknown master'
+									}}
+									onChange={(productId) => setSource(index, { productId, plane: 0 })}
+								/>
+								{master && master.channels > 1 ? (
+									<Select label="Channel" className="w-24 flex-none" options={PLANE_LABELS.slice(0, master.channels).map((_, plane) => String(plane))} value={String(source.plane)} format={(plane) => PLANE_LABELS[Number(plane)]} onChange={(plane) => setSource(index, { plane: Number(plane) })} />
+								) : (
+									<Field label="Channel" className="w-24 flex-none">
+										<span className="flex h-9.5 items-center text-sm text-ink-300">Mono</span>
+									</Field>
+								)}
+								<NumberInput label="Gain" className="w-40 min-w-0 flex-none" value={source.gain} min={0.05} max={20} step={0.05} onChange={(gain) => setSource(index, { gain })} />
 								{CHANNELS.map((channel) => (
-									<Cell key={channel}>
-										<NumberInput className="w-40 min-w-0 flex-none" value={weightOf(composition, channel, index)} min={0} max={10} step={0.1} onChange={(weight) => edit(withWeight(composition, channel, index, weight))} />
-									</Cell>
+									<NumberInput key={channel} label={CHANNEL_LABELS[channel]} className="w-40 min-w-0 flex-none" value={weightOf(composition, channel, index)} min={0} max={10} step={0.1} onChange={(weight) => edit(withWeight(composition, channel, index, weight))} />
 								))}
-								<Cell>
-									<Button variant="secondary" onClick={() => edit(withoutSource(composition, index))}>
-										Remove
-									</Button>
-								</Cell>
-							</Row>
+								<Button variant="secondary" onClick={() => edit(withoutSource(composition, index))}>
+									Remove
+								</Button>
+							</div>
 						)
 					})}
-				</Table>
+				</div>
 			)}
 			{composition && composition.sources.length > 0 && (
 				<div className="flex flex-wrap items-end gap-3">

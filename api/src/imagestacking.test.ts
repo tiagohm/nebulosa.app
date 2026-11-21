@@ -730,7 +730,7 @@ describe('integration and publication', () => {
 		const { projectId, folder } = await analyzed(stacking)
 
 		const started = await stacking.startRun(projectId, { token: 'first', recipe: { method: 'sigma-clip' } })
-		expect(started).toMatchObject({ type: 'integration', state: 'integrating', found: 3 })
+		expect(started).toMatchObject({ type: 'integration', state: 'integrating', found: 3, recipe: { method: 'sigma-clip' }, memoryBudget: 2 * 1024 ** 3 })
 		expect(started).not.toHaveProperty('token')
 		expect(await settled(stacking, started.jobId)).toMatchObject({ state: 'completed', measured: 3, published: 1 })
 		expect((await stacking.startRun(projectId, { token: 'first' })).jobId).toBe(started.jobId)

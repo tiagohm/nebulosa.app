@@ -6,23 +6,24 @@ import { imagesState, openImage } from '../../images/images'
 import { useActiveTimeZone } from '../../location/useLocation'
 import { navigate, routeState } from '../../shell/route'
 import { EmptyState } from '../../shell/WorkspaceLayout'
-import { Actions } from '../../ui/Actions'
 import { Button } from '../../ui/Button'
 import { ConfirmButton } from '../../ui/ConfirmButton'
 import { Notice } from '../../ui/Notice'
 import { NumberInput } from '../../ui/NumberInput'
+import { SectionHeading } from '../../ui/SectionHeading'
 import { Select } from '../../ui/Select'
 import { Slider } from '../../ui/Slider'
 import { StatusBadge } from '../../ui/StatusBadge'
 import { Cell, Row, Table } from '../../ui/Table'
-import { PRODUCT_LABELS, PRODUCT_TONES } from './format'
+import { compositeText, PRODUCT_LABELS, PRODUCT_TONES } from './format'
+import { JobProgress } from './JobProgress'
 import { COMPOSITION_PRESETS, CUSTOM_PRESET, resolvePreset, weightOf, withoutSource, withWeight } from './presets'
 import { cancelStackingComposition, deleteStackingComposite, imageStackingRuntime, jobEnded, loadCompositionPreview, loadCompositionValidation, loadStackingComposite, startStackingComposition } from './projects'
 
 // Color composition of an Image Stacking project: a preset or a hand-edited mix of its linear masters into RGB, with an
-// optional luminance, previewed as the server stretches it, validated by the server, and composed into a linear
-// composite. No light frame is read; changing the mix never integrates again. Composites are listed with their state,
-// opened in Images, and deleted.
+// optional luminance, previewed first as the server stretches it, validated by the server, and composed into a linear
+// composite. No light frame is read; changing the mix never integrates again. Composites are listed by their preset and
+// masters with their state, opened in Images, and deleted.
 
 // Output channels, in the order of the weight columns.
 const CHANNELS = ['red', 'green', 'blue'] as const
@@ -72,6 +73,11 @@ export function CompositionView({ projectId }: { readonly projectId: string }) {
 					masters,
 				)
 	const differs = items.length > 0 && validation !== undefined && items[0].fingerprint !== validation.fingerprint
+	// Name of the mix shown, for the caption and the text of its preview.
+	const mixName = composition ? compositeText({ composition }, masters) : preset
+	// Why Compose is unavailable, as its tooltip.
+	const blocker = validation?.issues.find((issue) => issue.severity === 'blocker')
+	const reason = !composition ? 'Choose a preset or add a master' : !validation ? 'The mix is being checked' : !validation.ready ? (blocker?.message ?? 'The mix cannot be composed') : validation.reusedCompositeId !== undefined ? 'This mix is already published' : undefined
 
 	// Resolves the preset chosen against the masters, again when they change; Custom keeps the composition shown.
 	useEffect(() => {
@@ -140,12 +146,18 @@ export function CompositionView({ projectId }: { readonly projectId: string }) {
 	return (
 		<>
 			<div className="flex flex-wrap items-end gap-3">
-				<Select label="Preset" className="w-36" options={[...COMPOSITION_PRESETS.map((item) => item.name), CUSTOM_PRESET]} value={preset} onChange={setPreset} />
+				<Select label="Preset" className="w-36 flex-none" options={[...COMPOSITION_PRESETS.map((item) => item.name), CUSTOM_PRESET]} value={preset} onChange={setPreset} />
 				<Button variant="secondary" onClick={addSource}>
 					Add Master
 				</Button>
 			</div>
 			{resolution && 'missing' in resolution && <Notice error>{`${preset} needs a mono master of ${resolution.missing.join(', ')}. Integrate those filters, or choose another preset.`}</Notice>}
+			{preview && composition && (
+				<figure className="m-0 flex w-fit max-w-full flex-col gap-1.5 self-start">
+					<img src={preview} alt={`Preview of ${mixName}`} className="max-h-96 w-fit max-w-full rounded-md border border-line-100" />
+					<figcaption className="text-xs leading-4 text-ink-300">{`${mixName} · stretched for display; the composite stays linear`}</figcaption>
+				</figure>
+			)}
 			{composition && composition.sources.length > 0 && (
 				<Table className="shrink-0" columns={['Master', 'Channel', 'Gain', 'Red', 'Green', 'Blue', '']}>
 					{composition.sources.map((source, index) => {
@@ -155,7 +167,7 @@ export function CompositionView({ projectId }: { readonly projectId: string }) {
 							<Row key={`${index}:${source.productId}`}>
 								<Cell>
 									<Select
-										className="w-56"
+										className="w-52 flex-none"
 										options={masters.map((product) => product.productId)}
 										value={source.productId}
 										format={(id) => {
@@ -167,17 +179,17 @@ export function CompositionView({ projectId }: { readonly projectId: string }) {
 								</Cell>
 								<Cell>
 									{master && master.channels > 1 ? (
-										<Select className="w-28" options={PLANE_LABELS.slice(0, master.channels).map((_, plane) => String(plane))} value={String(source.plane)} format={(plane) => PLANE_LABELS[Number(plane)]} onChange={(plane) => setSource(index, { plane: Number(plane) })} />
+										<Select className="w-24 flex-none" options={PLANE_LABELS.slice(0, master.channels).map((_, plane) => String(plane))} value={String(source.plane)} format={(plane) => PLANE_LABELS[Number(plane)]} onChange={(plane) => setSource(index, { plane: Number(plane) })} />
 									) : (
 										'Mono'
 									)}
 								</Cell>
 								<Cell>
-									<NumberInput className="w-28" value={source.gain} min={0.05} max={20} step={0.05} onChange={(gain) => setSource(index, { gain })} />
+									<NumberInput className="w-40 min-w-0 flex-none" value={source.gain} min={0.05} max={20} step={0.05} onChange={(gain) => setSource(index, { gain })} />
 								</Cell>
 								{CHANNELS.map((channel) => (
 									<Cell key={channel}>
-										<NumberInput className="w-28" value={weightOf(composition, channel, index)} min={0} max={10} step={0.1} onChange={(weight) => edit(withWeight(composition, channel, index, weight))} />
+										<NumberInput className="w-40 min-w-0 flex-none" value={weightOf(composition, channel, index)} min={0} max={10} step={0.1} onChange={(weight) => edit(withWeight(composition, channel, index, weight))} />
 									</Cell>
 								))}
 								<Cell>
@@ -194,7 +206,7 @@ export function CompositionView({ projectId }: { readonly projectId: string }) {
 				<div className="flex flex-wrap items-end gap-3">
 					<Select
 						label="Luminance"
-						className="w-56"
+						className="w-56 max-w-full flex-none"
 						options={['', ...composition.sources.map((_, index) => String(index))]}
 						value={composition.luminance === undefined ? '' : String(composition.luminance.source)}
 						format={(option) => {
@@ -209,10 +221,10 @@ export function CompositionView({ projectId }: { readonly projectId: string }) {
 					/>
 					{composition.luminance && (
 						<>
-							<Slider label={`Luminance weight ${formatPercent(composition.luminance.alpha)}`} className="w-56" value={composition.luminance.alpha} min={0} max={1} step={0.05} onChange={(alpha) => edit({ ...composition, luminance: { ...composition.luminance!, alpha } })} />
+							<Slider label={`Luminance weight ${formatPercent(composition.luminance.alpha)}`} className="w-56 max-w-full flex-none" value={composition.luminance.alpha} min={0} max={1} step={0.05} onChange={(alpha) => edit({ ...composition, luminance: { ...composition.luminance!, alpha } })} />
 							<Select
 								label="Match"
-								className="w-44"
+								className="w-44 flex-none"
 								options={['robustLinear', 'off'] as const}
 								value={composition.luminance.match}
 								format={(match) => (match === 'off' ? 'As Integrated' : 'Background and Scale')}
@@ -222,55 +234,63 @@ export function CompositionView({ projectId }: { readonly projectId: string }) {
 					)}
 				</div>
 			)}
-			<Notice>Each channel is the weighted mean of its masters after their gain. A luminance master replaces the luminance of the mix by its weight and keeps the color ratios. The composite stays linear and is cropped to the pixels every master covers; the preview alone is stretched.</Notice>
+			<Notice className="max-w-prose">
+				Each channel is the weighted mean of its masters after their gain. A luminance master replaces the luminance of the mix by its weight and keeps the color ratios. The composite stays linear and is cropped to the pixels every master covers; the preview alone is stretched.
+			</Notice>
 			{validation?.issues.map((issue) => (
 				<Notice key={`${issue.code}:${issue.message}`} error={issue.severity === 'blocker'}>
 					{issue.message}
 				</Notice>
 			))}
-			{preview && composition && <img src={preview} alt="" className="max-h-96 w-fit max-w-full self-start rounded-md border border-line-100" />}
 			{running ? (
-				<div className="flex flex-wrap items-center gap-3">
-					<Notice>{`Composing · ${job.rowsCombined ?? 0} of ${job.rowsTotal ?? 0} rows`}</Notice>
-					<Button variant="secondary" disabled={pending[`compose:${job.jobId}`] === true} onClick={() => void cancelStackingComposition(imageStackingRuntime, job.jobId)}>
-						Cancel
-					</Button>
-				</div>
+				<JobProgress job={job} cancelLabel="Cancel Composition" cancelling={pending[`compose:${job.jobId}`] === true} onCancel={() => void cancelStackingComposition(imageStackingRuntime, job.jobId)} />
 			) : (
-				<Actions>
-					<Button disabled={!composition || !validation?.ready || validation.reusedCompositeId !== undefined || pending.compose === true} onClick={() => composition && void startStackingComposition(imageStackingRuntime, projectId, composition)}>
+				<div className="flex flex-wrap items-center gap-3">
+					<Button disabled={reason !== undefined || pending.compose === true} title={reason} onClick={() => composition && void startStackingComposition(imageStackingRuntime, projectId, composition)}>
 						Compose
 					</Button>
-					{validation?.reusedCompositeId !== undefined && <Notice>This composition is already published below.</Notice>}
-					{differs && validation.reusedCompositeId === undefined && <StatusBadge tone="neutral" label="Differs From The Latest Composite" />}
-				</Actions>
+					{validation?.reusedCompositeId !== undefined && <Notice>This mix is already published below.</Notice>}
+					{differs && validation.reusedCompositeId === undefined && <Notice>This mix differs from the latest composite.</Notice>}
+				</div>
 			)}
 			{errors.compose && <Notice error>{errors.compose}</Notice>}
+			{errors[`compose:${job?.jobId}`] && <Notice error>{errors[`compose:${job?.jobId}`]}</Notice>}
 			{job?.state === 'failed' && job.error && <Notice error>{job.error}</Notice>}
 			{items.length > 0 && (
-				<Table className="shrink-0" columns={['Composite', 'Size', 'Grid', 'Published', 'State', '']}>
-					{items.map((composite) => (
-						<Row key={composite.compositeId}>
-							<Cell>{composite.composition.preset}</Cell>
-							<Cell>{formatByteSize(composite.bytes)}</Cell>
-							<Cell>{`${composite.width}×${composite.height} at ${composite.left}, ${composite.top}`}</Cell>
-							<Cell>{formatZonedDateTime(composite.createdAt, timeZone, false)}</Cell>
-							<Cell>
-								<StatusBadge tone={PRODUCT_TONES[composite.status]} label={PRODUCT_LABELS[composite.status]} />
-							</Cell>
-							<Cell>
-								<div className="flex items-center gap-2">
-									<Button disabled={composite.status === 'unavailable'} onClick={() => void open(composite.compositeId)}>
-										Open
-									</Button>
-									<ConfirmButton title="Delete this composite?" message="Its file is deleted. The masters it mixed stay." confirmLabel="Delete" disabled={pending[`composite:${composite.compositeId}`] === true} onConfirm={() => void deleteStackingComposite(imageStackingRuntime, composite.compositeId)}>
-										Delete
-									</ConfirmButton>
-								</div>
-							</Cell>
-						</Row>
-					))}
-				</Table>
+				<>
+					<SectionHeading as="h2" className="mt-2">
+						Composites
+					</SectionHeading>
+					<Table className="shrink-0" columns={['Composite', 'Size', 'Grid', 'Published', 'State', '']}>
+						{items.map((composite) => (
+							<Row key={composite.compositeId}>
+								<Cell>{compositeText(composite, masters)}</Cell>
+								<Cell>{formatByteSize(composite.bytes)}</Cell>
+								<Cell>{`${composite.width}×${composite.height} at ${composite.left}, ${composite.top}`}</Cell>
+								<Cell>{formatZonedDateTime(composite.createdAt, timeZone, false)}</Cell>
+								<Cell>
+									<StatusBadge tone={PRODUCT_TONES[composite.status]} label={PRODUCT_LABELS[composite.status]} />
+								</Cell>
+								<Cell>
+									<div className="flex items-center gap-2">
+										<Button variant="secondary" disabled={composite.status === 'unavailable'} title={composite.status === 'unavailable' ? 'Its file is missing' : undefined} onClick={() => void open(composite.compositeId)}>
+											Open
+										</Button>
+										<ConfirmButton
+											title="Delete this composite?"
+											message="Its file is deleted. The masters it mixed stay."
+											confirmLabel="Delete"
+											disabled={pending[`composite:${composite.compositeId}`] === true}
+											onConfirm={() => void deleteStackingComposite(imageStackingRuntime, composite.compositeId)}
+										>
+											Delete
+										</ConfirmButton>
+									</div>
+								</Cell>
+							</Row>
+						))}
+					</Table>
+				</>
 			)}
 		</>
 	)

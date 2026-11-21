@@ -1,4 +1,24 @@
-import type { StackingJobSummary, StackingCohort, StackingFinding, StackingFindingSeverity, StackingFrameSummary, StackingImportCandidate, StackingMasterCandidate, StackingProductStatus, StackingRecipe, StackingRegistration, StackingRole, StackingSettings } from 'api'
+import type {
+	IntegrationPlan,
+	StackingCalibration,
+	StackingCohort,
+	StackingCompositeSummary,
+	StackingFilterGroup,
+	StackingFinding,
+	StackingFindingSeverity,
+	StackingFrameSummary,
+	StackingImportCandidate,
+	StackingJobSummary,
+	StackingMasterCandidate,
+	StackingProductStatus,
+	StackingProductSummary,
+	StackingProjectSummary,
+	StackingRecipe,
+	StackingRegistration,
+	StackingRole,
+	StackingSettings,
+	StackingValidation,
+} from 'api'
 import { MISSING } from '../../format'
 import type { StatusTone } from '../../ui/StatusBadge'
 import { masterName } from '../calibrationlibrary/library'
@@ -7,14 +27,122 @@ import { masterName } from '../calibrationlibrary/library'
 // commit would add, and the settings a threshold form describes. Nothing here decides a role, a filter, a calibration, or
 // whether a frame is stacked; the server does.
 
-// Sections of the tool.
-export const STACKING_SECTIONS = ['filters', 'frames', 'calibration', 'quality', 'integration', 'results', 'composition'] as const
+// Steps of the tool, in the order a stack goes through them.
+export const STACKING_SECTIONS = ['frames', 'calibration', 'quality', 'integration', 'composition'] as const
 
-// Section of the tool.
+// Step of the tool.
 export type StackingSection = (typeof STACKING_SECTIONS)[number]
 
-// Label of each section.
-export const SECTION_LABELS: Readonly<Record<StackingSection, string>> = { filters: 'Filters', frames: 'Frames', calibration: 'Calibration', quality: 'Quality', integration: 'Integration', results: 'Results', composition: 'Color' }
+// Label of each step.
+export const SECTION_LABELS: Readonly<Record<StackingSection, string>> = { frames: 'Frames', calibration: 'Calibration', quality: 'Quality', integration: 'Integration', composition: 'Color' }
+
+// Returns whether a text, such as a segment of the URL, names a step.
+export function isStackingSection(value: string | undefined): value is StackingSection {
+	return (STACKING_SECTIONS as readonly (string | undefined)[]).includes(value)
+}
+
+// Where a step stands, in a word with a tone; absent while what it depends on is not known yet.
+export interface StepState {
+	// Tone of the word.
+	readonly tone: StatusTone
+	// The state in words.
+	readonly label: string
+}
+
+// What the steps of a project stand on, as the server answers it.
+export interface StepInputs {
+	// Project shown, with its counts.
+	readonly project: Pick<StackingProjectSummary, 'lights' | 'unclassified' | 'unavailable'>
+	// Filter groups, cohorts, findings, masters, and composites, each absent until fetched.
+	readonly groups?: readonly Pick<StackingFilterGroup, 'key' | 'usable'>[]
+	readonly cohorts?: readonly Pick<StackingCohort, 'calibration'>[]
+	readonly validation?: Pick<StackingValidation, 'findings'>
+	readonly products?: readonly Pick<StackingProductSummary, 'groupKey' | 'status'>[]
+	readonly composites?: readonly Pick<StackingCompositeSummary, 'status'>[]
+	// Whether an analysis, a run, or a composition of the project is working.
+	readonly running: Readonly<Partial<Record<'analysis' | 'integration' | 'composition', boolean>>>
+	// Whether the project was registered by an analysis.
+	readonly analyzed: boolean
+}
+
+// State of a running step: the one Ember word of the steps.
+const RUNNING: StepState = { tone: 'active', label: 'Running' }
+
+// Returns where each step of a project stands, so the operator sees what is done, partial, stale, or working without
+// visiting every step. Frames are ready when every light has a role and a file; calibration is the worst state of its
+// cohorts; quality is stale while the server asks for an analysis; integration is ready when every filter with usable
+// lights has a ready master; color is composed when its latest composite is ready.
+export function stepStates({ project, groups, cohorts, validation, products, composites, running, analyzed }: StepInputs): Readonly<Record<StackingSection, StepState | undefined>> {
+	const frames: StepState = project.lights === 0 ? { tone: 'muted', label: 'No Lights' } : project.unclassified > 0 || project.unavailable > 0 ? { tone: 'warning', label: 'Needs Review' } : { tone: 'success', label: `${project.lights} ${project.lights === 1 ? 'Light' : 'Lights'}` }
+
+	let calibration: StepState | undefined
+	if (cohorts) {
+		const states = cohorts.map((cohort) => cohortCalibration(cohort.calibration ?? {}).label)
+		if (states.length === 0) calibration = { tone: 'muted', label: 'No Cohorts' }
+		else if (states.includes('Needs a Dark or Bias')) calibration = { tone: 'danger', label: 'Blocked' }
+		else if (states.every((state) => state === 'Calibrated')) calibration = { tone: 'success', label: 'Calibrated' }
+		else if (states.every((state) => state === 'Not Calibrated')) calibration = { tone: 'muted', label: 'Not Calibrated' }
+		else calibration = { tone: 'warning', label: 'Partial' }
+	}
+
+	let quality: StepState | undefined
+	if (running.analysis) quality = RUNNING
+	else if (!analyzed) quality = { tone: 'muted', label: 'Not Measured' }
+	else if (validation?.findings.some((finding) => finding.code === 'analysisStale')) quality = { tone: 'warning', label: 'Stale' }
+	else if (validation?.findings.some((finding) => finding.code === 'measurementFailed' || finding.code === 'registrationFailed')) quality = { tone: 'warning', label: 'Needs Review' }
+	else if (validation) quality = { tone: 'success', label: 'Measured' }
+
+	let integration: StepState | undefined
+	if (running.integration) integration = RUNNING
+	else if (products && groups) {
+		const ready = new Set(products.filter((product) => product.status === 'ready').map((product) => product.groupKey))
+		const wanted = groups.filter((group) => group.usable > 0)
+		if (products.length === 0) integration = { tone: 'muted', label: 'Not Run' }
+		else if (products.some((product) => product.status !== 'ready')) integration = { tone: 'warning', label: 'Stale' }
+		else if (wanted.some((group) => !ready.has(group.key))) integration = { tone: 'warning', label: 'Partial' }
+		else integration = { tone: 'success', label: 'Ready' }
+	}
+
+	let composition: StepState | undefined
+	if (running.composition) composition = RUNNING
+	else if (composites && products) {
+		if (products.length === 0) composition = { tone: 'muted', label: 'No Masters' }
+		else if (composites.length === 0) composition = { tone: 'muted', label: 'Not Composed' }
+		else if (composites[0].status !== 'ready') composition = { tone: 'warning', label: 'Stale' }
+		else composition = { tone: 'success', label: 'Composed' }
+	}
+
+	return { frames, calibration, quality, integration, composition }
+}
+
+// Returns how far a running analysis, run, or composition went: the stage in words with its counts, and the share done
+// from 0 to 1, absent while it is not known (a run reading the frames of a filter before combining its rows).
+export function jobProgress(job: StackingJobSummary): { readonly label: string; readonly fraction?: number } {
+	const share = (done: number | undefined, total: number | undefined) => (total ? Math.min(1, (done ?? 0) / total) : undefined)
+
+	if (job.type === 'analysis') {
+		if (job.registrationTotal !== undefined) return { label: `Registering frames · ${job.registered ?? 0} of ${job.registrationTotal}`, fraction: share(job.registered, job.registrationTotal) }
+		return { label: `Measuring frames · ${job.measured ?? 0} of ${job.found}${job.failures ? ` · ${job.failures} not measured` : ''}`, fraction: share(job.measured, job.found) }
+	}
+
+	if (job.type === 'integration') {
+		const rows = job.rowsTotal ? ` · ${job.rowsCombined ?? 0} of ${job.rowsTotal} rows` : ''
+		return { label: `Integrating ${job.group ?? 'frames'} · ${job.measured ?? 0} of ${job.found} frames read${rows} · ${job.published ?? 0} published`, fraction: share(job.rowsCombined, job.rowsTotal) }
+	}
+
+	if (job.type === 'composition') return { label: `Composing · ${job.rowsCombined ?? 0} of ${job.rowsTotal ?? 0} rows`, fraction: share(job.rowsCombined, job.rowsTotal) }
+	return { label: `Reading headers · ${job.found} files` }
+}
+
+// Returns how a cohort is calibrated with the masters chosen for it, in a word with a tone. A flat divides what is left
+// once the pedestal is removed, so a flat without a dark or a bias cannot be stacked.
+export function cohortCalibration(calibration: StackingCalibration): StepState {
+	const pedestal = calibration.dark !== undefined || calibration.bias !== undefined
+	if (pedestal && calibration.flat) return { tone: 'success', label: 'Calibrated' }
+	if (calibration.flat) return { tone: 'danger', label: 'Needs a Dark or Bias' }
+	if (pedestal) return { tone: 'warning', label: 'Partially Calibrated' }
+	return { tone: 'muted', label: 'Not Calibrated' }
+}
 
 // Label of each role.
 export const ROLE_LABELS: Readonly<Record<StackingRole, string>> = { light: 'Light', unclassified: 'Unclassified' }
@@ -138,9 +266,11 @@ export function selectionFields(selection: StackingSettings['selection']): Recor
 	return { minStars, minMedianSNR, maxMedianHFD, maxMedianEccentricity, maxBackground }
 }
 
-// Text of a measured value with a precision; a missing or unbounded value is a dash. JSON writes Infinity as null.
-export function metricText(value: number | null | undefined, digits: number = 2) {
-	return value === null || value === undefined || !Number.isFinite(value) ? MISSING : value.toFixed(digits)
+// Text of a measured value with a precision and an optional unit; a missing or unbounded value is a dash. JSON writes
+// Infinity as null.
+export function metricText(value: number | null | undefined, digits: number = 2, unit?: string) {
+	if (value === null || value === undefined || !Number.isFinite(value)) return MISSING
+	return unit ? `${value.toFixed(digits)} ${unit}` : value.toFixed(digits)
 }
 
 // Text of a registration: the shift in pixels and the rotation in degrees, or why it failed.
@@ -181,6 +311,34 @@ export const METHOD_LABELS: Readonly<Record<StackingRecipe['method'], string>> =
 
 // Methods whose rejection limits are set in standard deviations.
 export const SIGMA_METHODS: ReadonlySet<StackingRecipe['method']> = new Set(['weighted-sigma-clip', 'sigma-clip'])
+
+// Methods that reject outlying pixels, which need several frames of a filter to tell an outlier from the signal.
+export const REJECTION_METHODS: ReadonlySet<StackingRecipe['method']> = new Set(['weighted-sigma-clip', 'sigma-clip', 'winsorized-mean', 'percentile-clip-average', 'min-max-average'])
+
+// Fewest frames of a filter a rejection method can find outliers among.
+export const REJECTION_MIN_FRAMES = 3
+
+// Text of a recipe in one line: its combination, with the sigma limits of a sigma method, and its weighting.
+export function recipeText(recipe: Pick<StackingRecipe, 'method' | 'weighting' | 'sigmaLower' | 'sigmaUpper'>) {
+	const sigma = SIGMA_METHODS.has(recipe.method) ? ` ${recipe.sigmaLower}/${recipe.sigmaUpper} σ` : ''
+	return `${METHOD_LABELS[recipe.method]}${sigma} · ${WEIGHTING_LABELS[recipe.weighting]} weights`
+}
+
+// Text of how a filter is combined within the memory budget: all in memory, or on disk a number of rows at a time.
+export function samplesText(plan: Pick<IntegrationPlan, 'mode' | 'stripRows'>) {
+	return plan.mode === 'online' ? 'In memory' : `On disk, ${plan.stripRows} ${plan.stripRows === 1 ? 'row' : 'rows'} at a time`
+}
+
+// Returns masters by filter name, and the newest first within a filter, the order the filter groups are listed in.
+export function byFilter<T extends Pick<StackingProductSummary, 'name' | 'createdAt'>>(products: readonly T[]) {
+	return [...products].sort((a, b) => a.name.localeCompare(b.name) || b.createdAt - a.createdAt)
+}
+
+// Name of a composite: its preset and the filters of the masters it mixes, in the order of its sources.
+export function compositeText(composite: Pick<StackingCompositeSummary, 'composition'>, masters: readonly Pick<StackingProductSummary, 'productId' | 'name'>[]) {
+	const names = composite.composition.sources.map((source) => masters.find((master) => master.productId === source.productId)?.name ?? 'Deleted')
+	return names.length === 0 ? composite.composition.preset : `${composite.composition.preset} · ${names.join(' + ')}`
+}
 
 // Weighting modes and their labels.
 export const WEIGHTINGS = ['quality', 'snr', 'inverse-hfd', 'stars', 'none'] as const satisfies readonly StackingRecipe['weighting'][]

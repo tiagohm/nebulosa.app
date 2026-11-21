@@ -405,6 +405,9 @@ export interface StackingJobSummary {
 	readonly rowsCombined?: number
 	readonly rowsTotal?: number
 	readonly published?: number
+	// Recipe a run integrates with and its memory budget, in bytes, so every tab shows what the run works with.
+	readonly recipe?: StackingRecipe
+	readonly memoryBudget?: number
 	// Whether the limit on files stopped a scan.
 	readonly truncated: boolean
 	// Frames that entered the project once committed.
@@ -1611,7 +1614,22 @@ export class ImageStacking implements Disposable {
 		const now = Date.now()
 		const jobId = Bun.randomUUIDv7()
 		const pending = plan.groups.filter((group) => group.reusedProductId === undefined)
-		const job = this.#saveJob({ jobId, projectId, type: 'integration', token: request.token, state: 'integrating', createdAt: now, updatedAt: now, found: pending.reduce((sum, group) => sum + group.frames, 0), bytes: 0, truncated: false, measured: 0, published: 0 })
+		const job = this.#saveJob({
+			jobId,
+			projectId,
+			type: 'integration',
+			token: request.token,
+			state: 'integrating',
+			createdAt: now,
+			updatedAt: now,
+			found: pending.reduce((sum, group) => sum + group.frames, 0),
+			bytes: 0,
+			truncated: false,
+			measured: 0,
+			published: 0,
+			recipe: plan.recipe,
+			memoryBudget: plan.memoryBudget,
+		})
 
 		if (pending.length === 0) {
 			const ended = this.#saveJob(job, { state: 'completed' })

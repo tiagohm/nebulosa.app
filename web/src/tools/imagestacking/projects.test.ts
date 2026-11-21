@@ -4,7 +4,7 @@ import { proxy } from 'valtio'
 import { cancelStackingRun, framesQuery, handleImageStackingEvent, type ImageStackingRuntime, jobEnded, loadStackingPreflight, startStackingRun, loadStackingFrames, loadStackingProject, refreshImageStacking, startStackingAnalysis, updateStackingCohort, updateStackingFrame } from './projects'
 
 function runtime() {
-	return proxy<ImageStackingRuntime>({ jobs: {}, changes: 0, loading: false, pending: {}, errors: {} })
+	return proxy<ImageStackingRuntime>({ jobs: {}, changes: 0, loading: false, pending: {}, errors: {}, drafts: {} })
 }
 
 function snapshot(epoch: string, revision: number, jobs: readonly StackingJobSummary[] = []): ImageStackingSnapshot {

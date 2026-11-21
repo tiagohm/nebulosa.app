@@ -3,7 +3,7 @@ import { proxy } from 'valtio'
 // Navigation state of the tab: the active workspace, and for Tools the standalone tool shown. The URL path is the
 // source of truth, so each tab navigates independently and a reload reopens the same context.
 // Paths are /images, /sky, /tools, /tools/<tool>, /tools/calculator/<calculator id>, /tools/solar-eclipse-map/<eclipse id>,
-// /tools/lunar-eclipse-map/<eclipse id>, /tools/calibration-library/<group id>, /tools/image-stacking/<project id>,
+// /tools/lunar-eclipse-map/<eclipse id>, /tools/calibration-library/<group id>, /tools/image-stacking/<project id>/<step>,
 // /tools/artificial-satellites/<NORAD id>, /tools/observing-planner/<plan id>, /tools/framing/<framing id>, the Equipment
 // Control page
 // /equipment, /equipment/<device id>, /equipment/<device id>/indi for the INDI properties of the device, and
@@ -64,6 +64,9 @@ export interface ToolsRoute {
 	readonly group?: string
 	// Id of the project Image Stacking shows; absent for its own choice and for every other tool.
 	readonly project?: string
+	// Step of the project Image Stacking shows, as the URL names it (the tool keeps only a step it knows); absent for its
+	// first step and for every other tool.
+	readonly stackingStep?: string
 	// NORAD catalog number of the satellite Artificial Satellites shows; absent for its own choice and for every other
 	// tool.
 	readonly satellite?: string
@@ -172,7 +175,7 @@ export function settingsSection(route: SettingsRoute): SettingsSectionId {
 
 // Returns the route of a URL path. An unknown workspace gives DEFAULT_ROUTE; an unknown tool opens the Tools
 // catalog; an unknown Settings section opens the first one; extra segments are ignored, but for the site of Observing
-// Sites, the kind and item of Equipment Catalog, the eclipse id of the Solar and Lunar Eclipse Maps, the group of the Calibration Library, the project of Image
+// Sites, the kind and item of Equipment Catalog, the eclipse id of the Solar and Lunar Eclipse Maps, the group of the Calibration Library, the project and step of Image
 // Stacking, the satellite of Artificial Satellites, the plan of the Observing Planner, the framing of Framing, and the
 // calculator of the Calculator.
 export function parseRoute(pathname: string): Route {
@@ -190,7 +193,7 @@ export function parseRoute(pathname: string): Route {
 	if (workspace === 'tools') {
 		if (!isToolId(first)) return { workspace }
 		if (first === 'calibration-library' && second) return { workspace, tool: first, group: decodeURIComponent(second) }
-		if (first === 'image-stacking' && second) return { workspace, tool: first, project: decodeURIComponent(second) }
+		if (first === 'image-stacking' && second) return { workspace, tool: first, project: decodeURIComponent(second), ...(third && { stackingStep: third }) }
 		if (first === 'artificial-satellites' && second) return { workspace, tool: first, satellite: decodeURIComponent(second) }
 		if (first === 'observing-planner' && second) return { workspace, tool: first, plan: decodeURIComponent(second) }
 		if (first === 'meteor-showers' && second) return { workspace, tool: first, meteorShower: decodeURIComponent(second) }
@@ -205,7 +208,7 @@ export function parseRoute(pathname: string): Route {
 // Returns the canonical URL path of a route.
 export function routePath(route: Route): string {
 	if (route.workspace === 'tools' && route.tool === 'calibration-library' && route.group) return `/tools/${route.tool}/${encodeURIComponent(route.group)}`
-	if (route.workspace === 'tools' && route.tool === 'image-stacking' && route.project) return `/tools/${route.tool}/${encodeURIComponent(route.project)}`
+	if (route.workspace === 'tools' && route.tool === 'image-stacking' && route.project) return `/tools/${route.tool}/${encodeURIComponent(route.project)}${route.stackingStep ? `/${encodeURIComponent(route.stackingStep)}` : ''}`
 	if (route.workspace === 'tools' && route.tool === 'artificial-satellites' && route.satellite) return `/tools/${route.tool}/${encodeURIComponent(route.satellite)}`
 	if (route.workspace === 'tools' && route.tool === 'observing-planner' && route.plan) return `/tools/${route.tool}/${encodeURIComponent(route.plan)}`
 	if (route.workspace === 'tools' && route.tool === 'meteor-showers' && route.meteorShower) return `/tools/${route.tool}/${encodeURIComponent(route.meteorShower)}`

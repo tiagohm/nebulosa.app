@@ -18,6 +18,7 @@ import type {
 	StackingProductDetail,
 	StackingProductSummary,
 	StackingProjectDetail,
+	StackingRecipe,
 	StackingRole,
 	StackingRunRequest,
 	StackingSettings,
@@ -77,10 +78,20 @@ export interface ImageStackingRuntime {
 	pending: Record<string, boolean>
 	// Why a command of this tab failed, by key; cleared by its next command.
 	errors: Record<string, string>
+	// Recipe and memory an operator edits for the next run of each project, by project id, kept while the tab lives so
+	// leaving Integration and coming back keeps them.
+	drafts: Record<string, IntegrationDraft>
+}
+
+// Recipe and memory of the next run of a project, as an operator edits them.
+export interface IntegrationDraft {
+	readonly recipe: StackingRecipe
+	// Memory of the integration, in GiB (0.25 to 64).
+	readonly memory: number
 }
 
 // Image Stacking state of the tab.
-export const imageStackingRuntime = proxy<ImageStackingRuntime>({ jobs: {}, changes: 0, loading: false, pending: {}, errors: {} })
+export const imageStackingRuntime = proxy<ImageStackingRuntime>({ jobs: {}, changes: 0, loading: false, pending: {}, errors: {}, drafts: {} })
 
 // Base of the routes of Image Stacking.
 const BASE_URL = '/api/image-stacking'
@@ -90,6 +101,11 @@ export const STACKING_PAGE_SIZE = 50
 
 // Number of the latest request of each kind, so a late response is dropped.
 const requests: Record<string, number> = {}
+
+// Keeps the recipe and memory an operator edits for the next run of a project.
+export function editStackingDraft(state: ImageStackingRuntime, projectId: string, draft: IntegrationDraft) {
+	state.drafts[projectId] = draft
+}
 
 // Returns whether a job ended.
 export function jobEnded(job: Pick<StackingJobSummary, 'state'>) {

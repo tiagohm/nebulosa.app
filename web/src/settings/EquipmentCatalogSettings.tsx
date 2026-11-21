@@ -187,6 +187,7 @@ function ItemList({ items, selected, onSelect, onAdd, wide, kinds, addLabel, emp
 			<List emptyText={emptyText} className="min-h-0 flex-1 overflow-y-auto p-2">
 				{items.map((entry) => (
 					<ListItem
+						opens
 						key={entry.id}
 						title={entry.name}
 						description={

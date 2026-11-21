@@ -69,7 +69,7 @@ export function DeviceSidebar({ groups, runtime, selected, onSelect }: DeviceLis
 						</>
 					)
 
-					return <ListItem key={group.hardwareId} title={group.name} description={description} selected={group === selected} onClick={() => onSelect(group)} />
+					return <ListItem opens key={group.hardwareId} title={group.name} description={description} selected={group === selected} onClick={() => onSelect(group)} />
 				})}
 			</List>
 		</aside>

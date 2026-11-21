@@ -29,7 +29,7 @@ export function ExternalToolsSidebar({ tools, selected, onSelect }: ExternalTool
 			<List emptyText="No external tools." className="min-h-0 flex-1 overflow-y-auto p-2">
 				{tools.map((tool) => {
 					const summary = summaryOf(tool)
-					return <ListItem key={tool.id} title={tool.name} description={capabilitiesOf(tool)} meta={<span className={summary.className}>{summary.label}</span>} selected={tool.id === selected} onClick={() => onSelect(tool.id)} />
+					return <ListItem opens key={tool.id} title={tool.name} description={capabilitiesOf(tool)} meta={<span className={summary.className}>{summary.label}</span>} selected={tool.id === selected} onClick={() => onSelect(tool.id)} />
 				})}
 			</List>
 		</aside>

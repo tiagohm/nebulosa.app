@@ -73,7 +73,6 @@ export function NotificationItem({ group: { record, ids, unreadIds }, available,
 					<span className={cn(LABEL_CLASS, LEVEL_ICON_CLASS[record.level])}>{LEVEL_TEXT[record.level]}</span>
 					{ids.length > 1 && <span className="text-ink-300 tabular-nums">×{ids.length}</span>}
 					{unread && <span className={cn(LABEL_CLASS, 'text-ink-100')}>New</span>}
-					{available && <span className="ml-auto text-ink-300 transition-colors duration-150 group-hover:text-ink-100 motion-reduce:transition-none">View</span>}
 				</span>
 				<span className={cn('text-sm leading-5 wrap-break-word', unread ? 'font-semibold text-ink-100' : 'font-medium text-ink-200')}>{record.title}</span>
 				<span className="text-xs leading-4 wrap-break-word text-ink-200">{record.message}</span>

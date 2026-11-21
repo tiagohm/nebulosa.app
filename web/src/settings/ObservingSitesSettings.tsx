@@ -122,7 +122,7 @@ function SiteList({ sites, activeId, selected, onSelect, onAdd, wide }: SiteList
 		<aside className="flex w-80 flex-none flex-col border-r border-line-100 bg-base-000">
 			<List emptyText="No observing sites." className="min-h-0 flex-1 overflow-y-auto p-2">
 				{sites.map((site) => (
-					<ListItem key={site.id} title={site.name} description={formatGeographic(site.latitude, site.longitude)} meta={site.id === activeId ? <span className="text-accent">Active</span> : site.timeZone} selected={site.id === selected} onClick={() => onSelect(site.id)} />
+					<ListItem opens key={site.id} title={site.name} description={formatGeographic(site.latitude, site.longitude)} meta={site.id === activeId ? <span className="text-accent">Active</span> : site.timeZone} selected={site.id === selected} onClick={() => onSelect(site.id)} />
 				))}
 			</List>
 			<div className="flex-none border-t border-line-100 p-2">

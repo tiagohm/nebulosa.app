@@ -232,6 +232,10 @@ describe('device chips', () => {
 		expect(domeChip(dome)).toEqual({ text: 'Open', tone: 'idle', moving: false, title: 'Azimuth 90.0° · shutter open' })
 		expect(domeChip({ ...dome, shutterState: 'CLOSED', slewing: true })).toMatchObject({ text: 'Moving Closed', moving: true, title: 'Moving · shutter closed' })
 		expect(domeChip({ ...dome, shutterState: 'OPENING' })).toMatchObject({ text: 'Opening', tone: 'active', moving: true })
+		// The driver's slewing covers the shutter too, so a shutter in motion alone is said once.
+		expect(domeChip({ ...dome, shutterState: 'OPENING', slewing: true })).toMatchObject({ text: 'Opening', tone: 'active', moving: true, title: 'Azimuth 90.0° · shutter opening' })
+		expect(domeChip({ ...dome, shutterState: 'CLOSING', slewing: true, parked: true }).text).toBe('Closing')
+		expect(domeChip({ ...dome, shutterState: 'OPENING', slewing: true }, ['shutter']).text).toBe('Opening')
 		expect(domeChip({ ...dome, shutterState: 'ERROR' }).tone).toBe('error')
 		expect(domeChip({ ...dome, hasShutter: false })).toMatchObject({ text: '', moving: false, title: 'Azimuth 90.0°' })
 	})

@@ -352,16 +352,21 @@ export function flatPanelChip(state: Pick<FlatPanelState, 'enabled' | 'intensity
 const SHUTTER_TEXT: Readonly<Partial<Record<DomeState['shutterState'], string>>> = { OPEN: 'Open', CLOSED: 'Closed', OPENING: 'Opening', CLOSING: 'Closing', ERROR: 'Error' }
 
 // Returns the reading of a dome: what its rotation is doing, when it is doing something, its shutter, when it has one,
-// and its azimuth in degrees.
+// and its azimuth in degrees. The driver's slewing is true while any part of the dome moves, the shutter included (as
+// the ASCOM Slewing property), so it means a rotation only while the shutter is still; a shutter opening or closing on
+// a dome that does not rotate is said once, as the status, rather than as a rotation followed by the shutter.
 export function domeChip(state: Pick<DomeState, 'slewing' | 'moving' | 'homing' | 'parking' | 'parked' | 'hasShutter' | 'shutterState' | 'azimuth'> | undefined, fields: readonly StatusChipField[] = DEFAULT_STATUS_CHIPS.DOME.fields): ChipValue {
 	if (!state) return { text: '--', tone: 'muted', moving: false, title: 'State not reported' }
 	const shutterMoving = state.hasShutter && (state.shutterState === 'OPENING' || state.shutterState === 'CLOSING')
 	const azimuth = formatDegrees(state.azimuth.value, 1)
-	const status = state.parking ? 'Parking' : state.homing ? 'Homing' : state.slewing || state.moving ? 'Moving' : state.parked ? 'Parked' : undefined
+	const rotation = state.parking ? 'Parking' : state.homing ? 'Homing' : state.moving || (state.slewing && !shutterMoving) ? 'Moving' : state.parked ? 'Parked' : undefined
+	const shutterText = state.hasShutter ? SHUTTER_TEXT[state.shutterState] : undefined
+	const shutterOnly = shutterMoving && (rotation === undefined || rotation === 'Parked')
 	const moving = shutterMoving || state.parking || state.homing || state.slewing || state.moving
 	const shutter = state.hasShutter ? ` · shutter ${state.shutterState.toLowerCase()}` : ''
 	const tone: StatusTone = state.hasShutter && state.shutterState === 'ERROR' ? 'error' : moving ? 'active' : 'idle'
-	return { ...chipReading({ status, shutter: state.hasShutter ? SHUTTER_TEXT[state.shutterState] : undefined, azimuth }, fields, tone), moving, title: `${status ?? `Azimuth ${azimuth}`}${shutter}` }
+	const readings = shutterOnly ? { status: shutterText, azimuth } : { status: rotation, shutter: shutterText, azimuth }
+	return { ...chipReading(readings, fields, tone), moving, title: `${rotation ?? `Azimuth ${azimuth}`}${shutter}` }
 }
 
 // Returns the reading of a guide camera: its running session (see guidingValue), or "Not guiding" while it does not

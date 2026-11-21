@@ -1,4 +1,5 @@
 import type { SpiceBody, SpiceCatalogItem, SpiceKernelSummary } from 'api'
+import { cn } from 'cn'
 import { type ChangeEvent, useEffect, useRef, useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { formatByteSize, MISSING } from '../../format'
@@ -121,7 +122,8 @@ export function SpiceKernelLibrary() {
 	return (
 		<WorkspaceLayout workspace="tools" title="SPICE Kernel Library" context={context} actions={actions} panel={panel}>
 			<div className="h-full overflow-y-auto bg-base-100">
-				<div className="mx-auto flex max-w-7xl flex-col gap-4 p-4">
+				{/* Bodies keeps the column to the height of the workspace, so its list scrolls in its own frame below the heading. */}
+				<div className={cn('mx-auto flex max-w-7xl flex-col gap-4 p-4', section === 'bodies' && 'h-full')}>
 					{state.errors.import && <Notice error>{state.errors.import}</Notice>}
 					{section === 'installed' && <Installed kernels={kernels} names={names} selected={selected} onSelect={setSelected} />}
 					{section === 'bodies' && <Bodies bodies={bodies} kernels={kernels} names={names} selected={selectedBody} onSelect={setSelectedBody} />}

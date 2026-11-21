@@ -15,10 +15,10 @@ import { LibrarySection } from './LibrarySection'
 import { setSpiceBodyPreference, spiceKernelsState, timelinePlacement, timelineSpan } from './spicekernels'
 
 // Bodies section of the SPICE Kernel Library tool: how the enabled kernels provide each body. Every body of the current
-// set is listed, filtered by its name or NAIF code, with the kernels that have it and the one preferred for it; a selected
-// body opens in the panel the control that prefers a kernel for it and its segments in selection order on a timeline,
-// where each is drawn over its coverage and filled where it is the selected one, so a segment hidden by another one is
-// visible as such.
+// set is listed, filtered by its name or NAIF code, in a frame that scrolls itself and fills the height of the workspace,
+// with the kernels that have it and the one preferred for it; a selected body opens in the panel the control that prefers
+// a kernel for it and its segments in selection order on a timeline, where each is drawn over its coverage and filled
+// where it is the selected one, so a segment hidden by another one is visible as such.
 
 // Value of the preference control that follows the load order alone.
 const LOAD_ORDER = ''
@@ -61,6 +61,7 @@ export function Bodies({ bodies, kernels, names, selected, onSelect }: BodiesPro
 	return (
 		<LibrarySection
 			title="Bodies"
+			className="min-h-0"
 			aside={
 				<div className="flex flex-wrap items-end gap-3">
 					<span className="pb-2 text-xs text-ink-300">{shown.length === bodies.length ? `${bodies.length} bodies` : `${shown.length} of ${bodies.length} bodies`}</span>

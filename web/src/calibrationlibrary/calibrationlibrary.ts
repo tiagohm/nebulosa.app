@@ -217,13 +217,31 @@ export async function loadFlatCorrections(request: ApiFetch = browserFetch): Pro
 	return pages.flatMap((page) => page?.items ?? [])
 }
 
-// Fetches a detail with load, or none without it. Resolves its value, absent when it could not be fetched, while it is the
-// latest request of key, and undefined once a newer one replaced it: selecting another record before the answer arrives
-// never shows the previous one.
-async function loadDetail<T>(key: string, load: (() => Promise<T | undefined>) | undefined): Promise<{ readonly value?: T } | undefined> {
+// What fetching a detail found.
+interface DetailAnswer<T> {
+	// The record; absent when it could not be fetched or none was asked for.
+	readonly value?: T
+	// Whether the server does not know the record (404), which a deletion elsewhere causes; a failure to reach the server is
+	// not that.
+	readonly gone: boolean
+}
+
+// Fetches a detail at url, or none without it. Resolves what it found while it is the latest request of key, and undefined
+// once a newer one replaced it: selecting another record before the answer arrives never shows the previous one.
+async function loadDetail<T>(key: string, url: string | undefined, request: ApiFetch): Promise<DetailAnswer<T> | undefined> {
 	const number = (requests[key] = (requests[key] ?? 0) + 1)
-	const value = load === undefined ? undefined : await load()
-	return requests[key] === number ? { value } : undefined
+	let answer: DetailAnswer<T> = { gone: false }
+
+	if (url !== undefined) {
+		try {
+			const response = await request(url)
+			answer = response.ok ? { value: (await response.json()) as T, gone: false } : { gone: response.status === 404 }
+		} catch {
+			// The server is unreachable; the detail is absent, not gone.
+		}
+	}
+
+	return requests[key] === number ? answer : undefined
 }
 
 // Key of the command that deletes a group.
@@ -242,27 +260,32 @@ export function sourceDeletionKey(sourceId: string) {
 }
 
 // The loaders below skip a record this tab is deleting: the change its deletion causes arrives before the answer of the
-// deletion, and fetching the record then only finds it gone. The detail shown stays until the deletion answers.
+// deletion, and fetching the record then only finds it gone. The detail shown stays until the deletion answers. Each
+// resolves true when the server no longer knows the record, as after another tab or a wizard deleted it, so the view can
+// stop showing it; false otherwise, also when the answer was replaced or the server could not be reached.
 
-// Fetches a group and its frames; one the server does not know is forgotten.
+// Fetches a group and its frames; absent clears it.
 export async function loadCalibrationGroup(state: CalibrationLibraryRuntime, groupId: string | undefined, request: ApiFetch = browserFetch) {
-	if (groupId !== undefined && state.pending[groupDeletionKey(groupId)]) return
-	const answer = await loadDetail('group', groupId === undefined ? undefined : () => tryFetchJson<CalibrationGroupDetail>(`${BASE_URL}/groups/${encodeURIComponent(groupId)}`, request))
+	if (groupId !== undefined && state.pending[groupDeletionKey(groupId)]) return false
+	const answer = await loadDetail<CalibrationGroupDetail>('group', groupId === undefined ? undefined : `${BASE_URL}/groups/${encodeURIComponent(groupId)}`, request)
 	if (answer) state.group = answer.value
+	return answer?.gone === true
 }
 
 // Fetches a master; absent clears it.
 export async function loadCalibrationMaster(state: CalibrationLibraryRuntime, masterId: number | undefined, request: ApiFetch = browserFetch) {
-	if (masterId !== undefined && state.pending[masterDeletionKey(masterId)]) return
-	const answer = await loadDetail('master', masterId === undefined ? undefined : () => tryFetchJson<CalibrationMasterDetail>(`${BASE_URL}/masters/${masterId}`, request))
+	if (masterId !== undefined && state.pending[masterDeletionKey(masterId)]) return false
+	const answer = await loadDetail<CalibrationMasterDetail>('master', masterId === undefined ? undefined : `${BASE_URL}/masters/${masterId}`, request)
 	if (answer) state.master = answer.value
+	return answer?.gone === true
 }
 
 // Fetches a frame; absent clears it.
 export async function loadCalibrationSource(state: CalibrationLibraryRuntime, sourceId: string | undefined, request: ApiFetch = browserFetch) {
-	if (sourceId !== undefined && state.pending[sourceDeletionKey(sourceId)]) return
-	const answer = await loadDetail('source', sourceId === undefined ? undefined : () => tryFetchJson<CalibrationSource>(`${BASE_URL}/sources/${encodeURIComponent(sourceId)}`, request))
+	if (sourceId !== undefined && state.pending[sourceDeletionKey(sourceId)]) return false
+	const answer = await loadDetail<CalibrationSource>('source', sourceId === undefined ? undefined : `${BASE_URL}/sources/${encodeURIComponent(sourceId)}`, request)
 	if (answer) state.source = answer.value
+	return answer?.gone === true
 }
 
 // Sends a command and records its failure. Resolves its JSON answer, or undefined when it failed.

@@ -173,12 +173,14 @@ export function CalibrationLibrary() {
 		else void loadCalibrationMasters(state, filter, page)
 	}, [section, kind, cameraId, search, page, runtime.changes])
 
-	// Fetches what the panel shows, again whenever the server reports a change.
+	// Fetches what the panel shows, again whenever the server reports a change, and stops showing a record the server no
+	// longer knows, as after another tab, a wizard, or a stale link.
 	useEffect(() => {
 		const state = calibrationLibraryRuntime
-		void loadCalibrationGroup(state, selection?.type === 'group' ? selection.groupId : undefined)
-		void loadCalibrationMaster(state, selection?.type === 'master' ? selection.masterId : undefined)
-		void loadCalibrationSource(state, selection?.type === 'source' ? selection.sourceId : undefined)
+		const forget = (gone: boolean) => gone && deselect()
+		void loadCalibrationGroup(state, selection?.type === 'group' ? selection.groupId : undefined).then(forget)
+		void loadCalibrationMaster(state, selection?.type === 'master' ? selection.masterId : undefined).then(forget)
+		void loadCalibrationSource(state, selection?.type === 'source' ? selection.sourceId : undefined).then(forget)
 	}, [selection, runtime.changes])
 
 	function change<T>(apply: (value: T) => void) {
@@ -193,7 +195,7 @@ export function CalibrationLibrary() {
 		navigate(routeState, { workspace: 'tools', tool: 'calibration-library', group: groupId })
 	}
 
-	// Forgets what was deleted, and the link to its group.
+	// Forgets what was deleted, here or elsewhere, and the link to its group.
 	function deselect() {
 		setSelection(undefined)
 		if (linked !== undefined) navigate(routeState, { workspace: 'tools', tool: 'calibration-library' })

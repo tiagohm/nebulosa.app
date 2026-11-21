@@ -146,6 +146,20 @@ describe('details', () => {
 		expect(state.master?.masterId).toBe(2)
 	})
 
+	test('a record the server no longer knows is reported gone, and an unreachable server is not', async () => {
+		const state = runtime()
+		const missing = (() => Promise.resolve(new Response(null, { status: 404 }))) as unknown as typeof fetch
+		const unreachable = (() => Promise.reject(new Error('offline'))) as unknown as typeof fetch
+		const found = (() => Promise.resolve(Response.json({ masterId: 3 }))) as unknown as typeof fetch
+
+		expect(await loadCalibrationMaster(state, 3, found)).toBeFalse()
+		expect(state.master?.masterId).toBe(3)
+		expect(await loadCalibrationMaster(state, 3, unreachable)).toBeFalse()
+		expect(await loadCalibrationMaster(state, 3, missing)).toBeTrue()
+		expect(state.master).toBeUndefined()
+		expect(await loadCalibrationMaster(state, undefined, missing)).toBeFalse()
+	})
+
 	test('a record this tab is deleting is not fetched again by the change its deletion causes', async () => {
 		const state = runtime()
 		const requested: string[] = []

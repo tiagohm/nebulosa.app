@@ -6,6 +6,7 @@ import { resolveDisplayZone } from '../../location/zone'
 import { routePath, type RouteState } from '../../shell/route'
 import { setSkyTime, skyClock, type SkyClock } from '../../sky/clock'
 import {
+	answersInputs,
 	applyToSky,
 	type AstronomicalTimeState,
 	chooseFold,
@@ -129,9 +130,12 @@ describe('request', () => {
 		expect(conversionRequest(initialAstronomicalTimeState(), undefined, 'UTC')).toEqual({ request: { input: { kind: 'now' }, observer: undefined, timeZone: 'UTC' } })
 	})
 
-	test('sends the right ascension only with a valid one', () => {
+	test('sends the right ascension only with a valid one, and converts the instant without an invalid one', () => {
 		expect(conversionRequest({ ...initialAstronomicalTimeState(), rightAscension: '12' }, SITE, 'UTC')).toMatchObject({ request: { rightAscension: Math.PI } })
-		expect(conversionRequest({ ...initialAstronomicalTimeState(), rightAscension: 'x' }, SITE, 'UTC')).toHaveProperty('error')
+		const invalid = conversionRequest({ ...initialAstronomicalTimeState(), rightAscension: 'x' }, SITE, 'UTC')
+		expect(invalid).toMatchObject({ request: { input: { kind: 'now' } }, rightAscensionError: 'Enter the right ascension in hours, such as 5.5 or 05 30 00.' })
+		expect('request' in invalid && invalid.request.rightAscension).toBeUndefined()
+		expect(conversionRequest({ ...initialAstronomicalTimeState(), mode: 'custom', rightAscension: 'x' }, SITE, 'UTC')).toMatchObject({ error: 'Enter a Calendar.', rightAscensionError: 'Enter the right ascension in hours, such as 5.5 or 05 30 00.' })
 	})
 
 	test('a new zone or location forgets the occurrence chosen', () => {
@@ -156,6 +160,8 @@ describe('conversions', () => {
 		await settled(300)
 		expect(requests).toHaveLength(1)
 		expect(state.result?.epochs.dayOfYear).toBe(304)
+		expect(answersInputs(state, { request: { input: { kind: 'unix', seconds: 0 }, timeZone: 'UTC' } })).toBeTrue()
+		expect(answersInputs(state, { request: { input: { kind: 'unix', seconds: 1 }, timeZone: 'UTC' } })).toBeFalse()
 		stop()
 	})
 
@@ -180,22 +186,26 @@ describe('conversions', () => {
 		expect(requests).toHaveLength(1)
 	})
 
-	test('inputs that cannot be sent clear the old result', () => {
-		const state = proxy<AstronomicalTimeState>({ ...initialAstronomicalTimeState(), result: RESULT, error: 'old' })
-		followConversion(state, { error: 'Enter a Julian Date.' })
-		expect(state.result).toBeUndefined()
+	test('inputs that cannot be sent keep the old result, which no longer answers them', () => {
+		const state = proxy<AstronomicalTimeState>({ ...initialAstronomicalTimeState(), result: RESULT, answered: '{}', error: 'old' })
+		const inputs = { error: 'Enter a Julian Date.', rightAscensionError: 'Enter the right ascension.' }
+		followConversion(state, inputs)
+		expect(state.result).toEqual(RESULT)
+		expect(answersInputs(state, inputs)).toBeFalse()
 		expect(state.error).toBeUndefined()
 		expect(state.inputError).toBe('Enter a Julian Date.')
+		expect(state.rightAscensionError).toBe('Enter the right ascension.')
 	})
 
-	test('a repeated reading offers both occurrences, and no old result stands for it', async () => {
+	test('a repeated reading offers both occurrences, and no old result answers it', async () => {
 		const state = proxy<AstronomicalTimeState>({ ...initialAstronomicalTimeState(), result: RESULT })
 		const { io } = fakeIo(() => Response.json({ error: 'twice', code: 'ambiguousLocalTime', earlier: 1, later: 2 }, { status: 422 }))
 		followConversion(state, { request: { input: { kind: 'now' }, timeZone: 'UTC' } }, io)()
 		const stop = followConversion(state, { request: { input: { kind: 'unix', seconds: 0 }, timeZone: 'UTC' } }, io)
 		await settled(300)
 		expect(state.ambiguous).toEqual({ earlier: 1, later: 2 })
-		expect(state.result).toBeUndefined()
+		expect(state.result).toEqual(RESULT)
+		expect(answersInputs(state, { request: { input: { kind: 'unix', seconds: 0 }, timeZone: 'UTC' } })).toBeFalse()
 		expect(state.error).toBeUndefined()
 		stop()
 	})
@@ -215,7 +225,8 @@ describe('conversions', () => {
 		const stop = followConversion(state, { request: { input: { kind: 'unix', seconds: 0 }, timeZone: 'UTC' } }, io)
 		await settled(300)
 		expect(state.error).toBe('offline')
-		expect(state.result).toBeUndefined()
+		expect(state.result).toEqual(RESULT)
+		expect(answersInputs(state, { request: { input: { kind: 'unix', seconds: 0 }, timeZone: 'UTC' } })).toBeFalse()
 		stop()
 	})
 })
@@ -227,7 +238,7 @@ describe('entry text', () => {
 		expect(entryText({ format: 'iso', scale: 'UTC', read: 'zone' }, RESULT)).toBe('2026-10-31T12:00:00.000-UTCZ')
 		expect(entryText({ format: 'jd', scale: 'TDB', read: 'zone' }, RESULT)).toBe('2461345.0-TDB')
 		expect(entryText({ format: 'mjd', scale: 'TT', read: 'zone' }, RESULT)).toBe('61344.5-TT')
-		expect(entryText({ format: 'unix', scale: 'UTC', read: 'zone' }, RESULT)).toBe('1793448000')
+		expect(entryText({ format: 'unix', scale: 'UTC', read: 'zone' }, RESULT)).toBe('1793448000.000')
 		expect(entryText({ format: 'julianEpoch', scale: 'UTC', read: 'zone' }, RESULT)).toBe('2026.830000000')
 	})
 
@@ -254,7 +265,7 @@ describe('Sky clock', () => {
 		setSkyTime(simulation, 1000_000, 0)
 		const state = initialAstronomicalTimeState()
 		takeSkyTime(state, simulation, 5000)
-		expect(state).toMatchObject({ mode: 'custom', format: 'unix', text: '1000' })
+		expect(state).toMatchObject({ mode: 'custom', format: 'unix', text: '1000.000' })
 	})
 
 	test('sends the instant shown to the Sky and nothing else', () => {

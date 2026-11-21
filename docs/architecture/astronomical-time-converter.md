@@ -28,7 +28,13 @@ The Astronomical Time Converter tool of the Reference group, its conversion rout
   Instants with their own orientation providers keep them (Planetary Events, the Observing Planner); tests use the full series, except those comparing a worker's results with their own thread's.
 - Astronomical Time Converter tool: its state is a tab-lived valtio proxy (`astronomicalTimeState`), never persisted.
   Now converts the real current time every second while the page is visible, one request at a time, and never the Sky simulation clock;
-  Custom sends an entry 250 ms after the last edit, superseding the request before it, and an entry the tool cannot read or a refused one leaves no result, so an old value never stands for new inputs.
+  Custom sends an entry 250 ms after the last edit, superseding the request before it.
+  The last answer is kept with the request it answers (`answered`), so while new inputs wait for an answer, cannot be read, or are refused, the results stay dimmed, the reading says Out of date, every copy and use-as-input is disabled, and so is Set Sky Time: an old value is shown as such and never stands for new inputs.
+  The header states the values in a word: Live (Now), Custom instant, Converting, Entry incomplete, Choose an occurrence, or Not converted, with the reason as the tooltip; the reason of an entry or of a refusal is also shown under the entry.
+  A right ascension that cannot be read is reported under its field and in the Hour Angle result, and the instant is converted without it.
+  The results lead with the apparent sidereal time in large figures, local with a location and Greenwich without one, stating Approximate when UT1 is taken as UTC; JD(UTC) and JD(TT) follow civil time, and every scale's calendar, JD, and MJD are under Time Scales.
+  Unix time is shown and entered with three decimals.
+  Edit Instant, a workspace action, opens the panel on the instant and focuses its first control.
   Changing form rewrites the entry for the instant shown.
   The location is a tab-memory `ToolLocation` (typed coordinates carry their elevation too) and the time zone the one `resolveDisplayZone` gives for the tool's `DisplayZoneOverride` and that location (see [Observing Sites and Time Zones Contract](observing-sites-and-time-zones.md)), always sent as an IANA name, since the server reads calendar entries and the local civil time in it.
   An Earlier or Later choice holds only for the zone it was made in.

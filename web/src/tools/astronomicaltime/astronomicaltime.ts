@@ -13,9 +13,11 @@ import { errorMessage } from '../eclipse/eclipse'
 // location it is read for (a ToolLocation, the active profile's observing site by default), the zone of its local
 // calendar (resolveDisplayZone of the tool's override against that location, always a real IANA zone, sent with every
 // request), and the answer of the server, which owns every astronomical value. This module only reads what is typed into
-// the fields of a request and says what is wrong with it; the server assumes valid fields. The state lives as long as the
-// tab, so leaving and reopening the tool keeps it, and nothing is persisted. The instant here is independent of the Sky
-// simulation clock: it is read from it or written to it only by an explicit action.
+// the fields of a request and says what is wrong with it; the server assumes valid fields. An answer is kept while new
+// inputs have none yet, marked with the request it answers, so the tool shows it as out of date rather than as the
+// answer to the new inputs. The state lives as long as the tab, so leaving and reopening the tool keeps it, and nothing
+// is persisted. The instant here is independent of the Sky simulation clock: it is read from it or written to it only
+// by an explicit action.
 
 // How the instant is decided: following the real current time, or as entered.
 export type ConverterMode = 'now' | 'custom'
@@ -57,10 +59,14 @@ export interface AstronomicalTimeState {
 	location: ToolLocation
 	// Text of the apparent right ascension of date of the hour angle, in hours.
 	rightAscension: string
-	// Answer for the current inputs.
+	// Last answer of the server; it answers the current inputs only when `answered` is their request.
 	result?: AstronomicalTimeResult
-	// Why the inputs cannot be sent.
+	// Request the result answers, as JSON.
+	answered?: string
+	// Why the entry of the instant cannot be sent.
 	inputError?: string
+	// Why the right ascension of the hour angle cannot be sent; the instant is then converted without it.
+	rightAscensionError?: string
 	// Why the server gave no answer.
 	error?: string
 	// Both instants of a repeated local reading, Unix milliseconds, until one is chosen.
@@ -94,7 +100,7 @@ export const INPUT_FORMATS: readonly InputFormat[] = ['calendar', 'iso', 'jd', '
 export const INPUT_FORMAT_LABELS: Readonly<Record<InputFormat, string>> = { calendar: 'Calendar', iso: 'ISO 8601', jd: 'Julian Date', mjd: 'Modified Julian Date', unix: 'Unix Time', julianEpoch: 'Julian Epoch', besselianEpoch: 'Besselian Epoch' }
 
 // Example shown in the empty field of each form.
-export const INPUT_FORMAT_EXAMPLES: Readonly<Record<InputFormat, string>> = { calendar: '2026-10-31 21:30:00', iso: '2026-10-31T21:30:00-03:00', jd: '2461345.5', mjd: '61345', unix: '1793491200', julianEpoch: '2026.83', besselianEpoch: '2026.83' }
+export const INPUT_FORMAT_EXAMPLES: Readonly<Record<InputFormat, string>> = { calendar: '2026-10-31T21:30:00', iso: '2026-10-31T21:30:00-03:00', jd: '2461345.5', mjd: '61345', unix: '1793491200', julianEpoch: '2026.83', besselianEpoch: '2026.83' }
 
 // Time between the last edit of a custom instant and its request, in milliseconds.
 const EDIT_DEBOUNCE_MS = 250
@@ -137,8 +143,9 @@ interface CivilFields {
 	readonly second: number
 }
 
-// What the inputs ask of the server, or why they cannot be sent.
-export type ConversionRequest = { readonly request: AstronomicalTimeRequest } | { readonly error: string }
+// What the inputs ask of the server, or why they cannot be sent, with what is wrong with the optional right ascension,
+// which never keeps the instant from being converted.
+export type ConversionRequest = { readonly request: AstronomicalTimeRequest; readonly rightAscensionError?: string } | { readonly error: string; readonly rightAscensionError?: string }
 
 // Initial state of the tool.
 export function initialAstronomicalTimeState(): AstronomicalTimeState {
@@ -229,21 +236,32 @@ export function parseRightAscension(text: string): Angle | undefined {
 
 // Returns what the inputs ask of the server, or why they cannot be sent. location is the place the tool observes from,
 // undefined without one (its name and zone are never sent); timeZone is the IANA zone of the local calendar, as
-// resolveDisplayZone gives it, always sent, since the server does not know the browser's.
-export function conversionRequest(state: Omit<AstronomicalTimeState, 'result' | 'inputError' | 'error' | 'ambiguous'>, location: GeographicLocation | undefined, timeZone: string): ConversionRequest {
+// resolveDisplayZone gives it, always sent, since the server does not know the browser's. A right ascension that cannot
+// be read is left out of the request and reported beside it, so the instant is still converted, with no hour angle.
+export function conversionRequest(state: Omit<AstronomicalTimeState, 'result' | 'answered' | 'inputError' | 'rightAscensionError' | 'error' | 'ambiguous'>, location: GeographicLocation | undefined, timeZone: string): ConversionRequest {
 	const observer = siteObserver(location)
-	const input = state.mode === 'now' ? ({ kind: 'now' } as const) : parseEntry(state, timeZone)
-	if (typeof input === 'string') return { error: input }
-
 	const typed = state.rightAscension.trim()
-	if (!typed) return { request: { input, observer, timeZone } }
-
-	const rightAscension = parseRightAscension(typed)
-	if (rightAscension === undefined) return { error: 'Enter the right ascension in hours, such as 5.5 or 05 30 00.' }
+	const rightAscension = typed ? parseRightAscension(typed) : undefined
+	const rightAscensionError = typed && rightAscension === undefined ? 'Enter the right ascension in hours, such as 5.5 or 05 30 00.' : undefined
+	const input = state.mode === 'now' ? ({ kind: 'now' } as const) : parseEntry(state, timeZone)
+	if (typeof input === 'string') return { error: input, rightAscensionError }
+	if (rightAscension === undefined) return { request: { input, observer, timeZone }, rightAscensionError }
 	return { request: { input, observer, timeZone, rightAscension } }
 }
 
-// Asks for a conversion and shows its answer. No answer leaves no result, so an old value never stands for new inputs.
+// Returns whether the result answers these inputs, rather than earlier ones while these wait for an answer of their own
+// or cannot have one.
+export function answersInputs(state: Pick<AstronomicalTimeState, 'result' | 'answered'>, inputs: ConversionRequest): boolean {
+	return state.result !== undefined && 'request' in inputs && state.answered === JSON.stringify(inputs.request)
+}
+
+// Formats Unix milliseconds as Unix seconds with three decimals, so the value keeps its width as it changes.
+export function formatUnixSeconds(milliseconds: number): string {
+	return (milliseconds / 1000).toFixed(3)
+}
+
+// Asks for a conversion and shows its answer. A refusal or a failure keeps the last answer, which still names the request
+// it answers, so it is shown as out of date and never as the answer to this one.
 async function convert(state: AstronomicalTimeState, request: AstronomicalTimeRequest, io: ConverterIo) {
 	const own = conversionGuard.begin()
 
@@ -254,6 +272,7 @@ async function convert(state: AstronomicalTimeState, request: AstronomicalTimeRe
 			const result = (await response.json()) as AstronomicalTimeResult
 			if (!own.current()) return
 			state.result = result
+			state.answered = JSON.stringify(request)
 			state.error = undefined
 			state.ambiguous = undefined
 			return
@@ -262,26 +281,24 @@ async function convert(state: AstronomicalTimeState, request: AstronomicalTimeRe
 		const failure = response.clone()
 		const body = (await response.json().catch(() => undefined)) as (ApiError<AstronomicalTimeErrorCode> & { readonly earlier: number; readonly later: number }) | undefined
 		if (!own.current()) return
-		state.result = undefined
 		state.ambiguous = body?.code === 'ambiguousLocalTime' ? { earlier: body.earlier, later: body.later } : undefined
 		state.error = state.ambiguous ? undefined : (body?.error ?? (await responseError(failure)))
 	} catch (error) {
 		if (aborted(error) || !own.current()) return
-		state.result = undefined
 		state.ambiguous = undefined
 		state.error = errorMessage(error)
 	}
 }
 
 // Follows the inputs: asks for a custom instant once, after the edits settle, or for the real current time every
-// NOW_INTERVAL_MS while the page is visible, one request at a time. Inputs that cannot be sent clear the result. Returns
-// the function that stops it.
+// NOW_INTERVAL_MS while the page is visible, one request at a time. Inputs that cannot be sent ask for nothing and keep
+// the last answer, which no longer answers them. Returns the function that stops it.
 export function followConversion(state: AstronomicalTimeState, inputs: ConversionRequest, io: ConverterIo = browserConverterIo): () => void {
 	state.inputError = 'error' in inputs ? inputs.error : undefined
+	state.rightAscensionError = inputs.rightAscensionError
 
 	if ('error' in inputs) {
 		conversionGuard.cancel()
-		state.result = undefined
 		state.error = undefined
 		state.ambiguous = undefined
 		return () => {}
@@ -321,7 +338,7 @@ export function entryText(state: Pick<AstronomicalTimeState, 'format' | 'scale' 
 		case 'mjd':
 			return scales[state.scale].mjd
 		case 'unix':
-			return civil.unixMillis === undefined ? '' : `${civil.unixMillis / 1000}`
+			return civil.unixMillis === undefined ? '' : formatUnixSeconds(civil.unixMillis)
 		case 'julianEpoch':
 			return epochs.julian.toFixed(9)
 		case 'besselianEpoch':
@@ -394,7 +411,7 @@ export function takeAsInput(state: AstronomicalTimeState, format: InputFormat, s
 
 // Takes the instant the Sky shows now as a custom instant, once: the tool does not follow the Sky afterwards.
 export function takeSkyTime(state: AstronomicalTimeState, clock: Readonly<SkyClock> = skyClock, now: number = Date.now()) {
-	takeAsInput(state, 'unix', state.scale, `${skyTime(clock, now) / 1000}`)
+	takeAsInput(state, 'unix', state.scale, formatUnixSeconds(skyTime(clock, now)))
 }
 
 // Sends the Sky to the instant shown; nothing else changes. A leap second has no Unix time, so it has no effect there.

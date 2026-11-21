@@ -43,23 +43,41 @@ function calendarReadLabel(read: CalendarRead) {
 	return read === 'zone' ? 'Time Zone' : read
 }
 
+// Identifier of the section of the instant, which keys its expanded state.
+export const INSTANT_SECTION_ID = 'tools.astronomicalTime.input'
+
+// Element id of the controls of the instant, whose first control Edit Instant focuses.
+export const INSTANT_CONTROLS_ID = 'astronomical-time-instant'
+
+// Returns why Set Sky Time cannot send the instant shown; undefined when it can.
+function skyTimeBlocker(unixMillis: number | undefined, current: boolean) {
+	if (unixMillis === undefined) return 'A leap second or a missing result has no instant the Sky can show'
+	if (!current) return 'The values shown are of earlier inputs; wait for the new ones to convert'
+	return undefined
+}
+
 export interface TimeInputPanelProps {
 	// Time zone of the local calendar in force, an IANA name.
 	readonly zone: string
 	// Place the tool observes from, whose zone the Site choice takes; absent when it has none.
 	readonly location?: ResolvedLocation
+	// Whether the result shown answers the current inputs; only then can it be sent to the Sky.
+	readonly current: boolean
 }
 
 // Input section of the tool.
-export function TimeInputPanel({ zone, location }: TimeInputPanelProps) {
-	const { mode, format, text, scale, read, fold, zone: override, result, inputError, ambiguous } = useSnapshot(astronomicalTimeState)
-	const unixMillis = result?.civil.unixMillis
+export function TimeInputPanel({ zone, location, current }: TimeInputPanelProps) {
+	const { mode, format, text, scale, read, fold, zone: override, result, inputError, error, ambiguous } = useSnapshot(astronomicalTimeState)
+	const blocker = skyTimeBlocker(result?.civil.unixMillis, current)
 	const custom = mode === 'custom'
 	const occurrence = foldIn(fold, zone)
 
 	return (
-		<CollapsibleSection id="tools.astronomicalTime.input" title="Instant">
-			<SegmentedControl label="Mode" options={MODES} value={mode} format={(value) => MODE_LABELS[value]} onChange={(value) => setConverterMode(astronomicalTimeState, value)} />
+		<CollapsibleSection id={INSTANT_SECTION_ID} title="Instant">
+			<div id={INSTANT_CONTROLS_ID} className="contents">
+				<SegmentedControl label="Mode" options={MODES} value={mode} format={(value) => MODE_LABELS[value]} onChange={(value) => setConverterMode(astronomicalTimeState, value)} />
+			</div>
+			<TimeZoneSelect value={override} onChange={(value) => setConverterZone(astronomicalTimeState, value)} site={location} selectedSite={location !== undefined && location.source !== 'active'} />
 			{custom && (
 				<>
 					<Select label="Format" options={INPUT_FORMATS} value={format} format={(value) => INPUT_FORMAT_LABELS[value]} onChange={(value) => setInputFormat(astronomicalTimeState, value)} />
@@ -85,12 +103,12 @@ export function TimeInputPanel({ zone, location }: TimeInputPanelProps) {
 					{format === 'unix' && <Notice>Unix time counts UTC days of 86400 s, so it has no timescale and no leap seconds.</Notice>}
 				</>
 			)}
-			<TimeZoneSelect value={override} onChange={(value) => setConverterZone(astronomicalTimeState, value)} site={location} selectedSite={location !== undefined && location.source !== 'active'} />
+			{error && <Notice error>{error}</Notice>}
 			<div className="flex flex-wrap gap-2">
 				<Button variant="secondary" title="Copies the instant the Sky shows into a custom instant" onClick={() => takeSkyTime(astronomicalTimeState)}>
 					Use Sky Time
 				</Button>
-				<Button variant="secondary" disabled={unixMillis === undefined} title={unixMillis === undefined ? 'A leap second or a missing result has no instant the Sky can show' : 'Sends the Sky simulation clock to this instant'} onClick={() => applyToSky(astronomicalTimeState)}>
+				<Button variant="secondary" disabled={blocker !== undefined} title={blocker ?? 'Sends the Sky simulation clock to this instant'} onClick={() => applyToSky(astronomicalTimeState)}>
 					Set Sky Time
 				</Button>
 			</div>

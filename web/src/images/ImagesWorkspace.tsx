@@ -1,6 +1,6 @@
 import type { ImageInfo, SaveFormat } from 'api'
 import { cn } from 'cn'
-import { type KeyboardEvent, useCallback, useMemo, useRef, useState } from 'react'
+import { type KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { AnnotationOverlay, shownAnnotations } from '../annotations/AnnotationOverlay'
 import { annotationMatchesWcs, annotationPlateSolveJobId } from '../annotations/annotations'
@@ -27,7 +27,7 @@ import { WcsCursorStatus } from '../platesolving/WcsCursorStatus'
 import { WcsGridOverlay } from '../platesolving/WcsGridOverlay'
 import { WcsOverlay } from '../platesolving/WcsOverlay'
 import { activeProfile, cameraFramesShown, imageAstrometrySettings, profileState, setCameraFramesShown, setLastImageDirectory, starProfileSettings } from '../profile/profile'
-import { EmptyState, WorkspaceLayout } from '../shell/WorkspaceLayout'
+import { EmptyState, useWorkspacePanel, WorkspaceLayout } from '../shell/WorkspaceLayout'
 import { StarOverlay } from '../stars/StarOverlay'
 import { inspectStar, starProfileOf } from '../stars/starprofile'
 import { StarProfileOverlay } from '../stars/StarProfileOverlay'
@@ -87,7 +87,7 @@ import { SaveImagePopover } from './SaveImagePopover'
 import { useStatisticsAreaTool } from './statisticsArea'
 import { StatisticsAreaOverlay } from './StatisticsAreaOverlay'
 import { TargetOffsetOverlay } from './TargetOffsetOverlay'
-import { IMAGE_TOOL_DEFINITIONS, imageToolsFor } from './tools'
+import { IMAGE_TOOL_DEFINITIONS, type ImageToolId, imageToolsFor } from './tools'
 
 // Images workspace: a permanent camera tab for each connected camera of the watched connection, showing the frames
 // its camera takes, then FITS and XISF images opened from the server, one closable tab each, shown in the shared
@@ -214,9 +214,26 @@ export function ImagesWorkspace() {
 	// Column of the tabs, the viewer, and the bottom area of a camera tab, which fills the screen on request.
 	const viewerRef = useRef<HTMLDivElement>(null)
 	const { active: fullscreen, supported: fullscreenSupported, toggle: toggleFullscreen } = useFullscreen(viewerRef)
-	const toolBar = <ImageToolBar tools={imageToolsFor(document)} selected={tool} disabled={!document} onSelect={(t) => document && selectImageTool(imagesState, document.key, t)} />
+	const panelState = useWorkspacePanel('images')
+	const { setOpen: setPanelOpen } = panelState
+	const panelRequested = state.panelRequested === true
+
+	// Opens the panel on the tool just chosen, from the tool bar, a panel, or another page, as a drawer on narrow screens
+	// as well as docked.
+	useEffect(() => {
+		if (!panelRequested) return
+		imagesState.panelRequested = false
+		setPanelOpen(true)
+	}, [panelRequested, setPanelOpen])
+
+	const toolBar = <ImageToolBar tools={imageToolsFor(document)} selected={tool} disabled={!document} onSelect={pickTool} />
 	const openButton = <IconButton icon="folder" onClick={() => setChoosing(true)} label="Open file" />
 	const waiting = document?.camera && !document.info
+
+	// Selects a tool of the active document; picking the selected tool opens its panel again.
+	function pickTool(id: ImageToolId) {
+		if (document) selectImageTool(imagesState, document.key, id)
+	}
 
 	// Closes a document, asking first when it is unsaved.
 	function requestClose(key: string) {
@@ -228,7 +245,7 @@ export function ImagesWorkspace() {
 	const savingDocument = state.documents.find((d) => d.key === saving?.key)
 
 	return (
-		<WorkspaceLayout workspace="images" title="Images" actions={openButton} context={toolBar} contextFill panel={{ title: definition.panelTitle, content: <Panel key={document?.key} document={document} view={view} camera={camera} onOpen={() => setChoosing(true)} /> }}>
+		<WorkspaceLayout workspace="images" title="Images" actions={openButton} context={toolBar} contextFill panelState={panelState} panel={{ title: definition.panelTitle, content: <Panel key={document?.key} document={document} view={view} camera={camera} onOpen={() => setChoosing(true)} /> }}>
 			<div ref={viewerRef} className="flex h-full flex-col bg-base-000">
 				{state.documents.length > 0 && <DocumentTabs documents={state.documents} activeKey={state.activeKey} onClose={requestClose} />}
 				<div className="min-h-0 flex-1">

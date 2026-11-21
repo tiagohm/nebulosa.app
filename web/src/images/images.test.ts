@@ -494,6 +494,18 @@ describe('tool context', () => {
 		closeImage(state, b, io)
 		expect(state.tools).toEqual({ [a]: { tool: 'inspector' } })
 	})
+
+	test('choosing a tool asks for the panel that holds it to open, and an unknown document asks nothing', async () => {
+		const state = newState()
+		const { io } = fakeIo()
+		await openImage(state, '/a.fits', io)
+
+		selectImageTool(state, 'missing', 'plate-solver')
+		expect(state.panelRequested).toBeUndefined()
+
+		selectImageTool(state, state.documents[0].key, 'plate-solver')
+		expect(state.panelRequested).toBeTrue()
+	})
 })
 
 describe('star detection', () => {

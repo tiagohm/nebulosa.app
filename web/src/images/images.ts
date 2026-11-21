@@ -266,6 +266,9 @@ export interface ImagesState {
 	tools: Record<string, ImageToolContext>
 	// Key of the document shown; absent when none is open.
 	activeKey?: string
+	// Whether a tool was chosen since the workspace last opened its contextual panel, which holds the tool; the workspace
+	// opens the panel, the drawer on narrow screens included, and clears it, so a tool chosen from another page shows too.
+	panelRequested?: boolean
 }
 
 // Browser services the store uses, replaced in tests.
@@ -845,10 +848,13 @@ export function selectAnnotation(state: ImagesState, key: string, selected?: Ima
 	if (annotation) annotation.selected = selected
 }
 
-// Shows a tool in the contextual panel of a document. Ignored for an unknown key.
+// Shows a tool in the contextual panel of a document and asks for the panel to open, so the tool chosen is always in
+// sight. Ignored for an unknown key.
 export function selectImageTool(state: ImagesState, key: string, tool: ImageToolId) {
 	const current = state.tools[key]
-	if (current) current.tool = tool
+	if (!current) return
+	current.tool = tool
+	state.panelRequested = true
 }
 
 // Shows a document. Ignored for an unknown key.

@@ -125,8 +125,8 @@ function ResultsBar({ timeZone, preferences }: CloseApproachTableProps) {
 function FailureAction({ notice }: { readonly notice: CloseApproachFailureNotice }) {
 	if (notice.offline) {
 		return (
-			<Button variant="secondary" onClick={() => navigate(routeState, { workspace: 'tools', tool: 'spice-kernel-library' })}>
-				Open SPICE Kernel Library
+			<Button variant="secondary" onClick={() => navigate(routeState, { workspace: 'settings', section: 'ephemeris-sources' })}>
+				Open Ephemeris Sources
 			</Button>
 		)
 	}

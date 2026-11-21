@@ -27,7 +27,7 @@ The Close Approaches tool of the Planning group and its routes over JPL.
   Refresh reads the page shown from JPL again and keeps its rows until the answer.
   Sorting and paging ask the server, from page 1 when the order changes, and rows are never sorted or sliced in the browser.
   The list, the object, and its history are independent requests, each behind a request guard, so an old answer never replaces a newer one, and no request ever repeats by itself.
-  A failure is named by the code of the server (`closeApproachFailureNotice`): offline, which points to the Offline switch of the SPICE Kernel Library and offers no Retry, rateLimited with the seconds JPL asked to wait, rejected, which only new filters change, an unreadable answer, or no answer; the others offer Retry.
+  A failure is named by the code of the server (`closeApproachFailureNotice`): offline, which points to the Offline switch of Settings, Ephemeris Sources, and offers no Retry, rateLimited with the seconds JPL asked to wait, rejected, which only new filters change, an unreadable answer, or no answer; the others offer Retry.
   A failed read of the list keeps the rows shown under that notice, the page shown being the one they belong to, and Retry reads the page asked for; only without rows does the notice take the place of the table.
   A new search forgets the selection; another page keeps it, and another encounter of the same object reads nothing again.
   A failure of the object leaves the encounter usable.

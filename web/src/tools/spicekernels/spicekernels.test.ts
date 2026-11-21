@@ -1,6 +1,7 @@
 import { expect, test } from 'bun:test'
-import type { SpiceEvaluation, SpiceKernelJob, SpiceKernelLibrarySnapshot } from 'api'
-import { activeJobs, applySpiceKernelSnapshot, evaluationDifference, handleSpiceKernelEvent, importSpiceKernel, refreshSpiceKernels, setEphemerisOffline, type SpiceKernelsState, timelinePlacement, timelineSpan, updateSpiceKernel } from './spicekernels'
+import type { SpiceEvaluation, SpiceKernelJob, SpiceKernelLibrarySnapshot, SpiceKernelSummary } from 'api'
+import { bodyNames, naifName, withMinus } from './format'
+import { activeJobs, applySpiceKernelSnapshot, downloadSpiceKernel, evaluationDifference, findJob, handleSpiceKernelEvent, importSpiceKernel, refreshSpiceKernels, setEphemerisOffline, type SpiceKernelsState, strandedKernels, timelinePlacement, timelineSpan, updateSpiceKernel } from './spicekernels'
 
 function snapshot(epoch: string, revision: number, jobs: SpiceKernelJob[] = []): SpiceKernelLibrarySnapshot {
 	return { epoch, revision, loading: false, generation: revision, offline: false, bytes: 0, kernels: [], jobs }
@@ -118,4 +119,45 @@ test('two evaluations differ by the distance of their positions and velocities a
 	expect(difference.position).toBeCloseTo(1, 12)
 	expect(difference.velocity).toBeCloseTo(0.002, 12)
 	expect(difference.angle).toBeCloseTo(Math.atan2(1, 1000), 12)
+})
+
+function kernel(id: string, patch: Partial<SpiceKernelSummary>): SpiceKernelSummary {
+	return { id, name: id, sourceKind: 'naif', enabled: true, targets: [], readiness: 'ready', ...patch } as SpiceKernelSummary
+}
+
+test('deleting the only enabled kernel with the Sun strands the enabled small-body kernels', () => {
+	const kernels = [kernel('de440s', { targets: [0, 10, 399] }), kernel('ceres', { sourceKind: 'horizons', targets: [20000001] }), kernel('off', { sourceKind: 'mpc', targets: [20000004], enabled: false }), kernel('sat441', { targets: [6, 699] })]
+	expect(strandedKernels(kernels, 'de440s').map((e) => e.id)).toEqual(['ceres'])
+	expect(strandedKernels([...kernels, kernel('de442s', { targets: [10] })], 'de440s')).toEqual([])
+	expect(strandedKernels(kernels, 'sat441')).toEqual([])
+	expect(
+		strandedKernels(
+			kernels.map((e) => (e.id === 'de440s' ? kernel('de440s', { targets: [0, 10, 399], enabled: false }) : e)),
+			'de440s',
+		),
+	).toEqual([])
+})
+
+test('small bodies are named by the kernels that hold them, and negative values by the minus sign', () => {
+	const names = bodyNames([
+		kernel('h', { sourceKind: 'horizons', name: '1 Ceres (A801 AA) (20000001)', targets: [20000001] }),
+		kernel('e', { sourceKind: 'elements', name: 'Bright', targets: [20000004], targetNames: { 20000004: '(4) Vesta' } }),
+		kernel('u', { sourceKind: 'import', name: 'x (20000433)', targets: [20000433] }),
+	])
+	expect(naifName(20000001, names)).toBe('1 Ceres (A801 AA) (20000001)')
+	expect(naifName(20000004, names)).toBe('(4) Vesta (20000004)')
+	expect(naifName(20000433, names)).toBe('20000433')
+	expect(naifName(399, names)).toBe('Earth (399)')
+	expect(withMinus('-5.3 km/s')).toBe('−5.3 km/s')
+	expect(withMinus('5.3 km/s')).toBe('5.3 km/s')
+})
+
+test('a started download answers its job, which the snapshot then tracks', async () => {
+	const s = state()
+	const started = job('j1', 'queued')
+	const answered = await downloadSpiceKernel(s, 'de440s', () => respond(started, 202))
+	expect(answered).toEqual(started)
+	expect(findJob(snapshot('a', 1, [job('j1', 'running')]), answered?.jobId)?.state).toBe('running')
+	expect(await downloadSpiceKernel(s, 'de440s', () => respond({ message: 'Queue full' }, 503))).toBeUndefined()
+	expect(s.errors['download:de440s']).toBeDefined()
 })

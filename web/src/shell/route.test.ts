@@ -87,6 +87,7 @@ describe('parse', () => {
 		expect(parseRoute('/settings/external-tools')).toEqual({ workspace: 'settings', section: 'external-tools' })
 		expect(parseRoute('/settings/external-tools/astap/extra')).toEqual({ workspace: 'settings', section: 'external-tools', tool: 'astap' })
 		expect(parseRoute('/settings/other/astap')).toEqual({ workspace: 'settings', section: 'external-tools' })
+		expect(parseRoute('/settings/ephemeris-sources')).toEqual({ workspace: 'settings', section: 'ephemeris-sources' })
 		expect(parseRoute('/settings/status-bar')).toEqual({ workspace: 'settings', section: 'status-bar' })
 		expect(parseRoute('/settings/status-bar/extra')).toEqual({ workspace: 'settings', section: 'status-bar' })
 		expect(routePath({ workspace: 'settings', section: 'status-bar' })).toBe('/settings/status-bar')

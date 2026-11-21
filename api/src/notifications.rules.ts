@@ -14,6 +14,7 @@ import type { MeridianFlipExecutorErrorCode } from './meridianflipexecutor.polic
 import type { MountPointingSessionSummary } from './mountpointing.sessions'
 import type { DeviceNameResolver } from './operationhistory'
 import type { OperationDevice, OperationKind, OperationRecord } from './operations'
+import type { SpiceKernelJob } from './spicekernels.jobs'
 import type { TargetCenteringSessionSummary } from './targetcentering'
 import type { TppaSessionSummary } from './tppa'
 import type { ServerEvent } from './websocket'
@@ -49,7 +50,7 @@ export type NotificationTarget =
 	| {
 			readonly kind: 'tool'
 			// Tool of the Tools workspace to open.
-			readonly tool: 'calibration-library' | 'meridian-flip'
+			readonly tool: 'calibration-library' | 'meridian-flip' | 'spice-kernel-library'
 			// Group it shows, for the Calibration Library.
 			readonly group?: string
 	  }
@@ -63,7 +64,7 @@ export type NotificationTarget =
 
 // What a notification is about.
 export interface NotificationSource {
-	// Service that reported the occurrence: connection, capture, autofocus, tppa, ipolar, mountPointing, targetCentering, flatWizard, darkLibraryWizard, calibrationLibrary, guiding, darv, meridianFlip (the Monitor and the Executor), operation, or indi (a global message of an INDI server).
+	// Service that reported the occurrence: connection, capture, autofocus, tppa, ipolar, mountPointing, targetCentering, flatWizard, darkLibraryWizard, calibrationLibrary, spiceKernels, guiding, darv, meridianFlip (the Monitor and the Executor), operation, or indi (a global message of an INDI server).
 	readonly kind: string
 	// Id of the connection involved; absent for an application-wide notification.
 	readonly connectionId?: string
@@ -233,6 +234,8 @@ export class NotificationClassifier {
 				return this.#darkLibraryWizard(event.session)
 			case 'calibrationLibrary:jobUpdated':
 				return this.#calibrationJob(event.job)
+			case 'spiceKernels:jobUpdated':
+				return this.#spiceKernelJob(event.job)
 			case 'guiding:updated':
 				return this.#guiding(event.session)
 			case 'guiding:event':
@@ -343,6 +346,26 @@ export class NotificationClassifier {
 				message: failed ? 'The Calibration Library explains why; build it again from its group.' : 'A master of the Dark Library Wizard is ready in the Calibration Library.',
 				source: { kind: 'calibrationLibrary' },
 				target: { kind: 'tool', tool: 'calibration-library', group: groupId },
+			},
+		]
+	}
+
+	// Reports how an acquisition of the SPICE Kernel Library ended, since a download or a generation outlives the view
+	// that started it: a new kernel, or a failure. A file the library already had, a cancellation, and every other state are
+	// quiet. The error of a job can name a host or a server path, so the failure is a fixed text and the tool explains it.
+	#spiceKernelJob({ jobId, kind, label, state, alreadyInstalled }: SpiceKernelJob): NotificationDraft[] {
+		if (state !== 'failed' && (state !== 'completed' || alreadyInstalled)) return []
+		const failed = state === 'failed'
+		const what = kind === 'download' ? 'download' : kind === 'integrate' ? 'integration' : 'generation'
+		return [
+			{
+				key: `spiceKernels:${jobId}:${state}`,
+				level: failed ? 'error' : 'success',
+				code: failed ? 'spiceKernels.failed' : 'spiceKernels.completed',
+				title: failed ? 'Kernel not added' : 'Kernel added',
+				message: failed ? `The ${what} of ${label} failed. The SPICE Kernel Library explains why under Add Kernel.` : `${label} is in the SPICE Kernel Library, first in the load order.`,
+				source: { kind: 'spiceKernels' },
+				target: { kind: 'tool', tool: 'spice-kernel-library' },
 			},
 		]
 	}

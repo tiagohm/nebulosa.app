@@ -324,6 +324,17 @@ test('a curated download is streamed, inspected, and installed', async () => {
 	expect(() => library.download('unknown')).toThrow('Unknown curated kernel.')
 })
 
+test('an upload of a curated file under its name and published size counts as installed', async () => {
+	const { library } = await started()
+	const entry = library.catalog().find((e) => e.id === 'sat393-daphnis')!
+	const padded = Buffer.concat([PLANETARY, Buffer.alloc(entry.bytes - PLANETARY.byteLength)])
+	const upload = await library.importFile(entry.name, stream(padded))
+	await library.importFile('sat441.bsp', stream(CERES))
+
+	expect(library.catalog().find((e) => e.id === 'sat393-daphnis')?.kernelId).toBe(upload.kernel.id)
+	expect(library.catalog().find((e) => e.id === 'sat441')?.kernelId).toBeUndefined()
+})
+
 test('the curated catalog lists the reviewed kernels by system', async () => {
 	const { library } = await started({})
 	const catalog = library.catalog()

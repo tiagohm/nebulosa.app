@@ -96,7 +96,7 @@ export interface CloseApproachFailureNotice {
 	// Whether reading again can succeed: never offline, where only what was read before is answered, nor for a search JPL
 	// refused, which only new filters change.
 	readonly retry: boolean
-	// Whether the failure comes from the offline switch of the ephemeris sources, kept in the SPICE Kernel Library.
+	// Whether the failure comes from the offline switch of the ephemeris sources, kept in Settings, Ephemeris Sources.
 	readonly offline: boolean
 }
 
@@ -215,7 +215,7 @@ export function closeApproachFailureNotice({ message, code, retryAfter }: CloseA
 
 	switch (code) {
 		case 'offline':
-			return { title: 'Offline', description: `${said} Turn Offline off in the SPICE Kernel Library to ask JPL.`, retry: false, offline: true }
+			return { title: 'Offline', description: `${said} Turn Offline off in Settings, Ephemeris Sources, to ask JPL.`, retry: false, offline: true }
 		case 'rateLimited':
 			return { title: 'JPL asked to wait', description: retryAfter === undefined ? said : `${said} Try again in ${Math.max(1, Math.ceil(retryAfter / 1000))} s.`, retry: true, offline: false }
 		case 'rejected':

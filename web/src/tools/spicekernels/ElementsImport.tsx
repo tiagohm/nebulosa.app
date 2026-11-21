@@ -1,7 +1,7 @@
 import type { SpiceElementList, SpiceElementsObject, SpiceElementsPreview } from 'api'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useSnapshot } from 'valtio'
-import { formatByteSize } from '../../format'
+import { formatByteSize, formatFixed } from '../../format'
 import { Button } from '../../ui/Button'
 import { Checkbox } from '../../ui/Checkbox'
 import { Notice } from '../../ui/Notice'
@@ -12,12 +12,14 @@ import { Select } from '../../ui/Select'
 import { Cell, Row, Table } from '../../ui/Table'
 import { TextInput } from '../../ui/TextInput'
 import { DEFAULT_WINDOW_MONTHS, ELEMENTS_PAGE_SIZE, elementsEstimate, elementsPage, filterElements, MAX_IMPORTED_OBJECTS, markAll, markedElements, toggleMarked } from './elements'
-import { downloadElements, fetchElementLists, integrateElements, parseElementsFile, type SpiceElementsAnswer, spiceKernelsState } from './spicekernels'
+import { JobItem } from './Jobs'
+import { LibrarySection } from './LibrarySection'
+import { downloadElements, fetchElementLists, findJob, integrateElements, jobActive, parseElementsFile, type SpiceElementsAnswer, spiceKernelsState } from './spicekernels'
 
 // Asteroid elements section of Add Kernel: the MPC 1-line elements of an MPC list the server downloads or of a file of the
 // operator, read by the server into the numbered asteroids they hold, shown page by page to mark the ones to integrate,
-// then integrated by the server into one kernel over a window from today. The preview is transient: it lives in this view
-// only, and nothing is downloaded or integrated without a click.
+// then integrated by the server into one kernel over a window from today, whose state shows below the form. The preview is
+// transient: it lives in this view only, and nothing is downloaded or integrated without a click.
 
 // Where the elements come from.
 type ElementsSource = 'list' | 'file'
@@ -48,8 +50,13 @@ function formatDuration(seconds: number) {
 	return seconds < 60 ? `${Math.max(1, Math.round(seconds))} s` : `${Math.round(seconds / 60)} min`
 }
 
+interface ElementsImportProps {
+	// Shows the kernel an integration added in Installed.
+	readonly onShowKernel: (id: string) => void
+}
+
 // Asteroid elements section.
-export function ElementsImport() {
+export function ElementsImport({ onShowKernel }: ElementsImportProps) {
 	const state = useSnapshot(spiceKernelsState)
 	const [source, setSource] = useState<ElementsSource>('list')
 	const [lists, setLists] = useState<readonly SpiceElementList[]>([])
@@ -83,11 +90,8 @@ export function ElementsImport() {
 	const list = lists.find((e) => e.id === listId)
 
 	return (
-		<section className="flex flex-col gap-3 rounded-sm border border-line-100 bg-base-100 p-4">
-			<div className="flex flex-col gap-1">
-				<h2 className="m-0 text-sm font-semibold text-ink-100">Asteroid elements from the MPC</h2>
-				<p className="m-0 text-xs leading-4 text-ink-300">MPC 1-line (MPCORB) elements of an MPC list or a file; only numbered asteroids are imported. The marked ones are integrated by this server into one kernel over the planetary kernels of the library.</p>
-			</div>
+		<LibrarySection title="Asteroid elements from the MPC">
+			<Notice className="max-w-3xl">MPC 1-line (MPCORB) elements of an MPC list or a file; only numbered asteroids are imported. The marked ones are integrated by this server into one kernel over the planetary kernels of the library.</Notice>
 			<div className="flex flex-wrap items-end gap-2">
 				<SegmentedControl label="Source" options={SOURCES} value={source} format={(e) => SOURCE_NAMES[e]} onChange={setSource} />
 				{source === 'list' ? (
@@ -128,14 +132,20 @@ export function ElementsImport() {
 				)}
 			</div>
 			{error && <Notice error>{error}</Notice>}
-			{loaded && <ElementsPreview key={`${loaded.sourceRef}:${loaded.preview.objects.length}`} loaded={loaded} />}
+			{loaded && <ElementsPreview key={`${loaded.sourceRef}:${loaded.preview.objects.length}`} loaded={loaded} onShowKernel={onShowKernel} />}
 			{state.errors.integrate && <Notice error>{state.errors.integrate}</Notice>}
-		</section>
+		</LibrarySection>
 	)
 }
 
+interface ElementsPreviewProps {
+	readonly loaded: LoadedElements
+	// Shows the kernel the integration added in Installed.
+	readonly onShowKernel: (id: string) => void
+}
+
 // The numbered asteroids of a preview to mark, page by page, and the integration of the marked ones.
-function ElementsPreview({ loaded }: { readonly loaded: LoadedElements }) {
+function ElementsPreview({ loaded, onShowKernel }: ElementsPreviewProps) {
 	const state = useSnapshot(spiceKernelsState)
 	const { objects, skipped } = loaded.preview
 	const [query, setQuery] = useState('')
@@ -143,20 +153,29 @@ function ElementsPreview({ loaded }: { readonly loaded: LoadedElements }) {
 	const [marked, setMarked] = useState<ReadonlySet<number>>(() => new Set())
 	const [label, setLabel] = useState(loaded.label)
 	const [months, setMonths] = useState(DEFAULT_WINDOW_MONTHS)
+	const [jobId, setJobId] = useState<string>()
+	const job = findJob(state.snapshot, jobId)
+	const running = job !== undefined && jobActive(job)
 	const shown = useMemo(() => filterElements(objects, query), [objects, query])
 	const rows = elementsPage(shown, page)
 	const estimate = elementsEstimate(marked.size, months)
-	const left = skipped.unnumbered + skipped.malformed
+	const left = [skipped.unnumbered > 0 && `${skipped.unnumbered} unnumbered`, skipped.malformed > 0 && `${skipped.malformed} unreadable`].filter(Boolean).join(' and ')
+	const blocked = marked.size === 0 ? 'Mark the asteroids to integrate' : !label.trim() ? 'Name the kernel' : running ? 'This integration is running; its state is below' : undefined
 
 	function mark(number: number, checked: boolean) {
 		setMarked((current) => toggleMarked(current, number, checked))
+	}
+
+	async function integrate() {
+		const started = await integrateElements(spiceKernelsState, { label: label.trim(), sourceRef: loaded.sourceRef, objects: markedElements(objects, marked), months })
+		if (started) setJobId(started.jobId)
 	}
 
 	return (
 		<div className="flex flex-col gap-3">
 			<p className="m-0 text-xs text-ink-300">
 				{objects.length} numbered asteroids
-				{left > 0 ? `; left out ${skipped.unnumbered} unnumbered and ${skipped.malformed} unreadable lines` : ''}.
+				{left ? `; left out ${left} lines` : ''}.
 			</p>
 			{objects.length > 0 && (
 				<>
@@ -172,7 +191,7 @@ function ElementsPreview({ loaded }: { readonly loaded: LoadedElements }) {
 							}}
 						/>
 						<Button variant="secondary" disabled={marked.size >= MAX_IMPORTED_OBJECTS} onClick={() => setMarked((current) => markAll(current, shown))}>
-							Mark all {query.trim() ? 'found' : ''}
+							{query.trim() ? 'Mark all found' : 'Mark all'}
 						</Button>
 						<Button variant="secondary" disabled={marked.size === 0} onClick={() => setMarked(new Set())}>
 							Unmark all
@@ -185,13 +204,14 @@ function ElementsPreview({ loaded }: { readonly loaded: LoadedElements }) {
 					</Table>
 					<Pager page={page} total={shown.length} pageSize={ELEMENTS_PAGE_SIZE} noun="asteroids" onPage={setPage} />
 					<div className="flex flex-wrap items-end gap-2">
-						<TextInput label="Kernel name" className="w-72" value={label} onChange={(e) => setLabel(e.target.value)} />
-						<NumberInput label="Duration from today" className="w-44" value={months} onChange={(value) => setMonths(value)} min={1} max={60} suffix="mo" />
-						<Button disabled={marked.size === 0 || !label.trim() || state.pending.integrate} onClick={() => void integrateElements(spiceKernelsState, { label: label.trim(), sourceRef: loaded.sourceRef, objects: markedElements(objects, marked), months })}>
-							Integrate {marked.size} {marked.size === 1 ? 'asteroid' : 'asteroids'}
+						<TextInput label="Kernel name" className="w-72 max-sm:w-full" value={label} onChange={(e) => setLabel(e.target.value)} />
+						<NumberInput label="Duration from today" className="w-48" value={months} onChange={(value) => setMonths(value)} min={1} max={60} suffix="months" />
+						<Button disabled={blocked !== undefined || state.pending.integrate} title={blocked} onClick={() => void integrate()}>
+							{running ? 'Integrating…' : `Integrate ${marked.size} ${marked.size === 1 ? 'asteroid' : 'asteroids'}`}
 						</Button>
 					</div>
-					<p className="m-0 text-xs leading-4 text-ink-300">
+					{job && <JobItem job={job} onShowKernel={onShowKernel} />}
+					<p className="m-0 max-w-3xl text-xs leading-4 text-ink-300">
 						{marked.size > 0 ? `About ${formatDuration(estimate.seconds)} and ${formatByteSize(estimate.bytes)}. ` : ''}
 						The elements carry no non-gravitational forces; the planets, the Moon, and the Sun's relativistic term are integrated, at most {MAX_IMPORTED_OBJECTS} asteroids at once. Generate the kernel again when the window ends, from the newer elements.
 					</p>
@@ -207,14 +227,14 @@ function ElementsRow({ object, checked, onMark }: { readonly object: SpiceElemen
 		<Row selected={checked} onSelect={() => onMark(object.number, !checked)}>
 			<Cell>
 				<span className="inline-flex" onClick={(event) => event.stopPropagation()}>
-					<Checkbox label="" checked={checked} onChange={(value) => onMark(object.number, value)} />
+					<Checkbox label={`Mark ${object.name}`} hideLabel checked={checked} onChange={(value) => onMark(object.number, value)} />
 				</span>
 			</Cell>
 			<Cell className="text-ink-100">{object.name}</Cell>
-			<Cell numeric>{object.h?.toFixed(2) ?? '—'}</Cell>
-			<Cell numeric>{object.a.toFixed(4)}</Cell>
-			<Cell numeric>{object.e.toFixed(4)}</Cell>
-			<Cell numeric>{object.i.toFixed(2)}</Cell>
+			<Cell numeric>{formatFixed(object.h, 2)}</Cell>
+			<Cell numeric>{formatFixed(object.a, 4)}</Cell>
+			<Cell numeric>{formatFixed(object.e, 4)}</Cell>
+			<Cell numeric>{formatFixed(object.i, 2)}</Cell>
 			<Cell>{epochDate(object.epoch)}</Cell>
 		</Row>
 	)

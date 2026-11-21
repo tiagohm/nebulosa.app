@@ -1365,8 +1365,9 @@ const satellites = new SatelliteService(satelliteStore, satelliteSync, new Satel
 const satelliteAutoDownload = new SatelliteAutoDownload(satellites)
 
 // SPICE Kernel Library: the SPK files of the operational database and its directory, the runtime set the Sky ephemeris
-// evaluates, and the curated downloads and Horizons generations, which share the JPL queue.
-const spiceKernelLibrary = new SpiceKernelLibrary(new SpiceKernelStore(database), spiceKernels, broadcast, ssdRequests)
+// evaluates, and the curated downloads and Horizons generations, which share the JPL queue. Its events go through the
+// dispatcher, so an acquisition that ends is also notified.
+const spiceKernelLibrary = new SpiceKernelLibrary(new SpiceKernelStore(database), spiceKernels, publish, ssdRequests)
 
 // Opens the operational database and brings its schema up to date, before anything is served, creates the Default
 // profile when it has none, and records the operations and the pointing model acquisitions a previous run left running

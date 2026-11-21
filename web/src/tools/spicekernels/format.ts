@@ -1,9 +1,9 @@
-import type { SpiceKernelJob, SpiceKernelReadiness, SpiceKernelSourceKind, SpiceSegmentUsage } from 'api'
+import type { SpiceKernelJob, SpiceKernelReadiness, SpiceKernelSourceKind, SpiceKernelSummary, SpiceSegmentUsage } from 'api'
 import { MISSING } from '../../format'
 import type { StatusTone } from '../../ui/StatusBadge'
 
-// Display formats of the SPICE Kernel Library tool: NAIF body names, segment epochs, sizes, and the labels and tones of
-// readiness, sources, and job states.
+// Display formats of the SPICE Kernel Library tool: NAIF body names, including the small bodies the library's own kernels
+// name, segment epochs, signed values, and the labels and tones of readiness, sources, and job states.
 
 // Names of the NAIF codes the SPK files of the library usually hold: the barycenters, the Sun, the planets, the Moon,
 // and the named moons of the curated satellite kernels but the irregular moons of Saturn and most provisional ones.
@@ -123,10 +123,42 @@ const NAIF_NAMES: Readonly<Record<number, string>> = {
 // Instant of TDB 0 s past J2000 (2000-01-01 12:00:00 TDB) in Unix milliseconds (UTC): 2000-01-01T11:58:55.816Z.
 const J2000_UNIX_MS = Date.UTC(2000, 0, 1, 11, 58, 55, 816)
 
-// Name of a NAIF code with the code, such as "Earth (399)", or the code alone when unnamed.
-export function naifName(code: number) {
-	const name = NAIF_NAMES[code]
+// Names of small bodies by NAIF code, as the kernels of the library name them: every asteroid of an element import, and
+// the body of a Horizons or MPC kernel, whose name ends with its SPK-ID in parentheses.
+export type BodyNames = ReadonlyMap<number, string>
+
+// Names the kernels of the library give their small bodies; a body of the fixed NAIF names keeps that name.
+export function bodyNames(kernels: readonly Pick<SpiceKernelSummary, 'name' | 'sourceKind' | 'targets' | 'targetNames'>[]): BodyNames {
+	const names = new Map<number, string>()
+
+	for (const kernel of kernels) {
+		for (const [code, name] of Object.entries(kernel.targetNames ?? {})) names.set(Number(code), name)
+
+		if ((kernel.sourceKind === 'horizons' || kernel.sourceKind === 'mpc') && kernel.targets.length === 1) {
+			const [code] = kernel.targets
+			const suffix = ` (${code})`
+			if (kernel.name.endsWith(suffix) && kernel.name.length > suffix.length) names.set(code, kernel.name.slice(0, -suffix.length))
+		}
+	}
+
+	return names
+}
+
+// Name of a NAIF code with the code, such as "Earth (399)" or "1 Ceres (A801 AA) (20000001)" when the library names it,
+// or the code alone when unnamed.
+export function naifName(code: number, names?: BodyNames) {
+	const name = NAIF_NAMES[code] ?? names?.get(code)
 	return name ? `${name} (${code})` : `${code}`
+}
+
+// Text of a signed number with the minus sign (U+2212) instead of a hyphen, as wide as the plus sign: "−5.385811 km/s".
+export function withMinus(text: string) {
+	return text.startsWith('-') ? `−${text.slice(1)}` : text
+}
+
+// Epoch in TDB seconds past J2000 of an instant in Unix milliseconds (UTC), under the same approximation as epochDate.
+export function epochOf(time: number) {
+	return (time - J2000_UNIX_MS) / 1000
 }
 
 // UTC date (YYYY-MM-DD) of an epoch in TDB seconds past J2000. The leap seconds since 2000 (under 10 s) and the TDB-TT

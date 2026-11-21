@@ -11,6 +11,7 @@ import type { MeridianFlipTransition } from './meridianflip'
 import type { MeridianFlipArm, MeridianFlipExecution } from './meridianflipexecutor'
 import { failureText, NotificationClassifier } from './notifications.rules'
 import type { OperationRecord } from './operations'
+import type { SpiceKernelJob } from './spicekernels.jobs'
 import type { TargetCenteringSessionSummary } from './targetcentering'
 import type { TppaSessionSummary } from './tppa'
 import type { ServerEvent } from './websocket'
@@ -243,6 +244,24 @@ describe('calibration library', () => {
 
 	test('an import is quiet', () => {
 		expect(classify({ type: 'import', state: 'failed', automatic: false })).toEqual([])
+	})
+})
+
+describe('spice kernel library', () => {
+	const job: SpiceKernelJob = { jobId: 'k', kind: 'download', key: 'download:de440s', label: 'de440s.bsp', state: 'running', createdAt: 1, updatedAt: 2, unit: 'bytes' }
+	const classify = (patch: Partial<SpiceKernelJob>) => new NotificationClassifier(() => undefined).classify({ type: 'spiceKernels:jobUpdated', epoch: 'e', revision: 1, job: { ...job, ...patch } })
+
+	test('a new kernel and a failed acquisition open the library', () => {
+		expect(classify({ state: 'completed', kernelId: 'x', alreadyInstalled: false })).toMatchObject([{ key: 'spiceKernels:k:completed', level: 'success', code: 'spiceKernels.completed', title: 'Kernel added', target: { kind: 'tool', tool: 'spice-kernel-library' } }])
+		expect(classify({ kind: 'generate', label: '1 Ceres (20000001)', state: 'failed', error: 'Horizons failed writing /var/nebulosa/staging/x.part' })).toMatchObject([
+			{ level: 'error', code: 'spiceKernels.failed', message: 'The generation of 1 Ceres (20000001) failed. The SPICE Kernel Library explains why under Add Kernel.' },
+		])
+	})
+
+	test('a file already installed, a cancellation, and progress are quiet', () => {
+		expect(classify({ state: 'completed', alreadyInstalled: true })).toEqual([])
+		expect(classify({ state: 'cancelled' })).toEqual([])
+		expect(classify({ state: 'running', bytes: 10 })).toEqual([])
 	})
 })
 

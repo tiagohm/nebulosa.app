@@ -30,7 +30,7 @@ Workspaces share services, not interfaces.
     - Registry: `CONTROLS` (`web/src/equipment-control/DeviceDetail.tsx`), `/equipment[/<device id>[/indi|/messages]]`
 - **Settings (top bar gear button)**
     - Responsibility: Settings of the server instance and of the active profile
-    - Features: Sections chosen by a header selector: External Tools (server), Observing Sites (server), Equipment Catalog (server), Date & Time (profile), Status Bar (profile)
+    - Features: Sections chosen by a header selector: External Tools (server), Observing Sites (server), Equipment Catalog (server), Ephemeris Sources (server: the offline switch of the ephemeris chain), Date & Time (profile), Status Bar (profile)
     - Registry: `SETTINGS_SECTION_IDS`, `/settings/<section>`, `/settings/external-tools[/<tool id>]` (`web/src/settings/`)
 - **About (rail footer button)**
     - Responsibility: Identity of the running distribution
@@ -39,7 +39,7 @@ Workspaces share services, not interfaces.
     - Registry: `/about` (`web/src/about/`)
 
 Connections, Equipment Setup, and profiles are modals of the shell (`ConnectionModal`, `EquipmentModal`, `ProfileModal`), not routes.
-The URL path is the source of truth for navigation (`web/src/shell/route.ts`): `/images`, `/sky`, `/tools[/<tool>]` (`/tools/solar-eclipse-map/<eclipse id>` and `/tools/lunar-eclipse-map/<eclipse id>` for one eclipse, `/tools/calibration-library/<group id>` for one group, `/tools/image-stacking/<project id>` for one project, `/tools/artificial-satellites/<NORAD id>` for one satellite; an unknown tool opens the catalog), `/equipment[/<device>[/indi|/messages]]`, `/settings/<section>` (`/settings/external-tools[/<tool>]`, `/settings/observing-sites[/<site>]`, `/settings/date-time`; an unknown section opens the first), `/about`;
+The URL path is the source of truth for navigation (`web/src/shell/route.ts`): `/images`, `/sky`, `/tools[/<tool>]` (`/tools/solar-eclipse-map/<eclipse id>` and `/tools/lunar-eclipse-map/<eclipse id>` for one eclipse, `/tools/calibration-library/<group id>` for one group, `/tools/image-stacking/<project id>` for one project, `/tools/artificial-satellites/<NORAD id>` for one satellite; an unknown tool opens the catalog), `/equipment[/<device>[/indi|/messages]]`, `/settings/<section>` (`/settings/external-tools[/<tool>]`, `/settings/observing-sites[/<site>]`, `/settings/ephemeris-sources`, `/settings/date-time`; an unknown section opens the first), `/about`;
 any other path opens Images, and the URL is rewritten to the canonical path of the route (`watchHistory`).
 
 An image tool declares its `outputs` (`ImageOperationOutput`): `display` (a new rendering of the document), `derived` (a new temporary document), or `analysis` (data and overlays that leave the pixels untouched);

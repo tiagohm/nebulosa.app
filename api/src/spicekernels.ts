@@ -483,10 +483,11 @@ export class SpiceKernelLibrary implements Disposable {
 		return { ...this.#summary(kernel, segments), segments: segments.map((e): SpiceKernelSegment => Object.assign(e, { usage: usage(e) })) }
 	}
 
-	// Curated downloads and the kernels installed from them.
+	// Curated downloads and the kernels installed from them: downloaded from the entry, or uploaded under its file name
+	// with its exact published size, so a copy imported by hand is not downloaded again.
 	catalog(): SpiceCatalogItem[] {
 		const kernels = this.store.kernels()
-		return SPICE_KERNEL_CATALOG.map((entry) => ({ ...entry, kernelId: kernels.find((e) => e.sourceKind === 'naif' && e.sourceRef === entry.id)?.id }))
+		return SPICE_KERNEL_CATALOG.map((entry) => ({ ...entry, kernelId: kernels.find((e) => (e.sourceKind === 'naif' && e.sourceRef === entry.id) || (e.sourceKind === 'import' && e.name === entry.name && e.bytes === entry.bytes))?.id }))
 	}
 
 	// Whether the current set resolves a NAIF body at an instant in Unix milliseconds. Makes no request.

@@ -13,6 +13,7 @@ import type {
 	SpiceKernelGenerateRequest,
 	SpiceKernelJob,
 	SpiceKernelLibrarySnapshot,
+	SpiceKernelSummary,
 	SpiceKernelUpdateRequest,
 } from 'api'
 import { proxy } from 'valtio'
@@ -86,9 +87,9 @@ export function importSpiceKernel(state: SpiceKernelsState, file: File, request:
 	return send(state, 'import', () => request(`/api/spice-kernels/import?name=${encodeURIComponent(file.name)}`, { method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: file }), 'The file could not be added.')
 }
 
-// Starts, or joins, the download of a curated kernel.
+// Starts, or joins, the download of a curated kernel. Returns its job, or undefined when it could not be started.
 export function downloadSpiceKernel(state: SpiceKernelsState, sourceId: string, request: ApiFetch = browserFetch) {
-	return send(state, `download:${sourceId}`, () => request('/api/spice-kernels/download', jsonInit('POST', { sourceId })), 'The download could not be started.')
+	return submit(state, `download:${sourceId}`, () => request('/api/spice-kernels/download', jsonInit('POST', { sourceId })), 'The download could not be started.')
 }
 
 // Outcome of reading elements: the numbered asteroids they hold, or why they could not be read.
@@ -114,9 +115,10 @@ export function parseElementsFile(file: File, request: ApiFetch = browserFetch) 
 	return readElements(() => request('/api/spice-kernels/elements/parse', { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: file }), 'The file could not be read.')
 }
 
-// Starts, or joins, the integration of imported elements into one kernel.
+// Starts, or joins, the integration of imported elements into one kernel. Returns its job, or undefined when it could not
+// be started.
 export function integrateElements(state: SpiceKernelsState, body: SpiceElementsIntegrateRequest, request: ApiFetch = browserFetch) {
-	return send(state, 'integrate', () => request('/api/spice-kernels/elements/integrate', jsonInit('POST', body)), 'The integration could not be started.')
+	return submit(state, 'integrate', () => request('/api/spice-kernels/elements/integrate', jsonInit('POST', body)), 'The integration could not be started.')
 }
 
 // Runs a request answering a preview of elements.
@@ -130,9 +132,9 @@ async function readElements(run: () => Promise<Response>, fallback: string): Pro
 	}
 }
 
-// Starts, or joins, the generation of a small-body kernel.
+// Starts, or joins, the generation of a small-body kernel. Returns its job, or undefined when it could not be started.
 export function generateSpiceKernel(state: SpiceKernelsState, body: SpiceKernelGenerateRequest, request: ApiFetch = browserFetch) {
-	return send(state, 'generate', () => request('/api/spice-kernels/generate', jsonInit('POST', body)), 'The kernel could not be requested.')
+	return submit(state, 'generate', () => request('/api/spice-kernels/generate', jsonInit('POST', body)), 'The kernel could not be requested.')
 }
 
 // Cancels an acquisition job.
@@ -232,9 +234,35 @@ export function evaluationDifference(a: SpiceEvaluation, b: SpiceEvaluation) {
 	return { position, velocity, angle: Math.atan2(cross, dot) }
 }
 
+// Whether a job is still queued or running, rather than completed, failed, or cancelled.
+export function jobActive(job: Pick<SpiceKernelJob, 'state'>) {
+	return job.state !== 'completed' && job.state !== 'failed' && job.state !== 'cancelled'
+}
+
 // Active jobs of the library, oldest first.
 export function activeJobs(snapshot: SpiceKernelLibrarySnapshot | undefined) {
-	return (snapshot?.jobs ?? []).filter((e) => e.state !== 'completed' && e.state !== 'failed' && e.state !== 'cancelled').toSorted((a, b) => a.createdAt - b.createdAt)
+	return (snapshot?.jobs ?? []).filter(jobActive).toSorted((a, b) => a.createdAt - b.createdAt)
+}
+
+// The latest state of a job the library still lists, by its id; undefined without an id or once the library forgot it.
+export function findJob(snapshot: SpiceKernelLibrarySnapshot | undefined, jobId: string | undefined) {
+	return jobId === undefined ? undefined : snapshot?.jobs.find((e) => e.jobId === jobId)
+}
+
+// NAIF code of the Sun, the center of every small-body kernel the library generates or integrates.
+const SUN = 10
+
+// Sources of the kernels relative to the Sun alone, which need another kernel to reach the barycenter.
+const HELIOCENTRIC_SOURCES: ReadonlySet<SpiceKernelSummary['sourceKind']> = new Set(['horizons', 'mpc', 'elements'])
+
+// The enabled small-body kernels that would need a planetary kernel again once the kernel `id` is gone: those relative to
+// the Sun, when `id` is the only enabled kernel with the Sun. Empty when another enabled kernel has the Sun, or when `id`
+// is disabled or has no Sun. Satellite kernels that need a planet are not followed.
+export function strandedKernels(kernels: readonly SpiceKernelSummary[], id: string): SpiceKernelSummary[] {
+	const kernel = kernels.find((e) => e.id === id)
+	if (!kernel?.enabled || !kernel.targets.includes(SUN)) return []
+	if (kernels.some((e) => e.id !== id && e.enabled && e.targets.includes(SUN))) return []
+	return kernels.filter((e) => e.id !== id && e.enabled && HELIOCENTRIC_SOURCES.has(e.sourceKind))
 }
 
 // Runs a request of an action, keeping its failure in errors. Returns whether it succeeded; the library itself changes
@@ -255,6 +283,25 @@ async function send(state: SpiceKernelsState, key: string, run: () => Promise<Re
 	} finally {
 		delete state.pending[key]
 	}
+}
+
+// Runs a request of an action that starts a job, keeping its failure in errors. Returns the job the server answered, or
+// undefined when it failed.
+async function submit(state: SpiceKernelsState, key: string, run: () => Promise<Response>, fallback: string): Promise<SpiceKernelJob | undefined> {
+	let job: SpiceKernelJob | undefined
+
+	await send(
+		state,
+		key,
+		async () => {
+			const response = await run()
+			if (response.ok) job = (await response.json()) as SpiceKernelJob
+			return response
+		},
+		fallback,
+	)
+
+	return job
 }
 
 // A snapshot with a job replaced or added, the latest change first.

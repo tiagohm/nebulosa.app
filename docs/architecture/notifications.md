@@ -9,6 +9,7 @@ Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
   ended Meridian Flip executions (success when imaging is ready, warning when cancelled, error otherwise);
   completed or failed captures, Auto Focus runs, Flat Wizard runs, and Dark Library Wizard runs (success or error);
   failed masters of the Calibration Library, and completed ones a wizard asked for;
+  acquisitions of the SPICE Kernel Library that added a kernel (success `spiceKernels.completed`) or failed (error `spiceKernels.failed`, a fixed text naming the download, generation, or integration, never the job's error), opening the tool; a file the library already had and a cancellation are quiet;
   TPPA ready to refine (info) or failed;
   iPolar ready to refine, within its requested threshold (info, once per session), or failed;
   each new Flat Wizard or Dark Library Wizard manual step, by `stepId` (warning), and their cleanup warnings;
@@ -25,7 +26,7 @@ Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
 - Each record (`NotificationRecord`: id, sequence, creation instant, level, stable code, title, message, source with the connection endpoint, optional target, and whether it was read) is created once per occurrence key while the key is younger than the retention, even after the record was dismissed.
   Text comes from fixed templates, device names, and fixed descriptions of the failure reasons, cut to 80 characters for the title and 240 for the message;
   driver errors, paths, and payloads are never copied, but for the global messages of an INDI server, which are the server's text for people and are copied as the INDI message service cleaned them.
-  Targets are typed (`tool`, the Calibration Library with a group or the Meridian Flip Monitor, `cameraTool` with the camera tab tool, or `equipment`), never URLs or commands.
+  Targets are typed (`tool`, the Calibration Library with a group, the Meridian Flip Monitor, or the SPICE Kernel Library, `cameraTool` with the camera tab tool, or `equipment`), never URLs or commands.
 - History: in server memory only, never in the database: a restart of the server starts an empty history, and its occurrences may be notified again.
   At most 500 records for 30 days, the older ones dropped when a record is created or the history is read; an occurrence older than the retention may be recorded again under a new sequence.
   `GET /api/notifications` answers the whole retained history, newest first.

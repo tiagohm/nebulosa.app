@@ -1,8 +1,7 @@
 import type { SpiceBody, SpiceChainLink, SpiceEvaluation, SpiceEvaluationResult, SpiceKernelSummary } from 'api'
 import { AU_KM } from 'nebulosa/src/core/constants'
-import { formatDEC, formatRA } from 'nebulosa/src/math/units/angle'
-import { useEffect, useState } from 'react'
-import { useSnapshot } from 'valtio'
+import { formatHMS, formatSignedDMS } from 'nebulosa/src/math/units/angle'
+import { useState } from 'react'
 import { formatArcsec, formatDegrees, formatFixed, formatKilometers, formatSpeed, MISSING } from '../../format'
 import { EmptyState } from '../../shell/WorkspaceLayout'
 import { Button } from '../../ui/Button'
@@ -11,8 +10,9 @@ import { Notice } from '../../ui/Notice'
 import { Select } from '../../ui/Select'
 import { Cell, Row, Table } from '../../ui/Table'
 import { TextInput } from '../../ui/TextInput'
-import { epochDate, naifName } from './format'
-import { evaluateSpice, evaluationDifference, fetchSpiceBodies, spiceKernelsState } from './spicekernels'
+import { type BodyNames, epochDate, naifName, withMinus } from './format'
+import { LibrarySection } from './LibrarySection'
+import { evaluateSpice, evaluationDifference } from './spicekernels'
 
 // Calculate section of the SPICE Kernel Library tool: the state of a body relative to another at an instant, computed by
 // the server from the enabled kernels, either through the selection the ephemeris makes or from one chosen segment of the
@@ -25,8 +25,13 @@ const AUTOMATIC = 'auto'
 // A source: the selection of the ephemeris, or a segment of the target as `<kernel id>|<segment index>`.
 type Source = string
 
-// Results of the last computation, one per source.
+// Last computation: what was asked, and its results, one per source.
 interface Computed {
+	// NAIF codes of the target and the center asked for.
+	readonly target: number
+	readonly center: number
+	// Instant asked for, Unix milliseconds (UTC).
+	readonly time: number
 	readonly results: readonly SpiceEvaluationResult[]
 }
 
@@ -35,10 +40,16 @@ function nowValue() {
 	return new Date().toISOString().slice(0, 19)
 }
 
+interface CalculateProps {
+	// Bodies of the current set; undefined while they are read.
+	readonly bodies?: readonly SpiceBody[]
+	readonly kernels: readonly SpiceKernelSummary[]
+	// Names of the library's small bodies.
+	readonly names: BodyNames
+}
+
 // Calculate section.
-export function Calculate() {
-	const state = useSnapshot(spiceKernelsState)
-	const [bodies, setBodies] = useState<readonly SpiceBody[]>()
+export function Calculate({ bodies, kernels, names }: CalculateProps) {
 	const [target, setTarget] = useState<string>()
 	const [center, setCenter] = useState<string>()
 	const [time, setTime] = useState(nowValue)
@@ -47,13 +58,6 @@ export function Calculate() {
 	const [computed, setComputed] = useState<Computed>()
 	const [error, setError] = useState<string>()
 	const [busy, setBusy] = useState(false)
-	const kernels = state.snapshot?.kernels ?? []
-
-	useEffect(() => {
-		const controller = new AbortController()
-		void fetchSpiceBodies(controller.signal).then((value) => !controller.signal.aborted && setBodies(value?.bodies ?? []))
-		return () => controller.abort()
-	}, [state.revision])
 
 	if (!bodies) return <EmptyState title="Loading" description="Reading the bodies of the enabled kernels." />
 	if (bodies.length === 0) return <EmptyState title="No bodies" description="Enable a kernel in Installed, or add one in Add Kernel." />
@@ -65,6 +69,7 @@ export function Calculate() {
 	const sourceOptions = [AUTOMATIC, ...(targetBody?.segments.map((e) => `${e.kernelId}|${e.segment}`) ?? [])]
 	const active = (compare ? [0, 1] : [0]).map((i) => (sources[i] && sourceOptions.includes(sources[i]) ? sources[i] : AUTOMATIC))
 	const instant = Date.parse(`${time}Z`)
+	const invalid = !Number.isFinite(instant) ? 'Enter a UTC instant to the second' : targetCode === centerCode ? 'Choose a center other than the target' : undefined
 
 	function formatSource(source: Source) {
 		if (source === AUTOMATIC) return 'Ephemeris selection'
@@ -91,7 +96,7 @@ export function Calculate() {
 					return evaluateSpice({ target: Number(targetCode), center: Number(centerCode), time: instant, source: source === AUTOMATIC ? undefined : { kernelId, segment: Number(segment) } })
 				}),
 			)
-			setComputed({ results })
+			setComputed({ target: Number(targetCode), center: Number(centerCode), time: instant, results })
 		} catch (e) {
 			setError(Error.isError(e) ? e.message : 'The state could not be computed.')
 		} finally {
@@ -101,32 +106,37 @@ export function Calculate() {
 
 	return (
 		<>
-			<form
-				onSubmit={(event) => {
-					event.preventDefault()
-					void compute()
-				}}
-				className="flex flex-col gap-3 rounded-sm border border-line-100 bg-base-100 p-4"
-			>
-				<div className="flex flex-wrap items-end gap-2">
-					<Select label="Target" className="w-60" options={codes} value={targetCode} format={(e) => naifName(Number(e))} onChange={setTarget} />
-					<Select label="Center" className="w-60" options={codes} value={centerCode} format={(e) => naifName(Number(e))} onChange={setCenter} />
-					<TextInput label="Instant (UTC)" type="datetime-local" step={1} className="w-56" value={time} onChange={(e) => setTime(e.target.value)} />
-				</div>
-				<div className="flex flex-wrap items-end gap-2">
-					<Select label={compare ? 'Source A' : 'Source'} className="w-96" options={sourceOptions} value={active[0]} format={formatSource} onChange={(e) => setSource(0, e)} />
-					{compare && <Select label="Source B" className="w-96" options={sourceOptions} value={active[1]} format={formatSource} onChange={(e) => setSource(1, e)} />}
-				</div>
-				<div className="flex flex-wrap items-center gap-4">
-					<Checkbox label="Compare two sources" checked={compare} onChange={setCompare} />
-					<Button type="submit" disabled={busy || !Number.isFinite(instant) || targetCode === centerCode}>
-						{busy ? 'Computing…' : 'Compute'}
-					</Button>
-				</div>
-				<Notice>Geometric state in the J2000 (ICRF) axes, without light time, aberration, or deflection. A source segment is evaluated whatever segment the ephemeris would select, and joined to the center through the selection.</Notice>
-				{error && <Notice error>{error}</Notice>}
-			</form>
-			{computed && <Results results={computed.results} kernels={kernels} />}
+			<LibrarySection title="State of a body">
+				<form
+					onSubmit={(event) => {
+						event.preventDefault()
+						void compute()
+					}}
+					className="flex flex-col gap-3"
+				>
+					<div className="flex flex-wrap items-end gap-2">
+						<Select label="Target" className="w-72 max-sm:w-full" options={codes} value={targetCode} format={(e) => naifName(Number(e), names)} onChange={setTarget} />
+						<Select label="Center" className="w-72 max-sm:w-full" options={codes} value={centerCode} format={(e) => naifName(Number(e), names)} onChange={setCenter} />
+						<TextInput label="Instant (UTC)" type="datetime-local" step={1} className="w-56" value={time} onChange={(e) => setTime(e.target.value)} />
+						<Button variant="secondary" title="Sets the instant to the current UTC time" onClick={() => setTime(nowValue())}>
+							Now
+						</Button>
+					</div>
+					<div className="flex flex-wrap items-end gap-2">
+						<Select label={compare ? 'Source A' : 'Source'} className="w-96 max-sm:w-full" options={sourceOptions} value={active[0]} format={formatSource} onChange={(e) => setSource(0, e)} />
+						{compare && <Select label="Source B" className="w-96 max-sm:w-full" options={sourceOptions} value={active[1]} format={formatSource} onChange={(e) => setSource(1, e)} />}
+					</div>
+					<div className="flex flex-wrap items-center gap-4">
+						<Checkbox label="Compare two sources" checked={compare} onChange={setCompare} />
+						<Button type="submit" disabled={busy || invalid !== undefined} title={invalid}>
+							{busy ? 'Computing…' : 'Compute'}
+						</Button>
+					</div>
+					<Notice className="max-w-3xl">Geometric state in the J2000 (ICRF) axes, without light time, aberration, or deflection. A source segment is evaluated whatever segment the ephemeris would select, and joined to the center through the selection.</Notice>
+					{error && <Notice error>{error}</Notice>}
+				</form>
+			</LibrarySection>
+			{computed && <Results computed={computed} kernels={kernels} names={names} />}
 		</>
 	)
 }
@@ -136,25 +146,25 @@ function kernelName(kernels: readonly SpiceKernelSummary[], id: string) {
 	return kernels.find((e) => e.id === id)?.name ?? id
 }
 
-// Text of a chain: each link as "body → center (kernel #segment)".
-function chainText(chain: readonly SpiceChainLink[], kernels: readonly SpiceKernelSummary[]) {
-	return chain.map((e) => `${naifName(e.body)} → ${naifName(e.center)}: ${kernelName(kernels, e.kernelId)} #${e.segment}${e.preferred ? ' (preferred)' : ''}`)
+// Text of a chain: each link as "body → center: kernel #segment".
+function chainText(chain: readonly SpiceChainLink[], kernels: readonly SpiceKernelSummary[], names: BodyNames) {
+	return chain.map((e) => `${naifName(e.body, names)} → ${naifName(e.center, names)}: ${kernelName(kernels, e.kernelId)} #${e.segment}${e.preferred ? ' (preferred)' : ''}`)
 }
 
 // Why a source has no state, for people.
-function missText(result: Exclude<SpiceEvaluationResult, SpiceEvaluation>, kernels: readonly SpiceKernelSummary[]) {
+function missText(result: Exclude<SpiceEvaluationResult, SpiceEvaluation>, kernels: readonly SpiceKernelSummary[], names: BodyNames) {
 	const where = result.side === 'source' ? 'The source segment' : result.side === 'target' ? 'The target' : 'The center'
 	const segment = result.kernelId !== undefined && result.segment !== undefined ? ` (${kernelName(kernels, result.kernelId)} #${result.segment})` : ''
 
 	switch (result.reason) {
 		case 'missing':
-			return `${where} needs ${naifName(result.body)}${segment}, which no enabled kernel provides.`
+			return `${where} needs ${naifName(result.body, names)}${segment}, which no enabled kernel provides.`
 		case 'coverage':
-			return `${where} needs ${naifName(result.body)}${segment}, which no enabled kernel covers at this instant.`
+			return `${where} needs ${naifName(result.body, names)}${segment}, which no enabled kernel covers at this instant.`
 		case 'cycle':
-			return `${where} has a cyclic chain at ${naifName(result.body)}.`
+			return `${where} has a cyclic chain at ${naifName(result.body, names)}.`
 		default:
-			return `${where} selects an unsupported segment for ${naifName(result.body)}${segment}.`
+			return `${where} selects an unsupported segment for ${naifName(result.body, names)}${segment}.`
 	}
 }
 
@@ -183,46 +193,50 @@ const QUANTITIES: readonly Quantity[] = [
 	{ label: 'Speed', value: (e) => formatSpeed(e.speed, 6) },
 	{ label: 'Range rate', value: (e) => formatSpeed(e.rangeRate, 6) },
 	{ label: 'Light time', value: (e) => `${formatFixed(e.lightTime, 3)} s` },
-	{ label: 'Right ascension (ICRF)', value: (e) => formatRA(e.rightAscension, 3) },
-	{ label: 'Declination (ICRF)', value: (e) => formatDEC(e.declination, 2) },
+	{ label: 'Right ascension (ICRF)', value: (e) => formatHMS(e.rightAscension, 3) },
+	{ label: 'Declination (ICRF)', value: (e) => formatSignedDMS(e.declination, 2) },
 	{ label: 'Ecliptic longitude (J2000)', value: (e) => formatDegrees(e.eclipticLongitude, 6) },
 	{ label: 'Ecliptic latitude (J2000)', value: (e) => formatDegrees(e.eclipticLatitude, 6) },
 	{ label: 'TDB', value: (e) => `JD ${formatFixed(e.tdbJulianDate, 6)} · ${formatFixed(e.tdbSeconds, 3)} s past J2000` },
 ]
 
 interface ResultsProps {
-	readonly results: readonly SpiceEvaluationResult[]
+	readonly computed: Computed
 	readonly kernels: readonly SpiceKernelSummary[]
+	readonly names: BodyNames
 }
 
-// Results of the sources, side by side, with their difference when two have a state.
-function Results({ results, kernels }: ResultsProps) {
+// Results of the sources, side by side, with their difference when two have a state; headed by what was asked, so a source
+// without a state still names its target and center.
+function Results({ computed: { target, center, time, results }, kernels, names }: ResultsProps) {
 	const states = results.filter((e): e is SpiceEvaluation => e.ok)
 	const pair = results.length === 2 && states.length === 2 ? ([states[0], states[1]] as const) : undefined
 	const difference = pair && evaluationDifference(pair[0], pair[1])
-	const names = results.length === 2 ? ['A', 'B'] : ['Value']
-	const columns = ['Quantity', ...names, ...(pair ? ['A − B'] : [])]
+	const labels = results.length === 2 ? ['A', 'B'] : ['Value']
+	const columns = ['Quantity', ...labels.map((key) => ({ key, label: key, numeric: true })), ...(pair ? [{ key: 'difference', label: 'A − B', numeric: true }] : [])]
 
 	return (
-		<section className="flex flex-col gap-3 rounded-sm border border-line-100 bg-base-100 p-4">
-			<h2 className="m-0 text-sm font-semibold text-ink-100">
-				{naifName(results[0].ok ? results[0].target : 0)} relative to {naifName(results[0].ok ? results[0].center : 0)}
-			</h2>
-			{results.map((result, i) => !result.ok && <Notice key={names[i]} error>{`${names[i]}: ${missText(result, kernels)}`}</Notice>)}
+		<LibrarySection title="Result">
+			<p className="m-0 text-sm text-ink-100">
+				{naifName(target, names)} relative to {naifName(center, names)} at {new Date(time).toISOString().slice(0, 19).replace('T', ' ')} UTC
+			</p>
+			{results.map((result, i) => !result.ok && <Notice key={labels[i]} error>{`${labels[i]}: ${missText(result, kernels, names)}`}</Notice>)}
 			{difference && (
 				<Notice>
 					A − B: {formatKilometers(difference.position, 3)} apart, velocities {formatFixed(difference.velocity * 1000, 3)} m/s apart, directions {formatArcsec(difference.angle, 4)} apart.
 				</Notice>
 			)}
 			{states.length > 0 && (
-				<Table columns={columns}>
+				<Table columns={columns} className="max-w-4xl">
 					{QUANTITIES.map((quantity) => (
 						<Row key={quantity.label}>
 							<Cell>{quantity.label}</Cell>
 							{results.map((result, i) => (
-								<Cell key={names[i]}>{result.ok ? quantity.value(result) : MISSING}</Cell>
+								<Cell key={labels[i]} numeric>
+									{result.ok ? withMinus(quantity.value(result)) : MISSING}
+								</Cell>
 							))}
-							{pair && <Cell>{quantity.difference ? quantity.difference(pair[0], pair[1]) : ''}</Cell>}
+							{pair && <Cell numeric>{quantity.difference ? quantity.difference(pair[0], pair[1]) : ''}</Cell>}
 						</Row>
 					))}
 				</Table>
@@ -230,18 +244,18 @@ function Results({ results, kernels }: ResultsProps) {
 			{results.map(
 				(result, i) =>
 					result.ok && (
-						<div key={names[i]} className="flex flex-col gap-1 text-xs text-ink-300">
-							<span className="font-medium text-ink-200">{results.length === 2 ? `Segments of ${names[i]}` : 'Segments'}</span>
-							{result.source && <span>Source: {chainText([result.source], kernels)}</span>}
-							{chainText(result.targetChain, kernels).map((text) => (
+						<div key={labels[i]} className="flex flex-col gap-1 text-xs leading-4 text-ink-300">
+							<span className="font-medium text-ink-200">{results.length === 2 ? `Segments of ${labels[i]}` : 'Segments'}</span>
+							{result.source && <span>Source: {chainText([result.source], kernels, names)}</span>}
+							{chainText(result.targetChain, kernels, names).map((text) => (
 								<span key={`t:${text}`}>Target: {text}</span>
 							))}
-							{chainText(result.centerChain, kernels).map((text) => (
+							{chainText(result.centerChain, kernels, names).map((text) => (
 								<span key={`c:${text}`}>Center: {text}</span>
 							))}
 						</div>
 					),
 			)}
-		</section>
+		</LibrarySection>
 	)
 }

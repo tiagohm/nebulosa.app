@@ -229,7 +229,7 @@ describe('catalog', () => {
 	test('a failure is named by its code, offering Retry only where reading again can help', () => {
 		expect(closeApproachFailureNotice({ message: 'The ephemeris sources are offline, and this was not read from JPL before', code: 'offline' })).toEqual({
 			title: 'Offline',
-			description: 'The ephemeris sources are offline, and this was not read from JPL before. Turn Offline off in the SPICE Kernel Library to ask JPL.',
+			description: 'The ephemeris sources are offline, and this was not read from JPL before. Turn Offline off in Settings, Ephemeris Sources, to ask JPL.',
 			retry: false,
 			offline: true,
 		})

@@ -173,6 +173,20 @@ export function MeridianFlipItem({ monitor, name, executor }: MeridianFlipItemPr
 	)
 }
 
+// The offline switch of the ephemeris sources while it is on, since it changes what every position, plan, and lookup
+// of the server can answer: its icon and "Ephemeris offline", opening its section of the Settings page.
+export function EphemerisOfflineItem() {
+	const title = 'Ephemeris sources offline: nothing asks JPL, and only what was already read is answered'
+
+	return (
+		<button type="button" data-fixed title={`${title} · Open the setting`} onClick={() => navigate(routeState, { workspace: 'settings', section: 'ephemeris-sources' })} className={cn('flex flex-none items-center gap-1', BUTTON_CLASS)}>
+			<Icon name="database" className="size-3.5 text-ink-300" />
+			<span className="sr-only">{title}</span>
+			<span className="text-ink-200">Ephemeris offline</span>
+		</button>
+	)
+}
+
 interface MountRemoteItemProps {
 	// Running listeners of the profile's mount, in protocol order; at least one.
 	readonly servers: readonly MountRemoteServer[]

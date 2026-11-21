@@ -55,6 +55,8 @@ import {
 	forgetConnection,
 	newProfile,
 	panelOpen,
+	PROFILE_NAME_MAX_LENGTH,
+	profileNameBlocker,
 	type ProfileState,
 	rememberDeviceNames,
 	renameProfile,
@@ -154,6 +156,31 @@ describe('management', () => {
 
 		expect(state.profiles.map((p) => p.name)).toEqual(['Default', 'Planetary'])
 		expect(original.id).toBe(state.activeId)
+	})
+
+	test('names are unique without case and at most 40 characters', () => {
+		const state = load()
+		const deep = createProfile(state, 'Deep Sky')!
+
+		expect(profileNameBlocker(state, ' ')).toBe('Enter a name')
+		expect(profileNameBlocker(state, 'x'.repeat(PROFILE_NAME_MAX_LENGTH))).toBeUndefined()
+		expect(profileNameBlocker(state, 'x'.repeat(PROFILE_NAME_MAX_LENGTH + 1))).toBe(`Use at most ${PROFILE_NAME_MAX_LENGTH} characters`)
+		expect(profileNameBlocker(state, ' deep sky ')).toBe('A profile named “Deep Sky” already exists')
+		expect(profileNameBlocker(state, 'DEEP SKY', deep.id)).toBeUndefined()
+
+		expect(createProfile(state, 'deep sky')).toBeUndefined()
+		expect(renameProfile(state, deep.id, 'default')).toBeFalse()
+		expect(renameProfile(state, deep.id, 'DEEP SKY')).toBeTrue()
+		expect(state.profiles.map((p) => p.name)).toEqual(['Default', 'DEEP SKY'])
+	})
+
+	test('a duplicate takes a name no profile has', () => {
+		const state = load()
+		const source = state.profiles[0]
+
+		expect(duplicateProfile(state, source.id)!.name).toBe('Default (copy)')
+		expect(duplicateProfile(state, source.id)!.name).toBe('Default (copy 2)')
+		expect(duplicateProfile(state, source.id)!.name).toBe('Default (copy 3)')
 	})
 
 	test('a duplicate is independent of its source', () => {

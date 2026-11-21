@@ -114,32 +114,56 @@ export function selectProfile(state: ProfileState, id: string) {
 	if (state.profiles.some((p) => p.id === id)) state.activeId = id
 }
 
-// Adds a profile with default preferences and returns it. Returns undefined for a blank name.
-export function createProfile(state: ProfileState, name: string): Profile | undefined {
+// Longest profile name, in characters, that a name typed by the operator may have; it keeps the name readable in the
+// top bar, the profile menu, and the Profiles modal. Copies made by duplicateProfile may exceed it by their suffix.
+export const PROFILE_NAME_MAX_LENGTH = 40
+
+// Returns why a name cannot be given to a profile, or undefined when it can: blank, longer than PROFILE_NAME_MAX_LENGTH
+// once trimmed, or already the name of another profile, compared without case. id is the profile being renamed, whose
+// own name does not count as taken; undefined for a new profile.
+export function profileNameBlocker(state: { readonly profiles: readonly Readonly<Pick<Profile, 'id' | 'name'>>[] }, name: string, id?: string): string | undefined {
 	const trimmed = name.trim()
-	if (!trimmed) return undefined
-	const profile = newProfile(trimmed)
+	if (!trimmed) return 'Enter a name'
+	if (trimmed.length > PROFILE_NAME_MAX_LENGTH) return `Use at most ${PROFILE_NAME_MAX_LENGTH} characters`
+	const taken = state.profiles.find((p) => p.id !== id && p.name.toLocaleLowerCase() === trimmed.toLocaleLowerCase())
+	return taken ? `A profile named “${taken.name}” already exists` : undefined
+}
+
+// Adds a profile with default preferences and returns it, without making it active. Returns undefined for a name that
+// profileNameBlocker refuses.
+export function createProfile(state: ProfileState, name: string): Profile | undefined {
+	if (profileNameBlocker(state, name)) return undefined
+	const profile = newProfile(name.trim())
 	state.profiles.push(profile)
 	return profile
 }
 
-// Renames a profile, keeping its id. Returns false for a blank name or an unknown id.
+// Renames a profile, keeping its id. Returns false for an unknown id or a name that profileNameBlocker refuses.
 export function renameProfile(state: ProfileState, id: string, name: string): boolean {
-	const trimmed = name.trim()
 	const profile = state.profiles.find((p) => p.id === id)
-	if (!trimmed || !profile) return false
-	profile.name = trimmed
+	if (!profile || profileNameBlocker(state, name, id)) return false
+	profile.name = name.trim()
 	return true
 }
 
-// Adds a copy of a profile, with a new id, right after it: same connection, equipment, and preferences.
-// Returns the copy, or undefined for an unknown id.
+// Returns the name of a copy of the named profile that no profile has yet: "Name (copy)", then "Name (copy 2)", and so on.
+function copyName(state: ProfileState, name: string): string {
+	const taken = new Set(state.profiles.map((p) => p.name.toLocaleLowerCase()))
+
+	for (let n = 1; ; n++) {
+		const candidate = n === 1 ? `${name} (copy)` : `${name} (copy ${n})`
+		if (!taken.has(candidate.toLocaleLowerCase())) return candidate
+	}
+}
+
+// Adds a copy of a profile, with a new id and a name no profile has, right after it: same connection, equipment, and
+// preferences. Returns the copy, or undefined for an unknown id.
 export function duplicateProfile(state: ProfileState, id: string): Profile | undefined {
 	const index = state.profiles.findIndex((p) => p.id === id)
 	if (index < 0) return undefined
 
 	const source = structuredClone(snapshot(state).profiles[index]) as Profile
-	const copy: Profile = { ...source, id: nanoid(), name: `${source.name} (copy)` }
+	const copy: Profile = { ...source, id: nanoid(), name: copyName(state, source.name) }
 	state.profiles.splice(index + 1, 0, copy)
 	return copy
 }

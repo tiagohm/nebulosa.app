@@ -3,7 +3,8 @@ import { Menu, MenuItem, NavigationMenu } from '../ui/NavigationMenu'
 import { activeProfile, profileState, selectProfile } from './profile'
 
 // Top bar profile switcher: the active profile's avatar and name, opening a list of the profiles with
-// the action that manages them.
+// the action that manages them. Below 640 px the name is only read by screen readers; long names are cut with an
+// ellipsis and given in full as a tooltip.
 
 // Returns up to two uppercase initials of a profile name, for its avatar.
 function initials(name: string): string {
@@ -28,7 +29,7 @@ export function ProfileMenu() {
 				label={
 					<>
 						<span className="flex size-7 items-center justify-center rounded-full bg-accent-subtle text-xs font-semibold text-accent">{initials(active.name)}</span>
-						<span className="max-w-40 truncate max-sm:hidden">{active.name}</span>
+						<span className="max-w-40 truncate max-sm:sr-only">{active.name}</span>
 						<span className="-mt-1 size-2 rotate-45 border-r-[1.5px] border-b-[1.5px] border-ink-300" />
 					</>
 				}
@@ -36,7 +37,9 @@ export function ProfileMenu() {
 				<li className="px-2 pt-1 pb-2 text-xs leading-4 text-ink-300">Profiles</li>
 				{state.profiles.map((profile) => (
 					<MenuItem key={profile.id} checked={profile.id === active.id} onSelect={() => selectProfile(profileState, profile.id)}>
-						{profile.name}
+						<span title={profile.name} className="block max-w-60 truncate">
+							{profile.name}
+						</span>
 					</MenuItem>
 				))}
 				<li className="mx-2 my-1 h-px bg-line-100" />

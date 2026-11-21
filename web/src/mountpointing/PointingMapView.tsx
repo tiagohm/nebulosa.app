@@ -5,12 +5,12 @@ import { Button } from '../ui/Button'
 import { Modal } from '../ui/Modal'
 import { SegmentedControl } from '../ui/SegmentedControl'
 import { loadPointingModel, mountPointingRuntime } from './mountpointing'
-import { PointingDiagnostics, PointingMeasures, PointingSampleInspector } from './PointingDiagnostics'
-import { PointingMap, type PointingMapVectors } from './PointingMap'
+import { PointingDiagnostics, PointingMeasures, PointingSampleInspector, PointingVerdict } from './PointingDiagnostics'
+import { PointingMap, PointingMapLegend, type PointingMapVectors } from './PointingMap'
 import { shownRevision } from './skymap'
 
-// Pointing Map view of the bottom area of a camera tab: the map of the session of its camera, the measures of its model
-// beneath it, and, in the same view, the diagnostics of the latest fit and the sample selected. The record of the model is
+// Pointing Map view of the bottom area of a camera tab: the map of the session of its camera, the verdict, the legend, and
+// the measures of its model beside it, and, in the same view, the diagnostics of the latest fit and the sample selected. The record of the model is
 // fetched here when it is shown, and again by the store whenever the model changes, so the view follows a running session.
 // Nothing here starts, stops, or edits anything. Maximize shows the same map larger.
 
@@ -44,6 +44,8 @@ export function PointingMapView({ session }: { readonly session: MountPointingSe
 		<div className="flex h-64 min-h-0 gap-3 max-sm:h-auto max-sm:flex-col">
 			<div className="aspect-square h-full flex-none max-sm:mx-auto max-sm:h-56">{map}</div>
 			<div className="flex min-w-0 flex-1 flex-col gap-2 overflow-y-auto pr-1">
+				<PointingVerdict model={model} revision={revision} />
+				<PointingMapLegend model={model} current={kind === 'acquisition' ? waypoint : undefined} />
 				<PointingMeasures model={model} revision={revision} />
 				<div className="flex flex-wrap items-center gap-2">
 					<SegmentedControl options={VECTORS} value={vectors} format={(option) => VECTOR_LABELS[option]} onChange={setVectors} />

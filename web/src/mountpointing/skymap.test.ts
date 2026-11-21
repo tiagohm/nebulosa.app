@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test'
 import type { PointingSampleRecord } from 'api'
 import { arcsec, deg } from 'nebulosa/src/math/units/angle'
-import { errorArrowEnd, errorDistribution, errorMagnification, horizontalOfHourAngle, mapPoint, mapRings, mapWaypoints, rejectionReasons, shownRevision } from './skymap'
+import { errorArrowEnd, errorDistribution, errorInPixels, errorMagnification, horizontalOfHourAngle, mapLegendCounts, mapPoint, mapRings, mapWaypoints, rejectionReasons, shownRevision } from './skymap'
 
 function sample(waypoint: number, status: PointingSampleRecord['status'], patch: Partial<PointingSampleRecord> = {}): PointingSampleRecord {
 	return { id: `${waypoint}:${status}`, waypoint, status, ...patch } as PointingSampleRecord
@@ -99,4 +99,27 @@ test('a view shows the revision asked for, else the latest', () => {
 	expect(shownRevision({ revisions }, 'gone')?.revisionId).toBe('b')
 	expect(shownRevision({ revisions })?.revisionId).toBe('b')
 	expect(shownRevision({ revisions: [] })).toBeUndefined()
+})
+
+test('the legend counts a withheld waypoint once, and a sample left out once, whatever else it is', () => {
+	const accepted = sample(0, 'accepted')
+	const leftOut = sample(1, 'accepted')
+	const withheld = sample(2, 'accepted')
+	const waypoints = [
+		{ status: 'accepted' as const, heldOut: false, sample: accepted },
+		{ status: 'accepted' as const, heldOut: false, sample: leftOut },
+		{ status: 'accepted' as const, heldOut: true, sample: withheld },
+		{ status: 'rejected' as const, heldOut: true },
+		{ status: 'rejected' as const, heldOut: false },
+		{ status: 'planned' as const, heldOut: false },
+		{ status: 'current' as const, heldOut: true },
+	]
+	expect(mapLegendCounts(waypoints, new Set([leftOut.id]))).toEqual({ accepted: 1, withheld: 2, rejected: 1, planned: 1, current: 1, leftOut: 1 })
+})
+
+test('an error reads in pixels of the frame only with a known positive scale', () => {
+	expect(errorInPixels(arcsec(10), arcsec(2))).toBeCloseTo(5, 9)
+	expect(errorInPixels(undefined, arcsec(2))).toBeUndefined()
+	expect(errorInPixels(arcsec(10), undefined)).toBeUndefined()
+	expect(errorInPixels(arcsec(10), 0)).toBeUndefined()
 })

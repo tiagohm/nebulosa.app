@@ -61,12 +61,16 @@ Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
   The exposure time is its own form's; the other camera settings are shown and belong to Camera Acquisition, and the solver is shown and belongs to Images → Plate Solver, each with a link that only selects the tool on the same tab.
   Preview Plan asks `POST /api/mount-pointing/plan`; Start asks for confirmation that the mount is clear to move.
   The mirror (`mountPointingRuntime`, the same store as the model library) follows sessions by camera, by revision, leaving what an event changed during a refresh.
-- Pointing Map (`web/src/mountpointing/`): one polar map of the local sky, zenith at the center, north up and east to the right, shared by Images and Tools (`PointingMap`, pure geometry in `skymap.ts`), with the waypoints marked by status, the withheld ones as diamonds, and arrows magnified to show the shape of the errors, never their size.
+- Pointing Map (`web/src/mountpointing/`): one polar map of the local sky, zenith at the center, north up and east to the right, shared by Images and Tools (`PointingMap`, pure geometry in `skymap.ts`), with the waypoints marked by status, the withheld ones as diamonds, a sample left out of the next fit hollow and dashed, and arrows magnified to show the shape of the errors, never their size; a legend names every mark drawn with its count.
+  A mark with a sample is one keyboard stop (the arrow keys, Home, and End move between them, Enter or Space selects) and takes a pointer on a circle about 24 px across on a phone.
   It is the single `Pointing Map` view of the bottom area of a camera tab, offered once its camera has a session; the diagnostics live inside that view, and Maximize shows the same map in a dialog.
-  The training, leave-one-out, and withheld measures are labelled apart, and a measure that does not exist is a dash.
+  A verdict line leads the figures: the offline gate, the RMS before correction against the withheld RMS (the fit residual when nothing was withheld) in arcseconds and in pixels at the image scale of the model, and the latest test on the sky.
+  The measures follow grouped as Fit, Unseen Sky, and Coverage, so the training, leave-one-out, and withheld measures are labelled apart, and a measure that does not exist is a dash; the warnings of the fit and the rejections follow, each led by its word.
 - Tools → Mount Pointing Model (`web/src/tools/mountpointing/`, `/tools/mount-pointing-model`) manages the models of the MOUNT of the active setup, without any camera tab: it lists its models (an explicit choice lists every mount's), shows the map, the measures, and each sample, and refits, imports, exports, renames, and deletes.
   A model of another mount can be read but never used.
-  The fit form and the samples left out are a draft of the tab until Fit asks for a revision.
+  A model opens on the revision in force on its mount, else on its latest, and any revision can be chosen: the map, the measures, the samples, the validation, and Activate all follow the revision shown, so a verified revision stays usable after a later refit.
+  The fit form and the samples left out are a draft of the tab, kept per model while the tab is open, until Fit asks for a revision: it starts from the revision shown (its strategy, the options the form holds, and the samples it left out), and a sample is left out from its inspector or from the Samples table, which orders the samples by point or by the error the revision shown leaves.
+  The revision a fit of the tab adds is then shown, with its withheld RMS and gate against the revision it started from.
   Build New Model is its only way to Images: it selects the Pointing Model Builder on the tab of the Main Camera, exactly, by `cameraTabKey`, and is disabled with the reason when there is none, never falling back to another camera.
   Images offers the way back once a session has a model.
   Nothing here starts an exposure or moves a mount.

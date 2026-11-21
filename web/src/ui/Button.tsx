@@ -22,6 +22,10 @@ const button = tv({
 	},
 })
 
+// Classes of a button of a variant and a size, for an element that acts as one without being a button, such as a link
+// that downloads a file.
+export const buttonClassName = button
+
 export interface ButtonProps extends ComponentProps<'button'>, VariantProps<typeof button> {}
 
 export function Button({ variant, size, className, type = 'button', ...props }: ButtonProps) {

@@ -125,6 +125,42 @@ export function rejectionReasons(samples: readonly PointingSampleRecord[]): read
 	return [...reasons].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
 }
 
+// Waypoints of the map counted by what its legend names: a withheld waypoint counts once as withheld whatever its status,
+// and a sample left out of the next fit counts once as left out.
+export interface MapLegendCounts {
+	// Waypoints with an accepted training sample.
+	readonly accepted: number
+	// Withheld waypoints.
+	readonly withheld: number
+	// Waypoints whose last attempt was rejected.
+	readonly rejected: number
+	// Waypoints not visited yet.
+	readonly planned: number
+	// Waypoint the session is on.
+	readonly current: number
+	// Accepted samples left out of the next fit.
+	readonly leftOut: number
+}
+
+// Returns what the legend of a map counts.
+export function mapLegendCounts(waypoints: readonly Pick<MapWaypoint, 'status' | 'heldOut' | 'sample'>[], excluded: ReadonlySet<string>): MapLegendCounts {
+	const counts = { accepted: 0, withheld: 0, rejected: 0, planned: 0, current: 0, leftOut: 0 }
+
+	for (const { status, heldOut, sample } of waypoints) {
+		if (status === 'accepted' && sample && excluded.has(sample.id)) counts.leftOut++
+		else if (heldOut && status !== 'current') counts.withheld++
+		else counts[status]++
+	}
+
+	return counts
+}
+
+// Returns an angle on the sky as pixels of the frame at an image scale in radians per pixel, or undefined when either is
+// unknown or the scale is not positive.
+export function errorInPixels(angle: number | undefined, scale: number | undefined) {
+	return angle === undefined || scale === undefined || !(scale > 0) ? undefined : angle / scale
+}
+
 // Returns the revision a view shows: the one asked for when it exists, else the latest.
 export function shownRevision(model: Pick<PointingModelDetail, 'revisions'>, revisionId?: string): PointingRevision | undefined {
 	return model.revisions.find((revision) => revision.revisionId === revisionId) ?? model.revisions.at(-1)

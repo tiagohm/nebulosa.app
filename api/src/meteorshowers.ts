@@ -1,7 +1,7 @@
 import { IAU_METEOR_SHOWER_CATALOG_URL } from 'nebulosa/src/adapters/catalogs/iau.meteor.showers'
 import type { MeteorShowerActivity, MeteorShowerSolution, MeteorShowerStatus } from 'nebulosa/src/astronomy/meteors/types'
 import bundledCatalogPath from '../data/meteor.showers.json.gz' with { type: 'file' }
-import type { AstroWeatherNight, AstroWeatherNightRequest } from './astroweather.night'
+import { type AstroWeatherNight, type AstroWeatherNightRequest, type AstroWeatherSunNight, sunNight } from './astroweather.night'
 import { type EphemerisKernels, NO_EPHEMERIS_KERNELS } from './ephemeris.chain'
 import { errorResponse } from './http'
 import { LruCache } from './lrucache'
@@ -294,8 +294,8 @@ export interface MeteorShowersNight {
 	readonly revision: number
 	// Civil date of the evening in the site's zone.
 	readonly eveningDate: string
-	// The Astro Weather night: the Sun, the part shown, and the Moon.
-	readonly night: AstroWeatherNight
+	// The Astro Weather night: the Sun and the part shown, without its Moon (sunNight).
+	readonly night: AstroWeatherSunNight
 	// The curated showers whose activity meets the night: those with a window first, then by modelled count when
 	// modelled, then by typical ZHR, then by geometric opportunity, then by name.
 	readonly showers: readonly MeteorNightShower[]
@@ -645,7 +645,7 @@ export class MeteorShowersService {
 		}
 		showers.sort((a, b) => Number(b.windows.length > 0) - Number(a.windows.length > 0) || (b.expectedCount ?? -1) - (a.expectedCount ?? -1) || (b.shower.visual?.typicalZhr ?? -1) - (a.shower.visual?.typicalZhr ?? -1) || opportunity(b) - opportunity(a) || a.shower.name.localeCompare(b.shower.name))
 
-		return { revision: this.options.store.state().revision, eveningDate: request.eveningDate, night, showers, otherActive }
+		return { revision: this.options.store.state().revision, eveningDate: request.eveningDate, night: sunNight(night), showers, otherActive }
 	}
 
 	// Activity curve of a shower in a civil year: its published profile sampled, or none. Throws MeteorShowersError notFound.

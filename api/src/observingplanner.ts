@@ -1,7 +1,7 @@
 import type { Database } from 'bun:sqlite'
 import { altitudeAtTransit } from 'nebulosa/src/astronomy/formulas'
 import { DEG2RAD } from 'nebulosa/src/core/constants'
-import type { AstroWeatherNight, AstroWeatherNightRequest } from './astroweather.night'
+import { type AstroWeatherNight, type AstroWeatherNightRequest, type AstroWeatherSunNight, sunNight } from './astroweather.night'
 import { errorResponse } from './http'
 import { LruCache } from './lrucache'
 import {
@@ -205,8 +205,8 @@ export interface ObservingPlanItemPreview extends ScheduleItemDiagnostics {
 
 // Preview of a plan: the night, each item, and the totals. Computed on request, never stored.
 export interface ObservingPlanPreview {
-	// The night of the plan.
-	readonly night: AstroWeatherNight
+	// The night of the plan, without its Moon (sunNight).
+	readonly night: AstroWeatherSunNight
 	// Stretches where the Sun is below the plan's limit, the scope of the totals.
 	readonly scope: readonly TimeSpan[]
 	// Items, in the plan's order.
@@ -315,7 +315,7 @@ export class ObservingPlannerService {
 		const scope = night.sunWindows(constraints.maximumSunAltitude)
 		const entries = items.map((item, i) => ({ id: item.id, requestedDurationMs: item.requestedDurationMs, scheduledStartAt: item.scheduledStartAt, status: analyses[i].status, windows: analyses[i].windows }))
 		const { items: diagnostics, totals } = diagnoseSchedule(entries, night.night.sun, scope)
-		return { night: night.night, scope, items: items.map((item, i) => ({ itemId: item.id, analysis: analyses[i], ...diagnostics.get(item.id)! })), totals }
+		return { night: sunNight(night.night), scope, items: items.map((item, i) => ({ itemId: item.id, analysis: analyses[i], ...diagnostics.get(item.id)! })), totals }
 	}
 
 	// Publishes a saved plan, after saving the elements of the minor bodies it names.

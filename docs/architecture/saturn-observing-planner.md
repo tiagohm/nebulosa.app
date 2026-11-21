@@ -47,4 +47,4 @@ Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
   Manage Kernels opens the SPICE Kernel Library and Show in Sky hands the tool's clock to the Sky as Jupiter's does, then selects Saturn through the Observing Planner's handoff.
   Show in Sky is its one change of the Sky clock; nothing here moves the mount, changes a site or the profile, or starts an operation.
 - Limits: the routes trust their requests (the tool asks for tracks of at most 14 days, separations of at most a year, and ring timelines of at most a Saturnian year).
-  Ring occultations, ring shadows, the rings' optical depth, and photometry are not modeled; the first visibility of a site computes each of its nights synchronously through the shared Astro Weather night.
+  Ring occultations, ring shadows, the rings' optical depth, and photometry are not modeled; the first visibility of a site computes each of its nights synchronously through the shared Astro Weather night (its Sun only, as Jupiter's).

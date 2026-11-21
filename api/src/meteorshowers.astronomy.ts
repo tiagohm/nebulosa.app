@@ -11,7 +11,7 @@ import { type Time, timeToUnixMillis, timeUnix } from 'nebulosa/src/astronomy/ti
 import { DEG2RAD } from 'nebulosa/src/core/constants'
 import { vecAngle } from 'nebulosa/src/math/linear-algebra/vec3'
 import { normalizeAngle } from 'nebulosa/src/math/units/angle'
-import type { AstroWeatherNight, AstroWeatherNightRequest } from './astroweather.night'
+import { type AstroWeatherNight, type AstroWeatherNightRequest, type AstroWeatherSunNight, sunNight } from './astroweather.night'
 import { LruCache } from './lrucache'
 import { type MeteorShowerRecord, preferredSolution } from './meteorshowers.catalog'
 import type { MeteorSolarLongitudeTable } from './meteorshowers.solar'
@@ -434,8 +434,8 @@ export interface MeteorObservingNight {
 	readonly kind: 'geometric' | 'modelled'
 	// Civil date of the evening.
 	readonly eveningDate: string
-	// The Astro Weather night: the Sun, the part shown, and the Moon.
-	readonly night: AstroWeatherNight
+	// The Astro Weather night: the Sun and the part shown, without its Moon (sunNight).
+	readonly night: AstroWeatherSunNight
 	// Support the windows were judged against.
 	readonly support: MeteorObservingSupport
 	// Windows in chronological order.
@@ -555,13 +555,13 @@ export function observingNight(record: MeteorShowerRecord, request: MeteorObserv
 	const rate = located && request.assumptions !== undefined && record.profile !== undefined ? prepareRate(record.profile, request.assumptions) : undefined
 	const samples = nightSamples(solution, request.site, night.display, ephemeris, rate)
 
-	if (!located) return { kind: 'geometric', eveningDate: request.eveningDate, night, support: { basis: 'none' }, windows: [], reasons: ['missingRadiant'], samples }
+	if (!located) return { kind: 'geometric', eveningDate: request.eveningDate, night: sunNight(night), support: { basis: 'none' }, windows: [], reasons: ['missingRadiant'], samples }
 
 	const support = observingSupport(record, solution, (night.sun.start + night.sun.end) / 2, table)
 	const windows = geometricWindows(solution, request.site, night.sun, windowOptions(request, support, ephemeris))
 	const reasons = windows.length > 0 ? [] : noWindowReasons(solution, request, support, night, samples, ephemeris)
-	if (rate === undefined) return { kind: 'geometric', eveningDate: request.eveningDate, night, support, windows, reasons, samples }
-	return { kind: 'modelled', eveningDate: request.eveningDate, night, support, windows, reasons, samples, model: { ...rateSummary(rate), windows: modelledWindows(solution, rate, request, night.sun, ephemeris) } }
+	if (rate === undefined) return { kind: 'geometric', eveningDate: request.eveningDate, night: sunNight(night), support, windows, reasons, samples }
+	return { kind: 'modelled', eveningDate: request.eveningDate, night: sunNight(night), support, windows, reasons, samples, model: { ...rateSummary(rate), windows: modelledWindows(solution, rate, request, night.sun, ephemeris) } }
 }
 
 // Lowest ZHR of a profile's support, meteors per hour: the profile is taken as zero where its model falls below one meteor
@@ -981,7 +981,7 @@ export function plannerAnalysis(record: MeteorShowerRecord | undefined, request:
 
 	if (record === undefined) {
 		const night = resolveNight(nights, site, eveningDate)
-		return { target, name: target.id, night, constraints, requestedDurationMs, status: 'unresolved', reasons: ['unresolvedTarget'], windows: [], summary: { totalUsableMs: 0, longestWindowMs: 0 }, samples: [] }
+		return { target, name: target.id, night: sunNight(night), constraints, requestedDurationMs, status: 'unresolved', reasons: ['unresolvedTarget'], windows: [], summary: { totalUsableMs: 0, longestWindowMs: 0 }, samples: [] }
 	}
 
 	const observing = observingNight(record, { site, eveningDate, maximumSolarAltitude: constraints.maximumSunAltitude, minimumRadiantAltitude: constraints.minimumAltitude, ...(constraints.minimumMoonSeparation !== undefined && { minimumMoonSeparation: constraints.minimumMoonSeparation }) }, nights, table, snapshot)

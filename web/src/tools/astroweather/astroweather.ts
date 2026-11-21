@@ -1,4 +1,4 @@
-import type { AstroWeatherForecast, AstroWeatherNight, AstroWeatherNightRequest, TimeSpan } from 'api'
+import type { AstroWeatherForecast, AstroWeatherNight, AstroWeatherNightRequest, AstroWeatherSunNight, TimeSpan } from 'api'
 import { proxy } from 'valtio'
 import { aborted, fetchJson } from '../../http'
 import { locationKey, type SiteLocation, siteObserver } from '../../location/site'
@@ -251,7 +251,7 @@ export interface SkyBandSpan extends TimeSpan {
 
 // Returns the display window of a night split by how dark the sky is, in time order. Polar nights and days need no invented
 // crossing: what the Sun does not cross is simply not split.
-export function skyBands({ sun, display }: AstroWeatherNight): readonly SkyBandSpan[] {
+export function skyBands({ sun, display }: AstroWeatherSunNight): readonly SkyBandSpan[] {
 	const sunset = sun.sunset ?? (sun.daylight === 'continuousAbove' ? display.end : display.start)
 	const sunrise = sun.sunrise ?? (sun.daylight === 'continuousAbove' ? display.start : display.end)
 	const cuts = new Set([display.start, display.end])

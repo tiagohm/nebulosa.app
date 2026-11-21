@@ -15,7 +15,7 @@ import { moonInterference, type ObservationScoreFactors, observationScore, obser
 import { greenwichApparentSiderealTime, precessionNutationMatrix, type Time, type TimeProviders, timeShift, timeToUnixMillis, timeUnix, ut1 } from 'nebulosa/src/astronomy/time/time'
 import { DEG2RAD, J2000, TAU } from 'nebulosa/src/core/constants'
 import { type Vec3, vecAngle, vecLength } from 'nebulosa/src/math/linear-algebra/vec3'
-import type { AstroWeatherNight, AstroWeatherNightRequest } from './astroweather.night'
+import { type AstroWeatherNight, type AstroWeatherNightRequest, type AstroWeatherSunNight, sunNight } from './astroweather.night'
 import { type EphemerisAttempt, type EphemerisMode, type EphemerisSourceKind, NO_EPHEMERIS_KERNELS } from './ephemeris.chain'
 import { solarSystemBody } from './sky/bodies'
 import { catalogObject } from './sky/catalog'
@@ -285,8 +285,8 @@ export interface TargetAnalysis {
 	readonly rightAscension?: number
 	// ICRS declination of the target's direction at the middle of the night, in radians; absent when unresolved.
 	readonly declination?: number
-	// The night, with its Sun and Moon.
-	readonly night: AstroWeatherNight
+	// The night, with its Sun and the part shown, without its Moon (sunNight).
+	readonly night: AstroWeatherSunNight
 	// Constraints applied.
 	readonly constraints: ObservingConstraints
 	// Continuous time requested, in milliseconds; absent when none was.
@@ -708,7 +708,7 @@ export function analyzeTarget(night: PlanningNight, target: ResolvedTarget, cons
 		minorAxis: target.minorAxis,
 		rightAscension,
 		declination,
-		night: night.night,
+		night: sunNight(night.night),
 		constraints,
 		requestedDurationMs,
 		status,
@@ -727,7 +727,7 @@ export function unresolvedAnalysis(night: PlanningNight, ref: ObservingTargetRef
 	return {
 		target: ref,
 		name: unresolvedName(ref),
-		night: night.night,
+		night: sunNight(night.night),
 		constraints,
 		requestedDurationMs,
 		status: 'unresolved',

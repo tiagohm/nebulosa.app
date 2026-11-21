@@ -1,3 +1,4 @@
+import type { EphemerisSource } from 'nebulosa/src/astronomy/ephemeris/source'
 import { type EphemerisKernels, NO_EPHEMERIS_KERNELS } from './ephemeris.chain'
 import { LruCache } from './lrucache'
 import { geographic, type SkyObserver, solarSystemSource } from './sky/ephemeris'
@@ -6,8 +7,11 @@ import { type SunLocalNight, sunNightAt, type TimeSpan } from './sky/sun'
 
 // Local astronomical context of Astro Weather: the Sun over one night of a site and the Moon above its horizon. Computed
 // locally, never from the network, so it needs no forecast: the Sun, the Earth, and the Moon of a night come from one
-// source of the fast ephemeris chain, the SPK kernels of the SPICE Kernel Library when they cover it, else the theories. A night costs a few hundred milliseconds, so the nights of
-// each site are kept and found by the instant they contain. Times are Unix milliseconds.
+// source of the fast ephemeris chain, the SPK kernels of the SPICE Kernel Library when they cover it, else the theories.
+// A night is computed synchronously: its Sun takes about 60 ms on the theories, and its Moon, computed only once read,
+// about 55 ms more for the appearance and 120 ms for the intervals above the horizon, which only Astro Weather reads; on
+// the kernels a whole night takes 10 to 20 ms. So the nights of each site are kept and found by the instant they
+// contain, and the planning tools that send a night send it without its Moon (sunNight). Times are Unix milliseconds.
 
 // Sites kept in memory.
 const SITE_CACHE_LIMIT = 16
@@ -44,7 +48,8 @@ export interface AstroWeatherMoon {
 	readonly above: readonly TimeSpan[]
 }
 
-// One night of a site.
+// One night of a site. Its Moon, and the Moon's intervals above the horizon, are computed the first time they are read
+// (serializing the night reads them).
 export interface AstroWeatherNight {
 	// The Sun over the night, whose start and end are consecutive upper transits.
 	readonly sun: SunLocalNight
@@ -54,9 +59,35 @@ export interface AstroWeatherNight {
 	readonly moon: AstroWeatherMoon
 }
 
+// A night without its Moon: what the planning tools send with their answers, which never read the Moon of the night.
+export type AstroWeatherSunNight = Pick<AstroWeatherNight, 'sun' | 'display'>
+
+// Returns a night without its Moon, so sending it computes no Moon.
+export function sunNight({ sun, display }: AstroWeatherNight): AstroWeatherSunNight {
+	return { sun, display }
+}
+
 // Returns the part of a night to show.
 function displayWindow({ start, end, sunset, sunrise }: SunLocalNight): TimeSpan {
 	return { start: sunset === undefined ? start : Math.max(start, sunset - DISPLAY_MARGIN_MS), end: sunrise === undefined ? end : Math.min(end, sunrise + DISPLAY_MARGIN_MS) }
+}
+
+// Returns the Moon over the display window of a night of observer, computed now, with its intervals above the horizon
+// computed the first time they are read. Each computation takes the ephemeris source `source` gives at that moment,
+// which chooses it from the kernels current then: a kernel file may have been closed since the night was computed.
+function nightMoon(observer: SkyObserver, display: TimeSpan, source: () => EphemerisSource): AstroWeatherMoon {
+	const time = (display.start + display.end) / 2
+	const { illuminatedFraction, phase } = moonGeometry(time, observer, source())
+	let above: readonly TimeSpan[] | undefined
+
+	return {
+		time,
+		illuminatedFraction,
+		phase,
+		get above() {
+			return (above ??= moonAboveHorizon(observer, display.start, display.end, source()))
+		},
+	}
 }
 
 // Nights of the sites asked for, kept by site and by the source of their ephemeris.
@@ -68,7 +99,8 @@ export class AstroWeatherNights {
 
 	// Returns the night containing an instant.
 	night({ observer, timeZone, time }: AstroWeatherNightRequest): AstroWeatherNight {
-		const { source, key: sourceKey } = solarSystemSource(this.kernels.current(), ['301'], [time - NIGHT_REACH_MS, time, time + NIGHT_REACH_MS])
+		const probes = [time - NIGHT_REACH_MS, time, time + NIGHT_REACH_MS]
+		const { source, key: sourceKey } = solarSystemSource(this.kernels.current(), ['301'], probes)
 		const key = `${sourceKey}|${timeZone}|${observer.latitude}|${observer.longitude}|${observer.elevation}`
 		const nights = this.#sites.get(key) ?? []
 		const cached = nights.find(({ sun }) => sun.start <= time && time < sun.end)
@@ -76,9 +108,15 @@ export class AstroWeatherNights {
 
 		const sun = sunNightAt(geographic(observer), time, timeZone, source)
 		const display = displayWindow(sun)
-		const middle = (display.start + display.end) / 2
-		const { illuminatedFraction, phase } = moonGeometry(middle, observer, source)
-		const night = { sun, display, moon: { time: middle, illuminatedFraction, phase, above: moonAboveHorizon(observer, display.start, display.end, source) } }
+		const moonSource = () => solarSystemSource(this.kernels.current(), ['301'], probes).source
+		let moon: AstroWeatherMoon | undefined
+		const night: AstroWeatherNight = {
+			sun,
+			display,
+			get moon() {
+				return (moon ??= nightMoon(observer, display, moonSource))
+			},
+		}
 
 		this.#sites.set(key, [...nights, night].slice(-NIGHTS_PER_SITE))
 		return night

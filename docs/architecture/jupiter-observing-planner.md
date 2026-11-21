@@ -53,4 +53,4 @@ Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
   Its clock, period, orientation, track interpolation, time bar, event table, and contact and visibility rows are the shared planetary planner pieces of `web/src/tools/planetary/`.
   Show in Sky is its one change of the Sky clock; nothing here moves the mount, changes a site or the profile, or starts an operation.
 - Limits: the routes trust their requests (the tool asks for ranges of at most 14 days);
-  the first visibility of a site computes each of its nights synchronously through the shared Astro Weather night (a few hundred milliseconds each, including its Moon), later ones come from the cache.
+  the first visibility of a site computes each of its nights synchronously through the shared Astro Weather night (its Sun only, about 60 ms each on the theories and a few milliseconds on the kernels), later ones come from the cache.

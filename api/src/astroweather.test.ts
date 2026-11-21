@@ -1,8 +1,9 @@
 import { describe, expect, test } from 'bun:test'
 import { type AstroWeatherForecast, AstroWeatherService, createAstroWeatherRoutes } from './astroweather'
-import { AstroWeatherNights } from './astroweather.night'
+import { AstroWeatherNights, sunNight } from './astroweather.night'
 import { openMeteoUrl, parseOpenMeteo } from './astroweather.openmeteo'
 import { parseSevenTimer, sevenTimerUrl } from './astroweather.seventimer'
+import { NO_EPHEMERIS_KERNELS } from './ephemeris.chain'
 import { UpstreamInvalidError, type UpstreamFetch } from './remote'
 
 const LATITUDE = -22.4
@@ -219,6 +220,7 @@ describe('night route', () => {
 		expect(body.display.end).toBe(body.sun.sunrise! + 3_600_000)
 		expect(body.moon.illuminatedFraction).toBeGreaterThan(0)
 		expect(body.moon.illuminatedFraction).toBeLessThanOrEqual(1)
+		expect(Array.isArray(body.moon.above)).toBeTrue()
 		expect(calls).toEqual({ openMeteo: 0, sevenTimer: 0 })
 	})
 
@@ -228,6 +230,23 @@ describe('night route', () => {
 		expect(nights.night({ observer: SAO_PAULO, timeZone: 'America/Sao_Paulo', time: Date.UTC(2026, 10, 1, 5) })).toBe(first)
 		expect(nights.night({ observer: SAO_PAULO, timeZone: 'UTC', time: Date.UTC(2026, 10, 1, 5) })).not.toBe(first)
 		expect(nights.night({ observer: SAO_PAULO, timeZone: 'America/Sao_Paulo', time: first.sun.end }).sun.localDate).toBe('2026-11-01')
+	})
+
+	test('the Moon of a night is computed once, when first read, from the kernels current then', () => {
+		let reads = 0
+		const nights = new AstroWeatherNights({ current: () => (reads++, NO_EPHEMERIS_KERNELS.current()) })
+		const night = nights.night({ observer: SAO_PAULO, timeZone: 'America/Sao_Paulo', time: Date.UTC(2026, 9, 31, 23) })
+		expect(reads).toBe(1)
+		expect(sunNight(night)).toEqual({ sun: night.sun, display: night.display })
+		expect(reads).toBe(1)
+		const { moon } = night
+		expect(moon.time).toBe((night.display.start + night.display.end) / 2)
+		expect(reads).toBe(2)
+		expect(moon.above.length).toBeGreaterThanOrEqual(0)
+		expect(reads).toBe(3)
+		expect(night.moon).toBe(moon)
+		expect(night.moon.above).toBe(moon.above)
+		expect(reads).toBe(3)
 	})
 
 	test('polar day shows the whole night', () => {

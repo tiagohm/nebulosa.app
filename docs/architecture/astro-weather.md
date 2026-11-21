@@ -3,7 +3,7 @@
 Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
 
 - Astro Weather (`api/src/astroweather.ts`, `astroweather.openmeteo.ts`, `astroweather.seventimer.ts`, `astroweather.night.ts`) is stateless and read-only, never an operation or an event, and nothing here reads or commands a device, opens a dome, or changes a sequence.
-  Other features read it as it is: the Observing Planner and Meteor Showers call `AstroWeatherService.night` in process for their nights, and the Meteor Showers tool reads `/forecast` for the weather of its observing windows (see [Meteor Showers Contract](meteor-showers.md)), never a provider of its own.
+  Other features read it as it is: the Observing Planner, Meteor Showers, and the Jupiter and Saturn Observing Planners call `AstroWeatherService.night` in process for their nights (the Observing Planner and Meteor Showers send them without the Moon, `AstroWeatherSunNight`, since they never read it), and the Meteor Showers tool reads `/forecast` for the weather of its observing windows (see [Meteor Showers Contract](meteor-showers.md)), never a provider of its own.
   It answers planning questions from forecasts and is not a safety system: a forecast is never presented as an observation.
 - `GET /api/astro-weather/forecast?latitude&longitude` (`AstroWeatherForecast`) reads two fixed public services, no key needed, and no URL or service is ever taken from a request.
   Each is read and cached apart, so one failing leaves the other usable, with `AstroWeatherSource` telling its `state` (`fresh`, `stale`, `unavailable`), download time, first and last sample, model run when known, and `errorCode` (`upstreamUnavailable`, `invalidResponse`, `rateLimited`).
@@ -29,7 +29,9 @@ Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
   The Moon's illuminated fraction and phase are taken at the middle of `display`, and its intervals above the horizon (`moonAboveHorizon`, the rise and set convention of `SkyEphemeris.events`, on a coarse search) cover `display`, however many rises and sets fall in it;
   a grazing pass near a polar latitude can be missed.
   This is site-wide guidance: nothing knows a target or its separation from the Moon.
-  A night costs about half a second of local computation on the theories (tens of milliseconds on the kernels), so the latest nights of the latest sites are kept (`astroweather.night.ts`) and found by the instant they contain.
+  The Moon of a night is computed the first time it is read, its intervals above the horizon the first time they are, each from the kernels current at that read; `/night` reads both, the planning tools at most the illuminated fraction.
+  A night is computed synchronously: on the theories its Sun takes about 60 ms, the Moon's appearance about 55 ms more, and its intervals above the horizon about 120 ms; on the kernels a whole night takes 10 to 20 ms.
+  So the latest nights of the latest sites are kept (`astroweather.night.ts`) and found by the instant they contain.
 - Reading a forecast (`web/src/tools/astroweather/observing.ts`) is pure and deterministic, with no request and no score: every hour of `display` gets `favorable`, `variable`, `unfavorable`, or `unavailable`, with its reasons and what it misses, beside a reading of the weather alone.
   Its limits are planning heuristics in constants, not scientific or equipment limits.
   Instantaneous values come from the sample starting an hour, and precipitation and gusts from the one ending it.

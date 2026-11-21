@@ -42,18 +42,28 @@ describe('save connection', () => {
 })
 
 describe('remove connection', () => {
-	test('removes the connection and selects the first remaining one', () => {
+	test('removes the connection and clears the highlight instead of moving it to another one', () => {
 		const state = newState()
 		const a = saveConnection(state, { name: 'A', host: 'a', port: 1, type: 'INDI' })!
 		const b = saveConnection(state, { name: 'B', host: 'b', port: 2, type: 'SIMULATOR' })!
 
 		removeConnection(state, b.id)
 		expect(state.connections).toEqual([a])
-		expect(state.selected).toBe(a.id)
+		expect(state.selected).toBeUndefined()
 
 		removeConnection(state, a.id)
 		expect(state.connections).toBeEmpty()
 		expect(state.selected).toBeUndefined()
+	})
+
+	test('keeps the highlight of another connection', () => {
+		const state = newState()
+		const a = saveConnection(state, { name: 'A', host: 'a', port: 1, type: 'INDI' })!
+		const b = saveConnection(state, { name: 'B', host: 'b', port: 2, type: 'INDI' })!
+		highlightConnection(state, a.id)
+
+		removeConnection(state, b.id)
+		expect(state.selected).toBe(a.id)
 	})
 })
 

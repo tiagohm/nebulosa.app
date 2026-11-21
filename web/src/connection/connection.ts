@@ -97,11 +97,11 @@ export function saveConnection(state: ConnectionState, input: ConnectionInput, i
 	return connection
 }
 
-// Removes the connection and selects the first remaining one. Profiles referencing it are updated by
-// the caller.
+// Removes the connection and clears the highlight when it was the highlighted one, so no other connection is
+// highlighted for an action meant for the removed one. Profiles referencing it are updated by the caller.
 export function removeConnection(state: ConnectionState, id: string) {
 	state.connections = state.connections.filter((c) => c.id !== id)
-	state.selected = state.connections[0]?.id
+	if (state.selected === id) state.selected = undefined
 	delete state.errors[id]
 }
 

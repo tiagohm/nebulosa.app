@@ -163,6 +163,7 @@ export function KernelSegments({ kernel, names }: KernelSegmentsProps) {
 	return (
 		<LibrarySection
 			title={`Segments of ${kernel.name}`}
+			className="min-h-0"
 			aside={
 				<span className="text-xs text-ink-300">
 					{kernel.segmentCount} {kernel.segmentCount === 1 ? 'segment' : 'segments'}

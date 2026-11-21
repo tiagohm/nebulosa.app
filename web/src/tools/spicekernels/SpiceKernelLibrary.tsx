@@ -122,8 +122,8 @@ export function SpiceKernelLibrary() {
 	return (
 		<WorkspaceLayout workspace="tools" title="SPICE Kernel Library" context={context} actions={actions} panel={panel}>
 			<div className="h-full overflow-y-auto bg-base-100">
-				{/* Bodies keeps the column to the height of the workspace, so its list scrolls in its own frame below the heading. */}
-				<div className={cn('mx-auto flex max-w-7xl flex-col gap-4 p-4', section === 'bodies' && 'h-full')}>
+				{/* Installed and Bodies keep the column to the height of the workspace, so their lists scroll in their own frames below the headings. */}
+				<div className={cn('mx-auto flex max-w-7xl flex-col gap-4 p-4', (section === 'installed' || section === 'bodies') && 'h-full')}>
 					{state.errors.import && <Notice error>{state.errors.import}</Notice>}
 					{section === 'installed' && <Installed kernels={kernels} names={names} selected={selected} onSelect={setSelected} />}
 					{section === 'bodies' && <Bodies bodies={bodies} kernels={kernels} names={names} selected={selectedBody} onSelect={setSelectedBody} />}
@@ -163,6 +163,8 @@ function Installed({ kernels, names, selected, onSelect }: InstalledProps) {
 		<>
 			<LibrarySection
 				title="Load order"
+				// With a kernel's segments below, the list keeps at most half the height and the segments take the rest.
+				className={cn('min-h-0', kernel && 'max-h-1/2 shrink-0')}
 				aside={
 					<span className="text-xs text-ink-300">
 						{kernels.length} {kernels.length === 1 ? 'kernel' : 'kernels'}, {usable} ready · {formatByteSize(snapshot.bytes)}

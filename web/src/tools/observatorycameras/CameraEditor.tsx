@@ -16,7 +16,7 @@ import { stopPlayer } from './player'
 
 // Editor of an observatory camera: its name, site, RTSP address, transport, and whether it is enabled. The address is
 // write-only: the server never gives it back, so editing a camera starts with an empty address, which keeps the saved
-// one, and typing one replaces it. Saving sends the revision the editor opened with, so a camera changed meanwhile by
+// one (named by its host only), and typing one replaces it. Saving sends the revision the editor opened with, so a camera changed meanwhile by
 // another client is reported instead of overwritten.
 
 // Value of the site field of a camera shared by every site.
@@ -50,7 +50,8 @@ export function CameraEditor({ camera, defaultSiteId, onClose }: CameraEditorPro
 	const [saving, setSaving] = useState(false)
 	const [error, setError] = useState<string>()
 	const siteOptions = [SHARED, ...sites.map((site) => site.id)]
-	const valid = name.trim().length > 0 && (camera !== undefined || source.trim().length > 0)
+	const invalid = name.trim().length === 0 ? 'Type a name for the camera.' : camera === undefined && source.trim().length === 0 ? 'Type the RTSP address of the camera.' : undefined
+	const valid = invalid === undefined
 
 	async function save() {
 		setSaving(true)
@@ -80,21 +81,24 @@ export function CameraEditor({ camera, defaultSiteId, onClose }: CameraEditorPro
 			>
 				<TextInput label="Name" value={name} onChange={(event) => setName(event.target.value)} data-autofocus maxLength={80} />
 				<Select label="Observing Site" options={siteOptions} value={siteId} onChange={setSiteId} format={(value) => (value === SHARED ? 'Every site' : (sites.find((site) => site.id === value)?.name ?? value))} />
-				<TextInput label="RTSP Address" value={source} onChange={(event) => setSource(event.target.value)} placeholder={camera ? 'Saved; type a new address to replace it' : 'rtsp://user:password@host:554/path'} autoComplete="off" spellCheck={false} />
-				<SegmentedControl label="RTSP Transport" options={TRANSPORTS} value={transport} onChange={setTransport} format={(value) => TRANSPORT_LABELS[value]} />
+				<TextInput label="RTSP Address" inputMode="url" value={source} onChange={(event) => setSource(event.target.value)} placeholder={camera ? `Saved for ${camera.sourceHost}; type to replace it` : 'rtsp://user:password@host:554/path'} />
+				<div className="flex flex-col gap-2">
+					<SegmentedControl label="RTSP Transport" options={TRANSPORTS} value={transport} onChange={setTransport} format={(value) => TRANSPORT_LABELS[value]} />
+					<Notice>TCP is the most reliable over Wi-Fi and through firewalls. Automatic lets MediaMTX try UDP first and fall back to TCP.</Notice>
+				</div>
 				<Checkbox label="Enabled" checked={enabled} onChange={setEnabled} />
 				<Notice>The address is stored encrypted on the server and never shown again. Prefer an H.264 stream without B-frames, such as a substream of the camera; video is relayed as the camera sends it, never transcoded.</Notice>
 				{error && <Notice error>{error}</Notice>}
 				<ModalActions>
 					{camera && (
-						<ConfirmButton title="Delete the camera?" message={`${camera.name} and its address are deleted from the server.`} confirmLabel="Delete" onConfirm={() => void remove()}>
+						<ConfirmButton title="Delete the camera?" message={`${camera.name} and its address are deleted from the server.`} confirmLabel="Delete" destructive onConfirm={() => void remove()}>
 							Delete
 						</ConfirmButton>
 					)}
 					<Button variant="secondary" onClick={onClose}>
 						Cancel
 					</Button>
-					<Button type="submit" disabled={!valid || saving}>
+					<Button type="submit" disabled={!valid || saving} title={invalid}>
 						{saving ? 'Saving…' : 'Save'}
 					</Button>
 				</ModalActions>

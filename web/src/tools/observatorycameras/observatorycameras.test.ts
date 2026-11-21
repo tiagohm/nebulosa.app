@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import type { ObservatoryCamera, ObservatoryCameraEvent, ObservatoryCamerasSnapshot } from 'api'
 import { proxy } from 'valtio'
 import { applyObservatoryCamerasSnapshot, filterCameras, handleObservatoryCameraEvent, moveCamera, type ObservatoryCamerasState, saveCamera, siteFilter, sortedCameras } from './observatorycameras'
-import { cameraStatus } from './status'
+import { cameraStatus, frameText, otherViewers } from './status'
 import { parseOffer, sdpFragment } from './whep'
 
 function camera(patch: Partial<ObservatoryCamera> = {}): ObservatoryCamera {
@@ -117,7 +117,29 @@ describe('status', () => {
 		expect(cameraStatus(camera(), { cameraId: 'c1', state: 'unavailable', code: 'sourceAuthFailed', readers: 0 }, undefined, { status: 'ready' }).label).toBe('Authentication failed')
 		expect(cameraStatus(camera(), undefined, { status: 'playing' }, { status: 'ready' }).label).toBe('Live')
 		expect(cameraStatus(camera(), undefined, { status: 'failed', error: 'No video' }, { status: 'ready' })).toEqual({ tone: 'danger', label: 'Failed', detail: 'No video' })
-		expect(cameraStatus(camera(), undefined, undefined, { status: 'notInstalled' }).label).toBe('Gateway not installed')
+		expect(cameraStatus(camera(), undefined, undefined, { status: 'notInstalled' }).label).toBe('MediaMTX not installed')
+	})
+
+	test('a refused stream points to the editor, other failures keep the message', () => {
+		expect(cameraStatus(camera(), undefined, { status: 'failed', error: 'refused', code: 'sourceAuthFailed' }, undefined)).toEqual({ tone: 'danger', label: 'Failed', detail: 'The camera refused the user or password of its address. Correct the address in Edit.' })
+		expect(cameraStatus(camera(), undefined, { status: 'failed', error: 'The video connection was lost.' }, undefined).detail).toBe('The video connection was lost.')
+		expect(cameraStatus(camera(), { cameraId: 'c1', state: 'unavailable', code: 'sourceNotFound', readers: 0 }, undefined, undefined)).toEqual({ tone: 'danger', label: 'Path not found', detail: 'The camera has no stream at the path of its address. Correct the address in Edit.' })
+	})
+
+	test('the frame says what the player is doing until it plays', () => {
+		expect(frameText(undefined, false)).toBe('Preview stopped')
+		expect(frameText({ status: 'connecting' }, false)).toBe('Connecting…')
+		expect(frameText({ status: 'reconnecting' }, false)).toBe('Reconnecting…')
+		expect(frameText({ status: 'paused' }, false)).toBe('Paused')
+		expect(frameText({ status: 'failed' }, false)).toBe('Failed')
+		expect(frameText({ status: 'playing' }, true)).toBe('Playing in picture-in-picture')
+	})
+
+	test('viewers leave out this tab', () => {
+		expect(otherViewers(1, true)).toBeUndefined()
+		expect(otherViewers(2, true)).toBe('1 other viewer')
+		expect(otherViewers(2, false)).toBe('2 other viewers')
+		expect(otherViewers(0, false)).toBeUndefined()
 	})
 })
 

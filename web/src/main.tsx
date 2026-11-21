@@ -54,7 +54,7 @@ import { handleMeridianFlipEvent, meridianFlipState, meridianFlipView, meridianF
 import { handleMeridianFlipExecutorEvent, meridianFlipExecutorState, refreshMeridianFlipExecutor } from './tools/meridianflip/meridianflipexecutor'
 import { handleMeteorShowersEvent, meteorShowerSourcesState, refreshMeteorShowerSources } from './tools/meteorshowers/meteorshowers.sources'
 import { handleMountRemoteControlEvent, mountRemoteControlState, refreshMountRemoteControl } from './tools/mountremotecontrol/listeners'
-import { handleObservatoryCameraEvent, observatoryCamerasState, refreshObservatoryCameras } from './tools/observatorycameras/observatorycameras'
+import { handleObservatoryCameraEvent, observatoryCamerasState, observatoryCamerasView, observatoryCamerasViewEntry, refreshObservatoryCameras } from './tools/observatorycameras/observatorycameras'
 import { watchPictureInPicture } from './tools/observatorycameras/pictureinpicture'
 import { handlePlayerEvent, watchPlayers } from './tools/observatorycameras/player'
 import { handleObservingPlanEvent, observingPlansState, refreshObservingPlans } from './tools/observingplanner/observingplanner'
@@ -158,7 +158,16 @@ const stops = [
 	watchActiveSiteZone(profileState, siteState),
 	workspace.start(),
 	new ViewPersistence(profileState).start(),
-	keepViewEntries([sectionsEntry(collapsibleSections), cameraToolsEntry(imagesState), activeCameraTabEntry(imagesState), centeringTargetsEntry(targetCenteringRuntime), pixelInspectionEntry(pixelInspection), framingPreviewEntry(framingPreviewState), meridianFlipViewEntry(meridianFlipView)]),
+	keepViewEntries([
+		sectionsEntry(collapsibleSections),
+		cameraToolsEntry(imagesState),
+		activeCameraTabEntry(imagesState),
+		centeringTargetsEntry(targetCenteringRuntime),
+		pixelInspectionEntry(pixelInspection),
+		framingPreviewEntry(framingPreviewState),
+		meridianFlipViewEntry(meridianFlipView),
+		observatoryCamerasViewEntry(observatoryCamerasView),
+	]),
 	watchHistory(routeState),
 	watchPlayers(),
 	watchPictureInPicture(),

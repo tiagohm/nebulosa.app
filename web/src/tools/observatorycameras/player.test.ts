@@ -137,3 +137,19 @@ test('a removed or disabled camera stops its player', () => {
 	handlePlayerEvent({ type: 'observatoryCamera:removed', epoch: 'e', revision: 1, cameraId: 'c1' })
 	expect(playerState.players.c1).toBeUndefined()
 })
+
+test('tells a failure without video from a refused stream, and clears it once playing', () => {
+	setTileOnscreen('c1', true)
+	startPlayer('c1')
+	fail(readers[0], { connected: false })
+	expect(playerState.players.c1).toMatchObject({ status: 'failed', noVideo: true })
+
+	startPlayer('c1')
+	fail(readers[1], { stage: 'signaling', code: 'sourceAuthFailed', connected: false })
+	expect(playerState.players.c1).toMatchObject({ status: 'failed', noVideo: false, code: 'sourceAuthFailed' })
+
+	startPlayer('c1')
+	markPlaying('c1')
+	expect(playerState.players.c1.noVideo).toBeUndefined()
+	expect(playerState.players.c1.code).toBeUndefined()
+})

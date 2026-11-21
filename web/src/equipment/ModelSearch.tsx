@@ -92,7 +92,6 @@ export function ModelSearch<T extends { readonly model: string }>({ label, place
 			<div className="relative">
 				<TextInput
 					label={label}
-					spellCheck={false}
 					autoComplete="off"
 					value={query}
 					placeholder={placeholder}

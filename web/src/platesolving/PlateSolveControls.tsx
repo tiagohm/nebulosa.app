@@ -160,7 +160,7 @@ export function AngleField({ label, hour = false, value, placeholder, disabled, 
 
 	return (
 		<>
-			<TextInput label={label} placeholder={placeholder ?? (hour ? 'From the header, such as 10h 44m 03s' : 'From the header, such as -59° 41′')} spellCheck={false} autoComplete="off" value={text} disabled={disabled} onChange={(e) => setText(e.target.value)} onBlur={commit} />
+			<TextInput label={label} placeholder={placeholder ?? (hour ? 'From the header, such as 10h 44m 03s' : 'From the header, such as -59° 41′')} value={text} disabled={disabled} onChange={(e) => setText(e.target.value)} onBlur={commit} />
 			{invalid && <Notice error>Unreadable {hour ? 'right ascension' : 'declination'}.</Notice>}
 		</>
 	)

@@ -51,8 +51,6 @@ export function Slider({ label, value, onChange, min, max, step, disabled, class
 				<input
 					type="text"
 					inputMode="decimal"
-					autoComplete="off"
-					spellCheck={false}
 					disabled={disabled}
 					value={draft ?? value.toFixed(decimals)}
 					onChange={(e) => {

@@ -65,7 +65,7 @@ export function TimeInputPanel({ zone, location }: TimeInputPanelProps) {
 					<Select label="Format" options={INPUT_FORMATS} value={format} format={(value) => INPUT_FORMAT_LABELS[value]} onChange={(value) => setInputFormat(astronomicalTimeState, value)} />
 					{format === 'calendar' && <Select label="Read In" options={CALENDAR_READS} value={read} format={calendarReadLabel} onChange={(value) => setCalendarRead(astronomicalTimeState, value)} />}
 					{(format === 'jd' || format === 'mjd') && <Select label="Timescale" options={TIME_SCALE_NAMES} value={scale} onChange={(value) => setInputScale(astronomicalTimeState, value)} />}
-					<TextInput label={INPUT_FORMAT_LABELS[format]} placeholder={INPUT_FORMAT_EXAMPLES[format]} spellCheck={false} value={text} onChange={(e) => setEntryText(astronomicalTimeState, e.target.value)} />
+					<TextInput label={INPUT_FORMAT_LABELS[format]} placeholder={INPUT_FORMAT_EXAMPLES[format]} value={text} onChange={(e) => setEntryText(astronomicalTimeState, e.target.value)} />
 					{inputError && <Notice error>{inputError}</Notice>}
 					{ambiguous && (
 						<>

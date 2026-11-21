@@ -81,8 +81,8 @@ function ManualForm({ start, elevation, onApply }: ManualFormProps) {
 			}}
 		>
 			<div className="grid grid-cols-2 gap-2">
-				<TextInput label="Latitude" suffix="°" spellCheck={false} autoComplete="off" value={latitude} onChange={(e) => setLatitude(e.target.value)} />
-				<TextInput label="Longitude" suffix="°" spellCheck={false} autoComplete="off" value={longitude} onChange={(e) => setLongitude(e.target.value)} />
+				<TextInput label="Latitude" suffix="°" value={latitude} onChange={(e) => setLatitude(e.target.value)} />
+				<TextInput label="Longitude" suffix="°" value={longitude} onChange={(e) => setLongitude(e.target.value)} />
 			</div>
 			{elevation && <TextInput label="Elevation" suffix="m" inputMode="decimal" value={height} onChange={(e) => setHeight(e.target.value)} />}
 			<Select label="Time Zone of the Place" options={TIME_ZONES} value={timeZone} onChange={setTimeZone} />

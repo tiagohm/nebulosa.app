@@ -149,8 +149,8 @@ export function ObservingSiteEditor({ site, onDirtyChange, onSaved, onClosed }: 
 							}}
 						>
 							<TextInput label="Name" value={draft.name} placeholder="Backyard" onChange={(e) => edit({ name: e.target.value })} />
-							<TextInput label="Latitude" suffix="°" spellCheck={false} autoComplete="off" value={draft.latitude} placeholder="-23.5475 or 23° 32′ 51″ S" onChange={(e) => edit({ latitude: e.target.value })} />
-							<TextInput label="Longitude" suffix="°" spellCheck={false} autoComplete="off" value={draft.longitude} placeholder="-46.6361 or 46° 38′ 10″ W" onChange={(e) => edit({ longitude: e.target.value })} />
+							<TextInput label="Latitude" suffix="°" value={draft.latitude} placeholder="-23.5475 or 23° 32′ 51″ S" onChange={(e) => edit({ latitude: e.target.value })} />
+							<TextInput label="Longitude" suffix="°" value={draft.longitude} placeholder="-46.6361 or 46° 38′ 10″ W" onChange={(e) => edit({ longitude: e.target.value })} />
 							{located && <Notice>{formatGeographic(latitude, longitude, MAP_DECIMALS)}</Notice>}
 							<TextInput label="Elevation" suffix="m" inputMode="decimal" value={draft.elevation} onChange={(e) => edit({ elevation: e.target.value })} />
 							<Notice>Height above the WGS84 ellipsoid, not above sea level; the two differ by up to about 100 m.</Notice>

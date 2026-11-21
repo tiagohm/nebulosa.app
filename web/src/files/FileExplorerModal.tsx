@@ -230,7 +230,7 @@ export function FileExplorerModal(props: FileExplorerModalProps) {
 				}}
 			>
 				<IconButton icon="arrow" label="Parent directory (Backspace)" disabled={listing?.parent === undefined} onClick={() => listing?.parent !== undefined && void browse(listing.parent)} />
-				<input value={typed} onChange={(e) => setTyped(e.target.value)} placeholder="Path on the server" spellCheck={false} className={inputClassName} />
+				<input value={typed} onChange={(e) => setTyped(e.target.value)} placeholder="Path on the server" autoCapitalize="off" className={inputClassName} />
 				<Button type="submit" variant="secondary">
 					Go
 				</Button>
@@ -257,7 +257,6 @@ export function FileExplorerModal(props: FileExplorerModalProps) {
 							e.stopPropagation()
 							cancelFolder()
 						}}
-						spellCheck={false}
 						className={inputClassName}
 					/>
 					<Button type="submit" disabled={!folder.trim() || creating}>
@@ -307,7 +306,7 @@ export function FileExplorerModal(props: FileExplorerModalProps) {
 					}}
 				>
 					<label className="flex-none text-sm text-ink-300">File name</label>
-					<input value={name} onChange={(e) => setName(e.target.value)} spellCheck={false} data-autofocus className={inputClassName} />
+					<input value={name} onChange={(e) => setName(e.target.value)} data-autofocus className={inputClassName} />
 				</form>
 			)}
 			{message && <p className="m-0 mt-3 text-sm text-danger">{message}</p>}

@@ -83,7 +83,7 @@ function SignIn({ tool, disabled }: { readonly tool: ExternalToolState; readonly
 				</Actions>
 			) : (
 				<>
-					<TextInput label="API Key" type="password" spellCheck={false} autoComplete="off" value={apiKey} disabled={disabled || busy} onChange={(e) => setApiKey(e.target.value)} />
+					<TextInput label="API Key" type="password" value={apiKey} disabled={disabled || busy} onChange={(e) => setApiKey(e.target.value)} />
 					<Actions>
 						<Button disabled={disabled || busy || !apiKey.trim()} onClick={() => void change(true)}>
 							{busy ? 'Signing In…' : 'Sign In'}
@@ -185,19 +185,19 @@ export function ExternalToolDetail({ tool, onDirtyChange }: ExternalToolDetailPr
 			<PanelSection title="Configuration">
 				{tool.fields.includes('executable') && (
 					<>
-						<TextInput label="Executable Path" placeholder="Full path on the server, such as /usr/bin/astap" spellCheck={false} autoComplete="off" value={draft.executable} onChange={(e) => edit({ ...draft, executable: e.target.value })} />
+						<TextInput label="Executable Path" placeholder="Full path on the server, such as /usr/bin/astap" value={draft.executable} onChange={(e) => edit({ ...draft, executable: e.target.value })} />
 						<Notice>The path is resolved on the computer running the Nebulosa server, not on this browser's computer. A name without a folder is looked up on the server's PATH.</Notice>
 					</>
 				)}
 				{tool.fields.includes('config') && (
 					<>
-						<TextInput label="Configuration File" placeholder="Default configuration of the program" spellCheck={false} autoComplete="off" value={draft.config ?? ''} onChange={(e) => edit({ ...draft, config: e.target.value })} />
+						<TextInput label="Configuration File" placeholder="Default configuration of the program" value={draft.config ?? ''} onChange={(e) => edit({ ...draft, config: e.target.value })} />
 						<Notice>Optional backend configuration on the server, which names the folders of the index files. Without one, the program's default configuration is used.</Notice>
 					</>
 				)}
 				{tool.fields.includes('endpoint') && (
 					<>
-						<TextInput label="Endpoint" placeholder="https://nova.astrometry.net" spellCheck={false} autoComplete="off" value={draft.endpoint ?? ''} onChange={(e) => edit({ ...draft, endpoint: e.target.value })} />
+						<TextInput label="Endpoint" placeholder="https://nova.astrometry.net" value={draft.endpoint ?? ''} onChange={(e) => edit({ ...draft, endpoint: e.target.value })} />
 						<Notice>Base URL of the service; the public nova.astrometry.net when empty. Changing it signs out.</Notice>
 					</>
 				)}

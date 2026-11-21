@@ -70,9 +70,9 @@ export function GrsSettings({ timeZone }: GrsSettingsProps) {
 			</span>
 			{!model && <Notice>Enter the spot's System II longitude from a recent observer report (such as ALPO or JUPOS) to predict its transits. Everything else works without it.</Notice>}
 			{status?.quality === 'stale' && <Notice>The reference is more than 60 days from now; the drift is extrapolated and the transits may be off by tens of minutes.</Notice>}
-			<TextInput label="Longitude (System II, west)" suffix="°" inputMode="decimal" autoComplete="off" spellCheck={false} placeholder="From the report" value={longitudeText} onChange={(event) => isNumberText(event.target.value) && setLongitudeText(event.target.value)} />
+			<TextInput label="Longitude (System II, west)" suffix="°" inputMode="decimal" placeholder="From the report" value={longitudeText} onChange={(event) => isNumberText(event.target.value) && setLongitudeText(event.target.value)} />
 			<TextInput label={`Measured at (${timeZone})`} type="datetime-local" value={reference} onChange={(event) => setReference(event.target.value)} />
-			<TextInput label="Drift (positive westward)" suffix="°/day" inputMode="decimal" autoComplete="off" spellCheck={false} placeholder="From the report" value={driftText} onChange={(event) => isNumberText(event.target.value) && setDriftText(event.target.value)} />
+			<TextInput label="Drift (positive westward)" suffix="°/day" inputMode="decimal" placeholder="From the report" value={driftText} onChange={(event) => isNumberText(event.target.value) && setDriftText(event.target.value)} />
 			<TextInput label="Source" value={sourceLabel} onChange={(event) => setSourceLabel(event.target.value)} placeholder="ALPO report of …" />
 			<TextInput label="Notes" value={notes} onChange={(event) => setNotes(event.target.value)} />
 			{skipped && <Notice error>The clocks skip this time in {timeZone}.</Notice>}

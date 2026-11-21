@@ -82,7 +82,7 @@ function Curated() {
 				</div>
 				<div className="flex flex-wrap items-end gap-2">
 					<Select label="System" className="w-40" options={SYSTEM_FILTERS} value={system} format={(e) => SYSTEM_LABELS[e]} onChange={setSystem} />
-					<TextInput label="Search" className="w-60" value={query} placeholder="File or body…" onChange={(e) => setQuery(e.target.value)} spellCheck={false} />
+					<TextInput label="Search" className="w-60" value={query} placeholder="File or body…" onChange={(e) => setQuery(e.target.value)} />
 				</div>
 			</div>
 			{shown.length > 0 ? (
@@ -210,7 +210,7 @@ function SmallBody() {
 				}}
 				className="flex flex-wrap items-end gap-2"
 			>
-				<TextInput label="Asteroid or comet" className="w-72" value={query} placeholder="Ceres, 433, 1P/Halley…" onChange={(e) => setQuery(e.target.value)} spellCheck={false} />
+				<TextInput label="Asteroid or comet" className="w-72" value={query} placeholder="Ceres, 433, 1P/Halley…" onChange={(e) => setQuery(e.target.value)} />
 				<Button type="submit" variant="secondary" disabled={searching || !query.trim()}>
 					{searching ? 'Searching…' : 'Search SBDB'}
 				</Button>

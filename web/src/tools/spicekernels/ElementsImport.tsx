@@ -170,7 +170,6 @@ function ElementsPreview({ loaded }: { readonly loaded: LoadedElements }) {
 								setQuery(e.target.value)
 								setPage(0)
 							}}
-							spellCheck={false}
 						/>
 						<Button variant="secondary" disabled={marked.size >= MAX_IMPORTED_OBJECTS} onClick={() => setMarked((current) => markAll(current, shown))}>
 							Mark all {query.trim() ? 'found' : ''}

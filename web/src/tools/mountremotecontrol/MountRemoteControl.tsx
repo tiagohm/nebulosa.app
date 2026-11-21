@@ -116,7 +116,7 @@ function ProtocolPanel({ protocol, device, identity, blocker }: ProtocolPanelPro
 			) : (
 				<>
 					<div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_10rem]">
-						<TextInput label="Host" value={host} disabled={!!pending} onChange={(event) => setHost(event.target.value)} inputMode="url" autoCapitalize="off" autoCorrect="off" spellCheck={false} />
+						<TextInput label="Host" value={host} disabled={!!pending} onChange={(event) => setHost(event.target.value)} inputMode="url" />
 						<NumberInput label="Port" value={port} min={1} max={65535} disabled={!!pending} onChange={setPort} />
 					</div>
 					{!isLoopback(host) && <p className="m-0 text-xs leading-4 text-warning">Anyone on the network can move the mount: clients are not authenticated. Use 127.0.0.1 to accept only this computer.</p>}

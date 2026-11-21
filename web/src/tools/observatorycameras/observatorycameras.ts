@@ -1,6 +1,7 @@
 import type { GatewayState, ObservatoryCamera, ObservatoryCameraEvent, ObservatoryCameraSaveRequest, ObservatoryCameraSecretKeyState, ObservatoryCamerasSnapshot, ObservatoryCameraStream, ObservatoryCameraStreamCode, ServerEvent } from 'api'
 import { proxy } from 'valtio'
 import { type ApiFetch, browserFetch, jsonInit, responseError } from '../../http'
+import type { ViewEntry } from '../../profile/view'
 
 // Mirror of the observatory cameras of the server: their definitions, the state of their streams on the server, the
 // media gateway, and the key of their addresses, fed by GET /api/observatory-cameras and the observatoryCamera:* events,
@@ -46,8 +47,30 @@ export const STREAM_CODE_LABELS: Readonly<Record<ObservatoryCameraStreamCode, st
 	sourceUnavailable: 'Stream failed',
 	secretKeyUnavailable: 'Key unavailable',
 	secretKeyMismatch: 'Saved with another key',
-	controlFailed: 'Gateway refused it',
+	controlFailed: 'MediaMTX refused it',
 	unsupportedCodec: 'Unsupported codec',
+}
+
+// How this browser shows the video of the cameras.
+export interface ObservatoryCamerasView {
+	// Whether the video of the tile, the enlarged view, and full screen is dimmed, to spare the dark adaptation of the
+	// operator; the browser draws picture-in-picture itself, never dimmed.
+	dimmed: boolean
+}
+
+// How this browser shows the video of the cameras, kept across its restarts (observatoryCamerasViewEntry).
+export const observatoryCamerasView = proxy<ObservatoryCamerasView>({ dimmed: false })
+
+// Keeps how this browser shows the video of the cameras.
+export function observatoryCamerasViewEntry(view: ObservatoryCamerasView): ViewEntry {
+	return {
+		name: 'observatoryCamerasView',
+		store: view,
+		restore: (value) => {
+			if (value === true) view.dimmed = true
+		},
+		value: () => (view.dimmed ? true : undefined),
+	}
 }
 
 // Cameras of the server, shared by every view of the tab.

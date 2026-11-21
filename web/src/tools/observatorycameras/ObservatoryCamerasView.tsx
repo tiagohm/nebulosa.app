@@ -12,28 +12,29 @@ import { Notice } from '../../ui/Notice'
 import { Select } from '../../ui/Select'
 import { StatusBadge } from '../../ui/StatusBadge'
 import { CameraEditor } from './CameraEditor'
-import { CameraTile, Placeholder } from './CameraTile'
-import { CameraVideo, requestFullscreen } from './CameraVideo'
-import { ALL_SITES, filterCameras, moveCamera, observatoryCamerasState, siteFilter, sortedCameras } from './observatorycameras'
-import { canPictureInPicture, togglePictureInPicture } from './pictureinpicture'
+import { CameraFrame, CameraMeta, CameraTile, PlaybackControls, TOUCH_BUTTON } from './CameraTile'
+import { ALL_SITES, filterCameras, moveCamera, observatoryCamerasState, observatoryCamerasView, siteFilter, sortedCameras } from './observatorycameras'
 import { isTileOnscreen, playerState, startPlayer, stopAllPlayers } from './player'
 import { cameraStatus } from './status'
 
 // Observatory Cameras tool: the IP cameras watching the observatory, in a grid. Nothing plays until the operator starts a
 // preview, one tile at a time or every tile on screen at once; a preview can be enlarged, shown in full screen, or shown
-// in picture-in-picture, which keeps playing in every workspace. The grid shows the cameras of one site and those shared
-// by every site, the active site when the page opens, or every camera. The cameras, the media gateway, and the key of
-// their addresses are the server's; this view only edits them.
+// in picture-in-picture, which keeps playing in every workspace, and this browser can dim the video. The grid shows the
+// cameras of one site and those shared by every site, the active site when the page opens, or every camera; the site
+// filter appears once there is more than one site. Moving cameras in the grid is a mode of its own, Arrange. The cameras,
+// the media gateway, and the key of their addresses are the server's; this view only edits them.
 
 // Observatory Cameras tool.
 export function ObservatoryCamerasView() {
 	const state = useSnapshot(observatoryCamerasState)
 	const { players } = useSnapshot(playerState)
+	const { dimmed } = useSnapshot(observatoryCamerasView)
 	const { sites } = useSnapshot(siteState)
 	const activeSite = useActiveSite()
 	const [chosenFilter, setFilter] = useState<string>()
 	const [editing, setEditing] = useState<ObservatoryCamera | 'new'>()
 	const [enlarged, setEnlarged] = useState<string>()
+	const [arranging, setArranging] = useState(false)
 	const [moveError, setMoveError] = useState<string>()
 	const filter = siteFilter(
 		chosenFilter,
@@ -44,6 +45,7 @@ export function ObservatoryCamerasView() {
 	const playing = Object.keys(players).length
 	const installed = state.gateway !== undefined && state.gateway.status !== 'notInstalled'
 	const filterOptions = [ALL_SITES, ...sites.map((site) => site.id)]
+	const startBlocked = !installed ? 'MediaMTX is not installed.' : cameras.length === 0 ? 'There is no camera to preview.' : undefined
 
 	function startVisible() {
 		for (const camera of cameras) if (camera.enabled && isTileOnscreen(camera.id)) startPlayer(camera.id)
@@ -55,13 +57,15 @@ export function ObservatoryCamerasView() {
 
 	const actions = (
 		<>
-			<Button variant="secondary" disabled={!installed || cameras.length === 0} onClick={startVisible}>
-				Start Visible Previews
+			<Button disabled={startBlocked !== undefined} title={startBlocked} onClick={startVisible}>
+				Play All
 			</Button>
-			<Button variant="secondary" disabled={playing === 0} onClick={stopAllPlayers}>
+			<Button variant="secondary" disabled={playing === 0} title={playing === 0 ? 'No preview is playing.' : undefined} onClick={stopAllPlayers}>
 				Stop All
 			</Button>
-			<Button onClick={() => setEditing('new')}>Add Camera</Button>
+			<Button variant="secondary" onClick={() => setEditing('new')}>
+				Add Camera
+			</Button>
 		</>
 	)
 
@@ -71,8 +75,12 @@ export function ObservatoryCamerasView() {
 				<div className="mx-auto flex max-w-7xl flex-col gap-4 p-4">
 					<FeatureNotices cameraCount={Object.keys(state.cameras).length} />
 					<div className="flex flex-wrap items-end gap-3">
-						<Select label="Cameras of" className="w-64" options={filterOptions} value={filter} onChange={setFilter} format={(value) => (value === ALL_SITES ? 'All sites' : (sites.find((site) => site.id === value)?.name ?? value))} />
-						<span className="pb-2 text-sm text-ink-300">{playing === 0 ? 'No preview is playing.' : `${playing} ${playing === 1 ? 'preview' : 'previews'} in this tab; each one decodes its own video.`}</span>
+						{sites.length > 1 && <Select label="Cameras of" className="w-64 flex-none" options={filterOptions} value={filter} onChange={setFilter} format={(value) => (value === ALL_SITES ? 'All sites' : (sites.find((site) => site.id === value)?.name ?? value))} />}
+						<span className="pb-2 text-sm text-ink-300">{playing === 0 ? 'No preview is playing.' : `${playing} playing in this tab`}</span>
+						<span className="ml-auto flex items-center gap-1">
+							<IconButton icon="moon" label={dimmed ? 'Show the video at full brightness' : 'Dim the video'} pressed={dimmed} className={TOUCH_BUTTON} onClick={() => (observatoryCamerasView.dimmed = !dimmed)} />
+							<IconButton icon="grip" label={cameras.length < 2 ? 'Arranging needs two cameras or more' : arranging ? 'Stop arranging the cameras' : 'Arrange the cameras'} pressed={arranging} className={TOUCH_BUTTON} disabled={cameras.length < 2 && !arranging} onClick={() => setArranging(!arranging)} />
+						</span>
 					</div>
 					{moveError && <Notice error>{moveError}</Notice>}
 					{state.loadError && !state.loaded && <Notice error>{state.loadError}</Notice>}
@@ -87,7 +95,7 @@ export function ObservatoryCamerasView() {
 					) : (
 						<div className="grid grid-cols-1 gap-4 md:grid-cols-2 2xl:grid-cols-3">
 							{cameras.map((camera, index) => (
-								<CameraTile key={camera.id} camera={camera} canMove={{ up: index > 0, down: index < cameras.length - 1 }} onEdit={setEditing} onEnlarge={(c) => setEnlarged(c.id)} onMove={(c, direction) => void move(c, direction)} />
+								<CameraTile key={camera.id} camera={camera} arranging={arranging} canMove={{ up: index > 0, down: index < cameras.length - 1 }} onEdit={setEditing} onEnlarge={(c) => setEnlarged(c.id)} onMove={(c, direction) => void move(c, direction)} />
 							))}
 						</div>
 					)}
@@ -99,15 +107,20 @@ export function ObservatoryCamerasView() {
 	)
 }
 
-// Notices about what the feature needs: MediaMTX, the key of the addresses, the gateway running, and the UDP port.
+// Notices about what the feature needs: MediaMTX, the key of the addresses, the gateway running, and, once a preview of
+// this tab got no video, the UDP port the browser must reach.
 function FeatureNotices({ cameraCount }: { readonly cameraCount: number }) {
 	const { gateway, secretKey, icePort } = useSnapshot(observatoryCamerasState)
+	const { players } = useSnapshot(playerState)
+	const noVideo = Object.values(players).some((player) => player.noVideo === true && (player.status === 'failed' || player.status === 'reconnecting'))
 
 	return (
 		<>
 			{gateway?.status === 'notInstalled' && (
-				<div className="flex flex-wrap items-center gap-3 rounded-sm border border-line-100 bg-base-100 p-3">
-					<p className="m-0 min-w-0 flex-1 text-sm leading-5 text-ink-200">{gateway.message ?? 'MediaMTX is not installed.'} Cameras can be added now and played once it is.</p>
+				<div className="flex flex-wrap items-center gap-3">
+					<div className="min-w-0 flex-1">
+						<Notice>{gateway.message ?? 'MediaMTX is not installed.'} Cameras can be added now and played once it is.</Notice>
+					</div>
 					<Button variant="secondary" onClick={() => navigate(routeState, { workspace: 'settings', section: 'external-tools', tool: 'mediamtx' })}>
 						Open External Tools
 					</Button>
@@ -115,12 +128,12 @@ function FeatureNotices({ cameraCount }: { readonly cameraCount: number }) {
 			)}
 			{(gateway?.status === 'unavailable' || gateway?.status === 'restarting') && (
 				<Notice error={gateway.status === 'unavailable'}>
-					{gateway.message ?? 'The media gateway is not available.'}
+					{gateway.message ?? 'MediaMTX is not available.'}
 					{gateway.status === 'restarting' && ' It is restarting.'}
 				</Notice>
 			)}
 			{secretKey && (secretKey.status === 'invalid' || (secretKey.status === 'unavailable' && cameraCount > 0)) && secretKey.message && <Notice error>{secretKey.message}</Notice>}
-			{icePort !== undefined && <Notice>Video reaches this browser directly from the server over UDP port {icePort}: allow it in the server's firewall. Only signaling goes through this page.</Notice>}
+			{noVideo && icePort !== undefined && <Notice error>No video reached this browser. The video comes straight from the server over UDP port {icePort}: allow that port in the firewall of the server and of this network.</Notice>}
 		</>
 	)
 }
@@ -133,35 +146,29 @@ interface EnlargedCameraProps {
 	readonly onClose: () => void
 }
 
-// Enlarged view of a camera in a dialog; opening it starts the preview, which the tile shares.
+// Enlarged view of a camera in a dialog, with the line and the playback controls of its tile; opening it starts the
+// preview, which the tile shares, and Stop stops it without closing the view.
 function EnlargedCamera({ camera, onClose }: EnlargedCameraProps) {
-	const { players, pictureInPicture } = useSnapshot(playerState)
-	const player = players[camera.id]
-	const inPictureInPicture = pictureInPicture === camera.id
+	const { players } = useSnapshot(playerState)
 	const { streams, gateway } = useSnapshot(observatoryCamerasState)
 	const video = useRef<HTMLVideoElement>(null)
+	const status = cameraStatus(camera, streams[camera.id], players[camera.id], gateway)
 
 	useEffect(() => startPlayer(camera.id), [camera.id])
-
-	const status = cameraStatus(camera, streams[camera.id], player, gateway)
-	const playing = player?.status === 'playing'
 
 	return (
 		<Modal open onClose={onClose} title={camera.name} className="max-w-7xl">
 			<div className="flex flex-col gap-3">
-				<div className="relative aspect-video bg-black">{inPictureInPicture ? <Placeholder text="Playing in picture-in-picture" /> : player?.stream ? <CameraVideo cameraId={camera.id} videoRef={video} /> : <Placeholder text={player?.status === 'failed' ? 'Failed' : 'Connecting…'} />}</div>
+				<CameraFrame cameraId={camera.id} videoRef={video} />
 				<div className="flex flex-wrap items-center gap-2">
 					<StatusBadge tone={status.tone} label={status.label} />
-					{status.detail && <span className="text-xs text-ink-300">{status.detail}</span>}
-					<span className="ml-auto flex items-center gap-1">
-						{player?.status === 'failed' && (
-							<Button variant="secondary" onClick={() => startPlayer(camera.id)}>
-								Retry
-							</Button>
-						)}
-						<IconButton icon="fit" label="Full screen" disabled={!playing || inPictureInPicture} onClick={() => requestFullscreen(video.current)} />
-						{canPictureInPicture() && <IconButton icon="pictureInPicture" label={inPictureInPicture ? 'Leave picture in picture' : 'Picture in picture'} pressed={inPictureInPicture} disabled={!playing && !inPictureInPicture} onClick={() => void togglePictureInPicture(camera.id)} />}
-					</span>
+					<div className="min-w-0 flex-1">
+						<CameraMeta camera={camera} />
+					</div>
+				</div>
+				{status.detail && <Notice error={status.tone === 'danger'}>{status.detail}</Notice>}
+				<div className="flex flex-wrap items-center gap-1">
+					<PlaybackControls camera={camera} video={video} />
 				</div>
 			</div>
 		</Modal>

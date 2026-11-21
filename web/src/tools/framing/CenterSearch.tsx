@@ -101,8 +101,6 @@ export function CenterSearch({ onPick }: CenterSearchProps) {
 			<div className="relative">
 				<TextInput
 					label="Object"
-					spellCheck={false}
-					autoComplete="off"
 					value={query}
 					placeholder="Search, such as M 42"
 					onFocus={() => setOpen(true)}

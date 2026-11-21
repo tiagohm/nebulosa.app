@@ -7,11 +7,11 @@ export interface TextInputProps extends Omit<ComponentProps<'input'>, 'size'> {
 	readonly suffix?: string
 }
 
-export function TextInput({ id, label, suffix, className, type = 'text', style, ...props }: TextInputProps) {
+export function TextInput({ id, label, suffix, className, type = 'text', style, autoCapitalize = 'off', spellCheck = false, ...props }: TextInputProps) {
 	return (
 		<Field label={label} className={className}>
 			<div className="relative">
-				<input type={type} className={inputClassName} style={suffix ? { ...style, paddingRight: suffixPadding(suffix) } : style} {...props} data-1p-ignore />
+				<input type={type} className={inputClassName} style={suffix ? { ...style, paddingRight: suffixPadding(suffix) } : style} autoCapitalize={autoCapitalize} spellCheck={spellCheck} {...props} data-1p-ignore />
 				{suffix && <InputSuffix>{suffix}</InputSuffix>}
 			</div>
 		</Field>

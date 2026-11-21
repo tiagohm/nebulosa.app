@@ -74,8 +74,6 @@ export function NumberInput({ label, value, onChange, min, max, step = 1, classN
 				<input
 					type="text"
 					inputMode={Number.isInteger(step) && min !== undefined && min >= 0 ? 'numeric' : 'decimal'}
-					autoComplete="off"
-					spellCheck={false}
 					disabled={disabled}
 					value={draft ?? String(displayValue(value, step, min, max))}
 					onChange={(e) => {

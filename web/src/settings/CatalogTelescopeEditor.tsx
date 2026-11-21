@@ -132,7 +132,7 @@ export function CatalogTelescopeEditor({ telescope, onDirtyChange, onSaved, onCl
 					{telescope && <Notice>{telescopeUsage(used)} The Telescope and Guide Telescope of the Equipment Setup refer to it.</Notice>}
 				</div>
 			</header>
-			<div className="flex min-w-0 flex-col lg:w-112">
+			<div className="flex min-w-0 flex-col lg:w-md">
 				<PanelSection title="Telescope">
 					<form
 						className="flex flex-col gap-3"
@@ -143,7 +143,7 @@ export function CatalogTelescopeEditor({ telescope, onDirtyChange, onSaved, onCl
 					>
 						<TextInput label="Name" value={draft.name} placeholder="Esprit 100" onChange={(e) => edit({ name: e.target.value })} />
 						<TelescopeModelSearch label="Model" placeholder="Sky-Watcher Esprit 100ED" value={draft.model} onValueChange={(model) => edit({ model })} onPick={fillFrom} />
-						<TextInput label="Serial Number" spellCheck={false} autoComplete="off" value={draft.serial} onChange={(e) => edit({ serial: e.target.value })} />
+						<TextInput label="Serial Number" value={draft.serial} onChange={(e) => edit({ serial: e.target.value })} />
 						<TextInput label="Notes" value={draft.notes} onChange={(e) => edit({ notes: e.target.value })} />
 						<Notice>The name tells telescopes apart in every list; the model, serial number, and notes are for people only and never compared.</Notice>
 						<Notice>Typing the model lists the matching telescopes of the AstroBin catalog; choosing one fills the optics. AstroBin lists a zoom, or a telescope with its reducer or extender, as a range of focal lengths: such a model fills the shortest; check it.</Notice>

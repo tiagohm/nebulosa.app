@@ -1,5 +1,5 @@
 import type { ObservatoryCamera } from 'api'
-import { useEffect, useRef, useState } from 'react'
+import { type Ref, type RefObject, useEffect, useRef, useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { formatClockDuration } from '../../format'
 import { siteState } from '../../location/site'
@@ -12,17 +12,24 @@ import { CameraVideo, requestFullscreen } from './CameraVideo'
 import { observatoryCamerasState } from './observatorycameras'
 import { canPictureInPicture, togglePictureInPicture } from './pictureinpicture'
 import { attachTile, playerState, setTileOnscreen, startPlayer, stopPlayer } from './player'
-import { cameraStatus } from './status'
+import { cameraStatus, frameText, otherViewers } from './status'
 
 // Tile of a camera in the grid of Observatory Cameras: a 16:9 frame that shows the video only once the operator starts
-// its preview (a static placeholder otherwise, so a grid never opens a stream by itself), its name, site, host, and
-// status below the frame, never over the video, and its actions. A tile that leaves the screen pauses its preview and a
-// tile that goes away stops it, unless the preview is in picture-in-picture, which keeps playing in every workspace.
+// its preview (a static placeholder otherwise, so a grid never opens a stream by itself), its name, status, site, host,
+// viewers, and time live below the frame, never over the video, and its actions; moving it in the grid is offered only
+// while the grid is arranged. A tile that leaves the screen pauses its preview and a tile that goes away stops it, unless
+// the preview is in picture-in-picture, which keeps playing in every workspace. The frame, the line under it, and the
+// playback controls are shared with the enlarged view.
+
+// Classes of an icon button sized for a finger on phones.
+export const TOUCH_BUTTON = 'max-sm:size-12.5'
 
 // Props of a camera tile.
 export interface CameraTileProps {
 	// Camera shown.
 	readonly camera: ObservatoryCamera
+	// Whether the grid is being arranged, which offers moving the camera.
+	readonly arranging: boolean
 	// Whether the camera can move up or down in the list shown.
 	readonly canMove: { readonly up: boolean; readonly down: boolean }
 	// Opens the editor of the camera.
@@ -47,22 +54,21 @@ export function useElapsed(startedAt: number | undefined) {
 	return startedAt === undefined ? undefined : (now - startedAt) / 1000
 }
 
+// Returns why a camera cannot play now, or undefined when it can.
+export function playBlocked(camera: ObservatoryCamera, gatewayInstalled: boolean) {
+	if (!camera.enabled) return 'The camera is disabled.'
+	if (!gatewayInstalled) return 'MediaMTX is not installed.'
+	return undefined
+}
+
 // Tile of a camera.
-export function CameraTile({ camera, canMove, onEdit, onEnlarge, onMove }: CameraTileProps) {
-	const { players, pictureInPicture } = useSnapshot(playerState)
-	const player = players[camera.id]
-	const inPictureInPicture = pictureInPicture === camera.id
+export function CameraTile({ camera, arranging, canMove, onEdit, onEnlarge, onMove }: CameraTileProps) {
+	const { players } = useSnapshot(playerState)
 	const { streams, gateway } = useSnapshot(observatoryCamerasState)
-	const { sites } = useSnapshot(siteState)
 	const frame = useRef<HTMLDivElement>(null)
 	const video = useRef<HTMLVideoElement>(null)
-	const elapsed = useElapsed(player?.status === 'playing' ? player.startedAt : undefined)
-	const stream = streams[camera.id]
-	const status = cameraStatus(camera, stream, player, gateway)
-	const site = camera.observingSiteId === undefined ? 'Every site' : (sites.find((s) => s.id === camera.observingSiteId)?.name ?? 'Every site')
-	const playing = player?.status === 'playing'
-	const showVideo = player !== undefined && !inPictureInPicture && player.stream !== undefined
-	const blocked = !camera.enabled ? 'The camera is disabled.' : gateway?.status === 'notInstalled' ? 'MediaMTX is not installed.' : undefined
+	const player = players[camera.id]
+	const status = cameraStatus(camera, streams[camera.id], player, gateway)
 
 	useEffect(() => {
 		const element = frame.current
@@ -79,37 +85,24 @@ export function CameraTile({ camera, canMove, onEdit, onEnlarge, onMove }: Camer
 
 	return (
 		<article className="flex min-w-0 flex-col overflow-hidden rounded-sm border border-line-100 bg-base-100">
-			<div ref={frame} className="relative aspect-video bg-black">
-				{showVideo ? <CameraVideo cameraId={camera.id} videoRef={video} /> : <Placeholder text={inPictureInPicture ? 'Playing in picture-in-picture' : player?.status === 'connecting' || player?.status === 'reconnecting' ? 'Connecting…' : player?.status === 'paused' ? 'Paused' : 'Preview stopped'} />}
-			</div>
+			<CameraFrame cameraId={camera.id} frameRef={frame} videoRef={video} />
 			<div className="flex flex-col gap-2 p-3">
 				<div className="flex min-w-0 items-center gap-2">
-					<h3 className="m-0 min-w-0 flex-1 truncate text-sm font-semibold text-ink-100">{camera.name}</h3>
+					<h2 className="m-0 min-w-0 flex-1 truncate text-sm font-semibold text-ink-100">{camera.name}</h2>
 					<StatusBadge tone={status.tone} label={status.label} />
 				</div>
-				<p className="m-0 truncate text-xs leading-4 text-ink-300">
-					{site} · {camera.sourceHost}
-					{stream && stream.readers > 0 && ` · ${stream.readers} ${stream.readers === 1 ? 'viewer' : 'viewers'}`}
-					{elapsed !== undefined && ` · ${formatClockDuration(elapsed)}`}
-				</p>
-				{status.detail && <Notice error={player?.status === 'failed'}>{status.detail}</Notice>}
+				<CameraMeta camera={camera} />
+				{status.detail && <Notice error={status.tone === 'danger'}>{status.detail}</Notice>}
 				<div className="flex flex-wrap items-center gap-1">
-					{player && player.status !== 'failed' ? (
-						<Button variant="secondary" onClick={() => stopPlayer(camera.id)}>
-							Stop
-						</Button>
-					) : (
-						<Button variant={player ? 'secondary' : 'primary'} disabled={blocked !== undefined} title={blocked} onClick={() => startPlayer(camera.id)}>
-							{player ? 'Retry' : 'Start Preview'}
-						</Button>
-					)}
-					<IconButton icon="expand" label="Enlarge" disabled={blocked !== undefined} onClick={() => onEnlarge(camera)} />
-					<IconButton icon="fit" label="Full screen" disabled={!playing || !showVideo} onClick={() => requestFullscreen(video.current)} />
-					{canPictureInPicture() && <IconButton icon="pictureInPicture" label={inPictureInPicture ? 'Leave picture in picture' : 'Picture in picture'} pressed={inPictureInPicture} disabled={!playing && !inPictureInPicture} onClick={() => void togglePictureInPicture(camera.id)} />}
+					<PlaybackControls camera={camera} video={video} onEnlarge={onEnlarge} />
 					<span className="ml-auto flex items-center gap-1">
-						<IconButton icon="arrow" label="Move up" disabled={!canMove.up} onClick={() => onMove(camera, -1)} />
-						<IconButton icon="arrow" label="Move down" className="rotate-180" disabled={!canMove.down} onClick={() => onMove(camera, 1)} />
-						<IconButton icon="edit" label="Edit" onClick={() => onEdit(camera)} />
+						{arranging && (
+							<>
+								<IconButton icon="arrow" label={canMove.up ? 'Move up' : 'The camera is first'} className={TOUCH_BUTTON} disabled={!canMove.up} onClick={() => onMove(camera, -1)} />
+								<IconButton icon="arrow" label={canMove.down ? 'Move down' : 'The camera is last'} className={`rotate-180 ${TOUCH_BUTTON}`} disabled={!canMove.down} onClick={() => onMove(camera, 1)} />
+							</>
+						)}
+						<IconButton icon="edit" label="Edit" className={TOUCH_BUTTON} onClick={() => onEdit(camera)} />
 					</span>
 				</div>
 			</div>
@@ -117,10 +110,91 @@ export function CameraTile({ camera, canMove, onEdit, onEnlarge, onMove }: Camer
 	)
 }
 
+// Props of the frame of a camera.
+export interface CameraFrameProps {
+	// Id of the camera shown.
+	readonly cameraId: string
+	// Receives the frame element, to tell whether it is on screen.
+	readonly frameRef?: Ref<HTMLDivElement>
+	// Receives the video element, for full screen.
+	readonly videoRef: Ref<HTMLVideoElement>
+}
+
+// 16:9 frame of a camera: the video once the player has a stream (mounted before its first frame, which marks it
+// playing), covered by the placeholder of the player's state until then.
+export function CameraFrame({ cameraId, frameRef, videoRef }: CameraFrameProps) {
+	const { players, pictureInPicture } = useSnapshot(playerState)
+	const player = players[cameraId]
+	const inPictureInPicture = pictureInPicture === cameraId
+	const showVideo = player?.stream !== undefined && !inPictureInPicture
+
+	return (
+		<div ref={frameRef} className="relative aspect-video overflow-hidden bg-black">
+			{showVideo && <CameraVideo cameraId={cameraId} videoRef={videoRef} />}
+			{(!showVideo || player.status !== 'playing') && <Placeholder text={frameText(player, inPictureInPicture)} />}
+		</div>
+	)
+}
+
+// Line under the frame of a camera: its site, the host of its address, the viewers other than this tab, and how long
+// this tab's preview has been live.
+export function CameraMeta({ camera }: { readonly camera: ObservatoryCamera }) {
+	const { players } = useSnapshot(playerState)
+	const { streams } = useSnapshot(observatoryCamerasState)
+	const { sites } = useSnapshot(siteState)
+	const player = players[camera.id]
+	const elapsed = useElapsed(player?.status === 'playing' ? player.startedAt : undefined)
+	const site = camera.observingSiteId === undefined ? 'Every site' : (sites.find((s) => s.id === camera.observingSiteId)?.name ?? 'Every site')
+	const viewers = otherViewers(streams[camera.id]?.readers ?? 0, player?.stream !== undefined)
+	const parts = [site, camera.sourceHost, viewers, elapsed !== undefined && `live for ${formatClockDuration(elapsed)}`].filter((part) => typeof part === 'string' && part.length > 0)
+
+	return <p className="m-0 text-xs leading-4 wrap-break-word text-ink-300">{parts.join(' · ')}</p>
+}
+
+// Props of the playback controls of a camera.
+export interface PlaybackControlsProps {
+	// Camera controlled.
+	readonly camera: ObservatoryCamera
+	// Video element shown in full screen.
+	readonly video: RefObject<HTMLVideoElement | null>
+	// Opens the enlarged view; absent where the camera is already enlarged.
+	readonly onEnlarge?: (camera: ObservatoryCamera) => void
+}
+
+// Start, Stop, or Retry of the preview of a camera, then Enlarge, Full screen, and picture-in-picture; an unavailable
+// one says why in its tooltip.
+export function PlaybackControls({ camera, video, onEnlarge }: PlaybackControlsProps) {
+	const { players, pictureInPicture } = useSnapshot(playerState)
+	const { gateway } = useSnapshot(observatoryCamerasState)
+	const player = players[camera.id]
+	const inPictureInPicture = pictureInPicture === camera.id
+	const playing = player?.status === 'playing'
+	const blocked = playBlocked(camera, gateway?.status !== 'notInstalled')
+	const fullScreenLabel = inPictureInPicture ? 'Leave picture-in-picture to show it in full screen' : playing ? 'Full screen' : 'Start the preview to show it in full screen'
+	const pictureInPictureLabel = inPictureInPicture ? 'Leave picture-in-picture' : playing ? 'Picture-in-picture' : 'Start the preview to show it in picture-in-picture'
+
+	return (
+		<>
+			{player && player.status !== 'failed' ? (
+				<Button variant="secondary" onClick={() => stopPlayer(camera.id)}>
+					Stop
+				</Button>
+			) : (
+				<Button variant="secondary" disabled={blocked !== undefined} title={blocked} onClick={() => startPlayer(camera.id)}>
+					{player ? 'Retry' : 'Play'}
+				</Button>
+			)}
+			{onEnlarge && <IconButton icon="zoomIn" label={blocked ?? 'Enlarge'} className={TOUCH_BUTTON} disabled={blocked !== undefined} onClick={() => onEnlarge(camera)} />}
+			<IconButton icon="expand" label={fullScreenLabel} className={TOUCH_BUTTON} disabled={!playing || inPictureInPicture} onClick={() => requestFullscreen(video.current)} />
+			{canPictureInPicture() && <IconButton icon="pictureInPicture" label={pictureInPictureLabel} className={TOUCH_BUTTON} pressed={inPictureInPicture} disabled={!playing && !inPictureInPicture} onClick={() => void togglePictureInPicture(camera.id)} />}
+		</>
+	)
+}
+
 // Static content of a frame without video: never a picture of the camera, which would need a stream of its own.
 export function Placeholder({ text }: { readonly text: string }) {
 	return (
-		<div className="flex size-full flex-col items-center justify-center gap-2 text-ink-300">
+		<div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black text-ink-300">
 			<Icon name="video" className="size-8" strokeWidth={1.2} />
 			<span className="text-xs">{text}</span>
 		</div>

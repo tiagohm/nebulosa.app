@@ -21,6 +21,11 @@ export interface PlayerEntry {
 	status: PlayerStatus
 	// Why it failed or is reconnecting.
 	error?: string
+	// Code of the server that refused the stream, such as sourceAuthFailed; absent for a failure of the connection.
+	code?: string
+	// Whether the last failure is that no video reached the browser (no media connection, or no frame in time), which a
+	// firewall closing the UDP port of the server explains.
+	noVideo?: boolean
 	// When the current video started to play, in milliseconds since the Unix epoch.
 	startedAt?: number
 	// Stream of the video, while connected.
@@ -142,6 +147,8 @@ function connect(id: string) {
 			if (!current) return
 			current.status = 'failed'
 			current.stream = undefined
+			current.code = undefined
+			current.noVideo = true
 			current.error = 'No video arrived: the browser may not reach the UDP port of the server, or may not decode what the camera sends.'
 		}, FIRST_FRAME_TIMEOUT),
 	)
@@ -157,6 +164,8 @@ export function markPlaying(id: string) {
 	entry.status = 'playing'
 	entry.attempt = 0
 	entry.error = undefined
+	entry.code = undefined
+	entry.noVideo = undefined
 	entry.startedAt = Date.now()
 }
 
@@ -170,6 +179,8 @@ function failed(id: string, reader: WhepReader, failure: WhepFailure) {
 	entry.stream = undefined
 	entry.startedAt = undefined
 	entry.error = failure.message
+	entry.code = failure.code
+	entry.noVideo = failure.stage === 'media' && !failure.connected
 	const transient = (failure.stage === 'media' && failure.connected) || (failure.code !== undefined && TRANSIENT_CODES.has(failure.code))
 
 	if (!transient || entry.attempt >= MAX_RECONNECTIONS) {

@@ -130,8 +130,6 @@ export function NumberField({ label, field = label, value, onChange, suffix, opt
 					id={id}
 					type="text"
 					inputMode={signed ? 'text' : 'decimal'}
-					autoComplete="off"
-					spellCheck={false}
 					value={value}
 					placeholder={optional ? 'Optional' : undefined}
 					onChange={(e) => isNumberText(e.target.value) && onChange(e.target.value)}

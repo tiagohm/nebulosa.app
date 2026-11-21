@@ -1,6 +1,6 @@
 import type { MeridianFlipMonitor, MountRemoteServer, OperationRecord } from 'api'
 import { cn } from 'cn'
-import type { Ref } from 'react'
+import { type Ref, useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { autoFocusRuntime } from '../../camera/autofocus'
 import { captureRuntime } from '../../camera/capture'
@@ -27,11 +27,12 @@ import { navigate, routeState } from '../route'
 import { abortOperation, type OperationAbortStores } from './abort'
 import { type BarOperation, type ChipValue, operationInterruption, type ScopedDevice, serverLinkLabel, type StatusTone } from './selectors'
 
-// Items of the status bar, as small as they can be: the server link is an icon alone, each chip an icon and a short
-// reading, its name and full reading in its title, each running operation its icon, name, and progress, followed by
-// its Abort, the enabled Meridian Flip Monitor of the profile's mount its icon and status, and the running Mount Remote
-// Control listeners of that mount their protocols and clients. A chip with a device opens that exact device in
-// Equipment Control.
+// Items of the status bar, as small as they can be: the server link is an icon alone while it is online and says its
+// state otherwise, each chip an icon and a short reading, its name and full reading in its title, each running
+// operation its icon, name, and progress, followed by its Abort, the enabled Meridian Flip Monitor of the profile's mount
+// its icon and status, and the running Mount Remote Control listeners of that mount their protocols and clients. A chip
+// opens its exact device in Equipment Control, or the page itself for a device missing from the connection. Every
+// control of the bar is pressed anywhere across the height of the bar, not only on the text it shows.
 
 // Text color of each status tone.
 export const TONE_CLASSES: Readonly<Record<StatusTone, string>> = {
@@ -45,8 +46,12 @@ export const TONE_CLASSES: Readonly<Record<StatusTone, string>> = {
 // Classes shared by the chips: the separator and the spacing.
 const CHIP_CLASS = 'flex flex-none items-center gap-1 border-l border-line-100 pl-3'
 
+// Classes that extend the area a control of the bar is pressed in across the whole height of the bar, at any of its
+// heights, without changing how it looks; the bar clips what goes past its edges.
+export const HIT_CLASS = "relative before:absolute before:inset-x-0 before:-inset-y-3 before:content-['']"
+
 // Classes added to a chip that is a button.
-const BUTTON_CLASS = 'cursor-pointer hover:text-ink-100 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent'
+const BUTTON_CLASS = cn('cursor-pointer hover:text-ink-100 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent', HIT_CLASS)
 
 // Live stores every Abort of the bar and of the details panel decides from.
 const ABORT_STORES: OperationAbortStores = {
@@ -91,16 +96,18 @@ interface ServerLinkItemProps {
 	readonly ref?: Ref<HTMLSpanElement>
 }
 
-// Link of the tab to the application server: a server icon, green while the event socket is open and red otherwise,
-// with the link and the active profile's connection in its title. The connection itself is managed by the top bar.
+// Link of the tab to the application server: a green server icon while the event socket is open, and otherwise a red
+// one followed by the state in words, since everything else the bar shows is then only the last state known. The
+// connection itself is managed by the top bar.
 export function ServerLinkItem({ ref }: ServerLinkItemProps) {
 	const { server } = useSnapshot(notificationsState)
 	const text = serverLinkLabel(server)
+	const online = server === 'online'
 
 	return (
-		<span ref={ref} title={text} className="flex flex-none items-center">
-			<Icon name="server" className={cn('size-3.5', server === 'online' ? 'text-success' : 'text-danger')} />
-			<span className="sr-only">{text}</span>
+		<span ref={ref} title={online ? text : `${text}: the bar shows the last state known`} className={cn('flex flex-none items-center gap-1', online ? 'text-success' : 'text-danger')}>
+			<Icon name="server" className="size-3.5" />
+			<span className={online ? 'sr-only' : undefined}>{text}</span>
 		</span>
 	)
 }
@@ -110,15 +117,20 @@ interface StatusChipProps {
 	readonly icon: IconName
 	// Name of the chip, such as "Mount", read through its title.
 	readonly label: string
+	// Name of the device of the Equipment Setup, read through its title.
+	readonly name?: string
 	// Reading of the chip.
 	readonly value: ChipValue
-	// Exact device the chip opens in Equipment Control; absent for the hidden copy the bar measures.
+	// Exact device the chip opens in Equipment Control; absent for a device missing from the connection, which opens the
+	// page itself.
 	readonly device?: ScopedDevice
+	// Whether this is the hidden copy the bar measures, which is not a button.
+	readonly measure?: boolean
 }
 
-// Icon and short reading of a device, a button opening it when it has one.
-export function StatusChip({ icon, label, value, device }: StatusChipProps) {
-	const title = `${label}${device ? ` ${device.name}` : ''}: ${value.title}`
+// Icon and short reading of a device, a button opening it in Equipment Control.
+export function StatusChip({ icon, label, name, value, device, measure }: StatusChipProps) {
+	const title = `${label}${name ? ` ${name}` : ''}: ${value.title}`
 	const content = (
 		<>
 			<Icon name={icon} className="size-3.5 text-ink-300" />
@@ -127,7 +139,7 @@ export function StatusChip({ icon, label, value, device }: StatusChipProps) {
 		</>
 	)
 
-	if (!device) {
+	if (measure) {
 		return (
 			<span title={title} className={CHIP_CLASS}>
 				{content}
@@ -136,7 +148,7 @@ export function StatusChip({ icon, label, value, device }: StatusChipProps) {
 	}
 
 	return (
-		<button type="button" title={`${title} · Open in Equipment Control`} onClick={() => navigate(routeState, { workspace: 'equipment', device: device.id })} className={cn(CHIP_CLASS, BUTTON_CLASS)}>
+		<button type="button" title={`${title} · Open in Equipment Control`} onClick={() => navigate(routeState, device ? { workspace: 'equipment', device: device.id } : { workspace: 'equipment' })} className={cn(CHIP_CLASS, BUTTON_CLASS)}>
 			{content}
 		</button>
 	)
@@ -195,7 +207,7 @@ interface MountRemoteItemProps {
 }
 
 // Mount Remote Control listeners of the profile's mount while one runs: the remote icon and their protocols and count
-// of clients in the active tone, with each listener's address and clients in the title, opening the tool.
+// of clients, in the idle tone since they serve for the whole night, with each listener's address and clients in the title, opening the tool.
 export function MountRemoteItem({ servers, name }: MountRemoteItemProps) {
 	const text = listenersStatusText(servers)
 	const details = servers.map((server) => `${MOUNT_REMOTE_PROTOCOL_LABELS[server.protocol]} on ${connectEndpoints(server).join(', ') || `port ${server.port}`}`).join('; ')
@@ -205,7 +217,7 @@ export function MountRemoteItem({ servers, name }: MountRemoteItemProps) {
 		<button type="button" data-fixed title={`${title} · Open the tool`} onClick={() => navigate(routeState, { workspace: 'tools', tool: 'mount-remote-control' })} className={cn('flex flex-none items-center gap-1', BUTTON_CLASS)}>
 			<Icon name="remote" className="size-3.5 text-ink-300" />
 			<span className="sr-only">{title}</span>
-			<span className="text-accent">{text}</span>
+			<span className="text-ink-200">{text}</span>
 		</button>
 	)
 }
@@ -213,20 +225,34 @@ export function MountRemoteItem({ servers, name }: MountRemoteItemProps) {
 interface AbortButtonProps {
 	// Id of the operation.
 	readonly id: string
-	// Name of the operation.
+	// Name of the operation, with its devices when they are known, such as "Move of Focuser Simulator".
 	readonly label: string
+	// Whether it sits in the bar, where it is pressed across the height of the bar (HIT_CLASS); a row of the details
+	// panel keeps it to its own box, so it never covers the rows around it.
+	readonly inBar?: boolean
 }
 
-// Abort of one operation; what it sends is decided again from the live stores when pressed.
-export function AbortButton({ id, label }: AbortButtonProps) {
+// Abort of one operation; what it sends is decided again from the live stores when pressed. Once pressed it says
+// Stopping and takes no second press while the server answers and, when it accepted, until the operation ends and the
+// button goes with it; a refused Abort can be pressed again, its reason being a device failure of the bar.
+export function AbortButton({ id, label, inBar }: AbortButtonProps) {
+	const [stopping, setStopping] = useState(false)
+
+	// Sends the Abort, and lets it be pressed again when it was refused.
+	async function handleClick() {
+		setStopping(true)
+		if (!(await abortOperation(id, ABORT_STORES))) setStopping(false)
+	}
+
 	return (
 		<button
 			type="button"
-			title={`Abort ${label}`}
-			onClick={() => void abortOperation(id, ABORT_STORES)}
-			className="flex-none cursor-pointer rounded-sm border border-danger bg-transparent px-1.5 py-0 font-mono text-xs leading-4 text-danger transition-colors duration-150 hover:bg-danger hover:text-base-000 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent"
+			title={stopping ? `Stopping ${label}` : `Abort ${label}`}
+			disabled={stopping}
+			onClick={() => void handleClick()}
+			className={cn('group flex flex-none cursor-pointer items-center border-0 bg-transparent p-0 font-mono text-xs leading-4 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent disabled:cursor-progress', inBar && HIT_CLASS)}
 		>
-			Abort
+			<span className={cn('rounded-sm border px-1.5 transition-colors duration-150 motion-reduce:transition-none', stopping ? 'border-line-200 text-ink-300' : 'border-danger text-danger group-hover:bg-danger group-hover:text-base-000')}>{stopping ? 'Stopping' : 'Abort'}</span>
 		</button>
 	)
 }
@@ -239,13 +265,13 @@ interface OperationItemProps {
 }
 
 // Icon, name, and progress of a running operation, followed by its Abort when it can be interrupted.
-export function OperationItem({ operation: { id, icon, label, detail, title, abortable }, online }: OperationItemProps) {
+export function OperationItem({ operation: { id, icon, label, target, detail, title, abortable }, online }: OperationItemProps) {
 	return (
 		<span title={online ? title : `Server offline: last known operation · ${title}`} className={cn('flex flex-none items-center gap-2', online ? 'text-accent' : 'text-ink-300')}>
 			<Icon name={icon} className="size-3.5 text-ink-300" />
 			{label}
 			{detail && <span className="tabular-nums">{detail}</span>}
-			{abortable && <AbortButton id={id} label={label} />}
+			{abortable && <AbortButton id={id} label={target ? `${label} of ${target}` : label} inBar />}
 		</span>
 	)
 }

@@ -3,7 +3,7 @@ import { useSnapshot } from 'valtio'
 import { captureRuntime } from '../camera/capture'
 import { guidingRuntime } from '../camera/guiding'
 import { controlRuntime, watchedDeviceState } from '../equipment-control/control'
-import { roleDevice } from '../equipment/equipment'
+import { roleDevice, roleStatus } from '../equipment/equipment'
 import { roleDefinition } from '../equipment/roles'
 import { useActiveServerId, useWatchedDevices } from '../equipment/useEquipment'
 import { useActiveSite, useDisplayZone } from '../location/useLocation'
@@ -14,10 +14,11 @@ import { meridianFlipState, monitorKey } from '../tools/meridianflip/meridianfli
 import { capturePausedBy, latestExecution, MERIDIAN_FLIP_STEP_LABELS, meridianFlipExecutorState } from '../tools/meridianflip/meridianflipexecutor'
 import { mountListeners, mountRemoteControlState } from '../tools/mountremotecontrol/listeners'
 import { spiceKernelsState } from '../tools/spicekernels/spicekernels'
-import { Icon, type IconName } from '../ui/Icon'
+import type { IconName } from '../ui/Icon'
 import { astronomicalClockRuntime, effectiveReadings, watchAstronomicalClock } from './statusbar/astronomicalclock'
 import { AstronomicalClockChip } from './statusbar/AstronomicalClockChip'
 import {
+	absentChip,
 	activeCapture,
 	activeGuiding,
 	type BarOperation,
@@ -42,17 +43,19 @@ import { StatusDetails } from './statusbar/StatusDetailsPanel'
 import { EphemerisOfflineItem, MeridianFlipItem, MountRemoteItem, OperationItem, ServerLinkItem, StatusChip, useOperationAbortable } from './statusbar/StatusItems'
 
 // Compact bar at the bottom of the window, visible from every workspace, showing everything the active profile has in
-// as little room as it can: the tab's link to the application server, a chip per connected device of the profile's
-// roles with what the profile asks of it, the device operations running on the profile's server connection, each with
-// its Abort, the Meridian Flip Monitor of the profile's mount while it is enabled, the Mount Remote Control listeners of
-// that mount while one runs, the offline switch of the ephemeris sources while it is on, its device failures, and the
-// details button that lists all of it. A device that is not
-// connected shows no chip. A narrower bar shows fewer chips, by priority, and fewer operations, and counts the others
-// on the details button; the server link, the monitor, the listeners, the offline switch, the failures, and the first operation are never
-// left out. Every operation has its own Abort, through the same command as the page that started it, and it interrupts that operation alone; a motion of the mount
-// of the profile that no operation holds has one too. In the room all of that leaves, the bar shows the real-time clock
-// the profile asks for, which opens the Astronomical Time Converter; it never takes room from anything else, and is
-// never the Sky simulation clock.
+// as little room as it can: the tab's link to the application server, a chip per device of the Equipment Setup's
+// roles, the device operations running on the profile's server connection, each with its Abort, the Meridian Flip
+// Monitor of the profile's mount while it is enabled, the Mount Remote Control listeners of that mount while one runs,
+// the offline switch of the ephemeris sources while it is on, its device failures, and the details button that lists
+// all of it. While the profile's server connection is open, every device the Equipment Setup assigns has a chip: a
+// connected one with what the profile asks of it, any other with its status in words, kept in view first, since the
+// setup says it is in use. A narrower bar shows fewer chips, by priority, and fewer operations, and counts the others
+// on the details button; the server link, the monitor, the listeners, the offline switch, the failures, and the first
+// operation are never left out. Every operation has its own Abort, through the same command as the page that started
+// it, and it interrupts that operation alone; a motion of the mount of the profile that no operation holds has one too.
+// In the room all of that leaves, the bar shows the real-time clock the profile asks for, which opens the Astronomical
+// Time Converter; it never takes room from anything else, and is never the Sky simulation clock. Below 640 px the bar
+// is taller, so its controls can be pressed with a thumb.
 
 // Gap between the items of the bar, in CSS pixels (gap-3).
 const ITEM_GAP = 12
@@ -99,12 +102,14 @@ interface BarChip {
 	readonly icon: IconName
 	// Name of the chip.
 	readonly label: string
+	// Name of the device the Equipment Setup assigns to the role.
+	readonly name: string
 	// Reading of the chip.
 	readonly value: ChipValue
 	// Whether the chip shows a running session.
 	readonly active: boolean
-	// Device the chip opens in Equipment Control.
-	readonly device: ScopedDevice
+	// Device the chip opens in Equipment Control; absent while the device is missing from the connection.
+	readonly device?: ScopedDevice
 }
 
 // Status bar of the application.
@@ -150,22 +155,25 @@ export function StatusBar() {
 	const online = link === 'online'
 	const chips: BarChip[] = []
 
-	for (const role of CHIP_ROLES) {
-		const device = roleDevice(setup, role, devices)
+	// The devices of the setup are known only once the device list of the profile's open connection is.
+	for (const role of serverId !== undefined && !devices.loading ? CHIP_ROLES : []) {
 		const preferences = statusChipPreferences(profile.settings, role)
-		const value = preferences.visible ? roleChip(role, device, control, { capture: role === 'MAIN_CAMERA' ? capture : undefined, guiding: role === 'GUIDE_CAMERA' ? session : undefined }, preferences.fields) : undefined
-		if (!value || !device) continue
+		const status = roleStatus(setup, role, devices)
+		if (!preferences.visible || status === 'notSelected') continue
+		const device = roleDevice(setup, role, devices)
+		const reading = status === 'connected' ? roleChip(role, device, control, { capture: role === 'MAIN_CAMERA' ? capture : undefined, guiding: role === 'GUIDE_CAMERA' ? session : undefined }, preferences.fields) : undefined
+		const value = reading ?? absentChip(status === 'connected' ? 'disconnected' : status)
 		// A mount moved by an operation the driver does not report yet is moving too.
-		const moving = role === 'MOUNT' ? value.moving || mountMoving(mountState, running, device) : value.moving
-		chips.push({ id: role, icon: CHIP_ICONS[role], label: roleDefinition(role).label, value: { ...value, moving }, active: (role === 'GUIDE_CAMERA' && !!session) || (role === 'MAIN_CAMERA' && !!capture), device })
+		const moving = role === 'MOUNT' && reading && device ? value.moving || mountMoving(mountState, running, device) : value.moving
+		chips.push({ id: role, icon: CHIP_ICONS[role], label: roleDefinition(role).label, name: device?.name ?? setup[role]?.name ?? '', value: { ...value, moving }, active: (role === 'GUIDE_CAMERA' && !!session) || (role === 'MAIN_CAMERA' && !!capture), device })
 	}
 
-	const operations: BarOperation[] = barOperations(running, { captures: captures.sessions, guiding: guiding.sessions }, abortable)
+	const operations: BarOperation[] = barOperations(running, { captures: captures.sessions, guiding: guiding.sessions }, abortable, devices.devices)
 
 	// A motion of the mount no operation holds, as from a hand controller, can be aborted just the same.
 	if (abort && mount && !mountMotionRunning(running, mount)) {
 		const motion = mountChip(mountState, ['status']).text
-		operations.unshift({ id: MOUNT_MOTION_ID, icon: 'mount', label: motion, title: `${abort.name}: ${motion}`, abortable: true })
+		operations.unshift({ id: MOUNT_MOTION_ID, icon: 'mount', label: motion, target: abort.name, title: `${abort.name}: ${motion}`, abortable: true })
 	}
 
 	const [latitude, longitude, elevation] = [observer?.latitude, observer?.longitude, observer?.elevation]
@@ -205,7 +213,7 @@ export function StatusBar() {
 			room,
 			ITEM_GAP,
 		)
-		const items = chips.map((chip) => ({ id: chip.id, moving: chip.value.moving, active: chip.active, width: widths.get(chip.id) ?? 0 }))
+		const items = chips.map((chip) => ({ id: chip.id, failed: chip.value.tone === 'error', moving: chip.value.moving, active: chip.active, width: widths.get(chip.id) ?? 0 }))
 		const left = room - shown.width
 		const next = fitItems(items, left, ITEM_GAP, operations.length - shown.visible.size)
 		setFitted((current) => (current && current.hidden === next.hidden && sameIds(current.chips, next.visible) && sameIds(current.operations, shown.visible) ? current : { chips: next.visible, operations: shown.visible, hidden: next.hidden }))
@@ -222,11 +230,11 @@ export function StatusBar() {
 	const hidden = fitted?.hidden ?? 0
 
 	return (
-		<footer ref={footerRef} className="relative flex h-7 flex-none items-center gap-3 overflow-hidden border-t border-line-100 bg-base-000 px-4 text-xs leading-4 whitespace-nowrap text-ink-200">
+		<footer ref={footerRef} className="relative flex h-10 flex-none items-center gap-3 overflow-clip border-t border-line-100 bg-base-000 px-4 text-xs leading-4 whitespace-nowrap text-ink-200 sm:h-7">
 			<div ref={measureRef} className="pointer-events-none invisible absolute top-0 left-0 flex">
 				{chips.map((chip) => (
 					<span key={chip.id} data-chip={chip.id} className="flex">
-						<StatusChip icon={chip.icon} label={chip.label} value={chip.value} />
+						<StatusChip icon={chip.icon} label={chip.label} name={chip.name} value={chip.value} measure />
 					</span>
 				))}
 				{operations.map((operation) => (
@@ -241,20 +249,14 @@ export function StatusBar() {
 				))}
 			</div>
 			<ServerLinkItem ref={serverRef} />
-			{chips.map((chip) => (!fitted || fitted.chips.has(chip.id)) && <StatusChip key={chip.id} icon={chip.icon} label={chip.label} value={chip.value} device={chip.device} />)}
+			{chips.map((chip) => (!fitted || fitted.chips.has(chip.id)) && <StatusChip key={chip.id} icon={chip.icon} label={chip.label} name={chip.name} value={chip.value} device={chip.device} />)}
 			<span ref={groupRef} className="ml-auto flex min-w-0 items-center gap-3 border-l border-line-100 pl-3">
 				{operations.map((operation) => (!fitted || fitted.operations.has(operation.id)) && <OperationItem key={operation.id} operation={operation} online={online} />)}
 				{readings.map((reading) => fittedClocks?.has(reading) && <AstronomicalClockChip key={reading} reading={reading} timeZone={timeZone} showSeconds={clock.showSeconds} hasSite={observer !== undefined} />)}
 				{monitor && <MeridianFlipItem monitor={monitor} name={mount?.name} executor={executor} />}
 				{listeners.length > 0 && <MountRemoteItem servers={listeners} name={mount?.name} />}
 				{ephemerisOffline && <EphemerisOfflineItem />}
-				{errors.length > 0 && (
-					<span data-fixed title={errors.map((error) => `${error.name}: ${error.message}`).join('\n')} className="flex flex-none items-center gap-1 text-danger">
-						<Icon name="error" className="size-3.5" />
-						{errors.length}
-					</span>
-				)}
-				<StatusDetails hidden={hidden} />
+				<StatusDetails hidden={hidden} errors={errors} />
 			</span>
 		</footer>
 	)

@@ -103,7 +103,7 @@ export function NotificationToasts() {
 	if (shown.length === 0 && !serverToast) return null
 
 	return (
-		<div className="pointer-events-none fixed right-4 bottom-10 z-40 flex w-[min(360px,calc(100vw-32px))] flex-col gap-2 lg:[body:has([data-docked-panel])_&]:right-84 xl:[body:has([data-docked-panel])_&]:right-92">
+		<div className="pointer-events-none fixed right-4 bottom-13 z-40 sm:bottom-10 flex w-[min(360px,calc(100vw-32px))] flex-col gap-2 lg:[body:has([data-docked-panel])_&]:right-84 xl:[body:has([data-docked-panel])_&]:right-92">
 			{serverToast && (
 				<div className={cn(TOAST_CLASS, LEVEL_BORDER_CLASS[serverToast === 'lost' ? 'warning' : 'success'])}>
 					<div className={BODY_CLASS}>

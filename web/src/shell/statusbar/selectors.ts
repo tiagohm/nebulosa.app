@@ -242,6 +242,10 @@ export const CHIP_ROLES = ['MAIN_CAMERA', 'FILTER_WHEEL', 'FOCUSER', 'ROTATOR', 
 // Role with a device chip in the status bar.
 export type ChipRole = (typeof CHIP_ROLES)[number]
 
+// Roles in the order a narrow bar keeps their chips, within each group of fitItems: what tells at a glance whether the
+// night is going (the mount, the imaging camera, the guider), then the imaging accessories, then the observatory.
+export const CHIP_PRIORITY = ['MOUNT', 'MAIN_CAMERA', 'GUIDE_CAMERA', 'FILTER_WHEEL', 'FOCUSER', 'ROTATOR', 'DOME', 'COVER', 'FLAT_PANEL'] as const satisfies readonly ChipRole[]
+
 // Reading of a device chip: a short value after its icon, and whether the device moves.
 export interface ChipValue {
 	// Short value, such as "Slewing", "Moving 50000", or "Open"; empty for the icon alone.
@@ -263,6 +267,15 @@ function chipText(readings: ChipReadings, fields: readonly StatusChipField[]) {
 	return fields.flatMap((field) => readings[field] ?? []).join(' ')
 }
 
+// Returns the short value of a chip and its tone, so that colour never carries a state alone: a state that asks for
+// attention (active or error) always says its status word, first, even when the profile did not choose the status
+// reading, and any other tone falls back to idle while the status word it belongs to is not shown.
+function chipReading(readings: ChipReadings, fields: readonly StatusChipField[], tone: StatusTone): Pick<ChipValue, 'text' | 'tone'> {
+	if (readings.status === undefined || fields.includes('status')) return { text: chipText(readings, fields), tone }
+	if (tone === 'active' || tone === 'error') return { text: chipText(readings, ['status', ...fields]), tone }
+	return { text: chipText(readings, fields), tone: 'idle' }
+}
+
 // Returns a sensor temperature in degrees Celsius rounded to 0.1 °C, such as "-10.2°C", or undefined when the driver
 // reports none or a non-finite one. Rounding to -0 reads 0.0.
 function temperatureText(temperature: number | undefined) {
@@ -281,7 +294,7 @@ export function cameraChip(state: Partial<Pick<CameraCapabilities, 'temperature'
 	const temperature = temperatureText(state?.temperature)
 	const cooler = state?.cooler && Number.isFinite(state.cooler.power) ? `${Math.round(state.cooler.power)}%` : undefined
 	const title = [status, temperature && `Sensor ${temperature}`, cooler && `Cooler ${cooler}`].filter(Boolean).join(' · ') || 'Connected'
-	return { text: chipText({ status, temperature, cooler }, fields), tone: status ? 'active' : 'ok', moving: false, title }
+	return { ...chipReading({ status, temperature, cooler }, fields, status ? 'active' : 'idle'), moving: false, title }
 }
 
 // Returns the reading of a mount: its motion (mountMotion), otherwise parked, then tracking, then idle, and its
@@ -291,7 +304,7 @@ export function mountChip(state: (Pick<MountState, 'parking' | 'homing' | 'slewi
 	const motion = mountMotion(state)
 	const status = motion ?? (state.parked ? 'Parked' : state.tracking ? 'Tracking' : 'Idle')
 	const coordinates = state.rightAscension !== undefined && state.declination !== undefined ? `${formatRA(normalizeAngle(state.rightAscension), false)} ${formatDEC(state.declination, false)}` : undefined
-	return { text: chipText({ status, coordinates }, fields), tone: motion ? 'active' : status === 'Tracking' ? 'ok' : 'idle', moving: !!motion, title: coordinates ? `${status} · ${coordinates}` : status }
+	return { ...chipReading({ status, coordinates }, fields, motion ? 'active' : status === 'Tracking' ? 'ok' : 'idle'), moving: !!motion, title: coordinates ? `${status} · ${coordinates}` : status }
 }
 
 // Returns the reading of a focuser: "Moving" while it moves, its position in steps, and its temperature.
@@ -299,17 +312,17 @@ export function focuserChip(state: Pick<FocuserState, 'moving' | 'position' | 't
 	if (!state) return { text: '', tone: 'muted', moving: false, title: 'State not reported' }
 	const temperature = temperatureText(state.temperature)
 	const title = `${state.moving ? 'Moving · ' : ''}Position ${state.position.value} steps${temperature ? ` · ${temperature}` : ''}`
-	return { text: chipText({ status: state.moving ? 'Moving' : undefined, position: String(state.position.value), temperature }, fields), tone: state.moving ? 'active' : 'ok', moving: state.moving, title }
+	return { ...chipReading({ status: state.moving ? 'Moving' : undefined, position: String(state.position.value), temperature }, fields, state.moving ? 'active' : 'idle'), moving: state.moving, title }
 }
 
 // Returns the reading of a filter wheel: "Changing" while it changes filter, otherwise the name of the filter at its
 // 0-based slot, or the 1-based slot number when the driver names none.
 export function wheelChip(state: Pick<WheelState, 'moving' | 'position' | 'names'> | undefined, fields: readonly StatusChipField[] = DEFAULT_STATUS_CHIPS.FILTER_WHEEL.fields): ChipValue {
 	if (!state) return { text: '', tone: 'muted', moving: false, title: 'State not reported' }
-	if (state.moving) return { text: chipText({ status: 'Changing' }, fields), tone: 'active', moving: true, title: 'Changing filter' }
+	if (state.moving) return { ...chipReading({ status: 'Changing' }, fields, 'active'), moving: true, title: 'Changing filter' }
 	const slot = `#${state.position + 1}`
 	const name = state.names[state.position]
-	return { text: chipText({ filter: name || slot }, fields), tone: 'ok', moving: false, title: name ? `${slot} · ${name}` : slot }
+	return { text: chipText({ filter: name || slot }, fields), tone: 'idle', moving: false, title: name ? `${slot} · ${name}` : slot }
 }
 
 // Returns the reading of a rotator: "Moving" while it moves, and its mechanical angle in degrees (not a sky position
@@ -317,22 +330,22 @@ export function wheelChip(state: Pick<WheelState, 'moving' | 'position' | 'names
 export function rotatorChip(state: Pick<RotatorState, 'moving' | 'angle'> | undefined, fields: readonly StatusChipField[] = DEFAULT_STATUS_CHIPS.ROTATOR.fields): ChipValue {
 	if (!state) return { text: '', tone: 'muted', moving: false, title: 'State not reported' }
 	const angle = `${formatFixed(state.angle.value, 1)}°`
-	return { text: chipText({ status: state.moving ? 'Moving' : undefined, angle }, fields), tone: state.moving ? 'active' : 'ok', moving: state.moving, title: `${state.moving ? 'Moving · ' : ''}Mechanical angle ${angle}` }
+	return { ...chipReading({ status: state.moving ? 'Moving' : undefined, angle }, fields, state.moving ? 'active' : 'idle'), moving: state.moving, title: `${state.moving ? 'Moving · ' : ''}Mechanical angle ${angle}` }
 }
 
 // Returns the reading of a dust cover: closed (parked), open, or moving.
 export function coverChip(state: Pick<CoverState, 'parked' | 'parking'> | undefined, fields: readonly StatusChipField[] = DEFAULT_STATUS_CHIPS.COVER.fields): ChipValue {
 	if (!state) return { text: '', tone: 'muted', moving: false, title: 'State not reported' }
-	if (state.parking) return { text: chipText({ status: 'Moving' }, fields), tone: 'active', moving: true, title: 'Moving' }
+	if (state.parking) return { ...chipReading({ status: 'Moving' }, fields, 'active'), moving: true, title: 'Moving' }
 	const status = state.parked ? 'Closed' : 'Open'
-	return { text: chipText({ status }, fields), tone: state.parked ? 'idle' : 'ok', moving: false, title: status }
+	return { text: chipText({ status }, fields), tone: 'idle', moving: false, title: status }
 }
 
 // Returns the reading of a flat panel: its light on or off, and, while on, its brightness in the driver's units.
 export function flatPanelChip(state: Pick<FlatPanelState, 'enabled' | 'intensity'> | undefined, fields: readonly StatusChipField[] = DEFAULT_STATUS_CHIPS.FLAT_PANEL.fields): ChipValue {
 	if (!state) return { text: '', tone: 'muted', moving: false, title: 'State not reported' }
 	const brightness = state.enabled ? String(state.intensity.value) : undefined
-	return { text: chipText({ status: state.enabled ? 'On' : 'Off', brightness }, fields), tone: state.enabled ? 'ok' : 'idle', moving: false, title: brightness ? `On · brightness ${brightness}` : 'Off' }
+	return { text: chipText({ status: state.enabled ? 'On' : 'Off', brightness }, fields), tone: 'idle', moving: false, title: brightness ? `On · brightness ${brightness}` : 'Off' }
 }
 
 // Text of each shutter state of a dome; an unknown one shows nothing.
@@ -347,18 +360,29 @@ export function domeChip(state: Pick<DomeState, 'slewing' | 'moving' | 'homing' 
 	const status = state.parking ? 'Parking' : state.homing ? 'Homing' : state.slewing || state.moving ? 'Moving' : state.parked ? 'Parked' : undefined
 	const moving = shutterMoving || state.parking || state.homing || state.slewing || state.moving
 	const shutter = state.hasShutter ? ` · shutter ${state.shutterState.toLowerCase()}` : ''
-	const tone: StatusTone = state.hasShutter && state.shutterState === 'ERROR' ? 'error' : moving ? 'active' : state.shutterState === 'CLOSED' ? 'idle' : 'ok'
-	return { text: chipText({ status, shutter: state.hasShutter ? SHUTTER_TEXT[state.shutterState] : undefined, azimuth }, fields), tone, moving, title: `${status ?? `Azimuth ${azimuth}`}${shutter}` }
+	const tone: StatusTone = state.hasShutter && state.shutterState === 'ERROR' ? 'error' : moving ? 'active' : 'idle'
+	return { ...chipReading({ status, shutter: state.hasShutter ? SHUTTER_TEXT[state.shutterState] : undefined, azimuth }, fields, tone), moving, title: `${status ?? `Azimuth ${azimuth}`}${shutter}` }
 }
 
-// Returns the reading of a guide camera: its running session (see guidingValue), or "--" while it does not guide, and
-// its sensor temperature when the driver reports a finite one.
+// Returns the reading of a guide camera: its running session (see guidingValue), or "Not guiding" while it does not
+// guide, and its sensor temperature when the driver reports a finite one.
 export function guideChip(session: GuidingSessionSummary | undefined, state?: Pick<CameraCapabilities, 'temperature'>, fields: readonly StatusChipField[] = DEFAULT_STATUS_CHIPS.GUIDE_CAMERA.fields): ChipValue {
 	const temperature = temperatureText(state?.temperature)
-	if (!session) return { text: chipText({ status: '--', temperature }, fields), tone: 'idle', moving: false, title: 'Not guiding' }
+	if (!session) return { text: chipText({ status: 'Not guiding', temperature }, fields), tone: 'idle', moving: false, title: 'Not guiding' }
 	const value = guidingValue(session)
 	const label = GUIDING_STATE_LABELS[session.state]
-	return { text: chipText({ status: value.text, temperature }, fields), tone: value.tone, moving: false, title: value.text === label ? label : `${label} · ${value.text}` }
+	return { ...chipReading({ status: value.text, temperature }, fields, value.tone), moving: false, title: value.text === label ? label : `${label} · ${value.text}` }
+}
+
+// Role statuses of an assigned device that is not connected.
+export type AbsentStatus = Exclude<RoleStatus, 'notSelected' | 'connected'>
+
+// Returns the chip of a role whose assigned device is not connected: its role status as the word, whatever readings the
+// profile chose, since the Equipment Setup says the device is in use. A device connecting or disconnecting is active and
+// kept in view like a moving one; one disconnected, failed, or missing from the connection is a failure.
+export function absentChip(status: AbsentStatus): ChipValue {
+	const switching = status === 'connecting' || status === 'disconnecting'
+	return { text: ROLE_STATUS_LABELS[status], tone: switching ? 'active' : 'error', moving: switching, title: ROLE_STATUS_LABELS[status] }
 }
 
 // Sessions that read through a device chip.
@@ -369,9 +393,9 @@ export interface ChipSessions {
 	readonly capture?: CaptureSession
 }
 
-// Returns the reading of the device of a role, from the control state of the watched connection, or undefined, so the
-// bar shows no chip, while no device is assigned or present or its driver does not report it connected. fields are the
-// readings shown.
+// Returns the reading of the device of a role, from the control state of the watched connection, or undefined while no
+// device is assigned or present or its driver does not report it connected, for which the bar shows absentChip instead.
+// fields are the readings shown.
 export function roleChip(role: ChipRole, device: Pick<DeviceSummary, 'id' | 'connectionId' | 'connected'> | undefined, control: Pick<ControlRuntime, 'watched' | 'states'>, sessions: ChipSessions = {}, fields: readonly StatusChipField[] = DEFAULT_STATUS_CHIPS[role].fields): ChipValue | undefined {
 	if (!device?.connected) return undefined
 
@@ -401,6 +425,8 @@ export function roleChip(role: ChipRole, device: Pick<DeviceSummary, 'id' | 'con
 export interface BarItem {
 	// Id of the chip: a role.
 	readonly id: string
+	// Whether it shows a failure, such as a device of the Equipment Setup that is not connected.
+	readonly failed: boolean
 	// Whether its device is moving.
 	readonly moving: boolean
 	// Whether it shows a running session.
@@ -450,11 +476,19 @@ export interface FittedItems {
 	readonly hidden: number
 }
 
-// Returns the chips that fit in the room the operations left, by priority: moving devices, then running sessions, then
-// the others, each group in display order; a chip that does not fit is skipped, so a narrower one after it may still fit.
-// The room and the widths are in CSS pixels, and each chip after the first costs the gap between items too.
+// Returns the rank of a chip in CHIP_PRIORITY; an id that is not a role comes last.
+function chipRank(id: string) {
+	const rank = (CHIP_PRIORITY as readonly string[]).indexOf(id)
+	return rank < 0 ? CHIP_PRIORITY.length : rank
+}
+
+// Returns the chips that fit in the room the operations left, by priority: failures, then moving devices, then running
+// sessions, then the others, each group in CHIP_PRIORITY order; a chip that does not fit is skipped, so a narrower one
+// after it may still fit. The room and the widths are in CSS pixels, and each chip after the first costs the gap between
+// items too.
 export function fitItems(items: readonly BarItem[], room: number, gap: number, hiddenOperations: number): FittedItems {
-	const priority = [...items.filter((item) => item.moving), ...items.filter((item) => !item.moving && item.active), ...items.filter((item) => !item.moving && !item.active)]
+	const group = (item: BarItem) => (item.failed ? 0 : item.moving ? 1 : item.active ? 2 : 3)
+	const priority = items.toSorted((a, b) => group(a) - group(b) || chipRank(a.id) - chipRank(b.id))
 	const visible = new Set<string>()
 	let left = room
 
@@ -522,6 +556,9 @@ export interface BarOperation {
 	readonly icon: IconName
 	// Name of the operation, such as "Slew" or "Capture".
 	readonly label: string
+	// Names of the devices it holds, such as "Focuser Simulator", which tell two operations of the same name apart; absent
+	// when the tab knows none of them.
+	readonly target?: string
 	// Short progress, such as "12/50 · 24%" or "2/5"; absent while it reports none.
 	readonly detail?: string
 	// Full description, shown as its title, such as "Move · 2/5 · Moving to 1100".
@@ -541,9 +578,16 @@ export interface BarOperationSessions {
 	readonly guiding: Readonly<Record<string, GuidingSessionSummary>>
 }
 
-// Returns the running operations as the bar shows them, those it can interrupt first, each group in start order. A
-// guiding session counts once: its guideOutput.guiding is part of its camera.guiding, which interrupts both.
-export function barOperations(operations: readonly OperationRecord[], { captures, guiding }: BarOperationSessions, abortable: (operation: OperationRecord) => boolean): BarOperation[] {
+// Returns the names of the devices of an operation that are among devices, joined by commas, or undefined when none is.
+export function operationTarget(operation: Pick<OperationRecord, 'devices'>, devices: readonly ScopedDevice[]): string | undefined {
+	const names = operation.devices.flatMap((ref) => devices.find((device) => device.id === ref.deviceId && device.connectionId === ref.connectionId)?.name ?? [])
+	return names.length > 0 ? names.join(', ') : undefined
+}
+
+// Returns the running operations as the bar shows them, those it can interrupt first, each group in start order, each
+// named with its devices among devices. A guiding session counts once: its guideOutput.guiding is part of its
+// camera.guiding, which interrupts both.
+export function barOperations(operations: readonly OperationRecord[], { captures, guiding }: BarOperationSessions, abortable: (operation: OperationRecord) => boolean, devices: readonly ScopedDevice[] = []): BarOperation[] {
 	const runs = new Set(Object.values(guiding).map((session) => session.runOperationId))
 	const shown: BarOperation[] = []
 
@@ -555,7 +599,9 @@ export function barOperations(operations: readonly OperationRecord[], { captures
 		const { progress } = operation
 		const detail = capture ? captureValue(capture).text : progress && progress.steps >= 1 ? `${progress.step}/${progress.steps}` : undefined
 		const full = progressText(progress) ?? detail
-		shown.push({ id: operation.operationId, icon, label, detail, title: full ? `${label} · ${full}` : label, abortable: abortable(operation) })
+		const target = operationTarget(operation, devices)
+		const name = target ? `${label} of ${target}` : label
+		shown.push({ id: operation.operationId, icon, label, target, detail, title: full ? `${name} · ${full}` : name, abortable: abortable(operation) })
 	}
 
 	return [...shown.filter((operation) => operation.abortable), ...shown.filter((operation) => !operation.abortable)]

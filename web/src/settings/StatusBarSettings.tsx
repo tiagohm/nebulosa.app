@@ -75,7 +75,7 @@ export function StatusBarSettings() {
 				{CHIP_ROLES.map((role) => (
 					<DeviceChipSettings key={role} role={role} settings={settings} />
 				))}
-				<Notice>A device shows only while it is connected. A chip without any reading shows its icon alone, and its title always has the full reading.</Notice>
+				<Notice>Every device of the equipment setup has a chip. One that is not connected says so in red and stays in view first. A chip without any reading shows its icon alone, and its title always has the full reading.</Notice>
 			</section>
 			<section className="flex max-w-md flex-col gap-3">
 				<SectionHeading as="h2">Astronomical Clock</SectionHeading>

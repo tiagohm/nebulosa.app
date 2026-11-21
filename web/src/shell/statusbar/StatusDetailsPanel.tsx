@@ -1,6 +1,6 @@
 import type { NotificationTarget, OperationRecord } from 'api'
 import { cn } from 'cn'
-import { type ReactNode, useEffect, useRef, useState } from 'react'
+import { type ReactNode, type Ref, useEffect, useRef, useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { captureCount, captureRuntime, captureStatus } from '../../camera/capture'
 import { GUIDING_STATE_LABELS, guidingRuntime } from '../../camera/guiding'
@@ -20,7 +20,8 @@ import { activeProfile, activeSetup, profileState } from '../../profile/profile'
 import { openAstronomicalTimeConverter, qualityNotes } from '../../tools/astronomicaltime/astronomicaltime'
 import { meridianFlipHeadline, meridianFlipState, meridianFlipStatusText, monitorKey } from '../../tools/meridianflip/meridianflip'
 import { listenersStatusText, mountListeners, mountRemoteControlState } from '../../tools/mountremotecontrol/listeners'
-import { Icon, type IconName } from '../../ui/Icon'
+import { DataRow } from '../../ui/DataRow'
+import { Icon } from '../../ui/Icon'
 import { LinkButton } from '../../ui/LinkButton'
 import { SectionHeading } from '../../ui/SectionHeading'
 import { TONE_TEXT } from '../../ui/StatusBadge'
@@ -28,17 +29,38 @@ import { useNow } from '../../useNow'
 import { navigate, routeState } from '../route'
 import { astronomicalClockRuntime, clockApproximate, clockFreshness, clockReadingText, liveClock } from './astronomicalclock'
 import { useMonotonicNow } from './AstronomicalClockChip'
-import { activeCapture, activeGuiding, capturePercent, type ChipSessions, connectionLabel, formatElapsed, guidingValue, otherOperations, progressText, roleDetailValue, scopedDeviceErrors, scopedRunningOperations, type ScopedDevice, serverLinkLabel, sessionOperationIds } from './selectors'
-import { AbortButton, TONE_CLASSES, useOperationAbortable } from './StatusItems'
+import {
+	activeCapture,
+	activeGuiding,
+	capturePercent,
+	type ChipSessions,
+	connectionLabel,
+	type DeviceError,
+	formatElapsed,
+	guidingValue,
+	operationTarget,
+	otherOperations,
+	progressText,
+	roleDetailValue,
+	scopedDeviceErrors,
+	scopedRunningOperations,
+	type ScopedDevice,
+	serverLinkLabel,
+	sessionOperationIds,
+} from './selectors'
+import { AbortButton, HIT_CLASS, TONE_CLASSES, useOperationAbortable } from './StatusItems'
 
-// Details of the status bar: a button at its right end, showing how many items the bar left out, that opens a panel
-// above itself with everything the bar summarizes for the active profile's server connection — the server link and
-// the selected connection, every role with its device and what it reports, the running capture and guiding sessions
-// with the enabled Meridian Flip Monitor and the running Mount Remote Control listeners of the mount, every other
-// running operation with its devices, elapsed time, and reported progress, each with its Abort, the device failures, and the real-time clock, even when the bar has no room
-// for it. The panel is placed in the viewport (fixed), so the clipping bar never cuts it, and closes when the button is
-// pressed again, on a press outside both, on Escape (returning the focus to the button), when the window resizes, and
-// after it opened a device, a camera tab, or a tool. Closing it, or anything it opens, never stops a session or an operation; only an Abort does.
+// Details of the status bar: a button at its right end, showing how many items the bar left out, and before it, while
+// a device fails, a button naming how many failures there are, both opening a panel above themselves with everything
+// the bar summarizes for the active profile's server connection — the server link and the selected connection, every
+// role with its device and what it reports, the running capture and guiding sessions with the enabled Meridian Flip
+// Monitor and the running Mount Remote Control listeners of the mount, every other running operation with its devices,
+// elapsed time, and reported progress, each with its Abort, the device failures, and the real-time clock, even when the
+// bar has no room for it. The panel is placed in the viewport (fixed), so the clipping bar never cuts it, follows the
+// buttons when the window resizes, takes the focus when it opens so the keyboard goes on inside it, and closes when a
+// button is pressed again, on a press outside, on Escape (returning the focus to the details button), and after it
+// opened a device, a camera tab, or a tool. Closing it, or anything it opens, never stops a session or an operation;
+// only an Abort does.
 
 // Width of the panel, in CSS pixels, when the viewport has room for it.
 const PANEL_WIDTH = 380
@@ -62,23 +84,37 @@ interface PanelPlacement {
 interface StatusDetailsProps {
 	// Items the bar left out, counted on the button.
 	readonly hidden: number
+	// Failures of the devices of the active connection, counted on their own button.
+	readonly errors: readonly DeviceError[]
 }
 
-// Button of the details and the panel it opens.
-export function StatusDetails({ hidden }: StatusDetailsProps) {
+// Buttons of the failures and of the details, and the panel they open.
+export function StatusDetails({ hidden, errors }: StatusDetailsProps) {
 	const [placement, setPlacement] = useState<PanelPlacement>()
 	const rootRef = useRef<HTMLSpanElement>(null)
 	const buttonRef = useRef<HTMLButtonElement>(null)
+	const panelRef = useRef<HTMLDivElement>(null)
 	const open = !!placement
 
-	// Places the panel above the button, aligned with its right edge but kept inside the viewport.
-	function show() {
+	// Returns where the panel goes: above the buttons, aligned with the right edge of the details button but kept inside
+	// the viewport, or undefined while the button is not laid out.
+	function place(): PanelPlacement | undefined {
 		const rect = buttonRef.current?.getBoundingClientRect()
-		if (!rect) return
+		if (!rect) return undefined
 		const width = Math.min(PANEL_WIDTH, window.innerWidth - 2 * VIEWPORT_GUTTER)
 		const right = Math.max(VIEWPORT_GUTTER, Math.min(window.innerWidth - rect.right, window.innerWidth - width - VIEWPORT_GUTTER))
-		setPlacement({ bottom: window.innerHeight - rect.top + PANEL_GAP, right, width })
+		return { bottom: window.innerHeight - rect.top + PANEL_GAP, right, width }
 	}
+
+	// Opens the panel, or closes it when it is open.
+	function toggle() {
+		setPlacement(open ? undefined : place())
+	}
+
+	// Moves the focus into the panel once it opened, so Tab goes on through its controls.
+	useEffect(() => {
+		if (open) panelRef.current?.focus()
+	}, [open])
 
 	useEffect(() => {
 		if (!open) return
@@ -93,8 +129,9 @@ export function StatusDetails({ hidden }: StatusDetailsProps) {
 			buttonRef.current?.focus()
 		}
 
+		// Follows the buttons, as when a phone's address bar hides or the device turns.
 		function handleResize() {
-			setPlacement(undefined)
+			setPlacement(place())
 		}
 
 		document.addEventListener('mousedown', handlePointerDown)
@@ -109,22 +146,36 @@ export function StatusDetails({ hidden }: StatusDetailsProps) {
 	}, [open])
 
 	return (
-		<span ref={rootRef} data-fixed className="flex flex-none">
-			{placement && <StatusDetailsPanel placement={placement} onClose={() => setPlacement(undefined)} />}
+		<span ref={rootRef} data-fixed className="flex flex-none items-center gap-3">
+			{errors.length > 0 && (
+				<button
+					type="button"
+					title={`${errors.map((error) => `${error.name}: ${error.message}`).join('\n')}\n· Open the status details`}
+					onClick={toggle}
+					className={cn('flex cursor-pointer items-center gap-1 text-danger focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent', HIT_CLASS)}
+				>
+					<Icon name="error" className="size-3.5" />
+					{errors.length === 1 ? '1 failure' : `${errors.length} failures`}
+				</button>
+			)}
 			<button
 				ref={buttonRef}
 				type="button"
 				title={hidden > 0 ? `${hidden} more in the status details` : 'Status details'}
-				onClick={() => (open ? setPlacement(undefined) : show())}
-				className={cn('flex min-w-7 cursor-pointer items-center justify-center rounded-sm px-1 text-ink-200 hover:text-ink-100 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent', open && 'bg-base-300 text-ink-100')}
+				onClick={toggle}
+				className={cn('flex min-w-7 cursor-pointer items-center justify-center rounded-sm px-1 text-ink-200 hover:text-ink-100 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent', HIT_CLASS, open && 'bg-base-300 text-ink-100')}
 			>
 				{hidden > 0 ? `+${hidden}` : <Icon name="info" className="size-3.5" />}
+				<span className="sr-only">{hidden > 0 ? ' more in the status details' : 'Status details'}</span>
 			</button>
+			{placement && <StatusDetailsPanel ref={panelRef} placement={placement} onClose={() => setPlacement(undefined)} />}
 		</span>
 	)
 }
 
 interface StatusDetailsPanelProps {
+	// Element of the panel, focused when it opens.
+	readonly ref?: Ref<HTMLDivElement>
 	// Position and width of the panel.
 	readonly placement: PanelPlacement
 	// Closes the panel.
@@ -132,7 +183,7 @@ interface StatusDetailsPanelProps {
 }
 
 // Panel of the details.
-function StatusDetailsPanel({ placement: { bottom, right, width }, onClose }: StatusDetailsPanelProps) {
+function StatusDetailsPanel({ ref, placement: { bottom, right, width }, onClose }: StatusDetailsPanelProps) {
 	const now = useNow()
 	const serverId = useActiveServerId()
 	const { server: link } = useSnapshot(notificationsState)
@@ -180,7 +231,12 @@ function StatusDetailsPanel({ placement: { bottom, right, width }, onClose }: St
 	const guidingTarget: NotificationTarget | undefined = guideCamera && { kind: 'cameraTool', connectionId: guideCamera.connectionId, deviceId: guideCamera.id, tool: 'guiding' }
 
 	return (
-		<div style={{ bottom, right, width, maxHeight: `calc(100dvh - ${bottom + TOP_BAR_HEIGHT + VIEWPORT_GUTTER}px)` }} className="fixed z-30 box-border flex flex-col gap-3 overflow-y-auto rounded-md border border-line-100 bg-base-200 p-3 text-xs whitespace-normal text-ink-200 shadow-[0_12px_32px_rgb(0_0_0/0.45)]">
+		<div
+			ref={ref}
+			tabIndex={-1}
+			style={{ bottom, right, width, maxHeight: `calc(100dvh - ${bottom + TOP_BAR_HEIGHT + VIEWPORT_GUTTER}px)` }}
+			className="fixed z-30 box-border flex flex-col gap-3 overflow-y-auto rounded-md border border-line-100 bg-base-200 p-3 text-xs whitespace-normal text-ink-200 shadow-[0_12px_32px_rgb(0_0_0/0.45)] outline-none"
+		>
 			{link !== 'online' && <p className="m-0 rounded-sm border border-danger px-2 py-1 text-danger">{link === 'offline' ? 'Server offline: showing the last known state.' : 'Connecting to the server.'}</p>}
 			<Section title="Connection">
 				<Row label="Server">{serverLinkLabel(link)}</Row>
@@ -192,31 +248,41 @@ function StatusDetailsPanel({ placement: { bottom, right, width }, onClose }: St
 			{(capture !== undefined || session !== undefined || monitor !== undefined || listeners !== undefined) && (
 				<Section title="Sessions">
 					{capture && (
-						<Row label="Capture">
+						<Row
+							label="Capture"
+							actions={
+								<>
+									{targetAvailable(captureTarget, { documents, devices: devices.devices }) && <OpenButton onClick={() => openCamera(captureTarget)} />}
+									{captureOperation && abortable(captureOperation) && <AbortButton id={captureOperation.operationId} label={mainCamera ? `Capture of ${mainCamera.name}` : 'Capture'} />}
+								</>
+							}
+						>
 							<span className="text-accent">{capture.stopping ? 'Stopping' : captureStatus(capture)}</span> · {captureCount(capture)}
 							{percent !== undefined && ` · ${percent}%`}
-							{targetAvailable(captureTarget, { documents, devices: devices.devices }) && <OpenButton onClick={() => openCamera(captureTarget)} />}
-							{captureOperation && abortable(captureOperation) && <RowAbort id={captureOperation.operationId} label="Capture" />}
 						</Row>
 					)}
 					{session && (
-						<Row label="Guiding">
+						<Row
+							label="Guiding"
+							actions={
+								<>
+									{targetAvailable(guidingTarget, { documents, devices: devices.devices }) && <OpenButton onClick={() => openCamera(guidingTarget)} />}
+									{guidingOperation && abortable(guidingOperation) && <AbortButton id={guidingOperation.operationId} label={guideCamera ? `Guiding of ${guideCamera.name}` : 'Guiding'} />}
+								</>
+							}
+						>
 							<span className={TONE_CLASSES[guidingValue(session).tone]}>{GUIDING_STATE_LABELS[session.state]}</span>
 							{guidingValue(session).text !== GUIDING_STATE_LABELS[session.state] && ` · ${guidingValue(session).text}`}
-							{targetAvailable(guidingTarget, { documents, devices: devices.devices }) && <OpenButton onClick={() => openCamera(guidingTarget)} />}
-							{guidingOperation && abortable(guidingOperation) && <RowAbort id={guidingOperation.operationId} label="Guiding" />}
 						</Row>
 					)}
 					{monitor && (
-						<Row label="Meridian flip">
+						<Row label="Meridian flip" actions={<OpenButton label="Open tool" onClick={openMeridianFlip} />}>
 							<span className={TONE_TEXT[meridianFlipHeadline(monitor)[1]]}>{meridianFlipStatusText(monitor, now)}</span>
-							<OpenButton label="Open tool" onClick={openMeridianFlip} />
 						</Row>
 					)}
 					{listeners && (
-						<Row label="Remote control">
-							<span className="text-accent">Serving</span> · {listeners}
-							<OpenButton label="Open tool" onClick={openRemoteControl} />
+						<Row label="Remote control" actions={<OpenButton label="Open tool" onClick={openRemoteControl} />}>
+							Serving · {listeners}
 						</Row>
 					)}
 				</Section>
@@ -227,8 +293,8 @@ function StatusDetailsPanel({ placement: { bottom, right, width }, onClose }: St
 			{errors.length > 0 && (
 				<Section title="Failures">
 					{errors.map((error) => (
-						<Row key={error.deviceId} label={error.name}>
-							<span className="text-danger">{error.message}</span>
+						<Row key={error.deviceId} label={error.name} tone="danger">
+							{error.message}
 						</Row>
 					))}
 				</Section>
@@ -258,7 +324,7 @@ function AstronomicalTimeSection({ onNavigate }: AstronomicalTimeSectionProps) {
 		<Section title="Astronomical Time">
 			{readings.map(({ label, value }) => (
 				<Row key={label} label={label}>
-					<span className="tabular-nums">{value}</span>
+					{value}
 					{label === 'Local' && ` · ${timeZone}`}
 				</Row>
 			))}
@@ -310,7 +376,7 @@ function EquipmentRows({ devices, onNavigate, sessions }: EquipmentRowsProps) {
 					<RoleStatusText status="notSelected" />
 				) : (
 					<>
-						<DeviceLink device={device} fallback={setup[role]?.name || 'Unavailable device'} onNavigate={onNavigate} /> · {status === 'connected' ? <span className={TONE_CLASSES[value.tone]}>{value.text}</span> : <RoleStatusText status={status} />}
+						<DeviceLink device={device} fallback={setup[role]?.name || 'Unavailable device'} className="text-ink-100" onNavigate={onNavigate} /> · {status === 'connected' ? <span className={TONE_CLASSES[value.tone]}>{value.text}</span> : <RoleStatusText status={status} />}
 					</>
 				)}
 			</Row>
@@ -331,32 +397,15 @@ interface OperationRowProps {
 
 // Kind, devices, elapsed time, reported progress, and Abort of a running operation.
 function OperationRow({ operation, devices, now, abortable }: OperationRowProps) {
-	const names = operation.devices.map((ref) => devices.find((d) => d.id === ref.deviceId && d.connectionId === ref.connectionId)?.name ?? 'Unknown device').join(', ')
+	const target = operationTarget(operation, devices)
 	const progress = progressText(operation.progress)
-	const [icon, label] = OPERATION_LABELS[operation.kind]
+	const label = OPERATION_LABELS[operation.kind][1]
 
 	return (
-		<Row icon={icon} label={label}>
-			{names} · <span className="tabular-nums">{formatElapsed(operation.startedAt, now)}</span>
-			{progress && <span className="text-accent"> · {progress}</span>}
-			{abortable && <RowAbort id={operation.operationId} label={label} />}
+		<Row label={label} actions={abortable && <AbortButton id={operation.operationId} label={target ? `${label} of ${target}` : label} />}>
+			{target ?? 'Unknown device'} · {formatElapsed(operation.startedAt, now)}
+			{progress && ` · ${progress}`}
 		</Row>
-	)
-}
-
-interface RowAbortProps {
-	// Id of the operation.
-	readonly id: string
-	// Name of the operation.
-	readonly label: string
-}
-
-// Abort at the end of a row.
-function RowAbort({ id, label }: RowAbortProps) {
-	return (
-		<span className="ml-2 inline-flex">
-			<AbortButton id={id} label={label} />
-		</span>
 	)
 }
 
@@ -378,24 +427,22 @@ function Section({ title, children }: SectionProps) {
 }
 
 interface RowProps {
-	// Icon of the row.
-	readonly icon?: IconName
 	// Name of the row.
 	readonly label: string
 	// Value of the row.
 	readonly children: ReactNode
+	// Tone of the whole value; a failure for the rows of the failures.
+	readonly tone?: 'danger'
+	// Links and Aborts acting on what the row is about, after its value; absent for a row with none.
+	readonly actions?: ReactNode
 }
 
-// Icon, name and value on one line, the value wrapping when long.
-function Row({ icon, label, children }: RowProps) {
+// Data row of the panel: the name at the start and the value at the end, its links and Aborts after it.
+function Row({ label, children, tone, actions }: RowProps) {
 	return (
-		<div className="flex gap-2 items-center">
-			{icon && <Icon name={icon} />}
-			<span className="w-28 flex-none truncate text-ink-300" title={label}>
-				{label}
-			</span>
-			<span className="min-w-0 flex-1 wrap-break-word">{children}</span>
-		</div>
+		<DataRow label={label} tone={tone} actions={actions ? <span className="flex items-center gap-2 pl-1">{actions}</span> : undefined}>
+			{children}
+		</DataRow>
 	)
 }
 
@@ -408,9 +455,5 @@ interface OpenButtonProps {
 
 // Link opening what a row is about: the camera tab of a session in Images, or a tool.
 function OpenButton({ label = 'Open in Images', onClick }: OpenButtonProps) {
-	return (
-		<LinkButton onClick={onClick} className="ml-2">
-			{label}
-		</LinkButton>
-	)
+	return <LinkButton onClick={onClick}>{label}</LinkButton>
 }

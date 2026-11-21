@@ -259,7 +259,7 @@ The root font is 14 px, so every rem-based size is a multiple of 14 px (Tailwind
 
 ## Layout
 
-The application is a fixed console frame around one workspace. From top to bottom: the top bar (49 px), then the navigation rail (56 px wide) beside the workspace, then the status bar (24.5 px). Only the workspace swaps on navigation.
+The application is a fixed console frame around one workspace. From top to bottom: the top bar (49 px), then the navigation rail (56 px wide) beside the workspace, then the status bar (24.5 px, 35 px below 640 px). Only the workspace swaps on navigation.
 
 Each workspace has a header at least 42 px tall (title, context controls, actions, panel toggle; actions wrap to their own line rather than clip), its content, which scrolls itself, and the contextual panel on the right: 280 px, 308 px from 1280 px, docked from 1024 px and a drawer over the content below it, or, for a live view its controls change, a flat sheet taking the lower half under that content. Pages (Equipment Control, Settings) use a sidebar list and a detail area instead.
 
@@ -332,7 +332,7 @@ Floating notices stacked above the status bar at the bottom right, beside the do
 
 - **Top bar:** Deep Night, logo and wordmark, the Management menu, then the observing site, connection indicator, notifications, settings, and profile on the right.
 - **Navigation rail:** Deep Night, one stacked icon and caption per workspace in Zodiacal Gray, Horizon Haze on hover; the active one is Ember Wash with an Ember Clay icon, a semibold caption, and a 3.5 px Ember Clay bar on its left edge. The About button is anchored at the bottom.
-- **Status bar:** Deep Night, caption text in Moonlight, device chips and running operations fitted to the room available, overflow counted on a details button.
+- **Status bar:** Deep Night, caption text in Moonlight, 24.5 px tall and 35 px below 640 px so a thumb can press it, every control pressed across its full height. Device chips and running operations are fitted to the room available, overflow counted on a details button. A chip's reading stays Moonlight while it is merely present; Aurora Green is kept for a good state (Tracking, Guiding) and Antares Red for a device of the setup that is not connected, which always says so in words.
 
 ### Collapsible Section and Data Rows (signature)
 

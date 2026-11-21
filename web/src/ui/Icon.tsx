@@ -58,6 +58,7 @@ export const ICONS = {
 	stepForward: 'M9 6l6 6l-6 6',
 	skipToStart: 'M19 6l-6 6l6 6M13 6l-6 6l6 6M5 5v14',
 	skipToEnd: 'M5 6l6 6l-6 6M11 6l6 6l-6 6M19 5v14',
+	reverse: 'M4 8h15M15 4l4 4l-4 4M20 16H5M9 12l-4 4l4 4',
 	save: 'M5 4h11l3 3v13H5zM8 4v5h7V4M8 20v-6h8v6',
 	clock: 'M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18M12 7v5l3 2',
 	// A tilted elliptic orbit with the central body at its focus and a small body on the orbit.

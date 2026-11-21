@@ -16,6 +16,14 @@ const STEP_FRACTION = 1 / 100
 // Positions of the scrubber across the timeline.
 const SCRUB_STEPS = 1000
 
+// Moves the clock by one step of the selected orbit's timeline, backward (−1) or forward (+1), within its ends.
+export function stepClock(state: OrbitalMechanicsState, direction: -1 | 1) {
+	const timeline = timelineOf(state)
+	if (!timeline) return
+	const span = timeline.end - timeline.start
+	setTime(state, Math.min(timeline.end, Math.max(timeline.start, state.time + direction * span * STEP_FRACTION)))
+}
+
 // Runs the clock of the explorer while it plays.
 export function usePlayback() {
 	const { playing } = useSnapshot(orbitalMechanicsState)
@@ -54,16 +62,15 @@ export function OrbitTimeline() {
 	const span = timeline ? timeline.end - timeline.start : 0
 	const position = timeline && span > 0 ? Math.round(((state.time - timeline.start) / span) * SCRUB_STEPS) : 0
 	const anchor = orbit?.solution?.anchor
-	const step = (direction: number) => timeline && setTime(orbitalMechanicsState, Math.min(timeline.end, Math.max(timeline.start, state.time + direction * span * STEP_FRACTION)))
 
 	return (
 		<div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-line-100 bg-base-100 px-3 py-2">
 			<div className="flex items-center gap-1">
-				<IconButton icon="stepBack" label="Step back" disabled={!timeline} onClick={() => step(-1)} />
-				<IconButton icon={state.playing ? 'pause' : 'play'} label={state.playing ? 'Pause' : 'Play'} disabled={!timeline} onClick={() => setPlaying(orbitalMechanicsState, !state.playing)} />
-				<IconButton icon="stepForward" label="Step forward" disabled={!timeline} onClick={() => step(1)} />
-				<IconButton icon="arrow" label="Reverse" pressed={state.rate < 0} disabled={!timeline} onClick={() => (orbitalMechanicsState.rate = -state.rate)} />
-				<IconButton icon="skipToEnd" label="Reset to epoch" className="rotate-180" disabled={anchor === undefined} onClick={() => anchor !== undefined && setTime(orbitalMechanicsState, anchor)} />
+				<IconButton icon="stepBack" label="Step back (,)" disabled={!timeline} onClick={() => stepClock(orbitalMechanicsState, -1)} />
+				<IconButton icon={state.playing ? 'pause' : 'play'} label={state.playing ? 'Pause (Space)' : 'Play (Space)'} disabled={!timeline} onClick={() => setPlaying(orbitalMechanicsState, !state.playing)} />
+				<IconButton icon="stepForward" label="Step forward (.)" disabled={!timeline} onClick={() => stepClock(orbitalMechanicsState, 1)} />
+				<IconButton icon="reverse" label={state.rate < 0 ? 'Running backward' : 'Run backward'} pressed={state.rate < 0} disabled={!timeline} onClick={() => (orbitalMechanicsState.rate = -state.rate)} />
+				<IconButton icon="skipToStart" label="Reset to epoch" disabled={anchor === undefined} onClick={() => anchor !== undefined && setTime(orbitalMechanicsState, anchor)} />
 			</div>
 			<input
 				type="range"
@@ -72,7 +79,7 @@ export function OrbitTimeline() {
 				step={1}
 				value={position}
 				disabled={!timeline}
-				title="Time"
+				title={`Time: ${formatTdb(state.time)}`}
 				className="min-w-40 flex-1 accent-accent"
 				onChange={(e) => {
 					if (!timeline) return
@@ -93,6 +100,7 @@ export function OrbitTimeline() {
 					const rate = options.find((e) => e.label === label)!.rate
 					orbitalMechanicsState.rate = state.rate < 0 ? -rate : rate
 				}}
+				title="Rate of the clock"
 				className="w-36"
 			/>
 		</div>

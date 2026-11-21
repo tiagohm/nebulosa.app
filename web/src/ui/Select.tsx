@@ -14,6 +14,8 @@ export interface SelectProps<T extends string> {
 	readonly disabledReason?: (value: T) => string | undefined
 	// Whether the whole control is disabled.
 	readonly disabled?: boolean
+	// Tooltip and name of the trigger when it has no visible label, such as a rate select in a tool bar; the label otherwise.
+	readonly title?: string
 	// Heading of the group an option belongs to, shown once above each run of options of the same group; options of a
 	// group must be consecutive. Ungrouped when absent.
 	readonly group?: (value: T) => string
@@ -43,7 +45,7 @@ function visibleRange(element: HTMLElement): { top: number; bottom: number } {
 	return { top, bottom }
 }
 
-export function Select<T extends string>({ label, options, value, onChange, className, format = String, disabledReason, disabled = false, group }: SelectProps<T>) {
+export function Select<T extends string>({ label, options, value, onChange, className, format = String, disabledReason, disabled = false, group, title }: SelectProps<T>) {
 	const [open, setOpen] = useState(false)
 	const [active, setActive] = useState(-1)
 	const [up, setUp] = useState(false)
@@ -175,7 +177,7 @@ export function Select<T extends string>({ label, options, value, onChange, clas
 					ref={triggerRef}
 					type="button"
 					role="combobox"
-					title={label}
+					title={title ?? label}
 					disabled={disabled}
 					onClick={() => (open ? close(false) : openList())}
 					onKeyDown={handleKeyDown}

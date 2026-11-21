@@ -1,27 +1,29 @@
 import type { OrbitPreset } from 'api'
 import { cn } from 'cn'
-import { type ChangeEvent, useEffect, useRef, useState } from 'react'
+import { type ChangeEvent, type KeyboardEvent as ReactKeyboardEvent, useEffect, useRef, useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { downloadText } from '../../download'
 import { useActiveSite } from '../../location/useLocation'
 import { CollapsibleSection } from '../../shell/CollapsibleSection'
 import { useMediaQuery, WIDE_SCREEN } from '../../shell/useMediaQuery'
 import { EmptyState, WorkspaceLayout } from '../../shell/WorkspaceLayout'
+import { takesKeys } from '../../sky/shortcuts'
 import { Actions } from '../../ui/Actions'
 import { Button } from '../../ui/Button'
 import { Checkbox } from '../../ui/Checkbox'
 import { IconButton } from '../../ui/IconButton'
+import { moveIndex } from '../../ui/navigation'
 import { Notice } from '../../ui/Notice'
 import { Popover } from '../../ui/Popover'
 import { SegmentedControl } from '../../ui/SegmentedControl'
-import { addOrbit, addRefusal, cloneOrbit, exportScenario, importScenario, loadPreset, type OrbitalMechanicsState, orbitalMechanicsState, openOrbitalMechanics, type OverlayKey, removeOrbit, selectedOrbit, selectOrbit, setPlane, trackCsv } from './orbitalmechanics'
+import { addOrbit, addRefusal, cloneOrbit, exportScenario, importScenario, loadPreset, type OrbitalMechanicsState, orbitalMechanicsState, openOrbitalMechanics, type OverlayKey, removeOrbit, selectedOrbit, selectOrbit, setPlane, setPlaying, timelineOf, trackCsv } from './orbitalmechanics'
 import { consumePendingTarget, showMinorBodyInSky } from './orbitalmechanics.sources'
 import { OrbitComparison } from './OrbitComparison'
 import { OrbitEditor, CenterEditor } from './OrbitEditor'
 import { OrbitInspector } from './OrbitInspector'
 import { OrbitScene } from './OrbitScene'
 import { OrbitSources } from './OrbitSources'
-import { OrbitTimeline, usePlayback } from './OrbitTimeline'
+import { OrbitTimeline, stepClock, usePlayback } from './OrbitTimeline'
 import { PALETTE_TOKENS, presetAngles, toDisplay } from './scene'
 
 // Orbital Mechanics Explorer: a two-body laboratory where an orbit is defined by elements or a state, drawn in 3D,
@@ -48,6 +50,7 @@ export function OrbitalMechanicsExplorer() {
 	const state = useSnapshot(orbitalMechanicsState) as OrbitalMechanicsState
 	const orbit = selectedOrbit(state)
 	usePlayback()
+	useShortcuts()
 
 	// Reads the reference on the first opening of the tab.
 	useEffect(() => void openOrbitalMechanics(orbitalMechanicsState), [])
@@ -86,6 +89,31 @@ export function OrbitalMechanicsExplorer() {
 			</div>
 		</WorkspaceLayout>
 	)
+}
+
+// Shortcuts of the tool while it is shown, unless a field, a list, a button, or a dialog takes the key: Space plays or
+// pauses, comma and period step the clock, F fits every orbit and Shift + F the selected one.
+function useShortcuts() {
+	useEffect(() => {
+		const onKeyDown = (event: KeyboardEvent) => {
+			if (event.ctrlKey || event.altKey || event.metaKey || takesKeys(event.target)) return
+			const state = orbitalMechanicsState
+			// A focused button or disclosure already answers Space itself.
+			const pressable = event.target instanceof Element && event.target.closest('button, a, summary') !== null
+
+			if (event.key === ' ' && !pressable && timelineOf(state)) setPlaying(state, !state.playing)
+			else if (event.key === ',') stepClock(state, -1)
+			else if (event.key === '.') stepClock(state, 1)
+			else if (event.key === 'f') state.fitPending = 'scene'
+			else if (event.key === 'F' && state.selected) state.fitPending = 'selected'
+			else return
+
+			event.preventDefault()
+		}
+
+		window.addEventListener('keydown', onKeyDown)
+		return () => window.removeEventListener('keydown', onKeyDown)
+	}, [])
 }
 
 // Workspace actions: presets, import, and the exports.
@@ -149,19 +177,37 @@ function PresetList({ presets, onLoad }: { readonly presets: readonly OrbitPrese
 	)
 }
 
-// Orbits of the scene: selection, visibility, copy, and removal.
+// Orbits of the scene: selection, visibility, copy, and removal. The arrow keys, Home, and End move the selection
+// between the orbits' names.
 function OrbitList() {
 	const state = useSnapshot(orbitalMechanicsState) as OrbitalMechanicsState
 	const refusal = addRefusal(state)
 
+	function onKeyDown(event: ReactKeyboardEvent<HTMLDivElement>) {
+		const names = [...event.currentTarget.querySelectorAll<HTMLButtonElement>('button[data-orbit]')]
+		const index = names.indexOf(event.target as HTMLButtonElement)
+		if (index < 0) return
+		const next = moveIndex(index, names.length, event.key === 'ArrowLeft' || event.key === 'ArrowRight' ? '' : event.key)
+		if (next === undefined) return
+		event.preventDefault()
+		selectOrbit(orbitalMechanicsState, names[next].dataset.orbit!)
+		names[next].focus()
+	}
+
 	return (
 		<CollapsibleSection id="orbitalmechanics.orbits" title="Orbits" summary={`${state.orbits.length}`}>
 			{state.importError && <Notice error>{state.importError}</Notice>}
-			<div className="flex flex-col gap-1">
+			<div className="flex flex-col gap-1" onKeyDown={onKeyDown}>
 				{state.orbits.map((orbit) => (
 					<div key={orbit.id} className={cn('flex items-center gap-2 rounded-sm px-2 py-1', orbit.id === state.selected ? 'bg-accent-subtle' : 'hover:bg-base-300')}>
 						<span className="size-3 flex-none rounded-full" style={{ background: `var(${PALETTE_TOKENS[orbit.color % PALETTE_TOKENS.length]})` }} />
-						<button type="button" className="min-w-0 flex-1 cursor-pointer truncate border-0 bg-transparent p-0 text-left text-sm text-ink-100" onClick={() => selectOrbit(orbitalMechanicsState, orbit.id)}>
+						<button
+							type="button"
+							data-orbit={orbit.id}
+							tabIndex={orbit.id === state.selected ? 0 : -1}
+							className="min-w-0 flex-1 cursor-pointer truncate rounded-sm border-0 bg-transparent p-0 text-left text-sm text-ink-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+							onClick={() => selectOrbit(orbitalMechanicsState, orbit.id)}
+						>
 							{orbit.name}
 							{orbit.loading && <span className="text-ink-300"> · updating</span>}
 						</button>

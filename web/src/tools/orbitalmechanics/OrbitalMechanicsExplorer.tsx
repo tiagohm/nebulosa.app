@@ -73,6 +73,7 @@ export function OrbitalMechanicsExplorer() {
 					{state.referenceError ? <EmptyState title="The explorer could not start" description={state.referenceError} action={<Button onClick={() => void openOrbitalMechanics(orbitalMechanicsState)}>Retry</Button>} /> : <OrbitScene />}
 					<p className="pointer-events-none absolute bottom-2 left-3 m-0 text-xs text-ink-300 max-sm:hidden">
 						Two-body model · {state.plane === 'ecliptic' ? 'J2000 ecliptic' : 'J2000 equator'} · {state.centerDrawing === 'marker' ? 'center not to scale' : 'center to scale'} · vectors v, h, e show directions only
+						{state.orbits.some((e) => e.visible && e.draftError) && ' · dashed: last valid definition'}
 					</p>
 				</div>
 				<OrbitTimeline />

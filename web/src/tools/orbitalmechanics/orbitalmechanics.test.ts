@@ -6,6 +6,7 @@ import {
 	advanceClock,
 	convertDraft,
 	draftDefinition,
+	isDraftProblem,
 	draftOf,
 	editDraft,
 	exportScenario,
@@ -117,7 +118,7 @@ describe('drafts', () => {
 		expect(draft.inclination).toBeCloseTo(63.4, 12)
 
 		const definition = draftDefinition(draft, EARTH, 'km', LIMITS)
-		if (typeof definition === 'string') throw new Error(definition)
+		if (isDraftProblem(definition)) throw new Error(definition.message)
 		expect(definition.kind).toBe('elliptic')
 		if (definition.kind !== 'elliptic') return
 		expect(definition.semiMajorAxis).toBeCloseTo(MOLNIYA.kind === 'elliptic' ? MOLNIYA.semiMajorAxis : 0, 15)
@@ -125,22 +126,23 @@ describe('drafts', () => {
 		expect(definition.mu).toBe(MU_EARTH)
 	})
 
-	test('a draft outside the model says why', () => {
+	test('a draft outside the model says why and which field to fix', () => {
 		const draft = draftOf(MOLNIYA, 'km')
-		expect(draftDefinition({ ...draft, eccentricity: 1 }, EARTH, 'km', LIMITS)).toContain('eccentricity')
-		expect(draftDefinition({ ...draft, inclination: 190 }, EARTH, 'km', LIMITS)).toContain('inclination')
-		expect(draftDefinition({ ...draft, semiMajorAxis: -1 }, EARTH, 'km', LIMITS)).toContain('semi-major axis')
-		expect(draftDefinition({ ...draft, epoch: 9e6 }, EARTH, 'km', LIMITS)).toContain('epoch')
-		expect(draftDefinition({ ...draft, kind: 'hyperbolic', hyperbolicEccentricity: 1 }, EARTH, 'km', LIMITS)).toContain('above 1')
-		expect(draftDefinition({ ...draft, kind: 'cartesian', position: [7000, 0, 0], velocity: [3, 0, 0] }, EARTH, 'km', LIMITS)).toContain('parallel')
-		expect(draftDefinition({ ...draft, kind: 'cartesian', position: [0, 0, 0], velocity: [3, 0, 0] }, EARTH, 'km', LIMITS)).toContain('center')
-		expect(draftDefinition(draft, { ...EARTH, mu: 0 }, 'km', LIMITS)).toContain('gravitational parameter')
+		const why = (value: ReturnType<typeof draftDefinition>) => (isDraftProblem(value) ? [value.field, value.message] : ['', ''])
+		expect(why(draftDefinition({ ...draft, eccentricity: 1 }, EARTH, 'km', LIMITS))).toEqual(['eccentricity', expect.stringContaining('eccentricity')])
+		expect(why(draftDefinition({ ...draft, inclination: 190 }, EARTH, 'km', LIMITS))).toEqual(['inclination', expect.stringContaining('inclination')])
+		expect(why(draftDefinition({ ...draft, semiMajorAxis: -1 }, EARTH, 'km', LIMITS))).toEqual(['semiMajorAxis', expect.stringContaining('semi-major axis')])
+		expect(why(draftDefinition({ ...draft, epoch: 9e6 }, EARTH, 'km', LIMITS))).toEqual(['epoch', expect.stringContaining('epoch')])
+		expect(why(draftDefinition({ ...draft, kind: 'hyperbolic', hyperbolicEccentricity: 0.8 }, EARTH, 'km', LIMITS))).toEqual(['hyperbolicEccentricity', expect.stringContaining('above 1')])
+		expect(why(draftDefinition({ ...draft, kind: 'cartesian', position: [7000, 0, 0], velocity: [3, 0, 0] }, EARTH, 'km', LIMITS))).toEqual(['velocity', expect.stringContaining('parallel')])
+		expect(why(draftDefinition({ ...draft, kind: 'cartesian', position: [0, 0, 0], velocity: [3, 0, 0] }, EARTH, 'km', LIMITS))).toEqual(['position', expect.stringContaining('center')])
+		expect(why(draftDefinition(draft, { ...EARTH, mu: 0 }, 'km', LIMITS))).toEqual(['center', expect.stringContaining('gravitational parameter')])
 	})
 
 	test('a Cartesian draft in km and km/s is sent in AU and AU/day without rotation', () => {
 		const draft = { ...draftOf(MOLNIYA, 'km'), kind: 'cartesian' as const, position: [7000, 0, 0] as [number, number, number], velocity: [0, 7.5, 1] as [number, number, number] }
 		const definition = draftDefinition(draft, EARTH, 'km', LIMITS)
-		if (typeof definition === 'string' || definition.kind !== 'cartesian') throw new Error(JSON.stringify(definition))
+		if (isDraftProblem(definition) || definition.kind !== 'cartesian') throw new Error(JSON.stringify(definition))
 		expect(definition.position[0]).toBeCloseTo(7000 / AU_KM, 15)
 		expect(definition.velocity[1]).toBeCloseTo((7.5 * 86400) / AU_KM, 12)
 	})

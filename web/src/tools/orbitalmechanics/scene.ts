@@ -33,6 +33,9 @@ const DIRECTION_LENGTH = 0.3
 // colour, so an orbit is neither taken for the selection nor for a state.
 export const PALETTE_TOKENS = ['--color-orbit-1', '--color-orbit-2', '--color-orbit-3', '--color-orbit-4', '--color-orbit-5', '--color-orbit-6'] as const
 
+// Dash of the curve of an orbit whose draft cannot be solved, CSS pixels: the last valid definition, still drawn.
+const STALE_DASH: readonly number[] = [6, 5]
+
 // Stroke width of an orbit's curve, CSS pixels.
 const ORBIT_WIDTH = 1.25
 
@@ -180,6 +183,8 @@ export interface SceneOrbit {
 	readonly color: number
 	// Whether it is the orbit selected.
 	readonly selected: boolean
+	// Whether its draft cannot be solved, so the curve drawn is its last valid definition.
+	readonly stale: boolean
 	// Curve, display points.
 	readonly points: readonly ScenePoint[]
 	// Whether the curve is a closed ellipse.
@@ -237,9 +242,11 @@ export function drawScene(ctx: CanvasRenderingContext2D, camera: Camera, model: 
 		})
 	}
 
-	const segment = (a: ScenePoint, b: ScenePoint, color: string, width: number, dash?: readonly number[]) => {
+	// Queues a segment and answers its drawn length in CSS pixels, so a dashed polyline drawn as many short segments
+	// carries its dash pattern across them through `dashOffset`, the length drawn before this one.
+	const segment = (a: ScenePoint, b: ScenePoint, color: string, width: number, dash?: readonly number[], dashOffset: number = 0) => {
 		const clipped = clipSegment(camera, a, b)
-		if (!clipped) return
+		if (!clipped) return 0
 		const [p, q] = clipped
 		primitives.push({
 			depth: (p.depth + q.depth) / 2,
@@ -247,12 +254,14 @@ export function drawScene(ctx: CanvasRenderingContext2D, camera: Camera, model: 
 				ctx.strokeStyle = color
 				ctx.lineWidth = width
 				ctx.setLineDash(dash ?? [])
+				ctx.lineDashOffset = dashOffset
 				ctx.beginPath()
 				ctx.moveTo(p.x, p.y)
 				ctx.lineTo(q.x, q.y)
 				ctx.stroke()
 			},
 		})
+		return Math.hypot(q.x - p.x, q.y - p.y)
 	}
 
 	const disc = (point: ScenePoint, color: string, radius: number, hollow = false) => {
@@ -356,7 +365,9 @@ export function drawScene(ctx: CanvasRenderingContext2D, camera: Camera, model: 
 			}
 		}
 
-		for (let k = 1; k < orbit.points.length; k++) segment(orbit.points[k - 1], orbit.points[k], color, width)
+		const dash = orbit.stale ? STALE_DASH : undefined
+		let drawn = 0
+		for (let k = 1; k < orbit.points.length; k++) drawn += segment(orbit.points[k - 1], orbit.points[k], color, width, dash, drawn)
 
 		for (const marker of orbit.markers) {
 			const visible = marker.kind === 'periapsis' || marker.kind === 'apoapsis' ? overlays.apsides : overlays.nodes
@@ -532,6 +543,7 @@ export function buildSceneModel(state: Pick<OrbitalMechanicsState, 'orbits' | 's
 			name: orbit.name,
 			color: orbit.color,
 			selected: orbit.id === state.selected,
+			stale: orbit.draftError !== undefined,
 			points,
 			closed: track.trajectory.curve.closed,
 			markers: track.trajectory.curve.markers.map((e) => ({ kind: e.kind, position: toDisplay(e.position, plane) })),

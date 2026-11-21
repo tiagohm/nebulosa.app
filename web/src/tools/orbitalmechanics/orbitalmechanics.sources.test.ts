@@ -149,6 +149,13 @@ test('a handoff the server cannot resolve opens the lookups with the reason', as
 	expect(sections['orbitalmechanics.sources']).toBeTrue()
 })
 
+test('a body JPL does not know says how to look it up again', async () => {
+	const { io } = fakeIo(() => Response.json({ error: 'JPL knows no small body zzqqxx', code: 'objectNotFound' }, { status: 404 }))
+	const state = scene(EARTH)
+	await resolveMinorBody(state, 'zzqqxx', io)
+	expect(state.lookup.error).toBe('JPL knows no small body zzqqxx. Check the spelling, or look it up by its SPK-ID or designation.')
+})
+
 test('a comparison about the scene center adds its osculating orbit once', async () => {
 	const { io } = fakeIo(() => Response.json(RESOLVED))
 	const state = scene(EARTH)

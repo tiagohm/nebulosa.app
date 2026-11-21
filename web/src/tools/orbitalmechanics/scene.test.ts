@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test'
 import { initialOrbitalMechanicsState, type OrbitTrack, type OrbitView } from './orbitalmechanics'
-import { buildSceneModel, cameraOf, clipSegment, fitDistance, gridRings, pickOrbit, presetAngles, project, toDisplay } from './scene'
+import { buildSceneModel, cameraOf, clipSegment, fitDistance, gridRings, pickOrbit, presetAngles, project, selectedExtent, toDisplay } from './scene'
 
 const VIEW: OrbitView = { yaw: 0, pitch: 0, distance: 10, target: [0, 0, 0], projection: 'perspective' }
 
@@ -91,6 +91,8 @@ test('the scene draws visible orbits with their body, and a click picks the near
 	const model = buildSceneModel(state)
 
 	expect(model.orbits.map((e) => e.id)).toEqual(['a'])
+	expect(model.orbits[0].stale).toBe(false)
+	expect(selectedExtent(model)).toBe(1)
 	expect(model.orbits[0].body).toEqual([1, 0, 0])
 	expect(model.orbits[0].velocity![1]).toBeGreaterThan(0)
 	expect(model.extent).toBe(1)
@@ -99,4 +101,13 @@ test('the scene draws visible orbits with their body, and a click picks the near
 	const body = project(camera, [1, 0, 0])!
 	expect(pickOrbit(camera, model, body.x + 3, body.y - 2)).toBe('a')
 	expect(pickOrbit(camera, model, body.x + 40, body.y)).toBeUndefined()
+
+	// A draft the model cannot take keeps its last valid curve, marked stale so it is drawn dashed.
+	state.orbits[0] = { ...state.orbits[0], draftError: { field: 'semiMajorAxis', message: 'The semi-major axis must be positive.' } }
+	expect(buildSceneModel(state).orbits[0].stale).toBe(true)
+})
+
+test('a narrow canvas frames across its width', () => {
+	expect(fitDistance(1, 0.5)).toBeGreaterThan(fitDistance(1))
+	expect(fitDistance(1, 2)).toBe(fitDistance(1))
 })

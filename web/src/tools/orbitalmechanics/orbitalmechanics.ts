@@ -123,8 +123,8 @@ export interface ExplorerOrbit {
 	visible: boolean
 	// Draft being edited.
 	draft: OrbitDraft
-	// Why the draft cannot be solved, while it cannot.
-	draftError?: string
+	// Why the draft cannot be solved and which field to fix, while it cannot.
+	draftError?: DraftProblem
 	// Last definition checked and sent; the values shown belong to it.
 	definition?: OrbitDefinitionPayload
 	// Where it comes from.
@@ -480,45 +480,72 @@ function inRange(jd: number, limits: OrbitalMechanicsLimits) {
 	return jd >= limits.epochMin && jd <= limits.epochMax
 }
 
-// The definition of a draft about a center, or why it cannot be solved. The server takes definitions as valid, so every
-// domain the model requires is held here.
-export function draftDefinition(draft: OrbitDraft, center: OrbitCenterPayload, unit: DistanceUnit, limits: OrbitalMechanicsLimits): OrbitDefinitionPayload | string {
+// Field of a draft a problem belongs to, or the center every orbit shares.
+export type DraftField = Exclude<keyof OrbitDraft, 'kind'> | 'center'
+
+// Why a draft cannot be solved, and the field to fix, so the editor says it beside that field.
+export interface DraftProblem {
+	// Field to fix.
+	readonly field: DraftField
+	// What is wrong and, when it helps, how to fix it.
+	readonly message: string
+}
+
+// The supported range of instants for people, as the years it spans (Julian years from J2000).
+function rangeText(limits: OrbitalMechanicsLimits) {
+	const year = (jd: number) => Math.round(2000 + (jd - 2451545) / 365.25)
+	return `the years ${year(limits.epochMin)} to ${year(limits.epochMax)}`
+}
+
+// A problem of a draft's field.
+function problem(field: DraftField, message: string): DraftProblem {
+	return { field, message }
+}
+
+// Whether a draft's check answered a problem rather than a definition.
+export function isDraftProblem(value: OrbitDefinitionPayload | DraftProblem): value is DraftProblem {
+	return 'field' in value
+}
+
+// The definition of a draft about a center, or why it cannot be solved and where. The server takes definitions as
+// valid, so every domain the model requires is held here.
+export function draftDefinition(draft: OrbitDraft, center: OrbitCenterPayload, unit: DistanceUnit, limits: OrbitalMechanicsLimits): OrbitDefinitionPayload | DraftProblem {
 	const { mu } = center
-	if (!(mu > 0) || !Number.isFinite(mu)) return 'The gravitational parameter of the center must be positive.'
+	if (!(mu > 0) || !Number.isFinite(mu)) return problem('center', 'The gravitational parameter of the center must be positive. Choose another center or a positive GM.')
 
 	if (draft.kind === 'cartesian') {
 		const position = draft.position.map((e) => toAu(e, unit)) as unknown as OrbitVector
 		const velocity = draft.velocity.map((e) => toAuPerDay(e, unit)) as unknown as OrbitVector
-		if (![...position, ...velocity].every(Number.isFinite)) return 'Every component of the position and velocity must be a number.'
+		if (![...position, ...velocity].every(Number.isFinite)) return problem('position', 'Every component of the position and velocity must be a number.')
 		const r = Math.hypot(...position)
 		const v = Math.hypot(...velocity)
-		if (!(r > 0)) return 'The position cannot be at the center.'
+		if (!(r > 0)) return problem('position', 'The position cannot be at the center. Move it away from 0, 0, 0.')
 		const h = Math.hypot(position[1] * velocity[2] - position[2] * velocity[1], position[2] * velocity[0] - position[0] * velocity[2], position[0] * velocity[1] - position[1] * velocity[0])
 		// Same threshold as the toolkit's DEGENERATE_TOLERANCE: a smaller h is lost in the rounding of |r||v|.
-		if (!(h > 1e-12 * r * v)) return 'The velocity is parallel to the position, so the motion is not a conic.'
-		if (!inRange(draft.epoch, limits)) return 'The epoch is outside the supported range.'
+		if (!(h > 1e-12 * r * v)) return problem('velocity', 'The velocity is parallel to the position, so the motion is not a conic. Give it a sideways component.')
+		if (!inRange(draft.epoch, limits)) return problem('epoch', `The epoch is outside the supported range, ${rangeText(limits)}.`)
 		return { kind: 'cartesian', mu, position, velocity, epoch: draft.epoch }
 	}
 
 	const { inclination, node, argumentOfPeriapsis } = draft
-	if (!(inclination >= 0 && inclination <= 180)) return 'The inclination must be between 0° and 180°.'
-	if (![node, argumentOfPeriapsis].every(Number.isFinite)) return 'The node and the argument of periapsis must be numbers.'
+	if (!(inclination >= 0 && inclination <= 180)) return problem('inclination', 'The inclination must be between 0° and 180°.')
+	if (![node, argumentOfPeriapsis].every(Number.isFinite)) return problem('node', 'The node and the argument of periapsis must be numbers.')
 	const angles = { mu, plane: draft.plane, inclination: inclination * DEG2RAD, node: node * DEG2RAD, argumentOfPeriapsis: argumentOfPeriapsis * DEG2RAD }
 
 	if (draft.kind === 'elliptic') {
 		const semiMajorAxis = toAu(draft.semiMajorAxis, unit)
-		if (!(semiMajorAxis > 0) || !Number.isFinite(semiMajorAxis)) return 'The semi-major axis must be positive.'
-		if (!(draft.eccentricity >= 0 && draft.eccentricity < 1)) return 'An elliptic orbit needs an eccentricity from 0 up to, but not including, 1.'
-		if (!Number.isFinite(draft.meanAnomaly)) return 'The mean anomaly must be a number.'
-		if (!inRange(draft.epoch, limits)) return 'The epoch is outside the supported range.'
+		if (!(semiMajorAxis > 0) || !Number.isFinite(semiMajorAxis)) return problem('semiMajorAxis', 'The semi-major axis must be positive.')
+		if (!(draft.eccentricity >= 0 && draft.eccentricity < 1)) return problem('eccentricity', 'An elliptic orbit needs an eccentricity from 0 up to, but not including, 1. For 1 or more, define it as a parabola or a hyperbola.')
+		if (!Number.isFinite(draft.meanAnomaly)) return problem('meanAnomaly', 'The mean anomaly must be a number.')
+		if (!inRange(draft.epoch, limits)) return problem('epoch', `The epoch is outside the supported range, ${rangeText(limits)}.`)
 		return { kind: 'elliptic', ...angles, semiMajorAxis, eccentricity: draft.eccentricity, meanAnomaly: draft.meanAnomaly * DEG2RAD, epoch: draft.epoch }
 	}
 
 	const periapsisDistance = toAu(draft.periapsisDistance, unit)
-	if (!(periapsisDistance > 0) || !Number.isFinite(periapsisDistance)) return 'The periapsis distance must be positive.'
-	if (!inRange(draft.periapsisTime, limits)) return 'The periapsis time is outside the supported range.'
+	if (!(periapsisDistance > 0) || !Number.isFinite(periapsisDistance)) return problem('periapsisDistance', 'The periapsis distance must be positive.')
+	if (!inRange(draft.periapsisTime, limits)) return problem('periapsisTime', `The periapsis time is outside the supported range, ${rangeText(limits)}.`)
 	if (draft.kind === 'parabolic') return { kind: 'parabolic', ...angles, periapsisDistance, periapsisTime: draft.periapsisTime }
-	if (!(draft.hyperbolicEccentricity > 1) || !Number.isFinite(draft.hyperbolicEccentricity)) return 'A hyperbolic orbit needs an eccentricity above 1.'
+	if (!(draft.hyperbolicEccentricity > 1) || !Number.isFinite(draft.hyperbolicEccentricity)) return problem('hyperbolicEccentricity', 'A hyperbolic orbit needs an eccentricity above 1. Below 1, define it as an ellipse.')
 	return { kind: 'hyperbolic', ...angles, periapsisDistance, eccentricity: draft.hyperbolicEccentricity, periapsisTime: draft.periapsisTime }
 }
 
@@ -669,7 +696,7 @@ export function commitDraft(state: OrbitalMechanicsState, id: string, io: Orbita
 	if (!orbit || !state.center || !state.reference) return
 	const definition = draftDefinition(orbit.draft, state.center, state.unit, state.reference.limits)
 
-	if (typeof definition === 'string') {
+	if (isDraftProblem(definition)) {
 		orbit.draftError = definition
 		return
 	}
@@ -1044,7 +1071,7 @@ export function importScenario(state: OrbitalMechanicsState, text: string, io: O
 		const definition = orbit.definition as unknown as OrbitDefinitionPayload
 		if (!['elliptic', 'parabolic', 'hyperbolic', 'cartesian'].includes(definition.kind)) return refuse(`Orbit ${index + 1} has an unknown kind.`)
 		if (definition.mu !== scenarioCenter.mu) return refuse(`Orbit ${index + 1} is not about the scenario's center.`)
-		let again: OrbitDefinitionPayload | string
+		let again: OrbitDefinitionPayload | DraftProblem
 
 		try {
 			again = draftDefinition(draftOf(definition, unit), scenarioCenter, unit, limits)
@@ -1053,7 +1080,7 @@ export function importScenario(state: OrbitalMechanicsState, text: string, io: O
 			return refuse(`Orbit ${index + 1} is not readable.`)
 		}
 
-		if (typeof again === 'string') return refuse(`Orbit ${index + 1}: ${again}`)
+		if (isDraftProblem(again)) return refuse(`Orbit ${index + 1}: ${again.message}`)
 		const color = typeof orbit.color === 'number' && orbit.color >= 0 && orbit.color < PALETTE_SIZE ? Math.floor(orbit.color) : index % PALETTE_SIZE
 		checked.push({ name: orbit.name, color, visible: orbit.visible !== false, source: scenarioSource(orbit.source), definition })
 	}

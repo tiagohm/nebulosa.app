@@ -95,10 +95,10 @@ export function OrbitInspector({ orbit }: { readonly orbit: ExplorerOrbit }) {
 					{formatTdb(solution.time)} · JD {solution.time.toFixed(6)} · {new Date(solution.utc).toISOString().replace('T', ' ').slice(0, 19)} UTC
 				</span>
 				{state.inspecting && <Notice>Reading exact values…</Notice>}
-				{stale && <Notice>These values belong to the previous definition until the new one is solved.</Notice>}
+				{stale && <Notice>These values belong to the last valid definition, dashed in the scene, until the new one is solved.</Notice>}
 				{state.inspectionError && <Notice error>{state.inspectionError}</Notice>}
 				{solution.warnings.map((e) => (
-					<Notice key={e}>{WARNING_TEXTS[e]}</Notice>
+					<Notice key={e} warning>{`Warning: ${WARNING_TEXTS[e]}`}</Notice>
 				))}
 			</CollapsibleSection>
 			<ElementsSection elements={elements} unit={unit} plane={plane} defaultOpen={wide} />

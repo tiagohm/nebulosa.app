@@ -94,7 +94,9 @@ async function resolve(state: OrbitalMechanicsState, request: OrbitResolveReques
 		} else acceptOrbit(state, response, io)
 	} catch (error) {
 		if (!guard.current()) return
-		lookup.error = error instanceof Error ? error.message : String(error)
+		const message = error instanceof Error ? error.message : String(error)
+		const unknown = error instanceof ApiResponseError && error.code === 'objectNotFound'
+		lookup.error = unknown ? `${message}. Check the spelling, or look it up by its SPK-ID or designation.` : message
 		lookup.kernelProblem = request.kind === 'spk' && error instanceof ApiResponseError && error.status !== 404
 	}
 

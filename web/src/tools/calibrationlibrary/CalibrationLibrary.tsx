@@ -1,4 +1,4 @@
-import type { CalibrationGroupSummary, CalibrationKind, CalibrationMasterSummary, CalibrationSource, CalibrationSourceSummary, CompatibilityFinding, Evidenced, ImportCandidatePage, MasterRequest, OverridableField, RecipeValidation } from 'api'
+import type { CalibrationGroupSummary, CalibrationJobSummary, CalibrationKind, CalibrationMasterSummary, CalibrationSource, CalibrationSourceSummary, CompatibilityFinding, Evidenced, ImportCandidatePage, MasterRequest, OverridableField, RecipeValidation } from 'api'
 import { cn } from 'cn'
 import { useEffect, useState } from 'react'
 import { useSnapshot } from 'valtio'
@@ -6,6 +6,8 @@ import {
 	buildMaster,
 	CALIBRATION_PAGE_SIZE,
 	calibrationLibraryRuntime,
+	calibrationLibraryView,
+	cancelCalibrationBuild,
 	cancelCalibrationImport,
 	commitCalibrationImport,
 	deleteCalibrationGroup,
@@ -30,7 +32,7 @@ import {
 import { cameraBindingsState, type CatalogCamera, catalogCameraName, catalogState, suggestedCameraId } from '../../equipment/catalog'
 import { FileExplorerModal } from '../../files/FileExplorerModal'
 import { IMAGE_EXTENSIONS } from '../../files/files'
-import { formatByteSize, formatExposureTime, formatFixed, formatPercent, formatTemperature, formatZonedDateTime, MISSING } from '../../format'
+import { formatByteSize, formatCount, formatExposureTime, formatFixed, formatPercent, formatTemperature, formatZonedDateTime, MISSING } from '../../format'
 import { imagesState, openImage } from '../../images/images'
 import { useActiveTimeZone } from '../../location/useLocation'
 import { activeProfile, profileState, setLastCalibrationDirectory } from '../../profile/profile'
@@ -42,17 +44,20 @@ import { Button } from '../../ui/Button'
 import { Checkbox } from '../../ui/Checkbox'
 import { ConfirmButton } from '../../ui/ConfirmButton'
 import { DataRow } from '../../ui/DataRow'
-import { Modal } from '../../ui/Modal'
+import { Modal, ModalActions } from '../../ui/Modal'
 import { Notice } from '../../ui/Notice'
 import { NumberInput } from '../../ui/NumberInput'
 import { Pager } from '../../ui/Pager'
+import { ProgressBar } from '../../ui/ProgressBar'
+import { SectionHeading } from '../../ui/SectionHeading'
 import { SegmentedControl } from '../../ui/SegmentedControl'
 import { Select } from '../../ui/Select'
 import { StatusBadge } from '../../ui/StatusBadge'
-import { Cell, Row, Table } from '../../ui/Table'
+import { Cell, Row, Table, type TableColumn } from '../../ui/Table'
 import { TextInput } from '../../ui/TextInput'
 import {
 	CALIBRATION_KINDS,
+	CALIBRATION_STATE_LABELS,
 	cameraText,
 	coverage,
 	EVIDENCE_LABELS,
@@ -69,7 +74,7 @@ import {
 	METHOD_LABELS,
 	ORIGIN_LABELS,
 	OVERRIDE_LABELS,
-	overrideIsText,
+	overrideValue,
 	PRODUCT_STATUS_LABELS,
 	PRODUCT_STATUS_TONES,
 	READINESS_LABELS,
@@ -86,8 +91,9 @@ import {
 // Calibration Library tool: what calibration frames exist, what can be combined and why not, and which masters were made. It
 // works with no camera and starts no exposure; every capture stays in Images. State lives on the server, so a reload, another
 // tab, or a wizard show the same builds. A master is built from the group it belongs to, whose form follows its build, and
-// every build makes a new master, told apart by its id and date. Deleting, after a confirmation, takes a frame or a group
-// with their files, or one master. Every frame and master is recorded against a camera of the Equipment Catalog, which an
+// every build makes a new master, told apart by its id and date, and can be cancelled until it publishes. Removing a frame or
+// a group, after a confirmation, takes it out of the library and deletes its files only when the operator asks, as this
+// browser remembers; deleting a master takes its file. Every frame and master is recorded against a camera of the Equipment Catalog, which an
 // import asks for, the filters and lists name, and the coverage groups by.
 
 // Fields of the recipe form.
@@ -118,6 +124,14 @@ type DarkMasterKind = (typeof DARK_MASTER_KINDS)[number]
 
 // Choice of the group, master, or frame shown in the panel.
 type Selection = { readonly type: 'group'; readonly groupId: string } | { readonly type: 'master'; readonly masterId: number } | { readonly type: 'source'; readonly sourceId: string }
+
+// Classes of a column a phone leaves out, so the name and the state of each row stay on screen.
+const WIDE_ONLY = 'max-sm:hidden'
+
+// Column a phone leaves out.
+function wide(label: string): TableColumn {
+	return { key: label, label, className: WIDE_ONLY }
+}
 
 // Calibration Library tool.
 export function CalibrationLibrary() {
@@ -184,7 +198,10 @@ export function CalibrationLibrary() {
 
 	// Every camera of the catalog, and any other camera the library records something against.
 	const cameras = ['', ...new Set([...catalog.map(({ id }) => id), ...(runtime.summary?.cameras ?? []).map((usage) => usage.cameraId)])]
-	const panel = selection && <SelectionPanel selection={selection} onGroup={selectGroup} onDeleted={deselect} />
+	// Whether a filter narrows the lists, which tells an empty page from an empty library.
+	const filtered = kind !== 'all' || cameraId !== ''
+	const selectMaster = (masterId: number) => select({ type: 'master', masterId })
+	const panel = selection && <SelectionPanel selection={selection} onGroup={selectGroup} onMaster={selectMaster} onDeleted={deselect} />
 
 	const actions = (
 		<Actions>
@@ -201,13 +218,13 @@ export function CalibrationLibrary() {
 				{runtime.errors.refresh && <Notice error>{runtime.errors.refresh}</Notice>}
 				<div className="flex flex-wrap items-end gap-3">
 					<SegmentedControl options={LIBRARY_SECTIONS} value={section} format={(option) => SECTION_LABELS[option]} onChange={change(setSection)} />
-					<Select label="Frame Type" className="w-36" options={KIND_FILTERS} value={kind} format={(option) => (option === 'all' ? 'All Types' : KIND_LABELS[option])} onChange={change(setKind)} />
-					<Select label="Camera" className="w-52" options={cameras} value={cameraId} format={(option) => (option ? catalogCameraName(catalog, option) : 'All Cameras')} onChange={change(setCameraId)} />
-					{section === 'frames' && <TextInput label="Search" className="w-52" value={search} onChange={(event) => change(setSearch)(event.target.value)} />}
+					<Select label="Frame Type" className="w-36 flex-none" options={KIND_FILTERS} value={kind} format={(option) => (option === 'all' ? 'All Types' : KIND_LABELS[option])} onChange={change(setKind)} />
+					<Select label="Camera" className="w-52 flex-none" options={cameras} value={cameraId} format={(option) => (option ? catalogCameraName(catalog, option) : 'All Cameras')} onChange={change(setCameraId)} />
+					{section === 'frames' && <TextInput label="Search" className="w-52 flex-none" value={search} onChange={(event) => change(setSearch)(event.target.value)} />}
 				</div>
-				{section === 'library' && <GroupsView selected={selection?.type === 'group' ? selection.groupId : undefined} onSelect={selectGroup} />}
+				{section === 'library' && <GroupsView filtered={filtered} selected={selection?.type === 'group' ? selection.groupId : undefined} onSelect={selectGroup} />}
 				{section === 'frames' && <FramesView selected={selection?.type === 'source' ? selection.sourceId : undefined} onSelect={(sourceId) => select({ type: 'source', sourceId })} />}
-				{section === 'masters' && <MastersView selection={selection} onSelect={(masterId) => select({ type: 'master', masterId })} />}
+				{section === 'masters' && <MastersView filtered={filtered} selection={selection} onSelect={selectMaster} />}
 				<Pager page={page} total={pageTotal(section)} pageSize={CALIBRATION_PAGE_SIZE} noun="rows" loading={runtime.loading[SECTION_LISTS[section]] === true} onPage={setPage} />
 			</div>
 			{importing && <ImportDialog onClose={() => setImporting(false)} />}
@@ -220,26 +237,35 @@ function pageTotal(section: LibrarySection) {
 	return calibrationLibraryRuntime[SECTION_LISTS[section]]?.total ?? 0
 }
 
-// Coverage and groups.
-function GroupsView({ selected, onSelect }: { readonly selected?: string; readonly onSelect: (groupId: string) => void }) {
+// Coverage and groups; filtered says whether a filter narrows them.
+function GroupsView({ filtered, selected, onSelect }: { readonly filtered: boolean; readonly selected?: string; readonly onSelect: (groupId: string) => void }) {
 	const timeZone = useActiveTimeZone()
 	const { groups, summary } = useSnapshot(calibrationLibraryRuntime)
 	const { cameras } = useSnapshot(catalogState)
 	const items = (groups?.items ?? []) as readonly CalibrationGroupSummary[]
 
-	if (items.length === 0) return <EmptyState title="No calibration frames" description="Finish a Dark Library plan in Images, or import a directory of FITS or XISF frames." />
+	if (items.length === 0) {
+		if (filtered) return <EmptyState title="No groups" description="Nothing matches these filters." />
+		return <EmptyState title="No calibration frames" description="Finish a Dark Library plan or a Flat Wizard session in Images, or import a directory of FITS or XISF frames." />
+	}
 
 	return (
 		<>
-			<p className="m-0 text-xs text-ink-300 tabular-nums">{`${summary?.frames.available ?? 0} frames available · ${(summary?.masters.ready ?? 0) + (summary?.masters.warning ?? 0)} masters`}</p>
+			<div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+				<SectionHeading as="h2">Coverage</SectionHeading>
+				<p className="m-0 text-xs text-ink-200 tabular-nums">{`${formatCount(summary?.frames.available ?? 0)} frames available · ${formatCount((summary?.masters.ready ?? 0) + (summary?.masters.warning ?? 0))} usable masters`}</p>
+			</div>
 			<Coverage groups={items} cameras={cameras} />
-			<Table columns={['Type', 'Group', 'Camera', 'Settings', 'Frames', 'State', 'Latest Master']}>
+			<SectionHeading as="h2" className="mt-2">
+				Groups
+			</SectionHeading>
+			<Table columns={['Type', 'Group', wide('Camera'), wide('Settings'), 'Frames', 'State', 'Latest Master']}>
 				{items.map((group) => (
 					<Row key={group.groupId} selected={group.groupId === selected} onSelect={() => onSelect(group.groupId)}>
 						<Cell>{KIND_LABELS[group.kind]}</Cell>
 						<Cell>{groupTitle(group)}</Cell>
-						<Cell>{cameraText(group.metadata, cameras)}</Cell>
-						<Cell>{settingsText(group.metadata)}</Cell>
+						<Cell className={WIDE_ONLY}>{cameraText(group.metadata, cameras)}</Cell>
+						<Cell className={WIDE_ONLY}>{settingsText(group.metadata)}</Cell>
 						<Cell>{group.required === undefined ? group.usable : `${group.usable}/${group.required}`}</Cell>
 						<Cell>
 							<StatusBadge tone={READINESS_TONES[group.readiness]} label={READINESS_LABELS[group.readiness]} />
@@ -252,16 +278,17 @@ function GroupsView({ selected, onSelect }: { readonly selected?: string; readon
 	)
 }
 
-// Which roles have masters, per camera of the Equipment Catalog and operating point.
+// Which roles have masters, per camera of the Equipment Catalog and operating point: each role reads the groups with a
+// usable master of it over the groups that serve it, in the warning tone while some lack one.
 function Coverage({ groups, cameras }: { readonly groups: readonly CalibrationGroupSummary[]; readonly cameras: readonly CatalogCamera[] }) {
 	return (
-		<Table columns={['Camera', 'Settings', ...CALIBRATION_KINDS.map((kind) => KIND_LABELS[kind])]}>
+		<Table className="shrink-0" columns={['Camera', wide('Settings'), ...CALIBRATION_KINDS.map((kind) => KIND_LABELS[kind])]}>
 			{coverage(groups, cameras).map(({ key, camera, settings, kinds }) => (
 				<Row key={key}>
-					<Cell>{camera}</Cell>
-					<Cell>{settings}</Cell>
+					<Cell title={settings}>{camera}</Cell>
+					<Cell className={WIDE_ONLY}>{settings}</Cell>
 					{CALIBRATION_KINDS.map((kind) => (
-						<Cell key={kind} className={kinds[kind].groups > 0 && kinds[kind].masters < kinds[kind].groups ? 'text-warning' : undefined}>
+						<Cell key={kind} title={kinds[kind].groups === 0 ? `No ${KIND_LABELS[kind].toLowerCase()} group` : `${kinds[kind].masters} of ${kinds[kind].groups} groups have a usable master`} className={kinds[kind].groups > 0 && kinds[kind].masters < kinds[kind].groups ? 'text-warning' : undefined}>
 							{kinds[kind].groups === 0 ? MISSING : `${kinds[kind].masters}/${kinds[kind].groups}`}
 						</Cell>
 					))}
@@ -280,16 +307,16 @@ function FramesView({ selected, onSelect }: { readonly selected?: string; readon
 	if (items.length === 0) return <EmptyState title="No frames" description="Nothing matches these filters." />
 
 	return (
-		<Table columns={['File', 'Type', 'Camera', 'Exposure', 'Temperature', 'Settings', 'Origin', 'State']}>
+		<Table columns={['File', 'Type', wide('Camera'), 'Exposure', 'Temperature', wide('Settings'), wide('Origin'), 'State']}>
 			{items.map((source) => (
 				<Row key={source.sourceId} selected={source.sourceId === selected} onSelect={() => onSelect(source.sourceId)}>
 					<Cell>{source.name}</Cell>
 					<Cell>{KIND_LABELS[source.kind]}</Cell>
-					<Cell>{catalogCameraName(cameras, source.metadata.cameraId)}</Cell>
+					<Cell className={WIDE_ONLY}>{catalogCameraName(cameras, source.metadata.cameraId)}</Cell>
 					<Cell>{exposureText(source.metadata)}</Cell>
 					<Cell>{temperatureText(source.metadata)}</Cell>
-					<Cell>{settingsText(source.metadata)}</Cell>
-					<Cell>{ORIGIN_LABELS[source.origin]}</Cell>
+					<Cell className={WIDE_ONLY}>{settingsText(source.metadata)}</Cell>
+					<Cell className={WIDE_ONLY}>{ORIGIN_LABELS[source.origin]}</Cell>
 					<Cell>{!source.excluded ? <StatusBadge tone={SOURCE_STATUS_TONES[source.status]} label={SOURCE_STATUS_LABELS[source.status]} /> : <StatusBadge tone="muted" label="Left Out" />}</Cell>
 				</Row>
 			))}
@@ -297,26 +324,26 @@ function FramesView({ selected, onSelect }: { readonly selected?: string; readon
 	)
 }
 
-// List of masters, newest first.
-function MastersView({ selection, onSelect }: { readonly selection?: Selection; readonly onSelect: (masterId: number) => void }) {
+// List of masters, newest first; filtered says whether a filter narrows it.
+function MastersView({ filtered, selection, onSelect }: { readonly filtered: boolean; readonly selection?: Selection; readonly onSelect: (masterId: number) => void }) {
 	const timeZone = useActiveTimeZone()
 	const { masters } = useSnapshot(calibrationLibraryRuntime)
 	const { cameras } = useSnapshot(catalogState)
 	const items = (masters?.items ?? []) as readonly CalibrationMasterSummary[]
 
-	if (items.length === 0) return <EmptyState title="No masters" description="Build one from a group of the Library." />
+	if (items.length === 0) return <EmptyState title="No masters" description={filtered ? 'Nothing matches these filters.' : 'Build one from a group of the Library.'} />
 
 	return (
-		<Table columns={['Master', 'Type', 'Group', 'Camera', 'Frames', 'Method', 'Contents', 'State']}>
+		<Table columns={['Master', 'Type', 'Group', wide('Camera'), 'Frames', wide('Method'), wide('Contents'), 'State']}>
 			{items.map((master) => (
 				<Row key={master.masterId} selected={selection?.type === 'master' && selection.masterId === master.masterId} onSelect={() => onSelect(master.masterId)}>
 					<Cell>{masterName(master, timeZone)}</Cell>
 					<Cell>{KIND_LABELS[master.kind]}</Cell>
 					<Cell>{groupTitle(master)}</Cell>
-					<Cell>{cameraText(master.metadata, cameras)}</Cell>
+					<Cell className={WIDE_ONLY}>{cameraText(master.metadata, cameras)}</Cell>
 					<Cell>{master.frames}</Cell>
-					<Cell>{METHOD_LABELS[master.method]}</Cell>
-					<Cell>{master.units}</Cell>
+					<Cell className={WIDE_ONLY}>{METHOD_LABELS[master.method]}</Cell>
+					<Cell className={WIDE_ONLY}>{CALIBRATION_STATE_LABELS[master.calibrationState]}</Cell>
 					<Cell>
 						<StatusBadge tone={PRODUCT_STATUS_TONES[master.status]} label={PRODUCT_STATUS_LABELS[master.status]} />
 					</Cell>
@@ -326,9 +353,10 @@ function MastersView({ selection, onSelect }: { readonly selection?: Selection; 
 	)
 }
 
-// Panel of what is selected; onDeleted runs once what it shows was deleted.
-function SelectionPanel({ selection, onGroup, onDeleted }: { readonly selection: Selection; readonly onGroup: (groupId: string) => void; readonly onDeleted: () => void }) {
-	if (selection.type === 'group') return <GroupPanel onDeleted={onDeleted} />
+// Panel of what is selected; onGroup and onMaster show another group or master, and onDeleted runs once what it shows was
+// deleted.
+function SelectionPanel({ selection, onGroup, onMaster, onDeleted }: { readonly selection: Selection; readonly onGroup: (groupId: string) => void; readonly onMaster: (masterId: number) => void; readonly onDeleted: () => void }) {
+	if (selection.type === 'group') return <GroupPanel onMaster={onMaster} onDeleted={onDeleted} />
 	if (selection.type === 'master') return <MasterPanel onGroup={onGroup} onDeleted={onDeleted} />
 	return <SourcePanel onDeleted={onDeleted} />
 }
@@ -338,6 +366,9 @@ function openInImages(path: string) {
 	void openImage(imagesState, path)
 	navigate(routeState, { workspace: 'images' })
 }
+
+// Word that leads a finding that stops or holds a build, so its weight never rests on its colour alone.
+const SEVERITY_LABELS: Readonly<Record<Exclude<CompatibilityFinding['severity'], 'notice'>, string>> = { blocker: 'Blocks', review: 'Review' }
 
 // Explained reasons, the worst first.
 function Findings({ findings }: { readonly findings: readonly CompatibilityFinding[] }) {
@@ -350,6 +381,7 @@ function Findings({ findings }: { readonly findings: readonly CompatibilityFindi
 				.toSorted((a, b) => order[a.severity] - order[b.severity])
 				.map(({ field, code, severity, message }) => (
 					<li key={`${field}:${code}:${message}`} className={cn('text-xs leading-4', severity === 'blocker' ? 'text-danger' : severity === 'review' ? 'text-warning' : 'text-ink-300')}>
+						{severity !== 'notice' && <span className="font-medium">{`${SEVERITY_LABELS[severity]}: `}</span>}
 						{message}
 					</li>
 				))}
@@ -357,8 +389,8 @@ function Findings({ findings }: { readonly findings: readonly CompatibilityFindi
 	)
 }
 
-// Group, why it is in its state, its build form, and its deletion.
-function GroupPanel({ onDeleted }: { readonly onDeleted: () => void }) {
+// Group, why it is in its state, its build form, its masters (onMaster shows one), and its removal, last.
+function GroupPanel({ onMaster, onDeleted }: { readonly onMaster: (masterId: number) => void; readonly onDeleted: () => void }) {
 	const timeZone = useActiveTimeZone()
 	const { group, jobs, pending, errors } = useSnapshot(calibrationLibraryRuntime)
 	const { cameras } = useSnapshot(catalogState)
@@ -368,8 +400,8 @@ function GroupPanel({ onDeleted }: { readonly onDeleted: () => void }) {
 	const job = latestGroupJob(jobs, group.groupId)
 	const building = job !== undefined && !jobEnded(job)
 
-	async function remove(groupId: string) {
-		if (await deleteCalibrationGroup(calibrationLibraryRuntime, groupId)) onDeleted()
+	async function remove(groupId: string, files: boolean) {
+		if (await deleteCalibrationGroup(calibrationLibraryRuntime, groupId, files)) onDeleted()
 	}
 
 	return (
@@ -380,39 +412,96 @@ function GroupPanel({ onDeleted }: { readonly onDeleted: () => void }) {
 				<DataRow label="Settings">{settingsText(group.metadata)}</DataRow>
 				<DataRow label="Frames">{group.required === undefined ? `${group.usable} usable of ${group.total}` : `${group.usable} usable, ${group.required} planned`}</DataRow>
 				<Findings findings={group.findings} />
-				{group.readiness === 'needsReview' && (
-					<Notice>
-						Needs Review: what is listed in yellow cannot be verified from the files. To build a master anyway, check that you accept it in Build Master; the master records what you accepted. A value the files leave out can instead be declared on each frame in Frames, which is then reported as declared by
-						you.
-					</Notice>
-				)}
-				{errors[key] && <Notice error>{errors[key]}</Notice>}
-				<Actions>
-					<ConfirmButton title="Delete this group?" message={`The files of its ${group.total} frames are deleted from the disk, wherever they are, and leave the library. Its masters stay.`} confirmLabel="Delete" disabled={building || pending[key] === true} onConfirm={() => void remove(group.groupId)}>
-						Delete Group
-					</ConfirmButton>
-				</Actions>
+				{group.readiness === 'needsReview' && <Notice>What is marked Review cannot be verified from the files. Accept it in Build Master to build anyway, and the master records it; or declare the missing value on each frame in Frames.</Notice>}
 			</CollapsibleSection>
 			<CollapsibleSection id="calibration.build" title="Build Master">
-				<BuildForm key={group.groupId} groupId={group.groupId} kind={group.kind} shown={group.findings} />
+				<BuildForm key={group.groupId} groupId={group.groupId} kind={group.kind} shown={group.findings} onMaster={onMaster} />
 			</CollapsibleSection>
 			{group.masters.length > 0 && (
 				<CollapsibleSection id="calibration.masters" title="Masters">
-					{group.masters.map((master) => (
-						<div key={master.masterId} className="flex items-center gap-2 text-xs text-ink-200 tabular-nums">
-							<span>{`${masterName(master, timeZone)} · ${master.frames} frames · ${METHOD_LABELS[master.method]}`}</span>
-							<StatusBadge tone={PRODUCT_STATUS_TONES[master.status]} label={PRODUCT_STATUS_LABELS[master.status]} />
-						</div>
-					))}
+					<Table columns={['Master', 'Type', 'Frames', 'State']}>
+						{group.masters.map((master) => (
+							<Row key={master.masterId} title={METHOD_LABELS[master.method]} onSelect={() => onMaster(master.masterId)}>
+								<Cell>{masterName(master, timeZone)}</Cell>
+								<Cell>{KIND_LABELS[master.kind]}</Cell>
+								<Cell>{master.frames}</Cell>
+								<Cell>
+									<StatusBadge tone={PRODUCT_STATUS_TONES[master.status]} label={PRODUCT_STATUS_LABELS[master.status]} />
+								</Cell>
+							</Row>
+						))}
+					</Table>
 				</CollapsibleSection>
 			)}
+			<CollapsibleSection id="calibration.remove" title="Remove" defaultOpen={false}>
+				{errors[key] && <Notice error>{errors[key]}</Notice>}
+				<Actions>
+					<RemoveFramesButton
+						title="Remove this group?"
+						message={`Its ${formatCount(group.total)} frames leave the library. Its masters stay.`}
+						files={`Also delete the files of its ${formatCount(group.total)} frames from the disk, wherever they are`}
+						disabled={building || pending[key] === true}
+						tooltip={building ? 'A master of this group is being built' : undefined}
+						onConfirm={(files) => void remove(group.groupId, files)}
+					>
+						Remove Group
+					</RemoveFramesButton>
+				</Actions>
+			</CollapsibleSection>
 		</>
 	)
 }
 
-// Recipe of a master, which the server explains as it changes.
-// shown is what the group section already lists, so only what the recipe itself adds is listed here.
-function BuildForm({ groupId, kind, shown }: { readonly groupId: string; readonly kind: CalibrationKind; readonly shown: readonly CompatibilityFinding[] }) {
+// Button that removes frames from the library once a dialog confirms it, and also deletes their files when its checkbox
+// is checked; the checkbox starts unchecked, and this browser remembers it (calibrationLibraryView). The dialog opens with
+// Cancel focused, and its confirming button names the files when they go too.
+function RemoveFramesButton({ title, message, files, disabled, tooltip, onConfirm, children }: { readonly title: string; readonly message: string; readonly files: string; readonly disabled: boolean; readonly tooltip?: string; readonly onConfirm: (files: boolean) => void; readonly children: string }) {
+	const { deleteFiles } = useSnapshot(calibrationLibraryView)
+	const [open, setOpen] = useState(false)
+
+	return (
+		<>
+			<Button variant="secondary" disabled={disabled} title={tooltip} onClick={() => setOpen(true)}>
+				{children}
+			</Button>
+			<Modal open={open} onClose={() => setOpen(false)} title={title} className="max-w-md">
+				<div className="flex flex-col gap-3 text-sm leading-5 text-ink-200">
+					<p className="m-0">{message}</p>
+					<Checkbox
+						label={files}
+						checked={deleteFiles}
+						onChange={(checked) => {
+							calibrationLibraryView.deleteFiles = checked
+						}}
+					/>
+					<p className="m-0 text-xs leading-4 text-ink-300">{deleteFiles ? 'Deleted files cannot be recovered.' : 'The files stay where they are, and an import adds them again.'}</p>
+				</div>
+				<ModalActions>
+					<Button variant="secondary" onClick={() => setOpen(false)} data-autofocus>
+						Cancel
+					</Button>
+					<Button
+						variant="danger"
+						onClick={() => {
+							setOpen(false)
+							onConfirm(deleteFiles)
+						}}
+					>
+						{deleteFiles ? 'Remove and Delete Files' : 'Remove'}
+					</Button>
+				</ModalActions>
+			</Modal>
+		</>
+	)
+}
+
+// What a running build is doing, by state of its job.
+const BUILD_STATE_LABELS: Readonly<Record<CalibrationJobSummary['state'], string>> = { queued: 'Queued behind another build', validating: 'Checking the frames', integrating: 'Combining the frames', publishing: 'Publishing the master', completed: 'Published', failed: 'Failed', cancelled: 'Cancelled' }
+
+// Recipe of a master, which the server explains as it changes, with the progress of its build, which can be cancelled
+// until it publishes. shown is what the group section already lists, so only what the recipe itself adds is listed here;
+// onMaster shows the master the last build published.
+function BuildForm({ groupId, kind, shown, onMaster }: { readonly groupId: string; readonly kind: CalibrationKind; readonly shown: readonly CompatibilityFinding[]; readonly onMaster: (masterId: number) => void }) {
 	const timeZone = useActiveTimeZone()
 	const { pending, errors, changes, jobs } = useSnapshot(calibrationLibraryRuntime)
 	const [form, setForm] = useState<RecipeForm>(DEFAULT_FORM)
@@ -465,6 +554,7 @@ function BuildForm({ groupId, kind, shown }: { readonly groupId: string; readonl
 	const building = job !== undefined && !jobEnded(job)
 	const requesting = pending[key] === true
 	const failure = job?.state === 'failed' ? job.error : undefined
+	const cancelKey = `build:${job?.jobId}`
 
 	return (
 		<>
@@ -473,8 +563,8 @@ function BuildForm({ groupId, kind, shown }: { readonly groupId: string; readonl
 			<Select label="Combination" options={RECIPE_METHODS} value={form.method} format={(option) => METHOD_LABELS[option]} onChange={(method) => edit({ method })} />
 			{form.method === 'sigmaClip' && (
 				<div className="flex flex-col gap-2">
-					<NumberInput label="Low σ" value={form.sigmaLow} min={1} max={10} step={0.5} onChange={(sigmaLow) => edit({ sigmaLow })} />
-					<NumberInput label="High σ" value={form.sigmaHigh} min={1} max={10} step={0.5} onChange={(sigmaHigh) => edit({ sigmaHigh })} />
+					<NumberInput label="Low Sigma" value={form.sigmaLow} min={1} max={10} step={0.5} onChange={(sigmaLow) => edit({ sigmaLow })} />
+					<NumberInput label="High Sigma" value={form.sigmaHigh} min={1} max={10} step={0.5} onChange={(sigmaHigh) => edit({ sigmaHigh })} />
 					<NumberInput label="Passes" value={form.maxIterations} min={1} max={20} onChange={(maxIterations) => edit({ maxIterations })} />
 				</div>
 			)}
@@ -483,11 +573,36 @@ function BuildForm({ groupId, kind, shown }: { readonly groupId: string; readonl
 			{validation?.needsAcknowledgement && <Checkbox label="I reviewed the warnings and accept them" checked={form.acknowledged} onChange={(acknowledged) => edit({ acknowledged })} />}
 			{validation !== undefined && validation.spillBytes > 0 && <Notice>{`Needs about ${formatByteSize(validation.spillBytes)} of temporary disk.`}</Notice>}
 			{errors[key] && <Notice error>{errors[key]}</Notice>}
+			{errors[cancelKey] && <Notice error>{errors[cancelKey]}</Notice>}
 			{failure && !building && <Notice error>{`The last build failed: ${failure}`}</Notice>}
-			<Button disabled={building || requesting || !validation?.valid} title={reason} onClick={() => void buildMaster(calibrationLibraryRuntime, key, request())}>
-				{(building || requesting) && <span className="size-3.5 flex-none animate-spin rounded-full motion-reduce:animate-none border-2 border-current border-t-transparent" />}
-				{building ? (job.state === 'queued' ? 'Queued' : `Building ${formatPercent(jobFraction(job))}`) : requesting ? 'Building' : 'Build Master'}
-			</Button>
+			{job?.state === 'cancelled' && <Notice>The last build was cancelled; nothing was published.</Notice>}
+			{job?.state === 'completed' && job.masterId !== undefined && (
+				<div className="flex flex-wrap items-center justify-between gap-2">
+					<span className="text-xs leading-4 text-ink-200">{`The last build published master #${job.masterId}.`}</span>
+					<Button variant="secondary" onClick={() => onMaster(job.masterId!)}>
+						Show Master
+					</Button>
+				</div>
+			)}
+			{building ? (
+				<div className="flex flex-col gap-2">
+					<div className="flex items-baseline justify-between gap-2 text-xs text-ink-200 tabular-nums">
+						<span>{BUILD_STATE_LABELS[job.state]}</span>
+						{job.state !== 'queued' && <span>{formatPercent(jobFraction(job))}</span>}
+					</div>
+					{job.state !== 'queued' && <ProgressBar fraction={jobFraction(job)} />}
+					<Actions>
+						<Button variant="secondary" disabled={job.state === 'publishing' || pending[cancelKey] === true} title={job.state === 'publishing' ? 'The master is being published and can no longer be cancelled' : undefined} onClick={() => void cancelCalibrationBuild(calibrationLibraryRuntime, job.jobId)}>
+							Cancel Build
+						</Button>
+					</Actions>
+				</div>
+			) : (
+				<Button disabled={requesting || !validation?.valid} title={reason ?? (validation === undefined ? 'The recipe is being checked' : undefined)} onClick={() => void buildMaster(calibrationLibraryRuntime, key, request())}>
+					{requesting && <span className="size-3.5 flex-none animate-spin rounded-full motion-reduce:animate-none border-2 border-current border-t-transparent" />}
+					{requesting ? 'Requesting' : 'Build Master'}
+				</Button>
+			)}
 		</>
 	)
 }
@@ -497,7 +612,7 @@ function EvidencedReadout<T extends string | number>({ label, value, format = St
 	return <DataRow label={label}>{value.value === undefined ? 'Unknown' : `${format(value.value)} · ${EVIDENCE_LABELS[value.evidence]}`}</DataRow>
 }
 
-// Master, what went in, how to use it, and its deletion.
+// Master, what went in, how to use it, and its deletion, last.
 function MasterPanel({ onGroup, onDeleted }: { readonly onGroup: (groupId: string) => void; readonly onDeleted: () => void }) {
 	const timeZone = useActiveTimeZone()
 	const { master: snapshot, pending, errors } = useSnapshot(calibrationLibraryRuntime)
@@ -525,7 +640,7 @@ function MasterPanel({ onGroup, onDeleted }: { readonly onGroup: (groupId: strin
 						))}
 					</ul>
 				)}
-				<DataRow label="Contents">{`${master.calibrationState} · ${master.units}`}</DataRow>
+				<DataRow label="Contents">{`${CALIBRATION_STATE_LABELS[master.calibrationState]} · ${master.units}`}</DataRow>
 				<Notice>{master.usage}</Notice>
 				<Actions>
 					<Button disabled={master.status === 'unavailable'} onClick={() => openInImages(master.path)}>
@@ -534,18 +649,14 @@ function MasterPanel({ onGroup, onDeleted }: { readonly onGroup: (groupId: strin
 					<Button variant="secondary" onClick={() => onGroup(master.groupId)}>
 						Open Group
 					</Button>
-					<ConfirmButton title={`Delete master #${master.masterId}?`} message="Its file is deleted from the disk, and its id is never used again. A master that was corrected by it must be deleted first." confirmLabel="Delete" disabled={pending[key] === true} onConfirm={() => void remove(master.masterId)}>
-						Delete
-					</ConfirmButton>
 				</Actions>
-				{errors[key] && <Notice error>{errors[key]}</Notice>}
 			</CollapsibleSection>
 			<CollapsibleSection id="calibration.diagnostics" title="Integration">
 				<DataRow label="Frames">{`${diagnostics.integratedFrames} of ${diagnostics.requestedFrames}`}</DataRow>
 				<DataRow label="Method">{METHOD_LABELS[diagnostics.method]}</DataRow>
-				<DataRow label="Rejected Samples">{`${diagnostics.rejectedLow} low, ${diagnostics.rejectedHigh} high`}</DataRow>
-				{diagnostics.hotPixels !== undefined && <DataRow label="Hot Pixels">{diagnostics.hotPixels}</DataRow>}
-				{diagnostics.invalidResponsePixels !== undefined && <DataRow label="Invalid Response">{diagnostics.invalidResponsePixels}</DataRow>}
+				<DataRow label="Rejected Samples">{`${formatCount(diagnostics.rejectedLow)} low, ${formatCount(diagnostics.rejectedHigh)} high`}</DataRow>
+				{diagnostics.hotPixels !== undefined && <DataRow label="Hot Pixels">{formatCount(diagnostics.hotPixels)}</DataRow>}
+				{diagnostics.invalidResponsePixels !== undefined && <DataRow label="Invalid Response">{formatCount(diagnostics.invalidResponsePixels)}</DataRow>}
 				{diagnostics.planes.map(({ plane, median, sigma }) => (
 					<DataRow key={plane} label={`Plane ${plane + 1}`}>{`${formatFixed(median, master.units === 'DN' ? 1 : 4)} ± ${formatFixed(sigma, master.units === 'DN' ? 1 : 4)}`}</DataRow>
 				))}
@@ -561,15 +672,37 @@ function MasterPanel({ onGroup, onDeleted }: { readonly onGroup: (groupId: strin
 				<DataRow label="SHA-256">
 					<span className="break-all">{master.contentDigest}</span>
 				</DataRow>
-				{master.sourceNames.map((name) => (
-					<Notice key={name}>{name}</Notice>
-				))}
+				<DataRow label="Frames">
+					<ul className="m-0 flex list-none flex-col p-0">
+						{master.sourceNames.map((name) => (
+							<li key={name} className="break-all">
+								{name}
+							</li>
+						))}
+					</ul>
+				</DataRow>
+			</CollapsibleSection>
+			<CollapsibleSection id="calibration.remove" title="Remove" defaultOpen={false}>
+				{errors[key] && <Notice error>{errors[key]}</Notice>}
+				<Actions>
+					<ConfirmButton
+						title={`Delete master #${master.masterId}?`}
+						message="Its file is deleted from the disk and cannot be recovered, and its id is never used again. A master that was corrected by it must be deleted first."
+						confirmLabel="Delete Master"
+						destructive
+						disabled={pending[key] === true}
+						onConfirm={() => void remove(master.masterId)}
+					>
+						Delete Master
+					</ConfirmButton>
+				</Actions>
 			</CollapsibleSection>
 		</>
 	)
 }
 
-// Frame, with how each value is known, what an operator may state about it, and its deletion, whose failure the review shows.
+// Frame, with how each value is known, what an operator may state about it, and its removal, last, whose failure the
+// review shows.
 function SourcePanel({ onDeleted }: { readonly onDeleted: () => void }) {
 	const { source: snapshot, pending } = useSnapshot(calibrationLibraryRuntime)
 	const { cameras } = useSnapshot(catalogState)
@@ -577,8 +710,8 @@ function SourcePanel({ onDeleted }: { readonly onDeleted: () => void }) {
 	if (!source) return <LoadingSection id="calibration.source" title="Frame" />
 	const { metadata } = source
 
-	async function remove(sourceId: string) {
-		if (await deleteCalibrationSource(calibrationLibraryRuntime, sourceId)) onDeleted()
+	async function remove(sourceId: string, files: boolean) {
+		if (await deleteCalibrationSource(calibrationLibraryRuntime, sourceId, files)) onDeleted()
 	}
 
 	return (
@@ -592,9 +725,6 @@ function SourcePanel({ onDeleted }: { readonly onDeleted: () => void }) {
 					<Button disabled={source.status === 'missing'} onClick={() => openInImages(source.path)}>
 						Open in Images
 					</Button>
-					<ConfirmButton title="Delete this frame?" message="Its file is deleted from the disk, wherever it is, and the frame leaves the library. Masters made with it stay." confirmLabel="Delete" disabled={pending[`source:${source.sourceId}`] === true} onConfirm={() => void remove(source.sourceId)}>
-						Delete
-					</ConfirmButton>
 				</Actions>
 				<DataRow label="Size">{formatByteSize(source.bytes)}</DataRow>
 				<DataRow label="Image">{`${metadata.width}×${metadata.height}×${metadata.channels}, BITPIX ${metadata.bitpix}${metadata.cfa ? `, ${metadata.cfa}` : ''}`}</DataRow>
@@ -613,6 +743,13 @@ function SourcePanel({ onDeleted }: { readonly onDeleted: () => void }) {
 			<CollapsibleSection id="calibration.review" title="Review">
 				<ReviewForm key={source.sourceId} source={source} />
 			</CollapsibleSection>
+			<CollapsibleSection id="calibration.remove" title="Remove" defaultOpen={false}>
+				<Actions>
+					<RemoveFramesButton title="Remove this frame?" message="The frame leaves the library. Masters made with it stay." files="Also delete its file from the disk, wherever it is" disabled={pending[`source:${source.sourceId}`] === true} onConfirm={(files) => void remove(source.sourceId, files)}>
+						Remove Frame
+					</RemoveFramesButton>
+				</Actions>
+			</CollapsibleSection>
 		</>
 	)
 }
@@ -626,7 +763,7 @@ function ReviewForm({ source }: { readonly source: CalibrationSource }) {
 	const key = `source:${source.sourceId}`
 
 	function declare() {
-		if (field) void overrideCalibrationSource(calibrationLibraryRuntime, source.sourceId, field, overrideIsText(field) ? value : Number(value))
+		if (field) void overrideCalibrationSource(calibrationLibraryRuntime, source.sourceId, field, overrideValue(field, value))
 	}
 
 	return (
@@ -681,7 +818,7 @@ function ImportDialog({ onClose }: { readonly onClose: () => void }) {
 							{paths.map((path) => (
 								<div key={path} className="flex items-center gap-2 text-xs text-ink-200">
 									<span className="min-w-0 flex-1 break-all">{path}</span>
-									<Button size="sm" variant="secondary" onClick={() => setPaths(paths.filter((other) => other !== path))}>
+									<Button variant="secondary" onClick={() => setPaths(paths.filter((other) => other !== path))}>
 										Remove
 									</Button>
 								</div>
@@ -698,11 +835,14 @@ function ImportDialog({ onClose }: { readonly onClose: () => void }) {
 					</Actions>
 					<Checkbox label="Include subdirectories" checked={recursive} onChange={setRecursive} />
 					{errors.import && <Notice error>{errors.import}</Notice>}
-					<Actions>
-						<Button disabled={paths.length === 0 || pending.import === true} onClick={() => void start()}>
-							Open
+					<ModalActions>
+						<Button variant="secondary" onClick={onClose}>
+							Cancel
 						</Button>
-					</Actions>
+						<Button disabled={paths.length === 0 || pending.import === true} title={paths.length === 0 ? 'Add a directory or files first' : undefined} onClick={() => void start()}>
+							Scan Files
+						</Button>
+					</ModalActions>
 				</div>
 			) : (
 				<ImportReview jobId={jobId} onClose={onClose} />
@@ -779,7 +919,7 @@ function ImportReview({ jobId, onClose }: { readonly jobId: string; readonly onC
 			{job?.truncated && <Notice error>The limit of files was reached; only part of these directories was read.</Notice>}
 			{page && (
 				<>
-					<Notice>{`${page.total} files found, ${ready} ready. Declared types and cameras are kept across pages. Frames are referenced where they are and never changed.`}</Notice>
+					<Notice>{`${formatCount(page.total)} files found, ${formatCount(ready)} ready to add${page.total > 0 && ready === 0 ? ': each one is already in the library or is not a calibration frame' : ''}. Declared types and cameras are kept across pages. Frames are referenced where they are and never changed.`}</Notice>
 					{offered.length === 0 ? (
 						<Notice error>The Equipment Catalog has no camera. Add the camera that took these frames in Settings → Equipment Catalog first.</Notice>
 					) : (
@@ -825,20 +965,23 @@ function ImportReview({ jobId, onClose }: { readonly jobId: string; readonly onC
 					<Pager page={pageIndex} total={page.total} pageSize={CALIBRATION_PAGE_SIZE} noun="files" loading={loading} onPage={setPageIndex} />
 					<Checkbox label="Copy into the library" checked={copy} onChange={setCopy} />
 					{errors.import && <Notice error>{errors.import}</Notice>}
-					<Actions>
-						<Button disabled={ready === 0 || camera === undefined || pending.import === true} title={camera === undefined ? 'Choose the camera of these frames first' : undefined} onClick={() => void commit()}>
-							{`Add ${ready} Frames`}
+					<ModalActions>
+						<Button variant="secondary" onClick={onClose}>
+							Close
 						</Button>
-					</Actions>
+						<Button disabled={ready === 0 || camera === undefined || pending.import === true} title={ready === 0 ? 'No file found is ready to add' : camera === undefined ? 'Choose the camera of these frames first' : undefined} onClick={() => void commit()}>
+							{ready === 1 ? 'Add 1 Frame' : `Add ${formatCount(ready)} Frames`}
+						</Button>
+					</ModalActions>
 				</>
 			)}
 			{failed && <Notice error>The files found could not be read from the server.</Notice>}
 			{ended && !page && (
-				<Actions>
+				<ModalActions>
 					<Button variant="secondary" onClick={onClose}>
 						Close
 					</Button>
-				</Actions>
+				</ModalActions>
 			)}
 		</div>
 	)

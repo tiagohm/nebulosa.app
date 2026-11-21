@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import type { CalibrationGroupSummary, CalibrationMetadata } from 'api'
-import { cameraText, coverage, exposureText, groupTitle, jobFraction, masterName, masterWarnings, overrideIsText, temperatureText } from './library'
+import { cameraText, coverage, exposureText, groupTitle, jobFraction, masterName, masterWarnings, overrideIsText, overrideValue, temperatureText } from './library'
 
 const unknown = { evidence: 'unknown' } as const
 
@@ -46,7 +46,7 @@ describe('text', () => {
 
 	test('a temperature never reads as a setpoint it did not have', () => {
 		expect(temperatureText(metadata())).toBe('-10 °C')
-		expect(temperatureText(metadata({ setTemperature: unknown }))).toBe('~-10.2 °C')
+		expect(temperatureText(metadata({ setTemperature: unknown }))).toBe('-10.2 °C')
 		expect(temperatureText(metadata({ setTemperature: unknown, sensorTemperature: unknown }))).toBe('Unverified')
 	})
 
@@ -62,10 +62,16 @@ describe('text', () => {
 		expect(overrideIsText('filter')).toBeTrue()
 		expect(overrideIsText('gain')).toBeFalse()
 	})
+
+	test('a declared exposure is typed in seconds and kept in microseconds', () => {
+		expect(overrideValue('exposure', '0.298523')).toBe(298523)
+		expect(overrideValue('gain', '120')).toBe(120)
+		expect(overrideValue('filter', 'Ha')).toBe('Ha')
+	})
 })
 
 describe('coverage', () => {
-	test('shows what exists for each operating point, and an unavailable master or one of another role does not count', () => {
+	test('shows what exists for each operating point, a group counts for the roles of its masters, and an unavailable master does not count', () => {
 		const master = { masterId: 1, kind: 'dark', calibrationState: 'rawBiasIncluded', units: 'DN', metadata: metadata(), frames: 1, method: 'mean', createdAt: 1, status: 'ready', groupId: 'g', dependencies: [], contentDigest: 'd' } as const
 		const rows = coverage(
 			[group('dark', { masters: [master] }), group('dark', { masters: [{ ...master, status: 'unavailable' }] }), group('dark', { masters: [{ ...master, kind: 'darkFlat' }] }), group('bias'), group('flat', { metadata: metadata({ gain: verified(0) }) }), group('bias', { metadata: metadata({ cameraId: 'k2' }) })],
@@ -74,7 +80,8 @@ describe('coverage', () => {
 
 		expect(rows).toHaveLength(3)
 		expect(rows.map(({ camera }) => camera)).toEqual(['Main', 'Main', 'Guide'])
-		expect(rows[0].kinds.dark).toEqual({ groups: 3, masters: 1 })
+		expect(rows[0].kinds.dark).toEqual({ groups: 2, masters: 1 })
+		expect(rows[0].kinds.darkFlat).toEqual({ groups: 1, masters: 1 })
 		expect(rows[0].kinds.bias).toEqual({ groups: 1, masters: 0 })
 		expect(rows[1].kinds.flat.groups).toBe(1)
 	})

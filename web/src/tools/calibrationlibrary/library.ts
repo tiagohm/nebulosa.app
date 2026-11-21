@@ -1,7 +1,7 @@
-import type { CalibrationGroupSummary, CalibrationJobSummary, CalibrationMaster, CalibrationKind, CalibrationMetadata, CalibrationRecipe, Evidenced, EvidenceLevel, GroupReadiness, HeaderMetadata, OverridableField, ProductStatus, SourceOrigin, SourceStatus } from 'api'
+import type { CalibrationGroupSummary, CalibrationJobSummary, CalibrationMaster, CalibrationKind, MasterCalibrationState, CalibrationMetadata, CalibrationRecipe, Evidenced, EvidenceLevel, GroupReadiness, HeaderMetadata, OverridableField, ProductStatus, SourceOrigin, SourceStatus } from 'api'
 import type { CalibrationList } from '../../calibrationlibrary/calibrationlibrary'
 import { type CatalogCamera, catalogCameraName } from '../../equipment/catalog'
-import { formatTemperature, formatZonedDateTime, MISSING } from '../../format'
+import { formatExposureTime, formatTemperature, formatZonedDateTime, MISSING } from '../../format'
 import type { StatusTone } from '../../ui/StatusBadge'
 
 // What the Calibration Library tool shows of what the server decided: labels, tones, and the coverage of a page of groups.
@@ -61,9 +61,12 @@ export const RECIPE_METHODS: readonly CalibrationRecipe['method'][] = ['sigmaCli
 // Label of each combination method.
 export const METHOD_LABELS: Readonly<Record<CalibrationRecipe['method'], string>> = { sigmaClip: 'Sigma-Clipped Mean', median: 'Median', mean: 'Mean' }
 
+// What the pixels of each kind of master hold, as the Contents of a master says.
+export const CALIBRATION_STATE_LABELS: Readonly<Record<MasterCalibrationState, string>> = { rawBiasIncluded: 'Bias Included', rawBias: 'Bias Only', calibratedNormalized: 'Calibrated and Normalized' }
+
 // Fields that can be declared, in control order, with their labels.
 export const OVERRIDE_LABELS: Readonly<Record<OverridableField, string>> = {
-	exposure: 'Exposure (µs)',
+	exposure: 'Exposure (s)',
 	setTemperature: 'Target Temperature (°C)',
 	sensorTemperature: 'Sensor Temperature (°C)',
 	gain: 'Gain',
@@ -81,6 +84,14 @@ export function overrideIsText(field: OverridableField) {
 	return field === 'readoutMode' || field === 'filter' || field === 'telescope'
 }
 
+// Value an operator typed for a field, as the server keeps it: an exposure typed in seconds becomes integer microseconds,
+// another number is kept as typed, and text is kept as is.
+export function overrideValue(field: OverridableField, text: string) {
+	if (overrideIsText(field)) return text
+	const value = Number(text)
+	return field === 'exposure' ? Math.round(value * 1000000) : value
+}
+
 // Text of a value, a dash when unknown.
 function valueText<T>({ value }: Evidenced<T>, format: (value: T) => string = String) {
 	return value === undefined ? MISSING : format(value)
@@ -88,13 +99,13 @@ function valueText<T>({ value }: Evidenced<T>, format: (value: T) => string = St
 
 // Text of an exposure in integer microseconds, in the seconds an operator chose.
 export function exposureText(metadata: Pick<CalibrationMetadata, 'exposure'>) {
-	return valueText(metadata.exposure, (value) => `${value / 1000000} s`)
+	return valueText(metadata.exposure, (value) => formatExposureTime(value / 1000000))
 }
 
-// Text of a temperature: the target when there is one, what was observed otherwise, and unverified without either.
+// Text of a temperature: the target when there is one, what the sensor read otherwise, and unverified without either.
 export function temperatureText({ setTemperature, sensorTemperature }: Pick<CalibrationMetadata, 'setTemperature' | 'sensorTemperature'>) {
 	if (setTemperature.value !== undefined) return `${setTemperature.value} °C`
-	return sensorTemperature.value === undefined ? 'Unverified' : `~${formatTemperature(sensorTemperature.value)}`
+	return sensorTemperature.value === undefined ? 'Unverified' : formatTemperature(sensorTemperature.value)
 }
 
 // Text of an operating point.
@@ -104,7 +115,7 @@ export function settingsText({ gain, offset, binX, binY, readoutMode }: Pick<Hea
 
 // Text of what distinguishes a group among those of its role.
 export function groupTitle({ kind, metadata, exposures }: Pick<CalibrationGroupSummary, 'kind' | 'metadata' | 'exposures'>) {
-	if (kind === 'flat') return `${metadata.filter.value ?? 'No filter'} · ${exposures ? `${exposures[0] / 1000000}–${exposures[1] / 1000000} s` : exposureText(metadata)}`
+	if (kind === 'flat') return `${metadata.filter.value ?? 'No filter'} · ${exposures ? `${Number((exposures[0] / 1000000).toPrecision(6))}–${formatExposureTime(exposures[1] / 1000000)}` : exposureText(metadata)}`
 	if (kind === 'bias') return `${metadata.width}×${metadata.height}`
 	return `${exposureText(metadata)} · ${temperatureText(metadata)}`
 }
@@ -141,12 +152,14 @@ export interface CoverageRow {
 	// Camera and settings, as text.
 	readonly camera: string
 	readonly settings: string
-	// Groups and groups with a usable master, by role.
+	// Groups that serve each role, and those of them with a usable master of it.
 	readonly kinds: Readonly<Record<CalibrationKind, { readonly groups: number; readonly masters: number }>>
 }
 
 // Summarizes groups by camera of the Equipment Catalog (named from cameras) and operating point, which shows where masters
-// are missing without choosing one for anything.
+// are missing without choosing one for anything. A group serves the roles of the masters built from it (darks may be built
+// as dark-flats), or its own role while it has none, so a group of darks taken for flats counts as a dark-flat, not as a
+// dark without a master.
 export function coverage(groups: readonly CalibrationGroupSummary[], cameras: readonly Pick<CatalogCamera, 'id' | 'name'>[]): readonly CoverageRow[] {
 	const rows = new Map<string, { key: string; camera: string; settings: string; kinds: Record<CalibrationKind, { groups: number; masters: number }> }>()
 
@@ -161,8 +174,12 @@ export function coverage(groups: readonly CalibrationGroupSummary[], cameras: re
 			rows.set(key, row)
 		}
 
-		row.kinds[kind].groups++
-		if (masters.some((master) => master.kind === kind && master.status !== 'unavailable')) row.kinds[kind].masters++
+		const roles = masters.length === 0 ? [kind] : [...new Set(masters.map((master) => master.kind))]
+
+		for (const role of roles) {
+			row.kinds[role].groups++
+			if (masters.some((master) => master.kind === role && master.status !== 'unavailable')) row.kinds[role].masters++
+		}
 	}
 
 	return Array.from(rows.values())

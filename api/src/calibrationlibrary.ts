@@ -54,7 +54,7 @@ import { errorCode } from './util'
 // Every build publishes a new immutable master with an incremental id, however many there already are of the same frames;
 // jobs live in memory: they survive the tab, never the server. What it indexes and publishes is kept by
 // CalibrationLibraryStore in the operational database. A wizard may ask for a master, through the same path as a person.
-// Only an operator deletes: a frame or a group with their files, or one master. Applying a master to a light is outside
+// Only an operator deletes: a frame or a group, with their files when asked, or one master; an operator may cancel a build. Applying a master to a light is outside
 // this service: it only lists which masters match.
 
 // Rows of a page unless a request asks otherwise.
@@ -684,34 +684,35 @@ export class CalibrationLibrary implements Disposable {
 		return { ...this.#describeGroup(group), sources: group.sources.map(sourceSummary) }
 	}
 
-	// Deletes a group: the file of every frame, wherever it is, and the frames from the library. Its masters stay, since they
-	// are products of their own. A frame whose file cannot be deleted stays in the library. Returns how many frames went away.
-	// Throws when the group is unknown, a master of it is being built, or a file could not be deleted.
-	async deleteGroup(groupId: string) {
+	// Deletes a group: its frames leave the library and, when files is true, the file of every frame is deleted, wherever it
+	// is. Its masters stay, since they are products of their own. A frame whose file cannot be deleted stays in the library.
+	// Returns how many frames went away. Throws when the group is unknown, a master of it is being built, or a file could not
+	// be deleted.
+	async deleteGroup(groupId: string, files: boolean) {
 		await this.#usable()
 		const { sources } = this.store.group(groupId)
 		if (sources.length === 0) throw new LibraryError('Unknown group', 404, 'notFound')
 		if (this.jobs.inStates(ACTIVE_JOB_STATES).some(({ build }) => build?.groupId === groupId)) throw new LibraryError('A master of this group is being built', 409, 'jobConflict')
-		return await this.#deleteSources(sources)
+		return await this.#deleteSources(sources, files)
 	}
 
-	// Deletes one frame: its file, wherever it is, and the frame from the library. Masters made with it stay. Throws when the
-	// frame is unknown, a master being built uses it, or its file could not be deleted.
-	async deleteSource(sourceId: string) {
+	// Deletes one frame: it leaves the library and, when files is true, its file is deleted, wherever it is. Masters made with
+	// it stay. Throws when the frame is unknown, a master being built uses it, or its file could not be deleted.
+	async deleteSource(sourceId: string, files: boolean) {
 		const source = await this.source(sourceId)
 		if (this.jobs.inStates(ACTIVE_JOB_STATES).some(({ build }) => build?.frames.some((frame) => frame.sourceId === sourceId))) throw new LibraryError('A master being built uses this frame', 409, 'jobConflict')
-		return await this.#deleteSources([source])
+		return await this.#deleteSources([source], files)
 	}
 
-	// Deletes the files of frames and forgets the frames whose file went away.
+	// Forgets frames, deleting their files first when files is true, in which case a frame whose file stays is kept.
 	// Returns how many went away; throws deleteFailed after forgetting the others when a file could not be deleted.
-	async #deleteSources(sources: readonly CalibrationSource[]) {
+	async #deleteSources(sources: readonly CalibrationSource[], files: boolean) {
 		const removed: string[] = []
 		const failures = new Set<string>()
 
 		for (const { sourceId, path } of sources) {
 			try {
-				await rm(path, { force: true })
+				if (files) await rm(path, { force: true })
 				removed.push(sourceId)
 			} catch (error) {
 				failures.add(errorCode(error) ?? 'unexpected error')
@@ -1008,6 +1009,14 @@ export class CalibrationLibrary implements Disposable {
 		if (!scan) throw new LibraryError('This import has ended', 409, 'jobConflict')
 		scan.abort(new DOMException('Cancelled', 'AbortError'))
 		return summary
+	}
+
+	// Cancels a master that is queued or being integrated; one already publishing ends as it would. Throws when the job is
+	// unknown, is not a build, or is past integrating.
+	async cancelBuild(jobId: string) {
+		const job = await this.#job(jobId)
+		if (job.type !== 'master' || !this.jobs.cancel(jobId)) throw new LibraryError('This build can no longer be cancelled', 409, 'jobConflict')
+		return jobSummary(this.jobs.get(jobId) ?? job)
 	}
 
 	// Starts scanning directories and single files. The scan keeps running after this returns, reports through its job, and
@@ -1401,7 +1410,7 @@ export function createCalibrationLibraryRoutes(library: CalibrationLibrary) {
 		},
 		'/api/calibration-library/sources/:sourceId': {
 			GET: ({ params }) => answer(() => library.source(params.sourceId)),
-			DELETE: ({ params }) => answer(() => library.deleteSource(params.sourceId)),
+			DELETE: (request) => answer(() => library.deleteSource(request.params.sourceId, new URL(request.url).searchParams.get('files') === 'true')),
 		},
 		'/api/calibration-library/sources/:sourceId/overrides': {
 			POST: async (request) => {
@@ -1444,7 +1453,7 @@ export function createCalibrationLibraryRoutes(library: CalibrationLibrary) {
 		},
 		'/api/calibration-library/groups/:groupId': {
 			GET: ({ params }) => answer(() => library.group(params.groupId)),
-			DELETE: ({ params }) => answer(() => library.deleteGroup(params.groupId)),
+			DELETE: (request) => answer(() => library.deleteGroup(request.params.groupId, new URL(request.url).searchParams.get('files') === 'true')),
 		},
 		'/api/calibration-library/recipes/validate': {
 			POST: async (request) => {
@@ -1468,6 +1477,9 @@ export function createCalibrationLibraryRoutes(library: CalibrationLibrary) {
 				const body = (await request.json()) as MasterRequest
 				return answer(() => library.requestMaster(body), 202)
 			},
+		},
+		'/api/calibration-library/builds/:jobId/cancel': {
+			POST: ({ params }) => answer(() => library.cancelBuild(params.jobId)),
 		},
 		'/api/calibration-library/masters/:masterId': {
 			GET: ({ params }) => answer(() => library.master(Number(params.masterId))),

@@ -28,6 +28,8 @@ The library is that single owner: every feature that calibrates frames takes its
 - The library lists the masters that match a target and never picks one; the operator chooses, and a consumer keeps the master and content digest it used.
 - A chosen master is read only while its content is the one chosen and it is available, and a master cannot be deleted while a master, a job, or an analysis depends on it.
 - Frames are referenced, never written; nothing is inferred from a file or directory name; only an operator deletes.
+  Removing a frame or a group forgets it, and deletes its files only when the operator asks; deleting a master always deletes its file.
+- An operator may cancel a build until it starts publishing its master; a cancelled build publishes nothing.
 - Compatibility is explained, never scored: a known difference blocks, an unknown value never matches a known one, and there is no closest master, dark scaling, or temperature interpolation.
 - Every build publishes a new immutable master.
   Masters in digital numbers keep their pedestal, and a master flat is normalized and exists only from flats corrected by a dark-flat or a bias.

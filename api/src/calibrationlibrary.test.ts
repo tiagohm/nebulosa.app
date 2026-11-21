@@ -663,16 +663,42 @@ describe('masters', () => {
 		const [group] = (await library.groups({}, 0, 50)).items
 		const masterId = await built(library, { groupId: group.groupId })
 
-		expect(await library.deleteGroup(group.groupId)).toEqual({ deleted: 3 })
+		expect(await library.deleteGroup(group.groupId, true)).toEqual({ deleted: 3 })
 		expect(readdirSync(join(base, 'frames')).filter((name) => name.endsWith('.fit'))).toEqual([])
 		expect((await library.groups({}, 0, 50)).total).toBe(0)
 		expect((await library.master(masterId)).status).not.toBe('unavailable')
-		await expect(library.deleteGroup(group.groupId)).rejects.toThrow('Unknown group')
+		await expect(library.deleteGroup(group.groupId, true)).rejects.toThrow('Unknown group')
 
 		library.close()
 		libraries.length = 0
 		const reopened = open(local, undefined, base)
 		expect((await reopened.library.groups({}, 0, 50)).total).toBe(0)
+	})
+
+	test('deleting a group or a frame without their files only forgets them', async () => {
+		const { library, base } = open(local)
+		await plan(library, base, 3)
+		const [frame] = (await library.sources({}, 0, 1)).items
+
+		expect(await library.deleteSource(frame.sourceId, false)).toEqual({ deleted: 1 })
+		const [group] = (await library.groups({}, 0, 50)).items
+		expect(await library.deleteGroup(group.groupId, false)).toEqual({ deleted: 2 })
+		expect(readdirSync(join(base, 'frames')).filter((name) => name.endsWith('.fit'))).toHaveLength(3)
+		expect((await library.sources({}, 0, 50)).total).toBe(0)
+	})
+
+	test('a build is cancelled while it integrates or waits, and not once it ended', async () => {
+		const { library, base } = open(blockedIntegrator())
+		await plan(library, base, 3)
+		const [group] = (await library.groups({}, 0, 50)).items
+		const running = await library.requestMaster({ groupId: group.groupId })
+		const waiting = await library.requestMaster({ groupId: group.groupId, recipe: { method: 'median' } })
+
+		expect((await library.cancelBuild(waiting.jobId)).state).toBe('cancelled')
+		await library.cancelBuild(running.jobId)
+		expect((await settled(library, running.jobId)).state).toBe('cancelled')
+		expect((await library.masters({}, 0, 10)).total).toBe(0)
+		await expect(library.cancelBuild(running.jobId)).rejects.toThrow('can no longer be cancelled')
 	})
 
 	test('a group or a frame being built cannot be deleted', async () => {
@@ -681,9 +707,9 @@ describe('masters', () => {
 		await plan(library, base, 3)
 		const [group] = (await library.groups({}, 0, 50)).items
 		await library.requestMaster({ groupId: group.groupId })
-		await expect(library.deleteGroup(group.groupId)).rejects.toThrow('being built')
+		await expect(library.deleteGroup(group.groupId, false)).rejects.toThrow('being built')
 		const [frame] = (await library.sources({}, 0, 1)).items
-		await expect(library.deleteSource(frame.sourceId)).rejects.toThrow('uses this frame')
+		await expect(library.deleteSource(frame.sourceId, false)).rejects.toThrow('uses this frame')
 	})
 
 	test('deleting a frame removes its file and the frame, and survives a restart', async () => {
@@ -691,10 +717,10 @@ describe('masters', () => {
 		await plan(library, base, 3)
 		const [frame] = (await library.sources({}, 0, 1)).items
 
-		expect(await library.deleteSource(frame.sourceId)).toEqual({ deleted: 1 })
+		expect(await library.deleteSource(frame.sourceId, true)).toEqual({ deleted: 1 })
 		expect(readdirSync(join(base, 'frames')).filter((name) => name.endsWith('.fit'))).toHaveLength(2)
 		expect((await library.sources({}, 0, 50)).total).toBe(2)
-		await expect(library.deleteSource(frame.sourceId)).rejects.toThrow('Unknown frame')
+		await expect(library.deleteSource(frame.sourceId, true)).rejects.toThrow('Unknown frame')
 
 		library.close()
 		libraries.length = 0

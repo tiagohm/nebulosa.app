@@ -78,7 +78,7 @@ export function CameraSettings({ device, settings, capabilities, disabled, onCha
 
 	const { gain, offset, bin, subframe, frameFormats, temperature, cooler } = capabilities
 	const formats = frameFormats.map((format) => format.name)
-	const sensor = [temperature !== undefined && `Sensor ${formatTemperature(temperature)}`, cooler && `Cooler ${cooler.enabled === false ? 'off' : formatPercent(cooler.power / 100)}`].filter(Boolean).join(' · ')
+	const sensor = [temperature !== undefined && formatTemperature(temperature), cooler && `Cooler ${cooler.enabled === false ? 'off' : formatPercent(cooler.power / 100)}`].filter(Boolean).join(' · ')
 
 	return (
 		<CollapsibleSection id="images.camera-acquisition.camera" title="Camera" summary={sensor || device?.name} defaultOpen={false}>

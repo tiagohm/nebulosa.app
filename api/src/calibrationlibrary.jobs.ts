@@ -21,6 +21,9 @@ export type CalibrationJobState = 'queued' | 'validating' | 'integrating' | 'pub
 // States of a job that still has work to do.
 export const ACTIVE_JOB_STATES: readonly CalibrationJobState[] = ['queued', 'validating', 'integrating', 'publishing']
 
+// States of a job an operator may still cancel: before it starts making its product visible.
+const CANCELLABLE_JOB_STATES: ReadonlySet<CalibrationJobState> = new Set(['queued', 'validating', 'integrating'])
+
 // What a job does.
 export type CalibrationJobType = 'master' | 'import'
 
@@ -270,6 +273,18 @@ export class CalibrationJobs {
 		this.#running?.controller.abort(new DOMException('Stopped', 'AbortError'))
 	}
 
+	// Cancels a job that is queued, validating, or integrating: a queued one ends at once, a running one once its worker
+	// stops. Returns false when the job is unknown or past integrating, where cancelling could leave half a publication.
+	cancel(jobId: string) {
+		const job = this.#jobs.get(jobId)
+		if (!job || !CANCELLABLE_JOB_STATES.has(job.state)) return false
+
+		if (this.#running?.jobId === jobId) this.#running.controller.abort(new DOMException('Cancelled', 'AbortError'))
+		else this.#save(job, { state: 'cancelled' })
+
+		return true
+	}
+
 	// Starts the oldest job allowed to run, when nothing is running.
 	pump() {
 		if (this.#running || this.#stopped) return
@@ -301,6 +316,8 @@ export class CalibrationJobs {
 
 		try {
 			const staging = await this.store.createStaging(job.jobId)
+			// A job cancelled while its staging was made never reaches the worker.
+			signal.throwIfAborted()
 			const request = this.host.request(job, staging)
 
 			const result = await this.integrator.integrate(
@@ -322,6 +339,8 @@ export class CalibrationJobs {
 			if (!signal.aborted) {
 				const code = (error as { readonly code?: CalibrationJobErrorCode }).code
 				this.#save(job, { state: 'failed', code: code ?? 'processingFailed', error: Error.isError(error) ? error.message : String(error) })
+			} else if (!this.#stopped) {
+				this.#save(job, { state: 'cancelled' })
 			}
 
 			await rm(this.store.stagingDirectory(job.jobId), { recursive: true, force: true, maxRetries: STAGING_REMOVAL_RETRIES, retryDelay: STAGING_REMOVAL_DELAY }).catch(() => undefined)

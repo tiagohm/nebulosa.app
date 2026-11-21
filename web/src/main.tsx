@@ -4,7 +4,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { subscribe as subscribeState } from 'valtio'
 import { annotationsState, handleAnnotationsEvent, refreshAnnotations } from './annotations/annotations'
 import { App } from './App'
-import { calibrationLibraryRuntime, handleCalibrationLibraryEvent, refreshCalibrationLibrary } from './calibrationlibrary/calibrationlibrary'
+import { calibrationLibraryRuntime, calibrationLibraryView, calibrationLibraryViewEntry, handleCalibrationLibraryEvent, refreshCalibrationLibrary } from './calibrationlibrary/calibrationlibrary'
 import { autoFocusRuntime, handleAutoFocusEvent, refreshAutoFocus } from './camera/autofocus'
 import { captureRuntime, handleCaptureEvent, refreshCaptures } from './camera/capture'
 import { darkLibraryWizardRuntime, handleDarkLibraryWizardEvent, refreshDarkLibraryWizard } from './camera/darklibrarywizard'
@@ -167,6 +167,7 @@ const stops = [
 		framingPreviewEntry(framingPreviewState),
 		meridianFlipViewEntry(meridianFlipView),
 		observatoryCamerasViewEntry(observatoryCamerasView),
+		calibrationLibraryViewEntry(calibrationLibraryView),
 	]),
 	watchHistory(routeState),
 	watchPlayers(),

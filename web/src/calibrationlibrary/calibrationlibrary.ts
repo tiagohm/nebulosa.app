@@ -21,6 +21,7 @@ import type {
 import { nanoid } from 'nanoid'
 import { proxy } from 'valtio'
 import { type ApiFetch, browserFetch, jsonInit, responseError, tryFetchJson } from '../http'
+import type { ViewEntry } from '../profile/view'
 
 // The Calibration Library as this tab knows it. The server owns every frame, master, and job, so this store only mirrors
 // them: a snapshot on every socket (re)open and on every change event, jobs as they change (which no list shows: a group
@@ -28,7 +29,7 @@ import { type ApiFetch, browserFetch, jsonInit, responseError, tryFetchJson } fr
 // when a view asks. A new epoch means a new server process, whose counters start over; a snapshot older than one applied is
 // dropped, and a page that arrives after a newer request is ignored. Nothing here decides whether frames are compatible:
 // the tool shows the reasons the server gives. The store lives outside the tool because the wizards of the camera tabs show
-// the state of their masters too.
+// the state of their masters too. Whether a removal also deletes files is a preference of this browser, kept in its storage.
 
 // Filters of the lists of frames and groups.
 export interface CalibrationFilter {
@@ -69,6 +70,27 @@ export interface CalibrationLibraryRuntime {
 
 // Calibration Library state of the tab.
 export const calibrationLibraryRuntime = proxy<CalibrationLibraryRuntime>({ jobs: {}, changes: 0, loading: {}, pending: {}, errors: {} })
+
+// How this browser removes frames from the library.
+export interface CalibrationLibraryView {
+	// Whether removing a frame or a group also deletes its files from the disk; off unless the operator turned it on.
+	deleteFiles: boolean
+}
+
+// How this browser removes frames, kept across its restarts (calibrationLibraryViewEntry).
+export const calibrationLibraryView = proxy<CalibrationLibraryView>({ deleteFiles: false })
+
+// Keeps how this browser removes frames from the library.
+export function calibrationLibraryViewEntry(view: CalibrationLibraryView): ViewEntry {
+	return {
+		name: 'calibrationLibraryView',
+		store: view,
+		restore: (value) => {
+			if (value === true) view.deleteFiles = true
+		},
+		value: () => (view.deleteFiles ? true : undefined),
+	}
+}
 
 // Base of the routes of the library.
 const BASE_URL = '/api/calibration-library'
@@ -265,14 +287,19 @@ export function deleteCalibrationMaster(state: CalibrationLibraryRuntime, master
 	return command(state, `master:${masterId}`, `${BASE_URL}/masters/${masterId}`, { method: 'DELETE' }, request)
 }
 
-// Deletes a frame with its file.
-export function deleteCalibrationSource(state: CalibrationLibraryRuntime, sourceId: string, request: ApiFetch = browserFetch) {
-	return command<{ readonly deleted: number }>(state, `source:${sourceId}`, `${BASE_URL}/sources/${encodeURIComponent(sourceId)}`, { method: 'DELETE' }, request)
+// Removes a frame from the library, and deletes its file from the disk when files is true.
+export function deleteCalibrationSource(state: CalibrationLibraryRuntime, sourceId: string, files: boolean, request: ApiFetch = browserFetch) {
+	return command<{ readonly deleted: number }>(state, `source:${sourceId}`, `${BASE_URL}/sources/${encodeURIComponent(sourceId)}?files=${files}`, { method: 'DELETE' }, request)
 }
 
-// Deletes a group with the files of its frames.
-export function deleteCalibrationGroup(state: CalibrationLibraryRuntime, groupId: string, request: ApiFetch = browserFetch) {
-	return command<{ readonly deleted: number }>(state, `delete:${groupId}`, `${BASE_URL}/groups/${encodeURIComponent(groupId)}`, { method: 'DELETE' }, request)
+// Removes a group from the library, and deletes the files of its frames from the disk when files is true.
+export function deleteCalibrationGroup(state: CalibrationLibraryRuntime, groupId: string, files: boolean, request: ApiFetch = browserFetch) {
+	return command<{ readonly deleted: number }>(state, `delete:${groupId}`, `${BASE_URL}/groups/${encodeURIComponent(groupId)}?files=${files}`, { method: 'DELETE' }, request)
+}
+
+// Cancels a build that has not started publishing its master; the job reports the end as an event.
+export function cancelCalibrationBuild(state: CalibrationLibraryRuntime, jobId: string, request: ApiFetch = browserFetch) {
+	return command<CalibrationJobSummary>(state, `build:${jobId}`, `${BASE_URL}/builds/${encodeURIComponent(jobId)}/cancel`, jsonInit('POST'), request)
 }
 
 // Cancels the scan of an import.

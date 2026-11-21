@@ -839,6 +839,7 @@ export type {
 export type { JupiterGrsEvent, JupiterGrsModel, JupiterGrsSaveRequest, JupiterGrsSettings } from './jupiter.store'
 export type {
 	LiveCohortAcquisition,
+	LiveSkipReason,
 	LiveStackingCapture,
 	LiveStackingCohort,
 	LiveStackingCounters,
@@ -847,6 +848,7 @@ export type {
 	LiveStackingFieldSummary,
 	LiveStackingProductDetail,
 	LiveStackingSession,
+	LiveStackingSkips,
 	LiveStackingSnapshot,
 	LiveStackingStartRequest,
 	LiveStackingState,

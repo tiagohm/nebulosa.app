@@ -12,7 +12,7 @@ Where each feature lives is the [Workspace Responsibility Matrix](workspace-resp
 - The navigation rail lists the workspaces (`WORKSPACES`) and the About page; pages opened from the Management menu or the top bar are not listed.
 - Connections, Equipment Setup, and Profiles are modals of the shell, not routes.
 - The observing site menu of the top bar is the one place that shows the active site; no workspace or tool repeats it.
-- The status bar is the only global status surface: the devices of the active profile's roles, and every running operation that holds a device of its connection, each with the Abort that sends the one command that interrupts it, the same as the page that started it (see [Operation Lifecycle Rules](operation-lifecycle-rules.md)).
+- The status bar is the only global status surface: the devices of the active profile's roles, every running operation that holds a device of its connection, each with the Abort that sends the one command that interrupts it, the same as the page that started it (see [Operation Lifecycle Rules](operation-lifecycle-rules.md)), and the [Live Stacking](live-stacking.md) sessions of that connection, which hold no device.
 - Closing a panel or navigating away never stops a session or an operation; only an explicit interruption does.
 
 ## Workspace Frame

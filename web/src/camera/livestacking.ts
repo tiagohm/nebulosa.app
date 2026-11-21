@@ -1,10 +1,12 @@
-import type { CalibrationMasterSummary, LiveExportTarget, LiveMasterKind, LiveStackingCalibration, LiveStackingCohort, LiveStackingProduct, LiveStackingProductDetail, LiveStackingRecipe, LiveStackingSession, LiveStackingSnapshot, LiveStackingState, ServerEvent } from 'api'
+import type { CalibrationMasterSummary, LiveExportTarget, LiveMasterKind, LiveSkipReason, LiveStackingCalibration, LiveStackingCohort, LiveStackingProduct, LiveStackingProductDetail, LiveStackingRecipe, LiveStackingSession, LiveStackingSnapshot, LiveStackingState, ServerEvent } from 'api'
 import { nanoid } from 'nanoid'
 import { proxy, ref } from 'valtio'
+import { formatDuration } from '../format'
 import { type ApiFetch, browserFetch, jsonInit, responseError } from '../http'
 import type { LiveStackingSettings } from '../profile/schema'
 import { SnapshotRefreshes } from '../refresh'
 import { COMPOSITION_PRESETS, type CompositionPreset, presetSources } from '../tools/imagestacking/presets'
+import type { StatusTone } from '../ui/StatusBadge'
 
 // Live Stacking sessions as this tab knows them. The server owns every session, whichever tab started it, and every frame
 // of it, so this store only mirrors them: each session arrives whole with its liveStacking:updated events, and with the
@@ -46,6 +48,72 @@ export const LIVE_STACKING_STATE_LABELS: Readonly<Record<LiveStackingState, stri
 	stopping: 'Stopping',
 	stopped: 'Stopped',
 	failed: 'Failed',
+}
+
+// Label of a running session that received frames but stacked none of them, so far.
+export const NONE_STACKED_LABEL = 'Receiving, none stacked'
+
+// Why frames were skipped, completing "N frames …", each with what the operator can change.
+export const LIVE_SKIP_LABELS: Readonly<Record<LiveSkipReason, string>> = {
+	paused: 'arrived while paused',
+	aborted: 'were queued when the session was aborted',
+	notLight: 'are dark, flat, or bias frames or masters, as their headers say',
+	metadata: 'record no image size or exposure',
+	unknownFilter: 'name no filter although the Equipment Setup has a filter wheel: connect it so the frames record their filter',
+	otherFilter: 'have a filter without masters, and Other filters skips them',
+}
+
+// Order the skip reasons are listed in, most actionable first.
+const LIVE_SKIP_ORDER = ['notLight', 'otherFilter', 'unknownFilter', 'metadata', 'paused', 'aborted'] as const satisfies readonly LiveSkipReason[]
+
+// Returns the skip reasons of a session with their counts, most frequent first, and in LIVE_SKIP_ORDER among equals.
+export function liveSkips(session: Pick<LiveStackingSession, 'skips'>) {
+	return LIVE_SKIP_ORDER.filter((reason) => session.skips[reason] > 0)
+		.map((reason) => ({ reason, count: session.skips[reason] }))
+		.toSorted((a, b) => b.count - a.count)
+}
+
+// Whether a running session received frames, all of which ended, and stacked none of them.
+export function liveNoneStacked(session: Pick<LiveStackingSession, 'state' | 'counters'>) {
+	const { counters } = session
+	return liveSessionActive(session) && counters.accepted === 0 && counters.rejected + counters.skipped + counters.deliveryFailed > 0
+}
+
+// Label of the state of a session, telling apart a running one that stacks nothing.
+export function liveStateLabel(session: Pick<LiveStackingSession, 'state' | 'counters'>) {
+	return liveNoneStacked(session) ? NONE_STACKED_LABEL : LIVE_STACKING_STATE_LABELS[session.state]
+}
+
+// Total exposure of the accepted frames of a session, in seconds.
+export function liveIntegration(session: Pick<LiveStackingSession, 'cohorts'>) {
+	return session.cohorts.reduce((total, cohort) => total + cohort.exposure, 0)
+}
+
+// Stacks of a session that hold accepted frames, the ones closing or resetting it discards.
+export function liveStacks(session: Pick<LiveStackingSession, 'cohorts'>) {
+	return session.cohorts.filter((cohort) => cohort.accepted > 0)
+}
+
+// Short status of a session for the status bar: what it stacked while it runs, or its state and what it stacked once it
+// paused or stopped, with the tone it is drawn in.
+export function liveStatus(session: Pick<LiveStackingSession, 'state' | 'counters' | 'cohorts'>): { readonly text: string; readonly tone: StatusTone } {
+	const stacked = `${session.counters.accepted} stacked`
+	if (session.state === 'failed') return { text: 'Failed', tone: 'danger' }
+	if (liveNoneStacked(session)) return { text: NONE_STACKED_LABEL, tone: 'warning' }
+	if (session.state === 'paused') return { text: `Paused · ${stacked}`, tone: 'warning' }
+	if (session.state === 'stopping') return { text: `Stopping · ${stacked}`, tone: 'active' }
+	if (session.state === 'stopped') return { text: `Stopped · ${stacked}`, tone: 'neutral' }
+	if (session.counters.accepted === 0) return { text: LIVE_STACKING_STATE_LABELS.waiting, tone: 'active' }
+	return { text: `${stacked} · ${formatDuration(liveIntegration(session))}`, tone: 'active' }
+}
+
+// Describes what discarding the stacks of a session loses, or undefined when it holds none: their count and integration.
+export function liveDiscardText(session: Pick<LiveStackingSession, 'cohorts' | 'products'>) {
+	const stacks = liveStacks(session)
+	if (stacks.length === 0) return undefined
+	const frames = stacks.reduce((total, cohort) => total + cohort.accepted, 0)
+	const saved = session.products.length > 0 ? ' What was saved from it stays as it was saved.' : ' None of it was saved.'
+	return `${stacks.length === 1 ? 'Its stack' : `Its ${stacks.length} stacks`} of ${frames} ${frames === 1 ? 'frame' : 'frames'} (${formatDuration(liveIntegration(session))} of integration) will be discarded.${saved} Captured files are never touched.`
 }
 
 // Label of each combination method.

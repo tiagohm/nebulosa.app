@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { captureRuntime } from '../camera/capture'
 import { guidingRuntime } from '../camera/guiding'
+import { liveStackingRuntime } from '../camera/livestacking'
 import { controlRuntime, watchedDeviceState } from '../equipment-control/control'
 import { roleDevice, roleStatus } from '../equipment/equipment'
 import { roleDefinition } from '../equipment/roles'
@@ -40,17 +41,18 @@ import {
 	scopedRunningOperations,
 } from './statusbar/selectors'
 import { StatusDetails } from './statusbar/StatusDetailsPanel'
-import { EphemerisOfflineItem, MeridianFlipItem, MountRemoteItem, OperationItem, ServerLinkItem, StatusChip, useOperationAbortable } from './statusbar/StatusItems'
+import { EphemerisOfflineItem, LiveStackingItem, MeridianFlipItem, MountRemoteItem, OperationItem, ServerLinkItem, StatusChip, useOperationAbortable } from './statusbar/StatusItems'
 
 // Compact bar at the bottom of the window, visible from every workspace, showing everything the active profile has in
 // as little room as it can: the tab's link to the application server, a chip per device of the Equipment Setup's
 // roles, the device operations running on the profile's server connection, each with its Abort, the Meridian Flip
-// Monitor of the profile's mount while it is enabled, the Mount Remote Control listeners of that mount while one runs,
+// Monitor of the profile's mount while it is enabled, the Mount Remote Control listeners of that mount while one runs, the
+// Live Stacking sessions of the profile's connection, which hold no device,
 // the offline switch of the ephemeris sources while it is on, its device failures, and the details button that lists
 // all of it. While the profile's server connection is open, every device the Equipment Setup assigns has a chip: a
 // connected one with what the profile asks of it, any other with its status in words, kept in view first, since the
 // setup says it is in use. A narrower bar shows fewer chips, by priority, and fewer operations, and counts the others
-// on the details button; the server link, the monitor, the listeners, the offline switch, the failures, and the first
+// on the details button; the server link, the monitor, the listeners, the live stacking sessions, the offline switch, the failures, and the first
 // operation are never left out. Every operation has its own Abort, through the same command as the page that started
 // it, and it interrupts that operation alone; a motion of the mount of the profile that no operation holds has one too.
 // In the room all of that leaves, the bar shows the real-time clock the profile asks for, which opens the Astronomical
@@ -128,6 +130,7 @@ export function StatusBar() {
 	const control = useSnapshot(controlRuntime)
 	const captures = useSnapshot(captureRuntime)
 	const guiding = useSnapshot(guidingRuntime)
+	const liveStacking = useSnapshot(liveStackingRuntime)
 	const meridianFlip = useSnapshot(meridianFlipState)
 	const meridianFlipExecutor = useSnapshot(meridianFlipExecutorState)
 	const remoteControl = useSnapshot(mountRemoteControlState)
@@ -148,6 +151,7 @@ export function StatusBar() {
 	const flip = mount ? latestExecution(meridianFlipExecutor, mount.connectionId, mount.id) : undefined
 	const executor = mount && { step: flip?.state === 'running' && flip.step ? MERIDIAN_FLIP_STEP_LABELS[flip.step] : undefined, armed: meridianFlipExecutor.arms[monitorKey(mount.connectionId, mount.id)] !== undefined, paused: capturePausedBy(flip, captures.sessions) }
 	const listeners = mount ? mountListeners(remoteControl.servers, mount.connectionId, mount.id) : []
+	const stackings = serverId === undefined ? [] : Object.values(liveStacking.sessions).filter((candidate) => candidate.connectionId === serverId)
 	const capture = activeCapture(captures.sessions, mainCamera)
 	const session = activeGuiding(guiding.sessions, roleDevice(setup, 'GUIDE_CAMERA', devices))
 	const errors = scopedDeviceErrors({ serverId, devices, control })
@@ -255,6 +259,9 @@ export function StatusBar() {
 				{readings.map((reading) => fittedClocks?.has(reading) && <AstronomicalClockChip key={reading} reading={reading} timeZone={timeZone} showSeconds={clock.showSeconds} hasSite={observer !== undefined} />)}
 				{monitor && <MeridianFlipItem monitor={monitor} name={mount?.name} executor={executor} />}
 				{listeners.length > 0 && <MountRemoteItem servers={listeners} name={mount?.name} />}
+				{stackings.map((stacking) => (
+					<LiveStackingItem key={stacking.sessionId} session={stacking} />
+				))}
 				{ephemerisOffline && <EphemerisOfflineItem />}
 				<StatusDetails hidden={hidden} errors={errors} />
 			</span>

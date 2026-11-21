@@ -1,4 +1,5 @@
 import type { CalibrationMasterSummary, LiveMasterKind, LiveStackingCohort, LiveStackingComposition, LiveStackingRecipe, LiveStackingSession } from 'api'
+import { cn } from 'cn'
 import { useEffect, useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { calibrationLibraryRuntime } from '../calibrationlibrary/calibrationlibrary'
@@ -16,9 +17,12 @@ import { CollapsibleSection } from '../shell/CollapsibleSection'
 import { CUSTOM_PRESET } from '../tools/imagestacking/presets'
 import { Actions } from '../ui/Actions'
 import { Button } from '../ui/Button'
+import { Checkbox } from '../ui/Checkbox'
+import { ConfirmButton } from '../ui/ConfirmButton'
 import { DataList, DataRow } from '../ui/DataRow'
 import { Notice } from '../ui/Notice'
 import { NumberInput } from '../ui/NumberInput'
+import { SectionHeading } from '../ui/SectionHeading'
 import { SegmentedControl } from '../ui/SegmentedControl'
 import { Select } from '../ui/Select'
 import { StatusBadge, type StatusTone } from '../ui/StatusBadge'
@@ -32,14 +36,20 @@ import {
 	LIVE_MASTER_ORDER,
 	LIVE_METHOD_LABELS,
 	LIVE_NORMALIZATION_LABELS,
-	LIVE_STACKING_STATE_LABELS,
+	LIVE_SKIP_LABELS,
 	LIVE_WEIGHTING_LABELS,
 	liveAcquisitionLabel,
 	liveCameraKey,
+	liveDiscardText,
+	liveIntegration,
+	liveNoneStacked,
 	liveSessionActive,
 	liveSessionCommand,
 	liveStackingRuntime,
 	livePresets,
+	liveSkips,
+	liveStacks,
+	liveStateLabel,
 	loadLiveMasters,
 	NO_FILTER,
 	removeFilterCalibration,
@@ -50,12 +60,20 @@ import {
 } from './livestacking'
 
 // Contextual panel sections of Live Stacking, a camera operation of the Images camera tabs: the session of the tab's
-// camera (start, pause, resume, stop, abort, reset, a new field, close) with its frame counts, the masters chosen per filter, the integration recipe, which stack or color
-// composition the tab shows. The session is the server's, shown here whichever tab
+// camera (start, pause, resume, stop, abort, reset, a new field, close) led by what it stacked, with its frame counts and
+// why frames were skipped, the masters chosen per filter, the integration recipe, and which stack or color composition
+// the tab shows, saved from here. The session is the server's, shown here whichever tab
 // started it, and keeps running when the panel unmounts or the tab closes; it only ever reads the frames Camera
 // Acquisition takes, so the acquisition itself is set up in its own panel. The recipe and masters are the camera's form,
 // kept in the profile, and the recipe is locked while a session runs. What the tab shows is display only: stretching a
 // stack, or composing it into color, never changes it.
+
+// HFD limit a recipe takes when the operator turns it on, in pixels, to be tuned to the seeing and the image scale;
+// valid from 0.1 to 50 px.
+const DEFAULT_MAX_HFD = 5
+
+// SNR limit a recipe takes when the operator turns it on, to be tuned to the target; valid from 1 to 1000.
+const DEFAULT_MIN_SNR = 10
 
 // Option of a master select that chooses none.
 const NO_MASTER = 'none'
@@ -87,7 +105,7 @@ export function LiveStackingSections({ document, camera }: LiveStackingSectionsP
 
 	return (
 		<>
-			<SessionSection camera={camera} session={session} settings={settings} />
+			<SessionSection document={document} camera={camera} session={session} settings={settings} />
 			<CalibrationSection camera={camera} session={session} settings={settings} />
 			<IntegrationSection camera={camera} session={session} settings={settings} />
 			{session && <DisplaySection document={document} session={session} />}
@@ -96,28 +114,39 @@ export function LiveStackingSections({ document, camera }: LiveStackingSectionsP
 }
 
 interface SessionSectionProps {
+	readonly document: ImageDocument
 	readonly camera: CameraOperationContext
 	readonly session?: LiveStackingSession
 	readonly settings: Readonly<LiveStackingSettings>
 }
 
-// Session of the camera: its state and frame counts, the capture it follows, and its commands.
-function SessionSection({ camera, session, settings }: SessionSectionProps) {
+// Session of the camera: what it stacked so far as the one Readout of the panel, its state and frame counts with why
+// frames were skipped, the capture it follows, and its commands. The routine commands come first; Abort, Reset, and
+// Close stand apart, and those that discard stacks ask first while the session holds any.
+function SessionSection({ document, camera, session, settings }: SessionSectionProps) {
 	const runtime = useSnapshot(liveStackingRuntime)
-	const [confirmReset, setConfirmReset] = useState(false)
 	const { connectionId, deviceId } = camera.camera
 	const startKey = liveCameraKey(connectionId, deviceId)
 	const sessionKey = session ? `session:${session.sessionId}` : ''
 	const busy = runtime.pending[startKey] || runtime.pending[sessionKey]
 	const active = liveSessionActive(session)
+	const stopping = session?.state === 'stopping'
 	const error = runtime.errors[startKey] ?? runtime.errors[sessionKey]
-	const exposure = session?.cohorts.reduce((total, cohort) => total + cohort.exposure, 0) ?? 0
+	const noneStacked = session !== undefined && liveNoneStacked(session)
+	const skips = session ? liveSkips(session) : []
+	// What closing, starting anew, or resetting would discard; a failed session already lost its stacks.
+	const discards = session && session.state !== 'failed' ? liveDiscardText(session) : undefined
+	// Whether a capture that has not ended feeds the session.
+	const fed = session?.capture !== undefined && !session.capture.ended
 	// Guarded rather than asserted: the React Compiler of the executable reads an asserted `session!.sessionId` during the
 	// render to memoize this closure, which throws while the camera has no session.
 	const send = (action: Parameters<typeof liveSessionCommand>[2]) => session && void liveSessionCommand(liveStackingRuntime, session.sessionId, action)
+	const start = () => void startLiveStacking(liveStackingRuntime, connectionId, deviceId, settings)
+	const close = () => session && void closeLiveSession(liveStackingRuntime, session.sessionId)
 
 	return (
-		<CollapsibleSection id="images.liveStacking.session" title="Session" summary={session ? LIVE_STACKING_STATE_LABELS[session.state] : 'Not started'}>
+		<CollapsibleSection id="images.liveStacking.session" title="Session" summary={session ? liveStateLabel(session) : 'Not started'}>
+			{session && <SessionReadout session={session} />}
 			<DataList>
 				<DataRow label="Camera">
 					<DeviceLink device={camera.device.device} fallback={session?.cameraName ?? 'Not connected'} />
@@ -125,7 +154,7 @@ function SessionSection({ camera, session, settings }: SessionSectionProps) {
 				{session && (
 					<>
 						<DataRow label="State">
-							<StatusBadge tone={STATE_TONES[session.state]} label={LIVE_STACKING_STATE_LABELS[session.state]} />
+							<StatusBadge tone={noneStacked ? 'warning' : STATE_TONES[session.state]} label={liveStateLabel(session)} />
 						</DataRow>
 						{session.error && (
 							<DataRow label="Error" tone="danger">
@@ -133,14 +162,22 @@ function SessionSection({ camera, session, settings }: SessionSectionProps) {
 							</DataRow>
 						)}
 						<DataRow label="Capture">{session.capture ? `${session.capture.outputMode === 'preview-only' ? 'Preview only' : 'Preview and save'}${session.capture.ended ? ', ended' : ''}` : 'No frame yet'}</DataRow>
-						<DataRow label="Frames">
-							{session.counters.accepted} accepted · {session.counters.rejected} rejected · {session.counters.skipped} skipped
-							{session.counters.deliveryFailed > 0 && ` · ${session.counters.deliveryFailed} not delivered`}
-						</DataRow>
-						<DataRow label="Backlog">
-							{session.counters.queued} queued · {session.counters.processing} integrating{session.counters.held > 0 && ` · ${session.counters.held} held for a new field`}
-						</DataRow>
-						<DataRow label="Integration">{formatDuration(exposure)}</DataRow>
+						{session.counters.rejected > 0 && <DataRow label="Rejected">{frameCount(session.counters.rejected)}</DataRow>}
+						{session.counters.skipped > 0 && (
+							<DataRow label="Skipped" tone={noneStacked ? 'warning' : undefined}>
+								{frameCount(session.counters.skipped)}
+							</DataRow>
+						)}
+						{session.counters.deliveryFailed > 0 && (
+							<DataRow label="Not delivered" tone="warning">
+								{frameCount(session.counters.deliveryFailed)}
+							</DataRow>
+						)}
+						{(active || stopping) && (
+							<DataRow label="Backlog">
+								{session.counters.queued} queued · {session.counters.processing} integrating{session.counters.held > 0 && ` · ${session.counters.held} held for a new field`}
+							</DataRow>
+						)}
 						<DataRow label="Memory">
 							{formatByteSize(session.retainedBytes + session.backlogBytes)} of {formatByteSize(runtime.memoryBudget)}
 						</DataRow>
@@ -148,60 +185,102 @@ function SessionSection({ camera, session, settings }: SessionSectionProps) {
 					</>
 				)}
 			</DataList>
-			<Notice>Frames come from Camera Acquisition of this camera, in either output mode; Live Stacking never commands the camera.</Notice>
-			<Actions>
-				{!active && (
-					<Button disabled={busy} onClick={() => void startLiveStacking(liveStackingRuntime, connectionId, deviceId, settings)}>
-						{session ? 'Start New Session' : 'Start'}
-					</Button>
-				)}
-				{session?.state === 'paused' && (
-					<Button disabled={busy} onClick={() => send('resume')}>
-						Resume
-					</Button>
-				)}
-				{active && session?.state !== 'paused' && (
-					<Button variant="secondary" disabled={busy} onClick={() => send('pause')}>
-						Pause
-					</Button>
-				)}
-				{active && (
-					<Button variant="secondary" disabled={busy} onClick={() => send('stop')}>
+			{skips.length > 0 && <Notice warning={noneStacked}>{skips.map(({ reason, count }) => `${frameCount(count)} ${LIVE_SKIP_LABELS[reason]}.`).join(' ')}</Notice>}
+			{!fed && (!session || active) && (
+				<>
+					<Notice>Frames come from Camera Acquisition of this camera, in either output mode; Live Stacking never commands the camera.</Notice>
+					{session && (
+						<Actions>
+							<Button variant="ghost" onClick={() => selectImageTool(imagesState, document.key, 'camera-acquisition')}>
+								Open Acquisition
+							</Button>
+						</Actions>
+					)}
+				</>
+			)}
+			{!active && !stopping && (
+				<Actions>
+					{discards ? (
+						<ConfirmButton variant="secondary" disabled={busy} title="Start a new session?" message={`Starting a new session closes this one. ${discards}`} confirmLabel="Discard and Start" destructive onConfirm={start}>
+							Start New Session
+						</ConfirmButton>
+					) : (
+						<Button disabled={busy} onClick={start}>
+							{session ? 'Start New Session' : 'Start'}
+						</Button>
+					)}
+				</Actions>
+			)}
+			{active && (
+				<Actions>
+					{session?.state === 'paused' ? (
+						<Button disabled={busy} title="Stack the frames that arrive again" onClick={() => send('resume')}>
+							Resume
+						</Button>
+					) : (
+						<Button variant="secondary" disabled={busy} title="Skip the frames that arrive; those already queued are still stacked" onClick={() => send('pause')}>
+							Pause
+						</Button>
+					)}
+					<Button variant="secondary" disabled={busy} title="Stack the frames already queued, then stop; the stacks stay" onClick={() => send('stop')}>
 						Stop
 					</Button>
-				)}
-				{(active || session?.state === 'stopping') && (
-					<Button variant="secondary" disabled={busy} onClick={() => send('abort')}>
-						Abort
-					</Button>
-				)}
-				{active && (
-					<Button variant="secondary" disabled={busy} onClick={() => send('fields')}>
+					<Button variant="secondary" disabled={busy} title="Start a new field with the next good frame, as after a slew to another target" onClick={() => send('fields')}>
 						New Field
 					</Button>
-				)}
-				{session && session.state !== 'failed' && (
-					<Button
-						variant="secondary"
-						disabled={busy}
-						onClick={() => {
-							if (!confirmReset) return setConfirmReset(true)
-							setConfirmReset(false)
-							send('reset')
-						}}
-					>
-						{confirmReset ? 'Discard the Stacks' : 'Reset'}
-					</Button>
-				)}
-				{session && !active && session.state !== 'stopping' && (
-					<Button variant="secondary" disabled={busy} onClick={() => void closeLiveSession(liveStackingRuntime, session.sessionId)}>
-						Close
-					</Button>
-				)}
-			</Actions>
-			{confirmReset && <Notice>Reset discards every stack of the session; saved stacks and captured files stay.</Notice>}
+				</Actions>
+			)}
+			{session && (
+				<Actions>
+					{(active || stopping) && (
+						<Button variant="secondary" disabled={busy} title="Stop now: the queued frames are skipped, the frame being stacked completes, and the stacks stay" onClick={() => send('abort')}>
+							Abort
+						</Button>
+					)}
+					{session.state !== 'failed' &&
+						(discards ? (
+							<ConfirmButton variant="secondary" disabled={busy} tooltip="Discard every stack and start over; frames already queued go into new stacks" title="Reset the session?" message={discards} confirmLabel="Discard the Stacks" destructive onConfirm={() => send('reset')}>
+								Reset
+							</ConfirmButton>
+						) : (
+							<Button variant="secondary" disabled={busy} title="Start over; the session holds no stack yet" onClick={() => send('reset')}>
+								Reset
+							</Button>
+						))}
+					{!active &&
+						!stopping &&
+						(discards ? (
+							<ConfirmButton variant="secondary" disabled={busy} tooltip="Close the session; its stacks are discarded" title="Close the session?" message={discards} confirmLabel="Discard and Close" destructive onConfirm={close}>
+								Close
+							</ConfirmButton>
+						) : (
+							<Button variant="secondary" disabled={busy} title="Close the session" onClick={close}>
+								Close
+							</Button>
+						))}
+				</Actions>
+			)}
 			{error && <Notice error>{error}</Notice>}
 		</CollapsibleSection>
+	)
+}
+
+// Text of a count of frames, such as "1 frame" or "12 frames".
+function frameCount(count: number) {
+	return `${count} ${count === 1 ? 'frame' : 'frames'}`
+}
+
+// What a session stacked, read from across the room: its integration time, or that nothing is stacked yet, over its
+// stacked frames and stacks.
+function SessionReadout({ session }: { readonly session: LiveStackingSession }) {
+	const stacks = liveStacks(session)
+	const frames = session.counters.accepted
+
+	return (
+		<div className="flex flex-col gap-0.5">
+			<p className={cn('m-0 text-3xl leading-9 font-semibold tracking-[-0.01em] tabular-nums', frames > 0 ? 'text-ink-100' : 'text-ink-300')}>{frames > 0 ? formatDuration(liveIntegration(session)) : 'Nothing stacked'}</p>
+			<p className="m-0 text-xs leading-4 text-ink-300 tabular-nums">{frames > 0 ? `${frameCount(frames)} stacked in ${stacks.length} ${stacks.length === 1 ? 'stack' : 'stacks'}` : 'Stacked frames add up here'}</p>
+		</div>
 	)
 }
 
@@ -283,13 +362,20 @@ function CalibrationSection({ camera, session, settings }: FormProps) {
 		return kinds.length > 0 ? kinds.join(' · ') : 'Uncalibrated'
 	}
 
+	// Summary of the section: the masters of the frames without filter, or how many filters of the wheel are calibrated.
+	const calibrated = filters.filter((name) => chosenSummary(name) !== 'Uncalibrated').length
+	const summary = !wheelNames ? chosenSummary(NO_FILTER) : calibrated === 0 ? 'Uncalibrated' : `${calibrated} of ${filters.length} ${filters.length === 1 ? 'filter' : 'filters'} calibrated`
+	// Whether the frames have no filter and no other filter is calibrated, so the masters need no filter heading.
+	const unnamed = !wheelNames && filters.length === 1
+
 	return (
-		<CollapsibleSection id="images.liveStacking.calibration" title="Calibration" summary={`${Object.keys(calibration.filters).length} filters`} defaultOpen={false}>
-			{wheelNames ? <Notice>Choose the filters of the wheel to calibrate before their frames arrive.</Notice> : <Notice>Without a connected filter wheel the frames have no filter, so they take the masters of {NO_FILTER}.</Notice>}
+		<CollapsibleSection id="images.liveStacking.calibration" title="Calibration" summary={summary} defaultOpen={false}>
+			{wheelNames ? <Notice>Choose the filters of the wheel to calibrate before their frames arrive.</Notice> : <Notice>Without a connected filter wheel the frames have no filter, so the masters below calibrate them all.</Notice>}
 			<CatalogCameraNotice device={camera.device.device} lead="Masters come from" purpose="to calibrate with the Calibration Library" />
 			{mastersFailed && <Notice error>The masters of the Calibration Library could not be read; the list may be out of date.</Notice>}
 			{filters.map((name) => (
-				<CollapsibleSection key={name} id={`images.liveStacking.calibration.filter.${name}`} title={name === NO_FILTER ? 'No filter' : name} summary={chosenSummary(name)}>
+				<div key={name} className="flex flex-col gap-2">
+					{!unnamed && <SectionHeading>{name === NO_FILTER ? 'No filter' : name}</SectionHeading>}
 					{LIVE_MASTER_ORDER.map((kind) => {
 						const options = [NO_MASTER, ...offered(kind, name).map((master) => String(master.masterId))]
 						const chosen = calibration.filters[name]?.[kind]
@@ -303,14 +389,14 @@ function CalibrationSection({ camera, session, settings }: FormProps) {
 						}
 						return <Select key={kind} label={LIVE_MASTER_LABELS[kind]} options={options} value={value} format={format} onChange={(option) => choose(name, kind, option)} />
 					})}
-					{calibration.filters[name] && (
+					{calibration.filters[name] && !unnamed && (
 						<Actions>
-							<Button variant="secondary" onClick={() => update(removeFilterCalibration(calibration, name))}>
+							<Button variant="secondary" title={`Forget the masters of ${name === NO_FILTER ? 'the frames without filter' : name}`} onClick={() => update(removeFilterCalibration(calibration, name))}>
 								Remove
 							</Button>
 						</Actions>
 					)}
-				</CollapsibleSection>
+				</div>
 			))}
 			{wheelNames && (
 				<div className="flex items-end gap-2">
@@ -328,7 +414,7 @@ function CalibrationSection({ camera, session, settings }: FormProps) {
 					</Button>
 				</div>
 			)}
-			<SegmentedControl label="Other filters" options={['uncalibrated', 'skip'] as const} value={calibration.otherwise} format={(option) => LIVE_FALLBACK_LABELS[option]} onChange={(otherwise) => update({ ...calibration, otherwise })} />
+			{wheelNames && <SegmentedControl label="Other filters" options={['uncalibrated', 'skip'] as const} value={calibration.otherwise} format={(option) => LIVE_FALLBACK_LABELS[option]} onChange={(otherwise) => update({ ...calibration, otherwise })} />}
 			{session && liveSessionActive(session) && (
 				<>
 					<Notice>Applying the masters to the running session starts other stacks for the frames that follow; its stacks so far are never recalibrated.</Notice>
@@ -353,15 +439,17 @@ function IntegrationSection({ camera, session, settings }: FormProps) {
 
 	return (
 		<CollapsibleSection id="images.liveStacking.integration" title="Quality & Integration" summary={LIVE_METHOD_LABELS[shown.method]} defaultOpen={false}>
+			{locked && <Notice>Locked: the running session keeps the recipe it started with.</Notice>}
 			<SegmentedControl label="Combination" options={['average', 'weighted-average'] as const} value={shown.method} format={(method) => LIVE_METHOD_LABELS[method]} onChange={(method) => update({ method })} disabled={locked} />
 			{shown.method === 'weighted-average' && <Select label="Weighting" options={['quality', 'snr', 'inverse-hfd', 'stars'] as const} value={shown.weighting} format={(weighting) => LIVE_WEIGHTING_LABELS[weighting]} onChange={(weighting) => update({ weighting })} disabled={locked} />}
 			<Select label="Normalization" options={['background-scale', 'scale', 'none'] as const} value={shown.normalization} format={(normalization) => LIVE_NORMALIZATION_LABELS[normalization]} onChange={(normalization) => update({ normalization })} disabled={locked} />
 			<Select label="Resampling" options={['bilinear', 'bicubic', 'nearest'] as const} value={shown.interpolation} format={(interpolation) => LIVE_INTERPOLATION_LABELS[interpolation]} onChange={(interpolation) => update({ interpolation })} disabled={locked} />
 			<NumberInput label="Minimum stars" value={shown.minStars} min={3} max={100} onChange={(minStars) => update({ minStars })} disabled={locked} />
 			<NumberInput label="Minimum overlap" value={Math.round(shown.minOverlap * 100)} min={0} max={100} suffix="%" onChange={(overlap) => update({ minOverlap: overlap / 100 })} disabled={locked} />
-			<NumberInput label="Maximum HFD (0 for any)" value={shown.maxHfd ?? 0} min={0} max={50} step={0.1} suffix="px" onChange={(maxHfd) => update({ maxHfd: maxHfd > 0 ? maxHfd : undefined })} disabled={locked} />
-			<NumberInput label="Minimum SNR (0 for any)" value={shown.minSnr ?? 0} min={0} max={1000} onChange={(minSnr) => update({ minSnr: minSnr > 0 ? minSnr : undefined })} disabled={locked} />
-			{locked && <Notice>Locked: the running session keeps the recipe it started with.</Notice>}
+			<Checkbox label="Reject frames above an HFD" checked={shown.maxHfd !== undefined} disabled={locked} onChange={(limited) => update({ maxHfd: limited ? DEFAULT_MAX_HFD : undefined })} />
+			{shown.maxHfd !== undefined && <NumberInput label="Maximum HFD" value={shown.maxHfd} min={0.1} max={50} step={0.1} suffix="px" onChange={(maxHfd) => update({ maxHfd })} disabled={locked} />}
+			<Checkbox label="Reject frames below an SNR" checked={shown.minSnr !== undefined} disabled={locked} onChange={(limited) => update({ minSnr: limited ? DEFAULT_MIN_SNR : undefined })} />
+			{shown.minSnr !== undefined && <NumberInput label="Minimum SNR" value={shown.minSnr} min={1} max={1000} onChange={(minSnr) => update({ minSnr })} disabled={locked} />}
 		</CollapsibleSection>
 	)
 }
@@ -391,7 +479,8 @@ function customComposition(cohorts: readonly LiveStackingCohort[], fieldId: stri
 }
 
 // What the camera tab shows: the latest frame, one stack, or a color composition of the stacks of one field by a preset or
-// a custom mix; each composition can be saved as a linear color FITS. Only the display changes.
+// a custom mix, offered once the session has them; the stack or composition shown can be saved as a linear FITS. Only
+// the display changes.
 function DisplaySection({ document, session }: SessionProps) {
 	const images = useSnapshot(imagesState)
 	const runtime = useSnapshot(liveStackingRuntime)
@@ -430,7 +519,14 @@ function DisplaySection({ document, session }: SessionProps) {
 
 	return (
 		<CollapsibleSection id="images.liveStacking.display" title="Display & Channels" summary={DISPLAY_LABELS[mode]}>
-			<SegmentedControl label="Show" options={['frame', 'stack', 'color'] as const} value={mode} format={(option) => DISPLAY_LABELS[option]} onChange={changeMode} />
+			<SegmentedControl
+				label="Show"
+				options={['frame', 'stack', 'color'] as const}
+				value={mode}
+				format={(option) => DISPLAY_LABELS[option]}
+				disabledReason={(option) => (option === 'stack' && session.cohorts.length === 0 ? 'No stack yet' : option === 'color' && !field ? 'Color needs mono stacks of one field' : undefined)}
+				onChange={changeMode}
+			/>
 			{mode === 'stack' && shownCohort && (
 				<Select
 					label="Stack"
@@ -444,6 +540,26 @@ function DisplaySection({ document, session }: SessionProps) {
 					}}
 					onChange={(cohortId) => show({ cohortId })}
 				/>
+			)}
+			{mode === 'stack' && shownCohort && (
+				<Actions>
+					<Button
+						variant="secondary"
+						disabled={runtime.pending[exportKey]}
+						onClick={() =>
+							void saveLiveStack(liveStackingRuntime, session.sessionId, { cohortId: shownCohort }).then((product) => {
+								if (product) setSaved(product.path)
+							})
+						}
+					>
+						Save Stack
+					</Button>
+					{saved && (
+						<Button variant="ghost" onClick={() => void openImage(imagesState, saved)}>
+							Open Saved
+						</Button>
+					)}
+				</Actions>
 			)}
 			{mode === 'color' && field && (
 				<>
@@ -508,11 +624,6 @@ function DisplaySection({ document, session }: SessionProps) {
 			{mode === 'color' && !field && <Notice>Color needs mono stacks of one field.</Notice>}
 			{runtime.errors[exportKey] && <Notice error>{runtime.errors[exportKey]}</Notice>}
 			<Notice>Stretching and color mixing change only the display; saved stacks are linear.</Notice>
-			<Actions>
-				<Button variant="ghost" onClick={() => selectImageTool(imagesState, document.key, 'camera-acquisition')}>
-					Open Acquisition
-				</Button>
-			</Actions>
 		</CollapsibleSection>
 	)
 }

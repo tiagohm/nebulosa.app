@@ -41,7 +41,7 @@ import type { LiveProductCohort, LiveStackingProduct, LiveStackingStore } from '
 // frame sink of the capture service (captures.ts) and are accounted for one by one, from received to exactly one
 // outcome: accepted into one stack, rejected after it was read, skipped on purpose (paused, aborted, not a light, unknown
 // filter or metadata, no calibration chosen), or failed to be delivered (its file failed to be saved, the backlog limit,
-// the worker), and only counted: why each frame ended is not kept. Preview-only frames are copied once and queued in
+// the worker), and only counted, the skipped ones also by reason; no frame is kept. Preview-only frames are copied once and queued in
 // memory, at most MAX_PENDING_PAYLOADS per camera: the capture waits before preparing its next exposure while the queue
 // is full (never during an exposure), and is released by
 // a stop, an abort, or a failure of either side. Saved frames queue only their path once their write succeeded, at most
@@ -107,6 +107,18 @@ type FrameState = 'queued' | 'processing' | 'held'
 
 // Final outcome of a frame, the counter it ends in.
 type FrameResult = 'accepted' | 'rejected' | 'skipped' | 'deliveryFailed'
+
+// Why a frame was skipped:
+// - paused: it arrived while the session was paused.
+// - aborted: it was queued when the session was aborted.
+// - notLight: its header calls it a calibration frame or a master.
+// - metadata: its header records no usable image size or no exposure.
+// - unknownFilter: its capture named a filter wheel of the setup, but its header names no filter.
+// - otherFilter: its filter has no masters chosen and the frames of other filters are skipped.
+export type LiveSkipReason = 'paused' | 'aborted' | 'notLight' | 'metadata' | 'unknownFilter' | 'otherFilter'
+
+// Skipped frames of a session by reason; they add up to its skipped counter.
+export type LiveStackingSkips = Readonly<Record<LiveSkipReason, number>>
 
 // Frame counts of a session. Every received frame is in exactly one of the others: received = queued + processing + held +
 // accepted + rejected + skipped + deliveryFailed.
@@ -197,6 +209,8 @@ export interface LiveStackingSession {
 	readonly recipe: LiveStackingRecipe
 	readonly calibration: LiveStackingCalibration
 	readonly counters: LiveStackingCounters
+	// Skipped frames by reason, reset with the counters.
+	readonly skips: LiveStackingSkips
 	// Bytes of the preview-only frames queued in memory.
 	readonly backlogBytes: number
 	readonly capture?: LiveStackingCapture
@@ -320,11 +334,12 @@ interface ViewDocument {
 
 // A session while the service knows it.
 interface Session {
-	summary: Omit<LiveStackingSession, 'state' | 'counters' | 'fields' | 'cohorts' | 'backlogBytes'>
+	summary: Omit<LiveStackingSession, 'state' | 'counters' | 'skips' | 'fields' | 'cohorts' | 'backlogBytes'>
 	phase: 'active' | 'paused' | 'stopping' | 'stopped' | 'failed'
 	readonly token: string
 	readonly processor: LiveStackingProcessor
 	counters: { -readonly [K in keyof LiveStackingCounters]: LiveStackingCounters[K] }
+	skips: Record<LiveSkipReason, number>
 	readonly queue: FrameEntry[]
 	// Held candidates of a new field, by frame id.
 	readonly held: Map<string, FrameEntry>
@@ -352,6 +367,11 @@ interface Session {
 // Returns a cleared set of counters.
 function emptyCounters(): Session['counters'] {
 	return { received: 0, queued: 0, processing: 0, held: 0, accepted: 0, rejected: 0, skipped: 0, deliveryFailed: 0 }
+}
+
+// Returns a cleared count of skipped frames by reason.
+function emptySkips(): Session['skips'] {
+	return { paused: 0, aborted: 0, notLight: 0, metadata: 0, unknownFilter: 0, otherFilter: 0 }
 }
 
 // Returns whether bytes hold an XISF file, by its signature.
@@ -502,6 +522,7 @@ export class LiveStacking implements Disposable {
 			token: request.token,
 			processor: this.#processor(recipe),
 			counters: emptyCounters(),
+			skips: emptySkips(),
 			queue: [],
 			held: new Map(),
 			generations: new Map(),
@@ -556,7 +577,7 @@ export class LiveStacking implements Disposable {
 		const session = this.#session(sessionId)
 		if (session.phase === 'stopped' || session.phase === 'failed') return this.#summary(session)
 		session.phase = 'stopping'
-		for (const entry of session.queue.splice(0)) this.#finish(session, entry, 'skipped')
+		for (const entry of session.queue.splice(0)) this.#skip(session, entry, 'aborted')
 		this.#release(session)
 		this.#publish(session)
 		void this.#pump(session)
@@ -576,6 +597,7 @@ export class LiveStacking implements Disposable {
 		this.#closeViews(session)
 		const inFlight = session.counters.queued + session.counters.processing + session.counters.held
 		session.counters = { ...emptyCounters(), received: inFlight, queued: session.counters.queued, processing: session.counters.processing, held: session.counters.held }
+		session.skips = emptySkips()
 		session.summary = { ...session.summary, newFieldRequested: false, retainedBytes: result.retainedBytes }
 		return this.#publish(session)
 	}
@@ -750,7 +772,7 @@ export class LiveStacking implements Disposable {
 		session.counters.queued++
 
 		if (session.phase === 'failed') return this.#finish(session, entry, 'deliveryFailed')
-		if (session.phase === 'paused') return this.#finish(session, entry, 'skipped')
+		if (session.phase === 'paused') return this.#skip(session, entry, 'paused')
 
 		if (outputMode === 'preview-only') {
 			if (!bytes) return this.#finish(session, entry, 'deliveryFailed')
@@ -899,18 +921,18 @@ export class LiveStacking implements Disposable {
 		}
 
 		if (!inspection) return this.#finish(session, entry, 'deliveryFailed', true)
-		if (inspection.kind !== undefined || inspection.rejectedRole === 'master') return this.#finish(session, entry, 'skipped', true)
+		if (inspection.kind !== undefined || inspection.rejectedRole === 'master') return this.#skip(session, entry, 'notLight', true)
 
 		const { metadata } = inspection
 		const missing = missingMetadata(metadata)
-		if (missing) return this.#finish(session, entry, 'skipped', true)
+		if (missing) return this.#skip(session, entry, 'metadata', true)
 
 		const filter = filterGroupOf(classifyFilter(metadata.filter.value, entry.wheelSnooped))
 		entry.temperature = metadata.sensorTemperature.value
-		if (filter === undefined) return this.#finish(session, entry, 'skipped', true)
+		if (filter === undefined) return this.#skip(session, entry, 'unknownFilter', true)
 
 		const chosen = filterCalibration(session.summary.calibration, filter)
-		if (!chosen && session.summary.calibration.otherwise === 'skip') return this.#finish(session, entry, 'skipped', true)
+		if (!chosen && session.summary.calibration.otherwise === 'skip') return this.#skip(session, entry, 'otherFilter', true)
 
 		const calibration: { -readonly [K in keyof AnalysisCalibration]: AnalysisCalibration[K] } = {}
 		const pins: MasterReference[] = []
@@ -1012,6 +1034,12 @@ export class LiveStacking implements Disposable {
 		entry.bytes = undefined
 		session.counters[result]++
 		this.#publish(session)
+	}
+
+	// Counts a skipped frame under its reason, then as skipped. processing says it was being integrated.
+	#skip(session: Session, entry: FrameEntry, reason: LiveSkipReason, processing = false) {
+		session.skips[reason]++
+		this.#finish(session, entry, 'skipped', processing)
 	}
 
 	// Ends a stopping session once its admitted frames were integrated: held candidates are rejected.
@@ -1222,7 +1250,7 @@ export class LiveStacking implements Disposable {
 		const state: LiveStackingState = session.phase === 'active' ? (session.current ? 'processing' : 'waiting') : session.phase
 		let backlogBytes = 0
 		for (const entry of session.queue) backlogBytes += entry.bytes?.byteLength ?? 0
-		return { ...session.summary, state, counters: { ...session.counters }, backlogBytes, fields: [...session.fields], cohorts: [...session.cohorts.values()] }
+		return { ...session.summary, state, counters: { ...session.counters }, skips: { ...session.skips }, backlogBytes, fields: [...session.fields], cohorts: [...session.cohorts.values()] }
 	}
 
 	// Publishes a changed session and returns its state.

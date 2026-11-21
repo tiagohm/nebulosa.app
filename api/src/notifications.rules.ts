@@ -8,6 +8,7 @@ import type { DarvSessionSummary } from './darv'
 import type { FlatWizardSessionSummary } from './flatwizard'
 import type { GuidingEventRecord, GuidingSessionSummary } from './guiding'
 import type { IPolarSessionSummary } from './ipolar'
+import type { LiveStackingSession } from './livestacking'
 import type { MeridianFlipTransition } from './meridianflip'
 import type { MeridianFlipExecution } from './meridianflipexecutor'
 import type { MeridianFlipExecutorErrorCode } from './meridianflipexecutor.policy'
@@ -34,7 +35,7 @@ import type { ServerEvent } from './websocket'
 export type NotificationLevel = 'info' | 'success' | 'warning' | 'error'
 
 // Camera tool a notification can open, named as the Images workspace names it.
-export type NotificationCameraTool = 'camera-acquisition' | 'auto-focus' | 'guiding' | 'tppa' | 'ipolar' | 'pointing-model-builder' | 'target-centering' | 'darv' | 'flat-wizard' | 'dark-library-wizard'
+export type NotificationCameraTool = 'camera-acquisition' | 'live-stacking' | 'auto-focus' | 'guiding' | 'tppa' | 'ipolar' | 'pointing-model-builder' | 'target-centering' | 'darv' | 'flat-wizard' | 'dark-library-wizard'
 
 // Context a notification can open in the UI; opening it never commands a device.
 export type NotificationTarget =
@@ -64,7 +65,7 @@ export type NotificationTarget =
 
 // What a notification is about.
 export interface NotificationSource {
-	// Service that reported the occurrence: connection, capture, autofocus, tppa, ipolar, mountPointing, targetCentering, flatWizard, darkLibraryWizard, calibrationLibrary, spiceKernels, guiding, darv, meridianFlip (the Monitor and the Executor), operation, or indi (a global message of an INDI server).
+	// Service that reported the occurrence: connection, capture, liveStacking, autofocus, tppa, ipolar, mountPointing, targetCentering, flatWizard, darkLibraryWizard, calibrationLibrary, spiceKernels, guiding, darv, meridianFlip (the Monitor and the Executor), operation, or indi (a global message of an INDI server).
 	readonly kind: string
 	// Id of the connection involved; absent for an application-wide notification.
 	readonly connectionId?: string
@@ -218,6 +219,8 @@ export class NotificationClassifier {
 				return this.#closed(event.id, event.cause === 'lost')
 			case 'capture:updated':
 				return this.#capture(event.session)
+			case 'liveStacking:updated':
+				return this.#liveStacking(event.session)
 			case 'autofocus:updated':
 				return this.#autoFocus(event.session)
 			case 'tppa:updated':
@@ -402,6 +405,32 @@ export class NotificationClassifier {
 		if (phase === 'completed') return [{ ...base, level: 'success', code: 'capture.completed', title: 'Capture completed', message: `${cameraName} captured ${session.captured} ${session.captured === 1 ? 'frame' : 'frames'}.` }]
 		if (phase === 'failed' && !this.#quiet(connectionId, reason)) return [{ ...base, level: 'error', code: 'capture.failed', title: 'Capture failed', message: `Capture with ${cameraName} failed: ${failureText(reason, session.error)}.` }]
 		return []
+	}
+
+	// Reports a Live Stacking session that failed, whose stacks are lost, and one whose capture ended without a single
+	// frame stacked, once per capture. The error of a failed worker is not copied; the panel says why frames were skipped.
+	#liveStacking(session: LiveStackingSession): NotificationDraft[] {
+		const { sessionId, connectionId, deviceId, cameraName, state, counters, capture } = session
+		const source = this.#source('liveStacking', connectionId, deviceId, undefined, sessionId)
+		const target = cameraTool(connectionId, deviceId, 'live-stacking')
+
+		if (state === 'failed') return [{ key: `liveStacking:${sessionId}:failed`, level: 'error', code: 'liveStacking.failed', title: 'Live Stacking failed', message: `The live stacking of ${cameraName} failed, and its stacks were lost.`, source, target }]
+
+		const ended = counters.rejected + counters.skipped + counters.deliveryFailed
+		const settled = counters.queued + counters.processing + counters.held === 0
+		if (!capture?.ended || !settled || counters.accepted > 0 || ended === 0 || state === 'stopped' || state === 'stopping') return []
+
+		return [
+			{
+				key: `liveStacking:${sessionId}:${capture.sessionId}:noneStacked`,
+				level: 'warning',
+				code: 'liveStacking.noneStacked',
+				title: 'Nothing stacked',
+				message: `None of the ${ended} ${ended === 1 ? 'frame' : 'frames'} ${cameraName} took was stacked; Live Stacking says why.`,
+				source,
+				target,
+			},
+		]
 	}
 
 	// Reports an Auto Focus that completed or failed; a cancelled one is quiet.

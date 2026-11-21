@@ -3,7 +3,7 @@ import type { LiveStackingCohort, LiveStackingSession, LiveStackingSnapshot } fr
 import { proxy } from 'valtio'
 import { DEFAULT_LIVE_STACKING_SETTINGS } from '../profile/schema'
 import { COMPOSITION_PRESETS } from '../tools/imagestacking/presets'
-import { calibrationFilters, cameraLiveSession, handleLiveStackingEvent, loadLiveMasters, type LiveStackingRuntime, liveSessionActive, NO_FILTER, refreshLiveStacking, removeFilterCalibration, resolveLivePreset, startLiveStacking, wheelFilterNames } from './livestacking'
+import { calibrationFilters, cameraLiveSession, handleLiveStackingEvent, liveDiscardText, liveSkips, liveStatus, loadLiveMasters, type LiveStackingRuntime, liveSessionActive, NO_FILTER, refreshLiveStacking, removeFilterCalibration, resolveLivePreset, startLiveStacking, wheelFilterNames } from './livestacking'
 
 // A session of camera c1/cam with fields replaced.
 function session(revision: number, patch: Partial<LiveStackingSession> = {}): LiveStackingSession {
@@ -17,6 +17,7 @@ function session(revision: number, patch: Partial<LiveStackingSession> = {}): Li
 		recipe: DEFAULT_LIVE_STACKING_SETTINGS.recipe,
 		calibration: DEFAULT_LIVE_STACKING_SETTINGS.calibration,
 		counters: { received: 0, queued: 0, processing: 0, held: 0, accepted: 0, rejected: 0, skipped: 0, deliveryFailed: 0 },
+		skips: { paused: 0, aborted: 0, notLight: 0, metadata: 0, unknownFilter: 0, otherFilter: 0 },
 		backlogBytes: 0,
 		newFieldRequested: false,
 		fields: [],
@@ -128,5 +129,31 @@ describe('live stacking store', () => {
 		expect(calibrationFilters(calibration, undefined)).toEqual(['Ha', NO_FILTER, 'OIII'])
 		expect(calibrationFilters({ filters: {} }, undefined)).toEqual([NO_FILTER])
 		expect(removeFilterCalibration(calibration, 'Ha')).toEqual({ filters: { OIII: {} }, otherwise: 'skip' })
+	})
+})
+
+describe('session status', () => {
+	const counters = session(1).counters
+
+	test('skip reasons are listed by count, most actionable first among equals', () => {
+		expect(liveSkips(session(1, { skips: { ...session(1).skips, paused: 2, notLight: 2, metadata: 5 } }))).toEqual([
+			{ reason: 'metadata', count: 5 },
+			{ reason: 'notLight', count: 2 },
+			{ reason: 'paused', count: 2 },
+		])
+	})
+
+	test('a running session that stacked none of the frames it received says so', () => {
+		expect(liveStatus(session(1, { counters: { ...counters, received: 3, skipped: 3 } }))).toEqual({ text: 'Receiving, none stacked', tone: 'warning' })
+		expect(liveStatus(session(1))).toEqual({ text: 'Waiting for frames', tone: 'active' })
+		expect(liveStatus(session(1, { counters: { ...counters, received: 1, accepted: 1 }, cohorts: [cohort('a', 'L')] }))).toEqual({ text: '1 stacked · 1 min 00 s', tone: 'active' })
+		expect(liveStatus(session(1, { state: 'stopped', counters: { ...counters, received: 3, skipped: 3 } }))).toEqual({ text: 'Stopped · 0 stacked', tone: 'neutral' })
+		expect(liveStatus(session(1, { state: 'failed' }))).toEqual({ text: 'Failed', tone: 'danger' })
+	})
+
+	test('discarding names the stacks, their frames and integration, and what was saved', () => {
+		expect(liveDiscardText(session(1))).toBeUndefined()
+		expect(liveDiscardText(session(1, { cohorts: [cohort('a', 'L'), cohort('b', 'R')] }))).toBe('Its 2 stacks of 2 frames (2 min 00 s of integration) will be discarded. None of it was saved. Captured files are never touched.')
+		expect(liveDiscardText(session(1, { cohorts: [cohort('a', 'L')], products: ['p1'] }))).toBe('Its stack of 1 frame (1 min 00 s of integration) will be discarded. What was saved from it stays as it was saved. Captured files are never touched.')
 	})
 })

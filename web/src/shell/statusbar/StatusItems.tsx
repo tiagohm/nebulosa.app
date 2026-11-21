@@ -1,4 +1,4 @@
-import type { MeridianFlipMonitor, MountRemoteServer, OperationRecord } from 'api'
+import type { LiveStackingSession, MeridianFlipMonitor, MountRemoteServer, OperationRecord } from 'api'
 import { cn } from 'cn'
 import { type Ref, useState } from 'react'
 import { useSnapshot } from 'valtio'
@@ -9,11 +9,13 @@ import { darvRuntime } from '../../camera/darv'
 import { flatWizardRuntime } from '../../camera/flatwizard'
 import { guidingRuntime } from '../../camera/guiding'
 import { ipolarRuntime } from '../../camera/ipolar'
+import { liveStatus } from '../../camera/livestacking'
 import { targetCenteringRuntime } from '../../camera/targetcentering'
 import { tppaRuntime } from '../../camera/tppa'
 import { connectionState } from '../../connection/connection'
 import { controlRuntime } from '../../equipment-control/control'
 import { deviceState } from '../../equipment/equipment'
+import { openCameraTool } from '../../images/opencameratool'
 import { mountPointingRuntime } from '../../mountpointing/mountpointing'
 import { notificationsState } from '../../notifications/notifications'
 import { operationsState } from '../../operations'
@@ -30,7 +32,8 @@ import { type BarOperation, type ChipValue, operationInterruption, type ScopedDe
 // Items of the status bar, as small as they can be: the server link is an icon alone while it is online and says its
 // state otherwise, each chip an icon and a short reading, its name and full reading in its title, each running
 // operation its icon, name, and progress, followed by its Abort, the enabled Meridian Flip Monitor of the profile's mount
-// its icon and status, and the running Mount Remote Control listeners of that mount their protocols and clients. A chip
+// its icon and status, the running Mount Remote Control listeners of that mount their protocols and clients, and each
+// Live Stacking session of the profile's connection what it stacked. A chip
 // opens its exact device in Equipment Control, or the page itself for a device missing from the connection. Every
 // control of the bar is pressed anywhere across the height of the bar, not only on the text it shows.
 
@@ -178,6 +181,25 @@ export function MeridianFlipItem({ monitor, name, executor }: MeridianFlipItemPr
 	return (
 		<button type="button" data-fixed title={`${title} · Open the tool`} onClick={() => navigate(routeState, { workspace: 'tools', tool: 'meridian-flip' })} className={cn('flex flex-none items-center gap-1', BUTTON_CLASS)}>
 			<Icon name="meridian" className="size-3.5 text-ink-300" />
+			<span className={cn('tabular-nums', TONE_TEXT[tone])}>{text}</span>
+		</button>
+	)
+}
+
+interface LiveStackingItemProps {
+	// Session shown, of a camera of the profile's connection.
+	readonly session: LiveStackingSession
+}
+
+// A Live Stacking session, which holds no device and so is no operation: the live stack icon and what it stacked, or its
+// state once paused, stopped, or failed, opening the tool on the camera tab of its camera.
+export function LiveStackingItem({ session }: LiveStackingItemProps) {
+	const { text, tone } = liveStatus(session)
+	const title = `Live Stacking of ${session.cameraName}: ${text}`
+
+	return (
+		<button type="button" data-fixed title={`${title} · Open the tool`} onClick={() => openCameraTool(session.connectionId, session.deviceId, 'live-stacking')} className={cn('flex flex-none items-center gap-1', BUTTON_CLASS)}>
+			<Icon name="liveStack" className="size-3.5 text-ink-300" />
 			<span className={cn('tabular-nums', TONE_TEXT[tone])}>{text}</span>
 		</button>
 	)

@@ -7,6 +7,7 @@ import type { DarvMeasurement, DarvSessionSummary } from './darv'
 import type { FlatWizardSessionSummary } from './flatwizard'
 import type { GuidingSessionSummary } from './guiding'
 import type { IPolarSessionSummary } from './ipolar'
+import type { LiveStackingCounters, LiveStackingSession } from './livestacking'
 import type { MeridianFlipTransition } from './meridianflip'
 import type { MeridianFlipArm, MeridianFlipExecution } from './meridianflipexecutor'
 import { failureText, NotificationClassifier } from './notifications.rules'
@@ -21,6 +22,19 @@ const mount = { connectionId: 'c', deviceId: 'mnt' }
 
 function capture(session: Partial<CaptureSession>): ServerEvent {
 	return { type: 'capture:updated', session: { sessionId: 's1', operationId: 'o1', connectionId: 'c', deviceId: 'cam', cameraName: 'CCD', phase: 'exposing', captured: 3, ...session } as CaptureSession }
+}
+
+function liveStacking(state: LiveStackingSession['state'], counters: Partial<LiveStackingCounters>, ended = true): ServerEvent {
+	const session = {
+		sessionId: 'l1',
+		connectionId: 'c',
+		deviceId: 'cam',
+		cameraName: 'CCD',
+		state,
+		capture: { sessionId: 'cap1', outputMode: 'preview-only', ended },
+		counters: { received: 0, queued: 0, processing: 0, held: 0, accepted: 0, rejected: 0, skipped: 0, deliveryFailed: 0, ...counters },
+	} as LiveStackingSession
+	return { type: 'liveStacking:updated', epoch: 'e', revision: 1, session }
 }
 
 function autoFocus(session: Partial<AutoFocusSessionSummary>): ServerEvent {
@@ -84,6 +98,18 @@ test('reports completed and failed captures once per session key', () => {
 	expect(failed).toMatchObject({ key: 'capture:s1', level: 'error', code: 'capture.failed' })
 	expect(failed.message).not.toContain('secret')
 	expect(failed.message).toContain('timed out')
+})
+
+test('reports a failed Live Stacking session and a capture that ended with nothing stacked, once each', () => {
+	const classifier = new NotificationClassifier()
+	expect(classifier.classify(liveStacking('waiting', { received: 3, skipped: 3 }, false))).toEqual([])
+	expect(classifier.classify(liveStacking('waiting', { received: 3, queued: 1, skipped: 2 }))).toEqual([])
+	expect(classifier.classify(liveStacking('waiting', { received: 3, accepted: 1, skipped: 2 }))).toEqual([])
+	expect(classifier.classify(liveStacking('stopped', { received: 3, skipped: 3 }))).toEqual([])
+	expect(classifier.classify(liveStacking('waiting', { received: 3, skipped: 3 }))).toMatchObject([
+		{ key: 'liveStacking:l1:cap1:noneStacked', level: 'warning', code: 'liveStacking.noneStacked', message: 'None of the 3 frames CCD took was stacked; Live Stacking says why.', target: { kind: 'cameraTool', connectionId: 'c', deviceId: 'cam', tool: 'live-stacking' } },
+	])
+	expect(classifier.classify(liveStacking('failed', { received: 3, deliveryFailed: 3 }))).toMatchObject([{ key: 'liveStacking:l1:failed', level: 'error', code: 'liveStacking.failed' }])
 })
 
 test('stopped, aborted, and cancelled sessions are quiet', () => {

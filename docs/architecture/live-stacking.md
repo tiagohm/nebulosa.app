@@ -18,11 +18,13 @@ Live Stacking gives that view, calibrated when the operator chooses masters, and
 - Calibrates with the masters the operator chose from the [Calibration Library](calibration-library.md), limited to the camera's [Equipment Catalog](equipment-catalog.md) camera, leased while read.
 - Serves its views as derived documents of the image store, so the viewer shows them and saves what it integrates.
 - Saves stacks as products recorded in the database and on disk, listed to open in Images (see [Persistence and State](persistence-and-state.md)).
+- Shows each session of the profile's connection in the status bar, though it is no operation, and reports a failed session and a capture that ended with nothing stacked through [Notifications](notifications.md).
 
 ## Rules and Limitations
 
 - It never commands or holds a device; it slows Camera Acquisition only by delaying the next exposure while its small in-memory queue is full.
-- Every received frame is counted in exactly one outcome; why each one ended is not kept.
+- Every received frame is counted in exactly one outcome; a skipped frame is also counted by why it was skipped, and nothing else about a frame is kept.
+- Closing a stopped session, starting a new one for its camera, and a reset discard its stacks; only what was saved stays.
 - The Calibration Library never chooses masters: a stack is calibrated only with masters chosen before its frames arrive, and no stack mixes calibrated and uncalibrated frames.
 - Retained memory of all sessions is bounded, nothing is evicted, and a new field, stack, or held frame beyond it is refused.
 - A failed worker loses the session's stacks, and the capture goes on.

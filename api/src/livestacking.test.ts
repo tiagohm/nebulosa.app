@@ -223,6 +223,7 @@ describe('live stacking', () => {
 		await deliver(wheel, await fits(0, 0))
 		await deliver(captured('dark', 1), await fits(0, 0, { IMAGETYP: 'Dark Frame' }))
 		await waitUntil(() => stacking.session(sessionId).counters.skipped === 2)
+		expect(stacking.session(sessionId).skips).toMatchObject({ unknownFilter: 1, notLight: 1, metadata: 0 })
 	})
 
 	test('frames of a filter without masters are skipped when asked, and chosen masters that no longer exist reject them', async () => {
@@ -234,6 +235,7 @@ describe('live stacking', () => {
 		await waitUntil(() => stacking.session(sessionId).counters.received === 2 && stacking.session(sessionId).counters.processing + stacking.session(sessionId).counters.queued === 0)
 
 		expect(stacking.session(sessionId).counters).toMatchObject({ skipped: 1, rejected: 1 })
+		expect(stacking.session(sessionId).skips).toMatchObject({ otherFilter: 1 })
 	})
 
 	test('chosen masters are checked against each frame and leased while it is read', async () => {
@@ -259,7 +261,7 @@ describe('live stacking', () => {
 		await deliver(captured('cap', 2), await fits(1, 1, { FILTER: 'L' }))
 		await waitUntil(() => stacking.session(sessionId).counters.accepted === 1)
 
-		expect(stacking.session(sessionId)).toMatchObject({ state: 'paused', counters: { received: 2, accepted: 1, skipped: 1 } })
+		expect(stacking.session(sessionId)).toMatchObject({ state: 'paused', counters: { received: 2, accepted: 1, skipped: 1 }, skips: { paused: 1 } })
 		stacking.resume(sessionId)
 		expect(stacking.session(sessionId).state).toBe('waiting')
 	})

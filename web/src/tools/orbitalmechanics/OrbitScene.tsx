@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { subscribe } from 'valtio'
-import { orbitalMechanicsState, PITCH_LIMIT, selectOrbit } from './orbitalmechanics'
+import { type FitKind, orbitalMechanicsState, PITCH_LIMIT, selectOrbit } from './orbitalmechanics'
 import { buildSceneModel, cameraOf, drawScene, FIELD_OF_VIEW, fitDistance, pickOrbit, readTheme, selectedExtent } from './scene'
 
 // The 3D view of the Orbital Mechanics Explorer: a canvas sized to its container that draws the tab's scene whenever its
@@ -72,8 +72,9 @@ export function OrbitScene() {
 
 			if (state.fitPending && model.orbits.length > 0) {
 				const extent = state.fitPending === 'selected' ? selectedExtent(model) : model.extent
+				fitted = { kind: state.fitPending, distance: fitDistance(extent, width / height) }
 				state.fitPending = false
-				state.view.distance = fitDistance(extent, width / height)
+				state.view.distance = fitted.distance
 				state.view.target = [0, 0, 0]
 			}
 
@@ -84,7 +85,14 @@ export function OrbitScene() {
 			if (!frame) frame = requestAnimationFrame(draw)
 		}
 
+		// The last framing while the camera has neither zoomed nor panned since, so a canvas that changes size (the
+		// panel's sheet opening on a phone) frames the same orbits again instead of showing them shrunken.
+		let fitted: { readonly kind: FitKind; readonly distance: number } | undefined
+
 		const observer = new ResizeObserver(([entry]) => {
+			const { view } = state
+			if (fitted && (view.distance !== fitted.distance || view.target.some((e) => e !== 0))) fitted = undefined
+			if (fitted && (entry.contentRect.width !== width || entry.contentRect.height !== height)) state.fitPending = fitted.kind
 			width = entry.contentRect.width
 			height = entry.contentRect.height
 			request()

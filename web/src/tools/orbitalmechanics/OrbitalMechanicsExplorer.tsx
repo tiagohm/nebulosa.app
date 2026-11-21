@@ -3,6 +3,7 @@ import { cn } from 'cn'
 import { type ChangeEvent, useEffect, useRef, useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { downloadText } from '../../download'
+import { useActiveSite } from '../../location/useLocation'
 import { CollapsibleSection } from '../../shell/CollapsibleSection'
 import { useMediaQuery, WIDE_SCREEN } from '../../shell/useMediaQuery'
 import { EmptyState, WorkspaceLayout } from '../../shell/WorkspaceLayout'
@@ -14,7 +15,7 @@ import { Notice } from '../../ui/Notice'
 import { Popover } from '../../ui/Popover'
 import { SegmentedControl } from '../../ui/SegmentedControl'
 import { addOrbit, addRefusal, cloneOrbit, exportScenario, importScenario, loadPreset, type OrbitalMechanicsState, orbitalMechanicsState, openOrbitalMechanics, type OverlayKey, removeOrbit, selectedOrbit, selectOrbit, setPlane, trackCsv } from './orbitalmechanics'
-import { consumePendingTarget } from './orbitalmechanics.sources'
+import { consumePendingTarget, showMinorBodyInSky } from './orbitalmechanics.sources'
 import { OrbitComparison } from './OrbitComparison'
 import { OrbitEditor, CenterEditor } from './OrbitEditor'
 import { OrbitInspector } from './OrbitInspector'
@@ -66,8 +67,13 @@ export function OrbitalMechanicsExplorer() {
 		</>
 	)
 
+	const source = orbit?.source
+	const site = useActiveSite()
+	// Actions on the selected orbit: a real minor body can be shown in the Sky, with the Sky's own ephemeris and clock.
+	const actions = orbit && source?.kind === 'sbdb' && <IconButton icon="reticle" label="Show in Sky (selects the body there; the Sky's clock does not change)" onClick={() => showMinorBodyInSky(source, orbit.name, site)} />
+
 	return (
-		<WorkspaceLayout workspace="tools" title="Orbital Mechanics Explorer" actions={<ExplorerActions />} panel={{ title: orbit?.name ?? 'Orbit', content: panel, sheet: true }}>
+		<WorkspaceLayout workspace="tools" title="Orbital Mechanics Explorer" actions={<ExplorerActions />} panel={{ title: orbit?.name ?? 'Orbit', content: panel, actions: actions || undefined, sheet: true }}>
 			<div className="flex h-full min-h-0 flex-col">
 				<div className="relative min-h-0 flex-1">
 					{state.referenceError ? <EmptyState title="The explorer could not start" description={state.referenceError} action={<Button onClick={() => void openOrbitalMechanics(orbitalMechanicsState)}>Retry</Button>} /> : <OrbitScene />}
@@ -203,9 +209,9 @@ function ViewSection() {
 
 	return (
 		<CollapsibleSection id="orbitalmechanics.view" title="View" summary={state.plane === 'ecliptic' ? 'Ecliptic' : 'Equator'} defaultOpen={wide}>
-			<SegmentedControl label="Reference plane" options={['equator', 'ecliptic'] as const} value={state.plane} format={(e) => (e === 'equator' ? 'J2000 equator' : 'J2000 ecliptic')} onChange={(plane) => setPlane(orbitalMechanicsState, plane)} />
+			<SegmentedControl label="Plane drawn" options={['equator', 'ecliptic'] as const} value={state.plane} format={(e) => (e === 'equator' ? 'J2000 equator' : 'J2000 ecliptic')} onChange={(plane) => setPlane(orbitalMechanicsState, plane)} />
 			<SegmentedControl label="Projection" options={['perspective', 'orthographic'] as const} value={state.view.projection} format={(e) => (e === 'perspective' ? 'Perspective' : 'Orthographic')} onChange={(projection) => (orbitalMechanicsState.view.projection = projection)} />
-			<SegmentedControl label="Center" options={['true', 'marker'] as const} value={state.centerDrawing} format={(e) => (e === 'true' ? 'To scale' : 'Marker (not to scale)')} onChange={(drawing) => (orbitalMechanicsState.centerDrawing = drawing)} />
+			<SegmentedControl label="Central body drawn" options={['true', 'marker'] as const} value={state.centerDrawing} format={(e) => (e === 'true' ? 'To scale' : 'As a marker')} onChange={(drawing) => (orbitalMechanicsState.centerDrawing = drawing)} />
 			<Actions>
 				<Button variant="secondary" onClick={() => look('top')}>
 					Top

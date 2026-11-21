@@ -2,15 +2,15 @@ import type { OrbitAngle, OrbitElementsPayload, OrbitSolveResponse, OrbitVector,
 import { RAD2DEG } from 'nebulosa/src/core/constants'
 import { useSnapshot } from 'valtio'
 import { formatDegrees, MISSING, formatZonedDateTime } from '../../format'
-import { useActiveSite, useActiveTimeZone } from '../../location/useLocation'
+import { useActiveTimeZone } from '../../location/useLocation'
 import { CollapsibleSection } from '../../shell/CollapsibleSection'
 import { useMediaQuery, WIDE_SCREEN } from '../../shell/useMediaQuery'
 import { Actions } from '../../ui/Actions'
 import { Button } from '../../ui/Button'
 import { DataRow } from '../../ui/DataRow'
 import { Notice } from '../../ui/Notice'
-import { definitionKey, distanceSymbol, type DistanceUnit, type ExplorerOrbit, formatTdb, fromAu, fromAuPerDay, inspectionCurrent, type OrbitalMechanicsState, orbitalMechanicsState, solutionCurrent, sourceLabel, velocitySymbol } from './orbitalmechanics'
-import { showMinorBodyInSky } from './orbitalmechanics.sources'
+import { spiceKernelsState } from '../spicekernels/spicekernels'
+import { definitionKey, distanceSymbol, type DistanceUnit, type ExplorerOrbit, formatTdb, fromAu, fromAuPerDay, inspectionCurrent, kernelNames, type OrbitalMechanicsState, orbitalMechanicsState, solutionCurrent, sourceText, velocitySymbol } from './orbitalmechanics'
 
 // Inspector of the selected orbit of the Orbital Mechanics Explorer: its elements on the reference plane drawn, its
 // geometry, dynamics, and Cartesian state, and where it comes from. Every value is exact, read from the server for the
@@ -181,27 +181,21 @@ function StateSection({ solution, unit }: { readonly solution: OrbitSolveRespons
 function SourceSection({ orbit, solution }: { readonly orbit: ExplorerOrbit; readonly solution: OrbitSolveResponse }) {
 	const timeZone = useActiveTimeZone()
 	const { source } = orbit
-	const site = useActiveSite()
+	const centers = useSnapshot(orbitalMechanicsState).reference?.centers ?? []
+	const library = useSnapshot(spiceKernelsState)
 	return (
-		<CollapsibleSection id="orbitalmechanics.source" title="Source & Accuracy" summary={source.kind === 'preset' ? (source.sourced ? 'Sourced preset' : 'Illustrative preset') : sourceLabel(source)} defaultOpen={false}>
-			<DataRow label="Source">{sourceLabel(source)}</DataRow>
+		<CollapsibleSection id="orbitalmechanics.source" title="Source & Accuracy" summary={source.kind === 'preset' ? (source.sourced ? 'Sourced preset' : 'Illustrative preset') : sourceText(source, centers)} defaultOpen={false}>
+			<DataRow label="Source">{sourceText(source, centers)}</DataRow>
 			{source.kind === 'preset' && <DataRow label="Kind">{source.sourced ? 'Published elements' : 'Illustrative orbit'}</DataRow>}
 			{source.kind === 'preset' && source.citation && <DataRow label="Citation">{source.citation}</DataRow>}
 			{source.kind === 'sbdb' && source.solutionDate && <DataRow label="Solution date">{source.solutionDate}</DataRow>}
 			{source.kind === 'sbdb' && <DataRow label="Fetched">{formatZonedDateTime(source.fetchedAt, timeZone)}</DataRow>}
-			{source.kind === 'spk' && <DataRow label="Kernels">{source.kernels.join(', ')}</DataRow>}
+			{source.kind === 'spk' && <DataRow label="Kernels">{kernelNames(source.kernels, library.snapshot?.kernels ?? [])}</DataRow>}
 			{source.kind === 'spk' && <DataRow label="Library generation">{source.generation}</DataRow>}
 			<DataRow label="Model">Two-body Kepler, universal variables</DataRow>
 			<DataRow label="Anchor">{formatTdb(solution.anchor)}</DataRow>
 			<DataRow label="Fingerprint">{solution.fingerprint}</DataRow>
 			<Notice>A two-body model ignores every perturbation, so it drifts from a real object&apos;s motion away from its epoch. It is not a precise ephemeris.</Notice>
-			{source.kind === 'sbdb' && (
-				<Actions>
-					<Button variant="secondary" title="Selects the body in the Sky, which computes its place with its own ephemeris. The Sky's clock does not change." onClick={() => showMinorBodyInSky(source, orbit.name, site)}>
-						Show in Sky
-					</Button>
-				</Actions>
-			)}
 		</CollapsibleSection>
 	)
 }

@@ -22,6 +22,8 @@ import {
 	rateOptions,
 	setPlaying,
 	setTime,
+	sourceText,
+	kernelNames,
 	trackCsv,
 } from './orbitalmechanics'
 
@@ -327,5 +329,18 @@ describe('exchange', () => {
 		expect(formatTdb(2451545)).toBe('2000-01-01 12:00:00 TDB')
 		expect(parseTdb('2000-01-01T12:00:00')).toBe(2451545)
 		expect(parseTdb('not a date')).toBeUndefined()
+	})
+})
+
+describe('names', () => {
+	test('a source names its bodies and kernels for people, falling back to codes and ids', () => {
+		const centers = [
+			{ code: 10, name: 'Sun' },
+			{ code: 399, name: 'Earth' },
+		]
+		expect(sourceText({ kind: 'manual' }, centers)).toBe('Typed by hand')
+		expect(sourceText({ kind: 'spk', target: 399, center: 10, epoch: 2451545, generation: 7, kernels: ['a'] }, centers)).toBe('SPK state of Earth about Sun at 2000-01-01 12:00:00 TDB')
+		expect(sourceText({ kind: 'spk', target: 2000433, center: 10, epoch: 2451545, generation: 7, kernels: ['a'] }, centers)).toContain('NAIF 2000433 about Sun')
+		expect(kernelNames(['a', 'gone'], [{ id: 'a', name: 'de440s.bsp' }])).toBe('de440s.bsp, gone')
 	})
 })

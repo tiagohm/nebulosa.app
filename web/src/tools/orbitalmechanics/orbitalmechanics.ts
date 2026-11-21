@@ -1121,6 +1121,31 @@ const CSV_COLUMNS: readonly (readonly [string, (time: number, position: OrbitVec
 ]
 
 // Name of the source of an orbit, for exports.
+// Name of a NAIF body for people: a DE440 center of the reference, or its NAIF ID when it is none of them.
+export function bodyName(code: number, centers: readonly Pick<OrbitCenterPayload, 'code' | 'name'>[]) {
+	return centers.find((e) => e.code === code)?.name ?? `NAIF ${code}`
+}
+
+// Names of SPICE kernels for people, from the library's records by id; an id the library no longer holds stays as is.
+export function kernelNames(ids: readonly string[], kernels: readonly { readonly id: string; readonly name: string }[]) {
+	return ids.map((id) => kernels.find((e) => e.id === id)?.name ?? id).join(', ')
+}
+
+// Where an orbit comes from, for people, with bodies by name; the CSV keeps the codes of sourceLabel.
+export function sourceText(source: ExplorerOrbitSource, centers: readonly Pick<OrbitCenterPayload, 'code' | 'name'>[]) {
+	switch (source.kind) {
+		case 'manual':
+			return 'Typed by hand'
+		case 'preset':
+			return `${source.sourced ? 'Sourced' : 'Illustrative'} preset ${source.name}`
+		case 'sbdb':
+			return `JPL SBDB ${source.designation}${source.orbitId ? `, solution ${source.orbitId}` : ''}`
+		case 'spk':
+			return `SPK state of ${bodyName(source.target, centers)} about ${bodyName(source.center, centers)} at ${formatTdb(source.epoch)}`
+	}
+}
+
+// Where an orbit comes from, by codes, as the exported CSV records it.
 export function sourceLabel(source: ExplorerOrbitSource) {
 	switch (source.kind) {
 		case 'manual':

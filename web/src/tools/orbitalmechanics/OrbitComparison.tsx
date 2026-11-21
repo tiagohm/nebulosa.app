@@ -10,8 +10,10 @@ import { Button } from '../../ui/Button'
 import { DataRow } from '../../ui/DataRow'
 import { Notice } from '../../ui/Notice'
 import { NumberInput } from '../../ui/NumberInput'
-import { formatTdb, type OrbitalMechanicsState, orbitalMechanicsState } from './orbitalmechanics'
+import { spiceKernelsState } from '../spicekernels/spicekernels'
+import { formatTdb, kernelNames, type OrbitalMechanicsState, orbitalMechanicsState, selectedOrbit } from './orbitalmechanics'
 import { COMPARE_COUNT_LIMIT, comparisonCsv, comparisonRefusal, DEFAULT_COMPARE_COUNT, runComparison } from './orbitalmechanics.sources'
+import { TargetPicker } from './OrbitSources'
 
 // Kepler versus SPICE in the Orbital Mechanics Explorer: the osculating two-body orbit of an SPK target's state at an
 // anchor, about the scene's DE440 center, against the SPK states over a span around it, with the separation, the speed
@@ -104,7 +106,11 @@ function ResidualChart({ nodes, anchor, series, unit }: { readonly nodes: readon
 // Comparison of the two-body model with the SPICE kernels.
 export function OrbitComparison() {
 	const state = useSnapshot(orbitalMechanicsState) as OrbitalMechanicsState
-	const [target, setTarget] = useState(301)
+	const library = useSnapshot(spiceKernelsState)
+	// The target chosen here, else the selected orbit's when it came from an SPK state, else the Moon.
+	const [chosen, setChosen] = useState<number>()
+	const source = selectedOrbit(state)?.source
+	const target = chosen ?? (source?.kind === 'spk' ? source.target : 301)
 	const [halfSpan, setHalfSpan] = useState(30)
 	const [count, setCount] = useState(DEFAULT_COMPARE_COUNT)
 	const center = state.center?.code
@@ -122,7 +128,7 @@ export function OrbitComparison() {
 				Starts a two-body orbit from the target&apos;s SPK state at the clock&apos;s instant, about {state.center?.name ?? 'the center'}, and compares it with the installed SPICE kernels over the span. The difference is between two models, zero at the anchor by construction, and not an uncertainty or a
 				prediction of an impact.
 			</Notice>
-			<NumberInput label="Target (NAIF ID)" value={target} step={1} onChange={setTarget} />
+			<TargetPicker label="Target" value={target} onChange={setChosen} />
 			<NumberInput label="Days before and after the anchor" value={halfSpan} min={0.001} step={0.001} onChange={setHalfSpan} />
 			<NumberInput label="Instants" value={count} min={2} max={COMPARE_COUNT_LIMIT} step={1} onChange={setCount} />
 			<Actions>
@@ -148,7 +154,7 @@ export function OrbitComparison() {
 					<DataRow label="Anchor">{formatTdb(comparison.request.anchor)}</DataRow>
 					<DataRow label="Largest separation">{`${km(comparison.response.summary.maxDistance).toPrecision(5)} km at ${formatTdb(comparison.response.summary.maxDistanceTime)}`}</DataRow>
 					<DataRow label="Largest speed difference">{`${ms(comparison.response.summary.maxSpeed).toPrecision(5)} m/s`}</DataRow>
-					{comparison.response.source.kind === 'spk' && <DataRow label="Kernels">{`${comparison.response.source.kernels.join(', ')} (generation ${comparison.response.source.generation})`}</DataRow>}
+					{comparison.response.source.kind === 'spk' && <DataRow label="Kernels">{`${kernelNames(comparison.response.source.kernels, library.snapshot?.kernels ?? [])} (generation ${comparison.response.source.generation})`}</DataRow>}
 					{!sameCenter && <Notice>The scene is about another center now, so this comparison is not drawn in it.</Notice>}
 					<ResidualChart nodes={nodes} anchor={comparison.request.anchor} unit="km" series={[{ label: '|Δr|', color: '--color-ink-200', values: nodes.map((e) => km(e.distance)) }]} />
 					<ResidualChart

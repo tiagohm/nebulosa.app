@@ -230,14 +230,16 @@ describe('device chips', () => {
 
 	test('a dome shows its shutter, and what it is doing while it rotates or the shutter moves', () => {
 		expect(domeChip(dome)).toEqual({ text: 'Open', tone: 'idle', moving: false, title: 'Azimuth 90.0° · shutter open' })
-		expect(domeChip({ ...dome, shutterState: 'CLOSED', slewing: true })).toMatchObject({ text: 'Moving Closed', moving: true, title: 'Moving · shutter closed' })
+		expect(domeChip({ ...dome, shutterState: 'CLOSED', moving: true })).toMatchObject({ text: 'Moving Closed', moving: true, title: 'Moving · shutter closed' })
 		expect(domeChip({ ...dome, shutterState: 'OPENING' })).toMatchObject({ text: 'Opening', tone: 'active', moving: true })
-		// The driver's slewing covers the shutter too, so a shutter in motion alone is said once.
-		expect(domeChip({ ...dome, shutterState: 'OPENING', slewing: true })).toMatchObject({ text: 'Opening', tone: 'active', moving: true, title: 'Azimuth 90.0° · shutter opening' })
-		expect(domeChip({ ...dome, shutterState: 'CLOSING', slewing: true, parked: true }).text).toBe('Closing')
-		expect(domeChip({ ...dome, shutterState: 'OPENING', slewing: true }, ['shutter']).text).toBe('Opening')
+		// Slewing aggregates the shutter and arrives as an event of its own, so it never names a rotation.
+		const slewing = { ...dome, slewing: true }
+		expect(domeChip({ ...slewing, shutterState: 'OPENING' })).toMatchObject({ text: 'Opening', tone: 'active', moving: true, title: 'Azimuth 90.0° · shutter opening' })
+		expect(domeChip({ ...slewing, shutterState: 'CLOSING', parked: true }).text).toBe('Closing')
+		expect(domeChip({ ...slewing, shutterState: 'OPENING' }, ['shutter']).text).toBe('Opening')
 		expect(domeChip({ ...dome, shutterState: 'ERROR' }).tone).toBe('error')
 		expect(domeChip({ ...dome, hasShutter: false })).toMatchObject({ text: '', moving: false, title: 'Azimuth 90.0°' })
+		expect(domeChip(slewing)).toMatchObject({ text: 'Open', tone: 'idle', moving: false })
 	})
 
 	function control(type: 'mount' | 'wheel', state: object, watched = 'A') {

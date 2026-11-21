@@ -352,17 +352,18 @@ export function flatPanelChip(state: Pick<FlatPanelState, 'enabled' | 'intensity
 const SHUTTER_TEXT: Readonly<Partial<Record<DomeState['shutterState'], string>>> = { OPEN: 'Open', CLOSED: 'Closed', OPENING: 'Opening', CLOSING: 'Closing', ERROR: 'Error' }
 
 // Returns the reading of a dome: what its rotation is doing, when it is doing something, its shutter, when it has one,
-// and its azimuth in degrees. The driver's slewing is true while any part of the dome moves, the shutter included (as
-// the ASCOM Slewing property), so it means a rotation only while the shutter is still; a shutter opening or closing on
-// a dome that does not rotate is said once, as the status, rather than as a rotation followed by the shutter.
-export function domeChip(state: Pick<DomeState, 'slewing' | 'moving' | 'homing' | 'parking' | 'parked' | 'hasShutter' | 'shutterState' | 'azimuth'> | undefined, fields: readonly StatusChipField[] = DEFAULT_STATUS_CHIPS.DOME.fields): ChipValue {
+// and its azimuth in degrees. The driver's slewing is never read: it is only the aggregate of the rotation (moving),
+// homing, parking, and the shutter in motion (as the ASCOM Slewing property), and it reaches the tab as an event of its
+// own after the one that changed them, so reading it would show a rotation for an instant as a shutter stops. A shutter
+// opening or closing on a dome that does not rotate is said once, as the status.
+export function domeChip(state: Pick<DomeState, 'moving' | 'homing' | 'parking' | 'parked' | 'hasShutter' | 'shutterState' | 'azimuth'> | undefined, fields: readonly StatusChipField[] = DEFAULT_STATUS_CHIPS.DOME.fields): ChipValue {
 	if (!state) return { text: '--', tone: 'muted', moving: false, title: 'State not reported' }
 	const shutterMoving = state.hasShutter && (state.shutterState === 'OPENING' || state.shutterState === 'CLOSING')
 	const azimuth = formatDegrees(state.azimuth.value, 1)
-	const rotation = state.parking ? 'Parking' : state.homing ? 'Homing' : state.moving || (state.slewing && !shutterMoving) ? 'Moving' : state.parked ? 'Parked' : undefined
+	const rotation = state.parking ? 'Parking' : state.homing ? 'Homing' : state.moving ? 'Moving' : state.parked ? 'Parked' : undefined
 	const shutterText = state.hasShutter ? SHUTTER_TEXT[state.shutterState] : undefined
 	const shutterOnly = shutterMoving && (rotation === undefined || rotation === 'Parked')
-	const moving = shutterMoving || state.parking || state.homing || state.slewing || state.moving
+	const moving = shutterMoving || state.parking || state.homing || state.moving
 	const shutter = state.hasShutter ? ` · shutter ${state.shutterState.toLowerCase()}` : ''
 	const tone: StatusTone = state.hasShutter && state.shutterState === 'ERROR' ? 'error' : moving ? 'active' : 'idle'
 	const readings = shutterOnly ? { status: shutterText, azimuth } : { status: rotation, shutter: shutterText, azimuth }

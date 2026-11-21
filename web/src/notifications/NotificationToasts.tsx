@@ -130,7 +130,7 @@ interface ToastContentProps {
 }
 
 // Severity icon and word, title, and message of a toast; the title and the message wrap rather than being cut.
-function ToastContent({ level, title, message, count = 1, viewable = false }: ToastContentProps) {
+function ToastContent({ level, title, message, count = 1 }: ToastContentProps) {
 	return (
 		<>
 			<Icon name={level} className={cn('mt-px size-5 flex-none', LEVEL_ICON_CLASS[level])} />
@@ -138,7 +138,6 @@ function ToastContent({ level, title, message, count = 1, viewable = false }: To
 				<span className="flex items-baseline gap-2 text-xs leading-4">
 					<span className={cn('font-medium tracking-[0.08em] uppercase', LEVEL_ICON_CLASS[level])}>{LEVEL_TEXT[level]}</span>
 					{count > 1 && <span className="text-ink-300 tabular-nums">×{count}</span>}
-					{viewable && <span className="ml-auto text-ink-300 transition-colors duration-150 group-hover:text-ink-100 motion-reduce:transition-none">View</span>}
 				</span>
 				<span className="text-sm leading-5 font-semibold wrap-break-word">{title}</span>
 				<span className="text-xs leading-4 wrap-break-word text-ink-200">{message}</span>

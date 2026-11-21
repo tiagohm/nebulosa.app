@@ -63,7 +63,7 @@ export interface NotificationItemProps {
 // Notification row with its read and dismiss buttons.
 export function NotificationItem({ group: { record, ids, unreadIds }, available, reason, connection, zone, now, onChoose, onMarkRead, onDismiss, onKeyDown }: NotificationItemProps) {
 	const unread = unreadIds.length > 0
-	const details = [`${formatLocalTime(record.createdAt, zone, now, false)} · ${formatAge(record.createdAt, now)}`, connection, reason].filter(Boolean).join(' · ')
+	const details = [`${formatLocalTime(record.createdAt, zone, now)} · ${formatAge(record.createdAt, now)}`, connection, reason].filter(Boolean).join(' · ')
 
 	const content: ReactNode = (
 		<>

@@ -1,6 +1,6 @@
 import type { NotificationEvent, NotificationIdsRequest, NotificationLevel, NotificationRecord, NotificationSnapshot, ServerEvent } from 'api'
 import { proxy } from 'valtio'
-import { type ConnectionInput, sameEndpoint } from '../connection/connection'
+import { type Connection, type ConnectionInput, sameEndpoint } from '../connection/connection'
 import { type ApiFetch, browserFetch, jsonInit } from '../http'
 
 // Notification history of the server as this tab knows it. The server owns the history, in memory, and the same
@@ -9,8 +9,9 @@ import { type ApiFetch, browserFetch, jsonInit } from '../http'
 // are asked of the server, so they reach every tab, and the tab applies them when their events arrive. Only
 // notifications that arrive live after the first synchronization become toasts, so a reload or a reconnect never
 // replays them. Toasts that read the same merge into one with a count; errors and warnings stay until hidden or viewed,
-// and a full stack drops a success before either of them. The store also follows the event socket itself, so the tab can tell when it lost the server, which no
-// server notification can report.
+// and a full stack drops a success before either of them. The store also follows the event socket itself, so the tab can
+// tell when it lost the server, which no server notification can report. For the panel, it merges the history into groups
+// that read the same, tells which need the operator, and says the unread notifications in words.
 
 // Notifications known to the tab and the toasts it shows.
 export interface NotificationsState {
@@ -196,12 +197,65 @@ export function unreadCount(records: readonly NotificationRecord[], connection: 
 	return visibleNotifications(records, connection).filter((record) => !record.read).length
 }
 
-// Age of a notification at now, as shown in the lists: "now", minutes, hours, or days, both in Unix milliseconds (UTC).
-export function notificationAge(createdAt: number, now: number) {
-	const minutes = Math.floor((now - createdAt) / 60000)
-	if (minutes < 1) return 'now'
-	if (minutes < 60) return `${minutes} min ago`
-	const hours = Math.floor(minutes / 60)
-	if (hours < 24) return `${hours} h ago`
-	return `${Math.floor(hours / 24)} d ago`
+// Severities from the most to the least pressing: what failed, what needs a look, what to know, and what went well.
+const LEVEL_ORDER: readonly NotificationLevel[] = ['error', 'warning', 'info', 'success']
+
+// Severities that ask for the operator: an unread notification of one of them needs them.
+const ATTENTION_LEVELS: ReadonlySet<NotificationLevel> = new Set<NotificationLevel>(['warning', 'error'])
+
+// Returns the most pressing severity among notifications, or undefined when there are none.
+export function worstLevel(records: readonly Pick<NotificationRecord, 'level'>[]): NotificationLevel | undefined {
+	return LEVEL_ORDER.find((level) => records.some((record) => record.level === level))
+}
+
+// Returns the unread notifications in words, the errors and warnings first: "1 error, 2 warnings, 8 unread", "3 unread",
+// or "No unread notifications".
+export function unreadText(records: readonly Pick<NotificationRecord, 'level' | 'read'>[]) {
+	const unread = records.filter((record) => !record.read)
+	if (unread.length === 0) return 'No unread notifications'
+	const errors = unread.filter((record) => record.level === 'error').length
+	const warnings = unread.filter((record) => record.level === 'warning').length
+	const parts = [errors > 0 && `${errors} ${errors === 1 ? 'error' : 'errors'}`, warnings > 0 && `${warnings} ${warnings === 1 ? 'warning' : 'warnings'}`, `${unread.length} unread`]
+	return parts.filter(Boolean).join(', ')
+}
+
+// Notifications that read the same (same code, title, message, and connection), listed as one row with a count.
+export interface NotificationGroup {
+	// Latest notification of the group; its id keys the row and its instant dates it.
+	readonly record: NotificationRecord
+	// Ids of every notification of the group, newest first; never empty.
+	readonly ids: readonly string[]
+	// Ids of the unread notifications of the group, newest first; empty when every one was read.
+	readonly unreadIds: readonly string[]
+}
+
+// Merges notifications that read the same into groups, in the order of their latest notification; records come newest
+// first, as the history keeps them.
+export function groupNotifications(records: readonly NotificationRecord[]): NotificationGroup[] {
+	const groups = new Map<string, { record: NotificationRecord; ids: string[]; unreadIds: string[] }>()
+
+	for (const record of records) {
+		const key = toastKey(record)
+		const group = groups.get(key) ?? { record, ids: [], unreadIds: [] }
+		group.ids.push(record.id)
+		if (!record.read) group.unreadIds.push(record.id)
+		groups.set(key, group)
+	}
+
+	return Array.from(groups.values())
+}
+
+// Whether a group needs the operator: it is a warning or an error not read yet.
+export function needsOperator(group: NotificationGroup) {
+	return group.unreadIds.length > 0 && ATTENTION_LEVELS.has(group.record.level)
+}
+
+// Returns the name of the connection a notification concerns: the saved connection of its endpoint, else the endpoint
+// itself ("Simulator", "pi.local:7624"); undefined for an application-wide notification.
+export function connectionName(record: NotificationRecord, connections: readonly Connection[]) {
+	const { endpoint } = record.source
+	if (!endpoint) return undefined
+	const saved = connections.find((connection) => sameEndpoint(endpoint, connection))
+	if (saved) return saved.name
+	return endpoint.type === 'SIMULATOR' ? 'Simulator' : `${endpoint.host}:${endpoint.port}`
 }

@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { arcmin, arcsec, deg, hour } from 'nebulosa/src/math/units/angle'
 import {
 	dateTimeFormat,
+	formatAge,
 	formatCivilDate,
 	formatAngularSize,
 	formatCount,
@@ -337,4 +338,11 @@ test('formats sample values and counts', () => {
 	expect(formatSampleValue(Number.NEGATIVE_INFINITY)).toBe('−∞')
 	expect(formatCount(1048576)).toBe('1,048,576')
 	expect(formatCount(Number.NaN)).toBe('—')
+})
+
+test('formats the age of an instant', () => {
+	expect(formatAge(0, 59_000)).toBe('now')
+	expect(formatAge(0, 5 * 60_000)).toBe('5 min ago')
+	expect(formatAge(0, 3 * 3_600_000)).toBe('3 h ago')
+	expect(formatAge(0, 50 * 3_600_000)).toBe('2 d ago')
 })

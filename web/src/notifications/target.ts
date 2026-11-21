@@ -36,6 +36,12 @@ export function targetAvailable(target: NotificationTarget | undefined, view: No
 	return view.devices.some((device) => device.id === target.deviceId && device.connectionId === target.connectionId)
 }
 
+// Says why a target cannot be opened now, in words for the row that names it: its camera or its device is not one the
+// tab watches, being disconnected or of another connection. A tool of the Tools workspace is always available.
+export function unavailableReason(target: NotificationTarget) {
+	return target.kind === 'cameraTool' ? 'Camera not connected' : target.kind === 'equipment' ? 'Device not connected' : 'Tool not available'
+}
+
 // Opens a target. Returns false, changing nothing, when it is absent or unavailable.
 export function openNotificationTarget(target: NotificationTarget | undefined, context: NotificationTargetContext): boolean {
 	if (!targetAvailable(target, { documents: context.images.documents, devices: context.devices })) return false

@@ -208,6 +208,17 @@ export function formatLongDuration(seconds: number) {
 	return `${Math.floor(total / 3600)} h ${String(minutes).padStart(2, '0')} min ${String(total % 60).padStart(2, '0')} s`
 }
 
+// Returns the age of an instant at another, both Unix milliseconds (UTC), in its largest whole unit: "now" under a
+// minute, "5 min ago", "3 h ago", "2 d ago". For the lists of things that happened, beside their time of day.
+export function formatAge(time: number, now: number) {
+	const minutes = Math.floor((now - time) / 60000)
+	if (minutes < 1) return 'now'
+	if (minutes < 60) return `${minutes} min ago`
+	const hours = Math.floor(minutes / 60)
+	if (hours < 24) return `${hours} h ago`
+	return `${Math.floor(hours / 24)} d ago`
+}
+
 // Returns a measurement of a wide dynamic range, such as a flux or a signal, with four significant digits, in exponential
 // notation from 1e5 and below 1e-2 in magnitude: "1234", "0.1235", "1.235e+5".
 export function formatSignificant(value: number) {

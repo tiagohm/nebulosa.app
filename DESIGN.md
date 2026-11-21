@@ -328,6 +328,10 @@ A pill 21 px tall with a one-pixel border tinted by its tone at 50–60 % opacit
 
 Floating notices stacked above the status bar at the bottom right, beside the docked contextual panel: Twilight Ash, Float shadow, 10 px corners, and a one-pixel border, Faint Meridian for a success and the tone at 50 % for a warning or an error, never a thicker edge. The severity leads as an uppercase Label word in its tone, with a count when notifications that read the same merge, then a semibold title and a Moonlight caption message, both wrapping. A toast that opens its context is one button with the row hover and a Zodiacal Gray "View" cue, so a routine success never shows Ember. They fade in over 150 ms, and the close button reads "Hide".
 
+### Notification Panel
+
+The bell's Float panel reads like a toast stack you can scroll: rows share the toasts' anatomy (severity Label first, ×N for merged notifications, a Starlight Cream "New" Label while unread, the Zodiacal Gray "View" cue only on rows that open their context) and end with the time of day and the age in a Zodiacal Gray caption. Unread warnings and errors lead under a "Needs you" section label, and the header says in words what needs the operator. The bell's badge takes the signal colour of the most pressing unread severity, never Ember, and its header actions are secondary buttons in a footer, the dismissal confirmed as destructive.
+
 ### Navigation
 
 - **Top bar:** Deep Night, logo and wordmark, the Management menu, then the observing site, connection indicator, notifications, settings, and profile on the right.

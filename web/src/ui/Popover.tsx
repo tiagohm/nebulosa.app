@@ -2,6 +2,7 @@ import { cn, type ClassValue } from 'cn'
 import { type ReactNode, useEffect, useRef, useState } from 'react'
 import type { IconName } from './Icon'
 import { IconButton } from './IconButton'
+import { useLightDismiss } from './useLightDismiss'
 
 // Toolbar icon button that opens a small floating panel of controls below it. The panel is fixed to the viewport, so
 // no scrolling or clipping ancestor of the toolbar cuts it, and is mounted only while open: whatever state its
@@ -60,32 +61,20 @@ export function Popover({ icon, label, open, onOpenChange, disabled = false, chi
 		if (open && disabled) onOpenChange(false)
 	}, [open, disabled, onOpenChange])
 
+	useLightDismiss(open, rootRef, (reason) => {
+		onOpenChange(false)
+		if (reason === 'escape') rootRef.current?.querySelector('button')?.focus()
+	})
+
 	useEffect(() => {
 		if (!open) return
-
-		function handlePointerDown(e: MouseEvent) {
-			if (e.target instanceof Node && !rootRef.current?.contains(e.target)) onOpenChange(false)
-		}
-
-		function handleKeyDown(e: KeyboardEvent) {
-			if (e.key !== 'Escape' || e.defaultPrevented) return
-			onOpenChange(false)
-			rootRef.current?.querySelector('button')?.focus()
-		}
 
 		function handleResize() {
 			onOpenChange(false)
 		}
 
-		document.addEventListener('mousedown', handlePointerDown)
-		document.addEventListener('keydown', handleKeyDown)
 		window.addEventListener('resize', handleResize)
-
-		return () => {
-			document.removeEventListener('mousedown', handlePointerDown)
-			document.removeEventListener('keydown', handleKeyDown)
-			window.removeEventListener('resize', handleResize)
-		}
+		return () => window.removeEventListener('resize', handleResize)
 	}, [open, onOpenChange])
 
 	return (

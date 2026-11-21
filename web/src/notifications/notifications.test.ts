@@ -2,7 +2,25 @@ import { expect, test } from 'bun:test'
 import type { NotificationRecord, ServerEvent } from 'api'
 import { proxy } from 'valtio'
 import type { ConnectionInput } from '../connection/connection'
-import { dismissNotifications, dismissToast, handleNotificationEvent, inScope, MAX_TOASTS, markNotificationsRead, notificationAge, type NotificationsState, refreshNotifications, setServerLink, toastDuration, unreadCount, visibleNotifications } from './notifications'
+import {
+	connectionName,
+	dismissNotifications,
+	dismissToast,
+	handleNotificationEvent,
+	inScope,
+	MAX_TOASTS,
+	markNotificationsRead,
+	needsOperator,
+	groupNotifications,
+	type NotificationsState,
+	refreshNotifications,
+	setServerLink,
+	toastDuration,
+	unreadCount,
+	unreadText,
+	visibleNotifications,
+	worstLevel,
+} from './notifications'
 
 const pi: ConnectionInput = { name: 'Pi', type: 'INDI', host: 'PI.local', port: 7624 }
 
@@ -212,13 +230,6 @@ test('reading and dismissing are asked of the server, never applied before its e
 	await expect(markNotificationsRead(['a'], () => Promise.reject(new Error('offline')))).resolves.toBeUndefined()
 })
 
-test('formats the age of a notification', () => {
-	expect(notificationAge(0, 59_000)).toBe('now')
-	expect(notificationAge(0, 5 * 60_000)).toBe('5 min ago')
-	expect(notificationAge(0, 3 * 3_600_000)).toBe('3 h ago')
-	expect(notificationAge(0, 50 * 3_600_000)).toBe('2 d ago')
-})
-
 test('follows the event socket without touching the history', async () => {
 	const state = newState()
 	await refreshNotifications(state, respond(notification('a', 1)))
@@ -229,4 +240,52 @@ test('follows the event socket without touching the history', async () => {
 	expect(state.server).toBe('offline')
 	expect(state.records).toHaveLength(1)
 	expect(state.toasts).toEqual([])
+})
+
+test('merges notifications that read the same into one group per connection, newest first', () => {
+	const records = [notification('c', 3), notification('b', 2, { read: true }), notification('a', 1, { source: { kind: 'capture', connectionId: 'd', endpoint: { type: 'SIMULATOR' } } })]
+	const groups = groupNotifications(records)
+
+	expect(groups.map((group) => group.record.id)).toEqual(['c', 'a'])
+	expect(groups[0]?.ids).toEqual(['c', 'b'])
+	expect(groups[0]?.unreadIds).toEqual(['c'])
+	expect(groups[1]?.ids).toEqual(['a'])
+})
+
+test('an unread warning or error needs the operator, a read one or a success never does', () => {
+	const [error, read, success, warning] = groupNotifications([notification('e', 4), notification('r', 3, { code: 'x', read: true }), notification('s', 2, { level: 'success', code: 'y' }), notification('w', 1, { level: 'warning', code: 'z' })])
+
+	expect(error && needsOperator(error)).toBeTrue()
+	expect(read && needsOperator(read)).toBeFalse()
+	expect(success && needsOperator(success)).toBeFalse()
+	expect(warning && needsOperator(warning)).toBeTrue()
+})
+
+test('finds the most pressing severity and says the unread notifications in words', () => {
+	expect(worstLevel([{ level: 'success' }, { level: 'warning' }, { level: 'info' }])).toBe('warning')
+	expect(worstLevel([])).toBeUndefined()
+
+	expect(unreadText([])).toBe('No unread notifications')
+	expect(
+		unreadText([
+			{ level: 'success', read: false },
+			{ level: 'error', read: true },
+		]),
+	).toBe('1 unread')
+	expect(
+		unreadText([
+			{ level: 'error', read: false },
+			{ level: 'warning', read: false },
+			{ level: 'warning', read: false },
+			{ level: 'success', read: false },
+		]),
+	).toBe('1 error, 2 warnings, 4 unread')
+})
+
+test('names the connection of a notification by its saved connection, else by its endpoint', () => {
+	const saved = [{ id: 'p', ...pi }]
+	expect(connectionName(notification('a', 1), saved)).toBe('Pi')
+	expect(connectionName(notification('b', 2, { source: { kind: 'capture', connectionId: 'd', endpoint: { type: 'SIMULATOR' } } }), saved)).toBe('Simulator')
+	expect(connectionName(notification('c', 3, { source: { kind: 'capture', connectionId: 'e', endpoint: { type: 'ALPACA', host: 'obs', port: 11111 } } }), saved)).toBe('obs:11111')
+	expect(connectionName(notification('d', 4, { source: { kind: 'app' } }), saved)).toBeUndefined()
 })

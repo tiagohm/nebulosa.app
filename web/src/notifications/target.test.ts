@@ -4,7 +4,7 @@ import { proxy } from 'valtio'
 import { cameraTabKey } from '../images/cameratabs'
 import type { ImagesState } from '../images/images'
 import type { RouteState } from '../shell/route'
-import { openNotificationTarget, targetAvailable } from './target'
+import { openNotificationTarget, targetAvailable, unavailableReason } from './target'
 
 const tab = cameraTabKey('c', 'cam')
 
@@ -51,4 +51,9 @@ test('an unavailable context changes nothing', () => {
 	expect(context.images.activeKey).toBe('file:a')
 	expect(context.route.route).toEqual({ workspace: 'sky' })
 	expect(context.paths).toEqual([])
+})
+
+test('says why a target cannot be opened', () => {
+	expect(unavailableReason({ kind: 'cameraTool', connectionId: 'c', deviceId: 'cam', tool: 'guiding' })).toBe('Camera not connected')
+	expect(unavailableReason({ kind: 'equipment', connectionId: 'c', deviceId: 'mnt' })).toBe('Device not connected')
 })

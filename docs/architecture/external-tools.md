@@ -23,5 +23,5 @@ Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
   It never starts the program, so it proves neither that the program runs nor that it analyzes images, and the version is reported as unknown.
   Only a check of the saved settings becomes the program's latest check, kept in memory until the server restarts.
 - There is no authentication: any client that can reach the API can change the executable the server runs and check paths of its filesystem, like `/api/files` lists them.
-  Keep the host the server listens on (`--host`, else `APP_HOST`; `app/src/address.ts`) on localhost when untrusted clients can reach the network.
+  Keep the host the server listens on (`--host`, `APP_HOST` else `HOST`; `app/src/options.ts`) on localhost when untrusted clients can reach the network.
 - Settings are rows of `external_tool_settings` in the operational database, one per program saved at least once; a program without a row runs with the defaults.

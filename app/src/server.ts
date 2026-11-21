@@ -23,7 +23,6 @@ import {
 } from 'api'
 import index from 'web/index.html'
 import { version, description } from '../package.json'
-import { serverAddress } from './address'
 
 // Server of the application, started by main.ts once the command line reached the environment: serves the API routes,
 // the /api/ws WebSocket, and the web UI from a single Bun server. Every path the API does not handle falls back to the UI's HTML entry point. A server whose
@@ -95,9 +94,6 @@ startSatelliteDownloads()
 // The media gateway of the observatory cameras is started when any is enabled; no camera stream is read until watched.
 startObservatoryCameras()
 
-// Host and port of the server: --host and --port, else APP_HOST and APP_PORT, else localhost and 7000 (serverAddress).
-const address = serverAddress(process.argv.slice(2), process.env)
-
 // Largest request body the server reads, in bytes: no practical limit, so an SPK upload of several GiB reaches the
 // SPICE Kernel Library instead of Bun's default 128 MiB cut-off. Bun streams the body, which the library writes to disk
 // one chunk at a time.
@@ -105,8 +101,8 @@ const MAX_REQUEST_BODY_BYTES = Number.MAX_SAFE_INTEGER
 
 // HTTP server listening on that address.
 const server = Bun.serve({
-	hostname: address.host,
-	port: address.port,
+	hostname: process.env.APP_HOST,
+	port: process.env.APP_PORT,
 	maxRequestBodySize: MAX_REQUEST_BODY_BYTES,
 	development: development && { hmr: true, console: true },
 	routes: {

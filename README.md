@@ -53,12 +53,12 @@ Run it and open the address it prints (`http://localhost:7000` by default):
 
 To run from source instead, without compiling, use `bun start`, which takes the same options (`bun start --port 8080`).
 
-| Option / variable            | Default      | Description                                                                                                                                                            |
-| ---------------------------- | ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `--host` / `APP_HOST`        | `localhost`  | Host or IP address the server listens on; `0.0.0.0` accepts every network interface                                                                                    |
-| `--port` / `APP_PORT`        | `7000`       | TCP port the server listens on                                                                                                                                         |
-| `--home` / `NEBULOSA_HOME`   | `~/Nebulosa` | Data directory, relative to the working directory when not absolute: the database (`nebulosa.sqlite`), captures, calibration frames and masters, and stacking projects |
-| `NEBULOSA_CAMERA_SECRET_KEY` | (none)       | Base64 of 32 random bytes that encrypts the addresses of the observatory cameras; without it, the key is kept by the operating system's credential storage             |
+| Option / variable              | Default      | Description                                                                                                                                                            |
+| ------------------------------ | ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--host` / `APP_HOST` / `HOST` | `localhost`  | Host or IP address the server listens on; `0.0.0.0` accepts every network interface                                                                                    |
+| `--port` / `APP_PORT` / `PORT` | `7000`       | TCP port the server listens on                                                                                                                                         |
+| `--home` / `NEBULOSA_HOME`     | `~/Nebulosa` | Data directory, relative to the working directory when not absolute: the database (`nebulosa.sqlite`), captures, calibration frames and masters, and stacking projects |
+| `NEBULOSA_CAMERA_SECRET_KEY`   | (none)       | Base64 of 32 random bytes that encrypts the addresses of the observatory cameras; without it, the key is kept by the operating system's credential storage             |
 
 The command-line options win over the environment variables. The executable also reads a `.env` file from the directory it is started in, and `APP_HOST` and `APP_PORT` present when it was compiled become its defaults.
 

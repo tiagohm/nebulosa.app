@@ -29,8 +29,16 @@ const MARKER_PX = 4
 // show directions and are not to scale.
 const DIRECTION_LENGTH = 0.3
 
-// CSS custom properties of the orbit palette, in palette order.
-export const PALETTE_TOKENS = ['--color-accent', '--color-info', '--color-success', '--color-warning', '--color-danger', '--color-ink-200'] as const
+// CSS custom properties of the orbit palette, in palette order: the muted orbit hues, never the accent or a signal
+// colour, so an orbit is neither taken for the selection nor for a state.
+export const PALETTE_TOKENS = ['--color-orbit-1', '--color-orbit-2', '--color-orbit-3', '--color-orbit-4', '--color-orbit-5', '--color-orbit-6'] as const
+
+// Stroke width of an orbit's curve, CSS pixels.
+const ORBIT_WIDTH = 1.25
+
+// Stroke width of the selected orbit's curve, CSS pixels: the selection is told apart by weight, the orbit keeping its
+// own hue.
+const SELECTED_ORBIT_WIDTH = 2.5
 
 // Colors of a scene, read from the theme's tokens.
 export interface SceneTheme {
@@ -42,8 +50,8 @@ export interface SceneTheme {
 	readonly muted: string
 	// Fill of the central body.
 	readonly center: string
-	// The X, Y, and Z axes.
-	readonly axes: readonly [string, string, string]
+	// The X, Y, and Z axes, told apart by their letters rather than by hue.
+	readonly axis: string
 	// Orbit colors by palette index.
 	readonly palette: readonly string[]
 }
@@ -57,7 +65,7 @@ export function readTheme(element: Element): SceneTheme {
 		text: token('--color-ink-100'),
 		muted: token('--color-ink-300'),
 		center: token('--color-ink-200'),
-		axes: [token('--color-danger'), token('--color-success'), token('--color-info')],
+		axis: token('--color-line-200'),
 		palette: PALETTE_TOKENS.map(token),
 	}
 }
@@ -268,7 +276,7 @@ export function drawScene(ctx: CanvasRenderingContext2D, camera: Camera, model: 
 		})
 	}
 
-	const arrow = (from: ScenePoint, to: ScenePoint, color: string, text: string) => {
+	const arrow = (from: ScenePoint, to: ScenePoint, color: string, text: string, textColor: string = color) => {
 		segment(from, to, color, 1.5)
 		const p = project(camera, from)
 		const q = project(camera, to)
@@ -287,7 +295,7 @@ export function drawScene(ctx: CanvasRenderingContext2D, camera: Camera, model: 
 				},
 			})
 		}
-		label(to, text, color)
+		label(to, text, textColor)
 	}
 
 	// The reference plane: rings around the center and the line of the equinox, under everything else.
@@ -318,13 +326,13 @@ export function drawScene(ctx: CanvasRenderingContext2D, camera: Camera, model: 
 		for (let i = 0; i < 3; i++) {
 			const tip: [number, number, number] = [0, 0, 0]
 			tip[i] = extent * 1.1
-			arrow([0, 0, 0], tip, theme.axes[i], names[i])
+			arrow([0, 0, 0], tip, theme.axis, names[i], theme.muted)
 		}
 	}
 
 	for (const orbit of model.orbits) {
 		const color = theme.palette[orbit.color % theme.palette.length]
-		const width = orbit.selected ? 2 : 1.25
+		const width = orbit.selected ? SELECTED_ORBIT_WIDTH : ORBIT_WIDTH
 
 		if (overlays.orbitalPlane && orbit.points.length > 2) {
 			const projected = orbit.points.map((e) => project(camera, e))

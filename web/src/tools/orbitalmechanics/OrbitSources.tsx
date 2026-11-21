@@ -42,7 +42,7 @@ export function OrbitSources() {
 				<div className="flex flex-col gap-1">
 					<span className="text-xs text-ink-300">Several bodies match; choose one:</span>
 					{lookup.matches.map((e) => (
-						<Button key={e.designation} variant="ghost" className="justify-start" onClick={() => void resolveMinorBody(orbitalMechanicsState, e.designation)}>
+						<Button key={e.designation} variant="secondary" className="justify-start" onClick={() => void resolveMinorBody(orbitalMechanicsState, e.designation)}>
 							{e.name}
 						</Button>
 					))}

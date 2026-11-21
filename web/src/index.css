@@ -90,6 +90,22 @@
 	--color-frame-6: oklch(0.72 0.085 345);
 }
 
+/* Colours of the orbits of the Orbital Mechanics Explorer (web/src/tools/orbitalmechanics/scene.ts reads them for its
+   canvas, the orbit list shows them as swatches, and the comparison charts reuse them for their series): the framings'
+   low chroma and lightness, so a conic never glows on a night screen, 50 to 70° apart in hue (ochre, sage, teal, slate,
+   violet, rose), so the orbits of one scene are told apart; no red or clay hue, so none is taken for the ember accent,
+   which marks only the selected orbit's row, or for a failure, and a chroma well under the signal colours', so an orbit
+   never reads as a state.
+   Each orbit keeps the one it was given when added (its `color`, 0 for orbit-1). */
+@theme static {
+	--color-orbit-1: oklch(0.76 0.085 85);
+	--color-orbit-2: oklch(0.74 0.08 145);
+	--color-orbit-3: oklch(0.74 0.07 200);
+	--color-orbit-4: oklch(0.72 0.075 255);
+	--color-orbit-5: oklch(0.72 0.08 305);
+	--color-orbit-6: oklch(0.74 0.08 355);
+}
+
 /* Colours of the Jupiter Observing Planner's viewer and moon chart (web/src/tools/jupiter): the schematic disk, its
    decorative belts, the Great Red Spot, and the shadows on the disk, toned down so the disk is never the brightest fill
    of a night screen; and the four Galilean moons at the map hues' low chroma, sulfur Io, icy Europa, mauve Ganymede,

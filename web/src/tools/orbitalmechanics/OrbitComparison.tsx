@@ -131,10 +131,10 @@ export function OrbitComparison() {
 				</Button>
 				{comparison && (
 					<>
-						<Button variant="ghost" onClick={() => downloadText(comparisonCsv(comparison), `${comparison.response.name}-kepler-vs-spk.csv`, 'text/csv')}>
+						<Button variant="secondary" onClick={() => downloadText(comparisonCsv(comparison), `${comparison.response.name}-kepler-vs-spk.csv`, 'text/csv')}>
 							Export CSV
 						</Button>
-						<Button variant="ghost" onClick={() => downloadText(`${JSON.stringify(comparison, null, '\t')}\n`, `${comparison.response.name}-kepler-vs-spk.json`, 'application/json')}>
+						<Button variant="secondary" onClick={() => downloadText(`${JSON.stringify(comparison, null, '\t')}\n`, `${comparison.response.name}-kepler-vs-spk.json`, 'application/json')}>
 							Export JSON
 						</Button>
 					</>
@@ -150,18 +150,18 @@ export function OrbitComparison() {
 					<DataRow label="Largest speed difference">{`${ms(comparison.response.summary.maxSpeed).toPrecision(5)} m/s`}</DataRow>
 					{comparison.response.source.kind === 'spk' && <DataRow label="Kernels">{`${comparison.response.source.kernels.join(', ')} (generation ${comparison.response.source.generation})`}</DataRow>}
 					{!sameCenter && <Notice>The scene is about another center now, so this comparison is not drawn in it.</Notice>}
-					<ResidualChart nodes={nodes} anchor={comparison.request.anchor} unit="km" series={[{ label: '|Δr|', color: '--color-accent', values: nodes.map((e) => km(e.distance)) }]} />
+					<ResidualChart nodes={nodes} anchor={comparison.request.anchor} unit="km" series={[{ label: '|Δr|', color: '--color-ink-200', values: nodes.map((e) => km(e.distance)) }]} />
 					<ResidualChart
 						nodes={nodes}
 						anchor={comparison.request.anchor}
 						unit="km"
 						series={[
-							{ label: 'Radial', color: '--color-danger', values: nodes.map((e) => e.rtnPosition && km(e.rtnPosition[0])) },
-							{ label: 'Along-track', color: '--color-success', values: nodes.map((e) => e.rtnPosition && km(e.rtnPosition[1])) },
-							{ label: 'Normal', color: '--color-info', values: nodes.map((e) => e.rtnPosition && km(e.rtnPosition[2])) },
+							{ label: 'Radial', color: '--color-orbit-1', values: nodes.map((e) => e.rtnPosition && km(e.rtnPosition[0])) },
+							{ label: 'Along-track', color: '--color-orbit-3', values: nodes.map((e) => e.rtnPosition && km(e.rtnPosition[1])) },
+							{ label: 'Normal', color: '--color-orbit-5', values: nodes.map((e) => e.rtnPosition && km(e.rtnPosition[2])) },
 						]}
 					/>
-					<ResidualChart nodes={nodes} anchor={comparison.request.anchor} unit="m/s" series={[{ label: '|Δv|', color: '--color-warning', values: nodes.map((e) => ms(e.speed)) }]} />
+					<ResidualChart nodes={nodes} anchor={comparison.request.anchor} unit="m/s" series={[{ label: '|Δv|', color: '--color-ink-200', values: nodes.map((e) => ms(e.speed)) }]} />
 				</>
 			)}
 		</CollapsibleSection>

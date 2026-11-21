@@ -123,6 +123,16 @@ describe('switching a device', () => {
 		expect(roleStatus({ GUIDE_CAMERA: { id: 'b', name: 'b' } }, 'GUIDE_CAMERA', state)).toBe('error')
 	})
 
+	test('a disconnect of a device the server no longer has is not an error', async () => {
+		fetchSpy.mockResolvedValue(Response.json({ error: 'Device not found' }, { status: 404 }))
+		const state = newState([device('a', true)])
+
+		await switchDevice(state, 'a', false)
+
+		expect(state.pending.a).toBeUndefined()
+		expect(state.errors.a).toBeUndefined()
+	})
+
 	test('a device not in the watched connection is never commanded', async () => {
 		const state = newState([device('a')])
 

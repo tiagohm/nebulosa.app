@@ -85,7 +85,7 @@ export function PlanetaryEventDetails({
 					</Button>
 				</Actions>
 			</div>
-			<p className="m-0 max-w-[72ch] text-sm text-ink-200">{KIND_DEFINITIONS[event.kind]}</p>
+			<p className="m-0 text-sm text-ink-200">{KIND_DEFINITIONS[event.kind]}</p>
 			{visibility && <VisibilitySection visibility={visibility} event={event} timeZone={timeZone} />}
 			<div className="flex flex-col gap-2">
 				<SectionHeading>Curve</SectionHeading>

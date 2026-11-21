@@ -95,7 +95,7 @@ export function CatalogBinding({ deviceId, device }: CatalogBindingProps) {
 
 	function format(value: string) {
 		if (value === UNBOUND) return 'Not bound'
-		if (value === NEW_CAMERA) return 'New Camera…'
+		if (value === NEW_CAMERA) return 'New Camera from This Device…'
 		return catalogCameraName(cameras, value)
 	}
 
@@ -106,19 +106,14 @@ export function CatalogBinding({ deviceId, device }: CatalogBindingProps) {
 		return other && `Bound to ${other.deviceName}`
 	}
 
-	const hint =
-		error ??
-		mismatch ??
-		(!device
-			? 'Only a device of a connected server can be bound. The binding belongs to the device and holds for every profile.'
-			: bound === undefined
-				? 'Bind it to calibrate: the wizards and the Calibration Library record frames against a camera of the catalog. The binding holds for every profile.'
-				: 'The binding belongs to this device and holds for every profile.')
+	// Why the binding cannot change while the device is not on an open connection, as the tooltip of its controls.
+	const offlineReason = device ? undefined : 'Only a device on a connected server can be bound'
+	const hint = error ?? mismatch ?? (device && bound === undefined ? 'Bind it so the calibration wizards and the Calibration Library can record its frames. The binding holds for every profile.' : undefined)
 
 	return (
 		<div className="col-start-2 -col-end-1 flex flex-col gap-1">
-			<div className="flex flex-wrap items-end gap-2">
-				<Select label="Catalog Camera" className="min-w-48 flex-1" options={options} value={bound ?? UNBOUND} format={format} onChange={change} disabledReason={disabledReason} disabled={busy || !device} />
+			<div title={offlineReason} className="flex flex-wrap items-end gap-2">
+				<Select label="Catalog" className="min-w-48 flex-1" options={options} value={bound ?? UNBOUND} format={format} onChange={change} disabledReason={disabledReason} disabled={busy || !device} />
 				<IconButton icon="edit" label={camera ? `Edit ${camera.name} in the Equipment Catalog` : 'Bind a camera of the catalog to edit it'} disabled={!camera} onClick={editCamera} />
 				{suggestion && (
 					<Button variant="secondary" disabled={busy} onClick={() => void bind(suggestion)}>
@@ -126,7 +121,7 @@ export function CatalogBinding({ deviceId, device }: CatalogBindingProps) {
 					</Button>
 				)}
 			</div>
-			<p className={`m-0 text-xs leading-4 ${error ? 'text-danger' : mismatch ? 'text-warning' : 'text-ink-300'}`}>{hint}</p>
+			{hint && <p className={error ? 'm-0 text-sm leading-5 text-danger' : `m-0 text-xs leading-4 ${mismatch ? 'text-warning' : 'text-ink-300'}`}>{hint}</p>}
 		</div>
 	)
 }

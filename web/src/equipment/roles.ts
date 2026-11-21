@@ -45,7 +45,7 @@ export interface RoleGroupDefinition {
 // Role groups in display order.
 export const ROLE_GROUPS: readonly RoleGroupDefinition[] = [
 	{ group: 'IMAGING', label: 'Imaging' },
-	{ group: 'TELESCOPE', label: 'Telescope & Guiding' },
+	{ group: 'TELESCOPE', label: 'Mount & Guiding' },
 	{ group: 'OBSERVATORY', label: 'Observatory' },
 ]
 

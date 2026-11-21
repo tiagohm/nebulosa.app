@@ -214,6 +214,9 @@ export async function switchDevice(state: DeviceState, deviceId: string, connect
 
 		if (!response.ok && state.watched === serverId) {
 			settle(state, deviceId)
+			// A device the server no longer has is disconnected: a guide output leaves with its mount or camera, so
+			// disconnecting both at once is not a failure.
+			if (!connect && response.status === 404) return
 			state.errors[deviceId] = await responseError(response)
 		}
 	} catch (error) {

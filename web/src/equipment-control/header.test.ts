@@ -26,6 +26,14 @@ test('reads the state of a mount, idle when it neither moves nor tracks', () => 
 	expect(readoutOf(device('m', 'mount'), states({ mount: { m: { ...mount, slewing: true, tracking: true } } }))?.value).toBe('Slewing')
 })
 
+test('reads a dome with its shutter said once, and no motion from a slewing that outlived its shutter', () => {
+	const dome = { azimuth: { value: 0, min: 0, max: 2 * Math.PI, step: 0 }, parked: false, parking: false, homing: false, moving: false, atHome: false, hasShutter: true, shutterState: 'OPEN' as const }
+	expect(readoutOf(device('d', 'dome'), states({ dome: { d: dome } }))?.caption).toBe('Azimuth · Idle · shutter open')
+	expect(readoutOf(device('d', 'dome'), states({ dome: { d: { ...dome, shutterState: 'CLOSING' } } }))?.caption).toBe('Azimuth · Shutter closing')
+	expect(readoutOf(device('d', 'dome'), states({ dome: { d: { ...dome, slewing: true } } }))?.caption).toBe('Azimuth · Idle · shutter open')
+	expect(readoutOf(device('d', 'dome'), states({ dome: { d: { ...dome, moving: true, shutterState: 'OPENING' } } }))?.caption).toBe('Azimuth · Rotating clockwise · shutter opening')
+})
+
 test('has no readout for a camera without a thermometer or a device not reported yet', () => {
 	expect(readoutOf(device('c', 'camera'), states({ camera: { c: { temperature: undefined } } }))).toBeUndefined()
 	expect(readoutOf(device('x', 'focuser'), states({}))).toBeUndefined()

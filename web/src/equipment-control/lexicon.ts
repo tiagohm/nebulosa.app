@@ -13,21 +13,24 @@ export function mountStateWord(mount: Pick<MountState, 'parking' | 'homing' | 'm
 	return mountMotion(mount) ?? (mount.parked ? 'Parked' : mount.tracking ? 'Tracking' : 'Idle')
 }
 
-// Returns whether a dome reports a motion of its rotation or of its shutter.
-export function domeMoving(dome: Pick<DomeState, 'slewing' | 'moving' | 'homing' | 'parking' | 'shutterState'>): boolean {
-	return dome.slewing || dome.moving || dome.homing || dome.parking || dome.shutterState === 'OPENING' || dome.shutterState === 'CLOSING'
+// The toolkit's slewing of a dome is never read here or in the status bar: it is only the aggregate of the rotation
+// (moving), homing, parking, and the shutter in motion (as the ASCOM Slewing property), and it reaches the tab as an
+// event of its own after the one that changed them, so reading it would show a dome still moving for an instant as its
+// shutter stops.
+
+// Returns whether a dome reports a motion of its rotation, homing, parking, or shutter.
+export function domeMoving(dome: Pick<DomeState, 'moving' | 'homing' | 'parking' | 'shutterState'>): boolean {
+	return dome.moving || dome.homing || dome.parking || dome.shutterState === 'OPENING' || dome.shutterState === 'CLOSING'
 }
 
-// Returns the state of a dome: its motion by precedence (homing, parking, a manual rotation and its direction, the
-// shutter moving, then a slew), otherwise Parked, At home, or Idle. The shutter comes before the slew because drivers
-// following ASCOM report slewing while any part of the dome moves, the shutter included.
-export function domeStateWord(dome: Pick<DomeState, 'homing' | 'parking' | 'moving' | 'direction' | 'slewing' | 'shutterState' | 'parked' | 'atHome'>): string {
+// Returns the state of a dome: its motion by precedence (homing, parking, a rotation and its direction, then the
+// shutter moving), otherwise Parked, At home, or Idle.
+export function domeStateWord(dome: Pick<DomeState, 'homing' | 'parking' | 'moving' | 'direction' | 'shutterState' | 'parked' | 'atHome'>): string {
 	if (dome.homing) return 'Homing'
 	if (dome.parking) return 'Parking'
 	if (dome.moving) return dome.direction === 'COUNTER_CLOCKWISE' ? 'Rotating counterclockwise' : 'Rotating clockwise'
 	if (dome.shutterState === 'OPENING') return 'Shutter opening'
 	if (dome.shutterState === 'CLOSING') return 'Shutter closing'
-	if (dome.slewing) return 'Slewing'
 	if (dome.parked) return 'Parked'
 	return dome.atHome ? 'At home' : 'Idle'
 }

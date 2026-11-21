@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test'
 import { deg } from 'nebulosa/src/math/units/angle'
-import { domeStateWord, guideOutputStateWord, mountStateWord } from './lexicon'
+import { domeMoving, domeStateWord, guideOutputStateWord, mountStateWord } from './lexicon'
 import { mountSiteDiffers } from './mountSite'
 import { firstReason } from './useControl'
 
@@ -16,8 +16,12 @@ test('names the motion of a dome before its rest state', () => {
 	const dome = { homing: false, parking: false, moving: false, slewing: false, shutterState: 'CLOSED', parked: true, atHome: false } as const
 	expect(domeStateWord(dome)).toBe('Parked')
 	expect(domeStateWord({ ...dome, shutterState: 'OPENING' })).toBe('Shutter opening')
-	expect(domeStateWord({ ...dome, shutterState: 'OPENING', slewing: true })).toBe('Shutter opening')
-	expect(domeStateWord({ ...dome, slewing: true })).toBe('Slewing')
+	// Slewing aggregates the other flags and arrives as an event of its own, so it never names a motion alone.
+	const slewing = { ...dome, slewing: true }
+	expect(domeStateWord({ ...slewing, shutterState: 'OPENING' })).toBe('Shutter opening')
+	expect(domeStateWord({ ...slewing, shutterState: 'OPEN' })).toBe('Parked')
+	expect(domeMoving({ ...slewing, shutterState: 'OPEN' })).toBe(false)
+	expect(domeMoving({ ...dome, shutterState: 'CLOSING' })).toBe(true)
 	expect(domeStateWord({ ...dome, moving: true, direction: 'COUNTER_CLOCKWISE' })).toBe('Rotating counterclockwise')
 })
 

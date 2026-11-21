@@ -57,7 +57,11 @@ export function readoutOf(device: Pick<DeviceSummary, 'type' | 'id'>, states: Re
 		}
 		case 'dome': {
 			const dome = deviceStateOf(states, 'dome', device.id)
-			return dome && { value: formatDegrees(dome.azimuth.value, 1), caption: `Azimuth · ${domeStateWord(dome)}${dome.hasShutter ? ` · shutter ${SHUTTER_LABELS[dome.shutterState].toLowerCase()}` : ''}` }
+			if (!dome) return undefined
+			const state = domeStateWord(dome)
+			// A shutter in motion is already the state word, so it is not said twice.
+			const shutter = dome.hasShutter && !state.startsWith('Shutter') ? ` · shutter ${SHUTTER_LABELS[dome.shutterState].toLowerCase()}` : ''
+			return { value: formatDegrees(dome.azimuth.value, 1), caption: `Azimuth · ${state}${shutter}` }
 		}
 		case 'cover': {
 			const cover = deviceStateOf(states, 'cover', device.id)

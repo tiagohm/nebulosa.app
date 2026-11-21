@@ -14,7 +14,7 @@ It is not an ephemeris, a mission planner, an orbit determination, an N-body int
 
 - Uses the canonical two-body model and universal-variable solver of the toolkit (`core/src/astronomy/orbits/mechanics.ts`); the browser never solves Kepler's equation and only interpolates between the exact states the server sampled to draw.
 - Resolves a minor body from SBDB through `MinorBodies` and the shared JPL queue of the [Sky Map](sky-map.md), and follows the offline switch of the [Ephemeris Chain](ephemeris-chain.md).
-- Reads SPK states from one snapshot of the [SPICE Kernel Library](spice-kernel-library.md), and points to that tool when a kernel is missing, never installing one itself.
+- Reads SPK states from one snapshot of the [SPICE Kernel Library](spice-kernel-library.md), names the kernels it used from the library's records, and points to that tool when a kernel is missing, never installing one itself.
 - Opened by Explore Orbit of [Close Approaches](close-approaches.md) and of the Sky's object actions with only the body's identity; hands a minor body back to the Sky through its own selection path.
 - Shares the CSV export helper `web/src/download.ts` with [Planetary Events](planetary-events.md), and exports and imports scenarios as files.
 - Stateless routes: no operation, event, store, database row, or device; the tool's state lives in the tab, with a clock of its own.

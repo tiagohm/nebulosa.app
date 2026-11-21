@@ -20,12 +20,15 @@ import { TargetPicker } from './OrbitSources'
 // difference, and their RTN components plotted against time. The difference is between two models; it is zero at the
 // anchor by construction and is never an uncertainty of either.
 
-// Size of a chart, in viewBox units.
+// Size of a chart, in viewBox units; drawn about 280 CSS pixels wide in the panel, so a unit is about 0.875 px.
 const WIDTH = 320
-const HEIGHT = 140
+const HEIGHT = 156
 
-// Margins of a chart, in viewBox units.
-const MARGIN = { top: 8, right: 8, bottom: 20, left: 44 } as const
+// Margins of a chart, in viewBox units: room for the unit above the value axis and for the tick labels.
+const MARGIN = { top: 18, right: 8, bottom: 24, left: 52 } as const
+
+// Size of the tick labels and the unit, in viewBox units: about the caption size (10.5 px) at the panel's width.
+const TICK_FONT = 12
 
 // A series of a chart: its values by node, its label, and its CSS color token.
 interface Series {
@@ -75,16 +78,19 @@ function ResidualChart({ nodes, anchor, series, unit }: { readonly nodes: readon
 				{ticks(low, high, 4).map((value) => (
 					<g key={value}>
 						<line x1={MARGIN.left} x2={WIDTH - MARGIN.right} y1={y(value)} y2={y(value)} stroke="var(--color-line-100)" strokeWidth={0.5} />
-						<text x={MARGIN.left - 4} y={y(value) + 3} textAnchor="end" fontSize={8} fill="var(--color-ink-300)">
+						<text x={MARGIN.left - 4} y={y(value) + 4} textAnchor="end" fontSize={TICK_FONT} fill="var(--color-ink-300)" className="tabular-nums">
 							{Number(value.toPrecision(3))}
 						</text>
 					</g>
 				))}
 				{ticks(days[0], days.at(-1)!, 5).map((day) => (
-					<text key={day} x={x(day)} y={HEIGHT - 6} textAnchor="middle" fontSize={8} fill="var(--color-ink-300)">
+					<text key={day} x={x(day)} y={HEIGHT - 6} textAnchor="middle" fontSize={TICK_FONT} fill="var(--color-ink-300)" className="tabular-nums">
 						{Number(day.toPrecision(3))}
 					</text>
 				))}
+				<text x={MARGIN.left - 4} y={MARGIN.top - 6} textAnchor="end" fontSize={TICK_FONT} fill="var(--color-ink-300)">
+					{unit}
+				</text>
 				<line x1={x(0)} x2={x(0)} y1={MARGIN.top} y2={HEIGHT - MARGIN.bottom} stroke="var(--color-ink-300)" strokeDasharray="2 2" strokeWidth={0.75} />
 				{series.map((e) => (
 					<path key={e.label} d={path(e.values)} fill="none" stroke={`var(${e.color})`} strokeWidth={1.25} />

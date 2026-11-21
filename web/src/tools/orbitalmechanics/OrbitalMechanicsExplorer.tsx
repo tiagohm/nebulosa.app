@@ -133,7 +133,7 @@ function ExplorerActions() {
 	return (
 		<div className="flex items-center gap-1">
 			<Popover icon="orbit" label="Presets" open={presetsOpen} onOpenChange={setPresetsOpen}>
-				<PresetList presets={state.reference?.presets ?? []} onLoad={() => setPresetsOpen(false)} />
+				<PresetList presets={state.reference?.presets ?? []} loaded={state.orbits.flatMap((e) => (e.source.kind === 'preset' ? [e.source.id] : []))} onLoad={() => setPresetsOpen(false)} />
 			</Popover>
 			<IconButton icon="folder" label="Import scenario" disabled={!state.reference} onClick={() => input.current?.click()} />
 			<input ref={input} type="file" accept="application/json,.json" className="hidden" onChange={(event) => void importFile(event)} />
@@ -151,15 +151,19 @@ function ExplorerActions() {
 	)
 }
 
-// Presets, each loaded in place of the scene.
-function PresetList({ presets, onLoad }: { readonly presets: readonly OrbitPreset[]; readonly onLoad: () => void }) {
+// Presets, each loaded in place of the scene; `loaded` holds the ids of those whose orbit is in the scene, marked.
+function PresetList({ presets, loaded, onLoad }: { readonly presets: readonly OrbitPreset[]; readonly loaded: readonly string[]; readonly onLoad: () => void }) {
 	return (
 		<div className="flex max-h-[70vh] w-64 max-w-full flex-col gap-2 overflow-y-auto">
+			<Notice>Loading a preset replaces the scene.</Notice>
 			{presets.map((preset) => (
 				<button
 					key={preset.id}
 					type="button"
-					className="flex cursor-pointer flex-col gap-1 rounded-sm border border-line-100 bg-transparent p-2 text-left hover:border-ink-300 hover:bg-base-300"
+					className={cn(
+						'flex cursor-pointer flex-col gap-1 rounded-sm border bg-transparent p-2 text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent',
+						loaded.includes(preset.id) ? 'border-accent bg-accent-subtle' : 'border-line-100 hover:border-ink-300 hover:bg-base-300',
+					)}
 					onClick={() => {
 						loadPreset(orbitalMechanicsState, preset)
 						onLoad()
@@ -167,7 +171,7 @@ function PresetList({ presets, onLoad }: { readonly presets: readonly OrbitPrese
 				>
 					<span className="flex items-center justify-between gap-2 text-sm text-ink-100">
 						{preset.name}
-						<span className="flex-none text-xs text-ink-300">{preset.source.kind === 'sourced' ? 'Sourced' : 'Illustrative'}</span>
+						<span className="flex-none text-xs text-ink-300">{loaded.includes(preset.id) ? 'In the scene' : preset.source.kind === 'sourced' ? 'Sourced' : 'Illustrative'}</span>
 					</span>
 					<span className="text-xs text-ink-200">{preset.description}</span>
 					{preset.source.kind === 'sourced' && <span className="text-xs text-ink-300">{preset.source.citation}</span>}

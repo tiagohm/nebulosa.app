@@ -22,6 +22,9 @@ const NEAR_FRACTION = 1e-3
 // Radius of the center drawn as a marker, and of the smallest disc of a center drawn to scale, in CSS pixels.
 const CENTER_MARKER_PX = 6
 
+// Offset of a label from its point, right and up, in CSS pixels.
+const LABEL_OFFSET_PX = 6
+
 // Radius of a marked point (apsis, node, body), in CSS pixels.
 const MARKER_PX = 4
 
@@ -51,8 +54,10 @@ export interface SceneTheme {
 	readonly text: string
 	// Secondary labels and lines.
 	readonly muted: string
-	// Fill of the central body.
+	// Fill of the central body: a dark tone, so a body drawn to scale is never a large bright disc on a night screen.
 	readonly center: string
+	// Rim of the central body, which outlines it against the dark scene.
+	readonly centerRim: string
 	// The X, Y, and Z axes, told apart by their letters rather than by hue.
 	readonly axis: string
 	// Orbit colors by palette index.
@@ -67,7 +72,8 @@ export function readTheme(element: Element): SceneTheme {
 		grid: token('--color-line-100'),
 		text: token('--color-ink-100'),
 		muted: token('--color-ink-300'),
-		center: token('--color-ink-200'),
+		center: token('--color-base-300'),
+		centerRim: token('--color-line-200'),
 		axis: token('--color-line-200'),
 		palette: PALETTE_TOKENS.map(token),
 	}
@@ -232,13 +238,14 @@ export function drawScene(ctx: CanvasRenderingContext2D, camera: Camera, model: 
 	const primitives: Primitive[] = []
 	const labels: (() => void)[] = []
 
-	const label = (point: ScenePoint, text: string, color: string) => {
+	// Queues a label up and to the right of a point, `offset` CSS pixels away on each axis, past what is drawn there.
+	const label = (point: ScenePoint, text: string, color: string, offset: number = LABEL_OFFSET_PX) => {
 		if (!overlays.labels) return
 		const p = project(camera, point)
 		if (!p) return
 		labels.push(() => {
 			ctx.fillStyle = color
-			ctx.fillText(text, p.x + 6, p.y - 6)
+			ctx.fillText(text, p.x + offset, p.y - offset)
 		})
 	}
 
@@ -412,12 +419,17 @@ export function drawScene(ctx: CanvasRenderingContext2D, camera: Camera, model: 
 			depth: center.depth,
 			draw: () => {
 				ctx.fillStyle = theme.center
+				ctx.strokeStyle = theme.centerRim
+				ctx.lineWidth = 1
+				ctx.setLineDash([])
 				ctx.beginPath()
 				ctx.arc(center.x, center.y, radius, 0, 2 * Math.PI)
 				ctx.fill()
+				ctx.stroke()
 			},
 		})
-		label([0, 0, 0], model.center.name, theme.muted)
+		// Along the diagonal, just outside the disc's edge.
+		label([0, 0, 0], model.center.name, theme.muted, radius * Math.SQRT1_2 + LABEL_OFFSET_PX - 2)
 	}
 
 	primitives.sort((a, b) => b.depth - a.depth)

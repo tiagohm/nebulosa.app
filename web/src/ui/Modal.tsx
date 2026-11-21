@@ -51,10 +51,12 @@ export function Modal({ open, onClose, title, className, fit = false, children }
 					<h2 className="m-0 min-w-0 flex-1 text-xl leading-7 font-semibold tracking-[-0.01em] text-ink-100">{title}</h2>
 					<button
 						type="button"
+						title="Close"
 						onClick={onClose}
 						className="-mt-1 -mr-2 flex size-8 flex-none cursor-pointer items-center justify-center rounded-full border-0 bg-transparent p-0 text-ink-200 transition-colors duration-150 hover:bg-base-300 hover:text-ink-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
 					>
 						<Icon name="close" strokeWidth={1.8} />
+						<span className="sr-only">Close</span>
 					</button>
 				</header>
 				<div className={cn('px-6 pt-4 pb-6 leading-6 text-ink-200', fit && 'flex min-h-0 flex-col')}>{children}</div>

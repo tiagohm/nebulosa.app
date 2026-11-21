@@ -1,37 +1,79 @@
 import { cn } from 'cn'
-import { Children, type ReactNode } from 'react'
+import { Children, type KeyboardEvent, type ReactNode } from 'react'
+import { moveIndex } from './navigation'
 
+// Selectable list of items, each a button with a title, an optional description and trailing meta, and a chevron. The
+// arrow keys, Home, and End move the focus between its items, and Enter or Space activates the focused one.
+
+// Properties of a list.
 export interface ListProps {
+	// Text shown in place of the list when it has no items.
 	readonly emptyText: string
+	// Classes of the list's root.
 	readonly className?: string
+	// The list's ListItem elements.
 	readonly children?: ReactNode
 }
 
-export function List({ emptyText, className, children }: ListProps) {
-	return <section className={cn('min-w-0 text-ink-100', className)}>{Children.count(children) ? <ul className="m-0 list-none p-0">{children}</ul> : <p className="m-0 px-6 py-8 text-center text-sm leading-5 text-ink-300">{emptyText}</p>}</section>
+// Moves the focus between the item buttons of a list with the arrow keys, Home, and End, wrapping at both ends.
+function handleKeyDown(e: KeyboardEvent<HTMLUListElement>) {
+	const buttons = Array.from(e.currentTarget.querySelectorAll<HTMLButtonElement>(':scope > li > button'))
+	const index = moveIndex(buttons.indexOf(document.activeElement as HTMLButtonElement), buttons.length, e.key)
+	if (index === undefined) return
+	e.preventDefault()
+	buttons[index]?.focus()
 }
 
+// List of items, or its empty text when it has none.
+export function List({ emptyText, className, children }: ListProps) {
+	return (
+		<section className={cn('min-w-0 text-ink-100', className)}>
+			{Children.count(children) ? (
+				<ul onKeyDown={handleKeyDown} className="m-0 list-none p-0">
+					{children}
+				</ul>
+			) : (
+				<p className="m-0 px-6 py-8 text-center text-sm leading-5 text-ink-300">{emptyText}</p>
+			)}
+		</section>
+	)
+}
+
+// Properties of a list item.
 export interface ListItemProps {
+	// Name of the item.
 	readonly title: ReactNode
+	// Secondary line under the title.
 	readonly description?: ReactNode
+	// Trailing content before the chevron, such as a count or a status badge.
 	readonly meta?: ReactNode
+	// Whether the item is the selected one, marked in Ember and named "Selected" for screen readers.
 	readonly selected?: boolean
+	// Whether the item takes the focus when it mounts and when the modal holding it opens.
+	readonly autoFocus?: boolean
+	// Activates the item.
 	readonly onClick: () => void
 }
 
-export function ListItem({ title, description, meta, selected = false, onClick }: ListItemProps) {
+// Item of a list: one button, highlighted while selected.
+export function ListItem({ title, description, meta, selected = false, autoFocus = false, onClick }: ListItemProps) {
 	return (
 		<li className="mb-1">
 			<button
 				type="button"
 				onClick={onClick}
+				autoFocus={autoFocus}
+				data-autofocus={autoFocus || undefined}
 				className={cn(
 					'group m-0 box-border flex w-full cursor-pointer items-center gap-4 rounded-md border-0 px-3 py-3 text-left font-mono text-inherit transition-colors duration-150 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent',
 					selected ? 'bg-accent-subtle' : 'bg-transparent hover:bg-base-300',
 				)}
 			>
 				<span className="flex min-w-0 flex-auto flex-col gap-0.5">
-					<span className={cn('leading-6 font-medium wrap-break-word', selected ? 'text-accent' : 'text-ink-100')}>{title}</span>
+					<span className={cn('leading-6 font-medium wrap-break-word', selected ? 'text-accent' : 'text-ink-100')}>
+						{title}
+						{selected && <span className="sr-only">, selected</span>}
+					</span>
 					{description && <span className="text-sm leading-5 text-ink-200">{description}</span>}
 				</span>
 				{meta && <span className="flex-none text-sm leading-5 whitespace-nowrap text-ink-300 tabular-nums">{meta}</span>}

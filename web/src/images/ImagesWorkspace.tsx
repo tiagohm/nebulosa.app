@@ -492,7 +492,8 @@ interface CaptureStatusProps {
 }
 
 // Compact state of the capture of a camera tab's camera, whatever tool is selected: what it does (with the time left
-// of an exposure or delay), its frame count, and the file state of its latest frame while it runs, or why it failed.
+// of an exposure or delay), its frame count, and the file state of its latest frame while it runs, or that it was
+// aborted or why it failed; only a failure is in the danger colour, since an abort is the operator's own command.
 // Nothing is shown for a camera that never captured or whose capture ended normally.
 function CaptureStatus({ connectionId, deviceId }: CaptureStatusProps) {
 	const runtime = useSnapshot(captureRuntime)
@@ -501,8 +502,8 @@ function CaptureStatus({ connectionId, deviceId }: CaptureStatusProps) {
 	if (!session) return null
 
 	const running = captureRunning(session)
-	const failed = session.phase === 'failed' || session.phase === 'aborted'
-	if (!running && !failed) return null
+	const failed = session.phase === 'failed'
+	if (!running && !failed && session.phase !== 'aborted') return null
 
 	const frame = runtime.frames[key]
 	const file = running && frame?.sessionId === session.sessionId && frame.file ? FILE_STATE_LABELS[fileState(frame)] : undefined

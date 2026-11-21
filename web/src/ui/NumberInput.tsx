@@ -1,5 +1,5 @@
 import { cn } from 'cn'
-import { type ReactNode, useState } from 'react'
+import { type ReactNode, useId, useState } from 'react'
 import { Field, InputSuffix, inputClassName, suffixPadding } from './Field'
 import { displayValue, isNumberText, parseNumberText, snapToStep } from './numberinput.step'
 
@@ -59,19 +59,21 @@ export function StepperFrame({ decreaseDisabled, increaseDisabled, onDecrease, o
 // Numeric field with − and + step buttons, a unit suffix, and Arrow Up and Down stepping. It is a text field with the
 // decimal keypad, so the value is always written with a dot, whatever the browser's locale; a typed comma is read as
 // the decimal dot. A field of whole non-negative values (an integer step and a minimum of zero or more), such as a TCP
-// port, opens the digits keypad instead, which has neither a dot nor a minus sign.
+// port, opens the digits keypad instead, which has neither a dot nor a minus sign. Its label names the text field.
 export function NumberInput({ label, value, onChange, min, max, step = 1, className, classNames, disabled, suffix }: NumberInputProps) {
 	// Text being typed; undefined shows the committed value.
 	const [draft, setDraft] = useState<string>()
+	const id = useId()
 
 	function commit(next: number) {
 		onChange(snapToStep(next, step, min, max))
 	}
 
 	return (
-		<Field label={label} className={className}>
+		<Field label={label} htmlFor={id} className={className}>
 			<StepperFrame decreaseDisabled={!!disabled || (min !== undefined && value <= min)} increaseDisabled={!!disabled || (max !== undefined && value >= max)} onDecrease={() => commit(value - step)} onIncrease={() => commit(value + step)}>
 				<input
+					id={id}
 					type="text"
 					inputMode={Number.isInteger(step) && min !== undefined && min >= 0 ? 'numeric' : 'decimal'}
 					disabled={disabled}

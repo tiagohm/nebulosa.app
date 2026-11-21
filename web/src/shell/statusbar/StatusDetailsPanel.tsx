@@ -257,7 +257,7 @@ function StatusDetailsPanel({ ref, placement: { bottom, right, width }, onClose 
 								</>
 							}
 						>
-							<span className="text-accent">{capture.stopping ? 'Stopping' : captureStatus(capture)}</span> · {captureCount(capture)}
+							<span className="text-accent">{captureStatus(capture)}</span> · {captureCount(capture)}
 							{percent !== undefined && ` · ${percent}%`}
 						</Row>
 					)}

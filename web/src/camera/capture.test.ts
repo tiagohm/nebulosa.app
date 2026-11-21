@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test'
 import type { CameraCapabilities, CaptureFrame, CaptureRequest, CaptureSession } from 'api'
 import { proxy } from 'valtio'
 import { DEFAULT_ACQUISITION_SETTINGS, DEFAULT_DITHER_SETTINGS, DEFAULT_EXPOSURE_SETTINGS, DEFAULT_GUIDING_SETTINGS, DEFAULT_MOUNT_DITHER_SETTINGS } from '../profile/schema'
-import { cameraKey, captureCount, captureDither, type CaptureDitherInput, captureElapsed, captureRequest, fitExposure, frameProgress, type CaptureRuntime, captureRunning, captureSnoop, captureStatus, fileState, handleCaptureEvent, refreshCaptures, startCapture, stopCapture } from './capture'
+import { cameraKey, captureCount, captureDither, type CaptureDitherInput, captureElapsed, captureRemaining, captureRequest, fitExposure, frameProgress, type CaptureRuntime, captureRunning, captureSnoop, captureStatus, fileState, handleCaptureEvent, refreshCaptures, startCapture, stopCapture } from './capture'
 import { convertExposure, exposureUnitOf, fromSeconds, toSeconds } from './ExposureTimeInput'
 
 function newState() {
@@ -150,12 +150,28 @@ test('describes the state of a capture', () => {
 	expect(captureStatus(session({ phase: 'dithering', dither: { completed: 1, settling: true } }))).toBe('Settling')
 	expect(captureRunning(session({ phase: 'dithering' }))).toBeTrue()
 	expect(captureStatus(session({ phase: 'failed', reason: 'commandFailed', error: 'disk full' }))).toBe('Failed: disk full')
+	expect(captureStatus(session({ phase: 'failed', reason: 'disconnected' }))).toBe('Failed: the camera disconnected')
+	expect(captureStatus(session({ phase: 'failed' }))).toBe('Failed')
+	// The countdown keeps one decimal, and a capture told to stop says so instead of its phase.
+	expect(captureStatus(session({ exposure: { elapsedTime: 276543, remainingTime: 723457, progress: 27 } }))).toBe('Exposing — 0.3 / 5 s')
+	expect(captureStatus(session({ stopping: true, exposure: { elapsedTime: 3200000, remainingTime: 1800000, progress: 64 } }))).toBe('Stopping after this frame')
+	expect(captureStatus(session({ phase: 'stopped', stopping: true }))).toBe('Stopped')
 	expect(captureCount(session({ captured: 12, count: 30 }))).toBe('Captured 12 / 30')
 	expect(captureCount(session({ captured: 152, count: undefined }))).toBe('Captured 152')
 	expect(captureElapsed(session({ startedAt: 1000, endedAt: 4500 }), 9999)).toBe(3.5)
 	expect(captureRunning(session({ phase: 'waiting' }))).toBeTrue()
 	expect(captureRunning(session({ phase: 'stopped' }))).toBeFalse()
 	expect(captureRunning(undefined)).toBeFalse()
+})
+
+test('the least time a fixed capture still takes counts the exposures and delays left', () => {
+	const request = { ...DEFAULT_REQUEST, exposureTime: 5, delay: 2 }
+	// Frame 3 of 4 is 1 s into its exposure: 2 exposures and 1 delay left, less the second exposed.
+	expect(captureRemaining(session({ request, count: 4, captured: 2, exposure: { elapsedTime: 1000000, remainingTime: 4000000, progress: 20 } }))).toBe(11)
+	// Waiting after frame 2 of 4, 0.5 s of the delay left: 2 exposures, the future delay, and the rest of this one.
+	expect(captureRemaining(session({ request, count: 4, captured: 2, phase: 'waiting', delay: { elapsedTime: 1500000, remainingTime: 500000, progress: 75 } }))).toBe(12.5)
+	expect(captureRemaining(session({ request, count: undefined }))).toBeUndefined()
+	expect(captureRemaining(session({ request, count: 4, phase: 'completed' }))).toBeUndefined()
 })
 
 test('converts exposure times between units without float noise', () => {
@@ -195,6 +211,7 @@ test('builds the frozen dither of the next capture from the preferences and the 
 	const input: CaptureDitherInput = {
 		acquisition: { exposureMode: 'fixed', frameType: 'LIGHT' },
 		settings: { ...DEFAULT_DITHER_SETTINGS, enabled: true },
+		guideCamera: true,
 		guidingSession: { sessionId: 'g1', active: true, state: 'guiding', cameraName: 'Guide' },
 		guiding: DEFAULT_GUIDING_SETTINGS,
 		mount,
@@ -204,7 +221,9 @@ test('builds the frozen dither of the next capture from the preferences and the 
 
 	expect(captureDither(input)).toEqual({ dither: { method: 'guided', everyFrames: 3, guidingSessionId: 'g1', amount: { unit: 'guidePixel', value: 5 }, raOnly: false, settle: { pixels: 1.5, time: 10, timeout: 60 } } })
 	expect(captureDither({ ...input, guidingSession: { ...input.guidingSession!, state: 'calibrating' } })).toEqual({ blocker: 'Guide is not guiding.' })
-	expect(captureDither({ ...input, guidingSession: undefined }).blocker).toBeString()
+	expect(captureDither({ ...input, guidingSession: undefined }).blocker).toContain('Start guiding')
+	// Without a Guide Camera, the remedy is to assign one, not to start guiding.
+	expect(captureDither({ ...input, guideCamera: false, guidingSession: undefined }).blocker).toContain('Assign a Guide Camera')
 
 	// A single exposure, another frame type, or dithering turned off send none and block nothing.
 	expect(captureDither({ ...input, acquisition: { exposureMode: 'single', frameType: 'LIGHT' }, guidingSession: undefined })).toEqual({})

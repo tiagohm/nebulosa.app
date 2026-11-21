@@ -22,13 +22,15 @@ import { SegmentedControl } from '../ui/SegmentedControl'
 import { Select } from '../ui/Select'
 import { TextInput } from '../ui/TextInput'
 import { useNow } from '../useNow'
-import { abortCapture, cameraKey, captureCount, captureElapsed, captureRequest, captureRuntime, captureRunning, captureStatus, FILE_STATE_LABELS, fileState, resumeCapture, startCapture, stopCapture } from './capture'
+import { abortCapture, cameraKey, captureElapsed, captureRemaining, captureRequest, captureRuntime, captureRunning, captureStatus, FILE_STATE_LABELS, fileState, resumeCapture, startCapture, stopCapture } from './capture'
 import { type DitherDevices, DitheringSection, useCaptureDither } from './DitheringSection'
 import { CameraSettings, ExposureSection } from './ExposureSettings'
 
-// Contextual panel sections of Camera Acquisition, the camera operation of the Images camera tabs: the exposure, the acquisition mode with its start and stop commands, the state of the running or last capture, the
-// less frequent camera settings, the output with a server directory chooser, and the latest frame, whose own state
-// and file state are shown apart from the outcome of the capture that took it. The exposure and camera settings are
+// Contextual panel sections of Camera Acquisition, the camera operation of the Images camera tabs: the exposure, the
+// acquisition mode with its start and stop commands and why a capture cannot start, then what the operator reads at a
+// glance, the state of the running or last capture and the latest frame, whose own state and file state are shown apart
+// from the outcome of the capture that took it, then the dithering of a fixed or loop capture, the less frequent camera
+// settings, and the output with a server directory chooser. The exposure and camera settings are
 // the physical camera's, whose camera settings its other operations share, and the rest of the form is its Camera
 // Acquisition form, both kept in the profile; the capture it starts is the server's, run on the camera the panel targets when it starts, and
 // shown here from the server state whichever tab started it. A capture started here releases a frame its camera tab held for analysis. Controls that would change a running capture are
@@ -124,6 +126,10 @@ export function CameraAcquisitionSections({ device, availability, settings: came
 	}
 
 	const xisf = capabilities?.transferFormats.includes('XISF') === true
+	// Why a new capture cannot start: the camera is not ready, or the dither it should do cannot be done.
+	const blocker = availability.status !== 'ready' ? availability.message : dither.blocker
+	// A single exposure never dithers, so the Dithering section is left out for it.
+	const dithers = (running && session ? session.request.exposureMode : settings.exposureMode) !== 'single'
 
 	return (
 		<>
@@ -133,28 +139,25 @@ export function CameraAcquisitionSections({ device, availability, settings: came
 			<CollapsibleSection id="images.camera-acquisition.acquisition" title="Acquisition">
 				<SegmentedControl label="Mode" options={EXPOSURE_MODES} value={settings.exposureMode} format={(mode) => EXPOSURE_MODE_LABELS[mode]} disabled={locked} onChange={(exposureMode) => update({ exposureMode })} />
 				{settings.exposureMode === 'fixed' && <NumberInput label="Frame Count" value={settings.count} min={1} max={MAX_FRAME_COUNT} disabled={locked} onChange={(count) => update({ count })} />}
-				{settings.exposureMode !== 'single' && (
-					<>
-						<NumberInput label="Delay" suffix="s" value={settings.delay} min={0} disabled={locked} onChange={(delay) => update({ delay })} />
-						<Notice>Wait after each capture before starting the next one.</Notice>
-					</>
-				)}
+				{settings.exposureMode !== 'single' && <NumberInput label="Delay Between Frames" suffix="s" value={settings.delay} min={0} disabled={locked} onChange={(delay) => update({ delay })} />}
 				<CaptureCommands
 					session={session}
 					capabilities={capabilities}
 					mode={settings.exposureMode}
 					pending={pending}
-					startable={availability.status === 'ready' && device !== undefined && dither.blocker === undefined}
+					startable={device !== undefined && blocker === undefined}
+					blocker={blocker}
 					onStart={() => void start()}
 					onStop={() => device && session && void stopCapture(captureRuntime, device.connectionId, device.id, session.sessionId)}
 					onAbort={() => device && session && void abortCapture(captureRuntime, device.connectionId, device.id, session.sessionId)}
 					onResume={() => device && session && void resumeCapture(captureRuntime, device.connectionId, device.id, session.sessionId)}
 				/>
-				{availability.status !== 'ready' && !running && <Notice>{availability.message}</Notice>}
+				{!running && blocker && <Notice warning={availability.status === 'ready'}>{blocker}</Notice>}
 				{error && <Notice error>{error}</Notice>}
 			</CollapsibleSection>
-			<DitheringSection camera={camera} acquisition={settings} devices={ditherDevices} session={session} running={running} locked={locked} outcome={dither} />
 			{session && <CaptureState session={session} />}
+			{frame && <LastFrame frame={frame} />}
+			{dithers && <DitheringSection camera={camera} acquisition={settings} devices={ditherDevices} session={session} running={running} locked={locked} outcome={dither} />}
 			<CameraSettings device={device} settings={exposure} capabilities={capabilities} disabled={locked} onChange={updateExposure} />
 			<CollapsibleSection id="images.camera-acquisition.output" title="Output">
 				<SegmentedControl options={OUTPUT_MODES} value={settings.output.mode} format={(mode) => OUTPUT_MODE_LABELS[mode]} disabled={locked} onChange={(mode) => updateOutput({ mode })} />
@@ -162,7 +165,7 @@ export function CameraAcquisitionSections({ device, availability, settings: came
 					<>
 						<div className="flex items-end gap-1">
 							<TextInput label="Server Directory" className="flex-1" placeholder="~/Nebulosa/captures" value={settings.output.directory ?? ''} disabled={locked} onChange={(e) => updateOutput({ directory: e.target.value.trim() || undefined })} />
-							<IconButton icon="folder" label="Choose directory" className="size-11" disabled={locked} onClick={() => setChoosingDirectory(true)} />
+							<IconButton icon="folder" label="Choose directory" disabled={locked} onClick={() => setChoosingDirectory(true)} />
 						</div>
 						<TextInput label="Filename Template" placeholder="{date}_{time}_{camera}_{type}_{seq}" value={settings.output.filenameTemplate ?? ''} disabled={locked} onChange={(e) => updateOutput({ filenameTemplate: e.target.value || undefined })} />
 						<Notice>Existing files are never replaced.</Notice>
@@ -183,7 +186,6 @@ export function CameraAcquisitionSections({ device, availability, settings: came
 					</dl>
 				</CollapsibleSection>
 			)}
-			{frame && <LastFrame frame={frame} />}
 			<FileExplorerModal
 				open={choosingDirectory}
 				mode="directory"
@@ -210,35 +212,40 @@ interface CaptureCommandsProps {
 	readonly pending: boolean
 	// Whether the camera is ready for a new capture.
 	readonly startable: boolean
+	// Why a new capture cannot start, the tooltip of the disabled start command; absent when it can.
+	readonly blocker?: string
 	readonly onStart: () => void
 	readonly onStop: () => void
 	readonly onAbort: () => void
 	readonly onResume: () => void
 }
 
-// Start command of the form's mode while the camera is idle; Stop, and Abort when the driver can abort, while it captures;
+// Start command of the form's mode while the camera is idle, with the reason as its tooltip while it cannot start; Stop,
+// and Abort when the driver can abort, while it captures, each saying in its tooltip what becomes of the frame in flight;
 // and Resume for a capture a tool paused and gave back to the operator.
-function CaptureCommands({ session, capabilities, mode, pending, startable, onStart, onStop, onAbort, onResume }: CaptureCommandsProps) {
+function CaptureCommands({ session, capabilities, mode, pending, startable, blocker, onStart, onStop, onAbort, onResume }: CaptureCommandsProps) {
 	if (!captureRunning(session)) {
 		return (
-			<Button disabled={!startable || pending} onClick={onStart}>
+			<Button disabled={!startable || pending} title={startable ? undefined : blocker} onClick={onStart}>
 				{START_LABELS[mode]}
 			</Button>
 		)
 	}
 
+	const stopping = session!.stopping
+
 	return (
 		<div className="flex gap-2">
 			{session!.suspension?.state === 'released' && (
-				<Button className="flex-1" disabled={pending || session!.stopping} onClick={onResume}>
+				<Button className="flex-1" title="Resume the capture a tool paused" disabled={pending || stopping} onClick={onResume}>
 					Resume
 				</Button>
 			)}
-			<Button className="flex-1" variant="secondary" disabled={pending || session!.stopping} onClick={onStop}>
-				{session!.stopping ? 'Stopping…' : 'Stop'}
+			<Button className="flex-1" variant="secondary" title={stopping ? 'The capture stops once the frame being exposed is done' : 'Finish the frame being exposed, then stop'} disabled={pending || stopping} onClick={onStop}>
+				{stopping ? 'Stopping…' : 'Stop'}
 			</Button>
 			{capabilities?.canAbort && (
-				<Button className="flex-1" variant="secondary" disabled={pending} onClick={onAbort}>
+				<Button className="flex-1" variant="secondary" title="Stop now; the frame being exposed is discarded" disabled={pending} onClick={onAbort}>
 					Abort
 				</Button>
 			)}
@@ -251,24 +258,32 @@ interface CaptureStateProps {
 	readonly session: CaptureSession
 }
 
-// State of the camera's latest capture: what it does, its progress, and its counts. Once the capture ended
-// it is titled as the last acquisition, so its counts are not read as the form's.
+// State of the camera's latest capture: what it does, its progress, its counts, and, for a fixed capture, the least
+// time it still takes; once it ended, when it ended. Once the capture ended it is titled as the last acquisition, so its
+// counts are not read as the form's. The status line is an output, so assistive technologies announce it as it changes.
+// Only an actual failure is shown in the danger colour; an abort is the operator's own command.
 function CaptureState({ session }: CaptureStateProps) {
 	const running = captureRunning(session)
 	// Only the elapsed time is refreshed here; the capture itself runs on the server.
 	const now = useNow(running)
+	const timeZone = useActiveTimeZone()
 
 	const progress = session.phase === 'exposing' ? session.exposure?.progress : session.phase === 'waiting' ? session.delay?.progress : undefined
 	const { dither } = session
-	const failed = session.phase === 'failed' || session.phase === 'aborted'
+	const status = captureStatus(session)
+	const frames = session.count === undefined ? String(session.captured) : `${session.captured} / ${session.count}`
+	const remaining = captureRemaining(session)
 
 	return (
-		<CollapsibleSection id="images.camera-acquisition.status" title={running ? 'Acquisition Status' : 'Last Acquisition'}>
-			<p className={failed ? 'm-0 text-danger' : 'm-0 text-ink-100'}>{captureStatus(session)}</p>
+		<CollapsibleSection id="images.camera-acquisition.status" title={running ? 'Acquisition Status' : 'Last Acquisition'} summary={`${status} · ${frames}`}>
+			<output className={session.phase === 'failed' ? 'block text-danger' : 'block text-ink-100'}>{status}</output>
 			{running && <ProgressBar fraction={progress === undefined ? undefined : progress / 100} />}
 			<DataList>
-				<DataRow label={captureCount(session)}>{session.request.output.mode === 'preview-save' ? `Saved ${session.saved}` : 'Not Saved'}</DataRow>
+				<DataRow label="Frames">{frames}</DataRow>
+				<DataRow label="Saved">{session.request.output.mode === 'preview-save' ? String(session.saved) : 'Preview only'}</DataRow>
 				<DataRow label="Elapsed">{formatClockDuration(captureElapsed(session, now))}</DataRow>
+				{remaining !== undefined && <DataRow label="Time Left">{`at least ${formatClockDuration(remaining)}`}</DataRow>}
+				{session.endedAt !== undefined && <DataRow label="Ended">{formatZonedDateTime(session.endedAt, timeZone)}</DataRow>}
 				{dither && <DataRow label="Dithers">{String(dither.completed)}</DataRow>}
 			</DataList>
 			{dither?.error && <Notice error>{dither.error}</Notice>}
@@ -296,7 +311,7 @@ function LastFrame({ frame }: LastFrameProps) {
 	const { acquisition } = frame
 	const file = fileState(frame)
 	const rows: [string, string, boolean?][] = [
-		['Frame of session', `#${frame.generation} · ${frame.frameType}`],
+		['Frame', `#${frame.generation} · ${frame.frameType}`],
 		['File', FILE_STATE_LABELS[file], file === 'failed'],
 		['Dimensions', `${frame.width} × ${frame.height}${frame.channels === 3 ? ' RGB' : frame.cfa ? ` ${frame.cfa}` : ''}`],
 	]
@@ -311,7 +326,7 @@ function LastFrame({ frame }: LastFrameProps) {
 	rows.push(['Acquired', formatZonedDateTime(frame.time, timeZone)])
 
 	return (
-		<CollapsibleSection id="images.camera-acquisition.last-frame" title="Last Frame">
+		<CollapsibleSection id="images.camera-acquisition.last-frame" title="Last Frame" summary={`#${frame.generation} · ${FILE_STATE_LABELS[file]}`}>
 			<DataList>
 				{rows.map(([label, value, danger]) => (
 					<DataRow key={label} label={label} tone={danger ? 'danger' : undefined}>

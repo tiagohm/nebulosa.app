@@ -80,6 +80,7 @@ export function useCaptureDither(camera: CameraIdentity | undefined, acquisition
 	return captureDither({
 		acquisition,
 		settings: ditherSettings(settings, camera),
+		guideCamera: guideDevice !== undefined,
 		guidingSession: guideDevice && guiding.sessions[cameraKey(guideDevice.connectionId, guideDevice.id)],
 		guiding: guidingSettings(settings, formIdentity(camera, guideCamera)),
 		mount: mount.device && { connectionId: mount.device.connectionId, deviceId: mount.device.id },
@@ -101,7 +102,8 @@ interface DitheringSectionProps {
 	readonly running: boolean
 	// Whether the form is locked by a running capture or a command waiting for the server.
 	readonly locked: boolean
-	// Dither the next capture sends, or why it cannot start.
+	// Dither the next capture sends, or why it cannot start; the blocker is shown under the start command, and only
+	// summarized here.
 	readonly outcome: CaptureDitherOutcome
 }
 
@@ -111,7 +113,7 @@ export function DitheringSection({ camera, acquisition, devices, session, runnin
 	const settings = activeProfile(profiles).settings
 	const dither = ditherSettings(settings, camera)
 	const applicable = acquisition.exposureMode !== 'single' && acquisition.frameType === 'LIGHT'
-	const summary = running ? (session?.request.dither ? 'On' : 'Off') : dither.enabled && applicable ? 'On' : 'Off'
+	const summary = running ? (session?.request.dither ? 'On' : 'Off') : outcome.blocker ? 'Blocked' : dither.enabled && applicable ? 'On' : 'Off'
 
 	if (!devices) {
 		return (
@@ -124,7 +126,6 @@ export function DitheringSection({ camera, acquisition, devices, session, runnin
 	return (
 		<CollapsibleSection id="images.camera-acquisition.dithering" title="Dithering" summary={summary} defaultOpen={false}>
 			{running && session ? <RunningDither dither={session.request.dither} /> : <DitherForm camera={camera} settings={dither} devices={devices} applicable={applicable} locked={locked} />}
-			{!running && dither.enabled && applicable && outcome.blocker && <Notice error>{outcome.blocker}</Notice>}
 		</CollapsibleSection>
 	)
 }
@@ -146,6 +147,8 @@ function DitherForm({ camera, settings, devices, applicable, locked }: DitherFor
 	const pulse = mountDitherSettings(profile, mountIdentity)
 	const guiding = guidingSettings(profile, formIdentity(camera, devices.guideCamera))
 	const disabled = locked || !applicable
+	// The preferences only apply while dithering is on, so they are greyed out, never lit, while it is off.
+	const fieldsDisabled = disabled || !settings.enabled
 
 	// Updates fields of the dithering preferences of the camera.
 	function update(patch: Partial<CameraDitherSettings>) {
@@ -161,8 +164,8 @@ function DitherForm({ camera, settings, devices, applicable, locked }: DitherFor
 		<>
 			<Checkbox label="Dither between frames" checked={settings.enabled} disabled={disabled} onChange={(enabled) => update({ enabled })} />
 			{!applicable && <Notice>Only Fixed and Loop LIGHT captures dither.</Notice>}
-			<NumberInput label="Every" suffix="frames" value={settings.everyFrames} min={1} max={DITHER_MAXIMUM_EVERY_FRAMES} disabled={disabled} onChange={(everyFrames) => update({ everyFrames: Math.round(everyFrames) })} />
-			<SegmentedControl label="Method" options={METHODS} value={settings.method} format={(method) => METHOD_LABELS[method]} disabled={disabled} onChange={(method) => update({ method })} />
+			<NumberInput label="Every" suffix="frames" value={settings.everyFrames} min={1} max={DITHER_MAXIMUM_EVERY_FRAMES} disabled={fieldsDisabled} onChange={(everyFrames) => update({ everyFrames: Math.round(everyFrames) })} />
+			<SegmentedControl label="Method" options={METHODS} value={settings.method} format={(method) => METHOD_LABELS[method]} disabled={fieldsDisabled} onChange={(method) => update({ method })} />
 			{settings.method === 'guided' ? (
 				<>
 					<DataList>
@@ -172,7 +175,7 @@ function DitherForm({ camera, settings, devices, applicable, locked }: DitherFor
 						<DataRow label="Dither">{`${guiding.ditherPixels} px${guiding.ditherRaOnly ? ' · RA only' : ''}`}</DataRow>
 						<DataRow label="Settle">{`${guiding.settle.pixels} px for ${guiding.settle.time} s, at most ${guiding.settle.timeout} s`}</DataRow>
 					</DataList>
-					<Notice>The guiding session dithers and settles with the Settle and Dither settings of Guiding.</Notice>
+					<Notice>After the delay, the guiding session dithers and settles with the Dither and Settle settings of Guiding.</Notice>
 				</>
 			) : (
 				<>
@@ -186,24 +189,23 @@ function DitherForm({ camera, settings, devices, applicable, locked }: DitherFor
 							</DataRow>
 						)}
 					</DataList>
-					<SegmentedControl label="Movement" options={MOVEMENTS} value={settings.movement} format={(movement) => MOVEMENT_LABELS[movement]} disabled={disabled} onChange={(movement) => update({ movement })} />
-					<NumberInput label="Amount" suffix="″" value={settings.amount} min={DITHER_MINIMUM_AMOUNT} max={DITHER_MAXIMUM_AMOUNT} step={1} disabled={disabled} onChange={(amount) => update({ amount })} />
-					<Select label="Pattern" options={PATTERNS} value={settings.pattern} format={(pattern) => PATTERN_LABELS[pattern]} disabled={disabled} onChange={(pattern) => update({ pattern })} />
-					<NumberInput label="Settle" suffix="s" value={settings.settleTime} min={0} max={DITHER_MAXIMUM_SETTLE} disabled={disabled} onChange={(settleTime) => update({ settleTime })} />
-					<Checkbox label="Dither in RA only" checked={settings.raOnly} disabled={disabled} onChange={(raOnly) => update({ raOnly })} />
-					<Notice>The settle is a fixed wait after the motion; nothing measures it.</Notice>
-					{settings.movement === 'pulse' && <Notice>If this mount moves the other way for a guide direction, the dithers go the opposite way: the offsets are the intended ones, not the physical motion, and Spiral and Grid come out mirrored. Reverse the direction under Advanced.</Notice>}
+					<SegmentedControl label="Movement" options={MOVEMENTS} value={settings.movement} format={(movement) => MOVEMENT_LABELS[movement]} disabled={fieldsDisabled} onChange={(movement) => update({ movement })} />
+					<NumberInput label="Amount" suffix="″" value={settings.amount} min={DITHER_MINIMUM_AMOUNT} max={DITHER_MAXIMUM_AMOUNT} step={1} disabled={fieldsDisabled} onChange={(amount) => update({ amount })} />
+					<Select label="Pattern" options={PATTERNS} value={settings.pattern} format={(pattern) => PATTERN_LABELS[pattern]} disabled={fieldsDisabled} onChange={(pattern) => update({ pattern })} />
+					<NumberInput label="Settle" suffix="s" value={settings.settleTime} min={0} max={DITHER_MAXIMUM_SETTLE} disabled={fieldsDisabled} onChange={(settleTime) => update({ settleTime })} />
+					<Checkbox label="Dither in RA only" checked={settings.raOnly} disabled={fieldsDisabled} onChange={(raOnly) => update({ raOnly })} />
+					<Notice>After the delay, the mount dithers, then waits the settle time; nothing measures the settle.</Notice>
+					{settings.movement === 'pulse' && <Notice>Pulses go in the mount's nominal directions. If this mount moves the other way, the dithers, Spiral and Grid included, come out mirrored: reverse a direction under Advanced.</Notice>}
 					{settings.movement === 'pulse' && (
 						<CollapsibleSection id="images.camera-acquisition.dithering.advanced" title="Advanced" defaultOpen={false}>
-							<Select label="+RA Pulse" options={RA_DIRECTIONS} value={pulse.rightAscensionDirection} format={directionLabel} disabled={disabled || !mountIdentity} onChange={(rightAscensionDirection) => updatePulse({ rightAscensionDirection })} />
-							<Select label="+DEC Pulse" options={DEC_DIRECTIONS} value={pulse.declinationDirection} format={directionLabel} disabled={disabled || !mountIdentity} onChange={(declinationDirection) => updatePulse({ declinationDirection })} />
-							<NumberInput label="Max Pulse" suffix="ms" value={pulse.maxPulseDuration} min={GUIDING_MINIMUM_PULSE} max={GUIDING_MAXIMUM_PULSE} step={100} disabled={disabled || !mountIdentity} onChange={(maxPulseDuration) => updatePulse({ maxPulseDuration })} />
-							<Notice>The guide directions that move this mount toward east and north. No calibration measures them, so the nominal East and North of the mount's commands hold until you reverse one.</Notice>
+							<Select label="+RA Pulse" options={RA_DIRECTIONS} value={pulse.rightAscensionDirection} format={directionLabel} disabled={fieldsDisabled || !mountIdentity} onChange={(rightAscensionDirection) => updatePulse({ rightAscensionDirection })} />
+							<Select label="+DEC Pulse" options={DEC_DIRECTIONS} value={pulse.declinationDirection} format={directionLabel} disabled={fieldsDisabled || !mountIdentity} onChange={(declinationDirection) => updatePulse({ declinationDirection })} />
+							<NumberInput label="Max Pulse" suffix="ms" value={pulse.maxPulseDuration} min={GUIDING_MINIMUM_PULSE} max={GUIDING_MAXIMUM_PULSE} step={100} disabled={fieldsDisabled || !mountIdentity} onChange={(maxPulseDuration) => updatePulse({ maxPulseDuration })} />
+							<Notice>The guide directions that move this mount toward east and north; no calibration measures them.</Notice>
 						</CollapsibleSection>
 					)}
 				</>
 			)}
-			{settings.enabled && applicable && <Notice>The delay is followed by the dither and its settle.</Notice>}
 		</>
 	)
 }

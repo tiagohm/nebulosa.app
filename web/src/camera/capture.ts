@@ -185,6 +185,8 @@ export interface CaptureDitherInput {
 	readonly acquisition: Pick<CameraAcquisitionSettings, 'exposureMode' | 'frameType'>
 	// Dithering preferences of the camera.
 	readonly settings: Readonly<CameraDitherSettings>
+	// Whether the setup assigns a Guide Camera, whose guiding session Guided dithers go through.
+	readonly guideCamera: boolean
 	// Latest guiding session of the setup's guide camera, running or ended, if any.
 	readonly guidingSession?: Pick<GuidingSessionSummary, 'sessionId' | 'active' | 'state' | 'cameraName'>
 	// Guiding form of the setup's guide camera, whose amount, RA only, and settle a Guided dither takes.
@@ -203,11 +205,12 @@ export type CaptureDitherOutcome = { readonly dither?: CaptureDither; readonly b
 
 // Builds the frozen dither snapshot of the next capture of a camera from its preferences and the setup, or why the
 // capture cannot dither now. A single exposure, a frame type other than LIGHT, or dithering turned off send none.
-export function captureDither({ acquisition, settings, guidingSession, guiding, mount, guideOutput, mountSettings }: CaptureDitherInput): CaptureDitherOutcome {
+export function captureDither({ acquisition, settings, guideCamera, guidingSession, guiding, mount, guideOutput, mountSettings }: CaptureDitherInput): CaptureDitherOutcome {
 	if (!settings.enabled || acquisition.exposureMode === 'single' || acquisition.frameType !== 'LIGHT') return {}
 	const { everyFrames } = settings
 
 	if (settings.method === 'guided') {
+		if (!guideCamera) return { blocker: 'Assign a Guide Camera in Equipment Setup to dither through guiding.' }
 		if (!guidingSession?.active) return { blocker: 'Start guiding with the Guide Camera to dither through it.' }
 		if (guidingSession.state !== 'guiding') return { blocker: `${guidingSession.cameraName} is not guiding.` }
 		return { dither: { method: 'guided', everyFrames, guidingSessionId: guidingSession.sessionId, amount: { unit: 'guidePixel', value: guiding.ditherPixels }, raOnly: guiding.ditherRaOnly, settle: { ...guiding.settle } } }
@@ -234,23 +237,41 @@ function seconds(value: number) {
 	return String(Math.round(value * 1000) / 1000)
 }
 
-// Returns what a session is doing, for the status line: the exposure progress, the delay left, or the
-// outcome. Progress is shown only when the driver reports it; a delay under 1 s has no countdown.
+// Formats a running countdown in seconds to the tenth, such as 3.2 or 12.0, so its width holds still as it ticks.
+function tenths(value: number) {
+	return (Math.round(value * 10) / 10).toFixed(1)
+}
+
+// Why a capture failed, completing "Failed: …", by the reason the server reports.
+const CAPTURE_FAILURE_REASONS: Readonly<Record<NonNullable<CaptureSession['reason']>, string>> = {
+	busy: 'the camera was busy',
+	aborted: 'it was aborted',
+	disconnected: 'the camera disconnected',
+	removed: 'the camera was removed',
+	timeout: 'the camera did not finish in time',
+	alert: 'the driver reported an error',
+	commandFailed: 'the command could not be confirmed',
+	unexpectedState: 'the camera refused it in its current state',
+}
+
+// Returns what a session is doing, for the status line: that it stops after the frame in flight, the exposure progress,
+// the delay left, or the outcome, a failure with its cause. Progress is shown only when the driver reports it.
 export function captureStatus(session: CaptureSession): string {
 	const { exposure, delay } = session
 	const total = session.request.exposureTime
+	if (session.stopping && captureRunning(session)) return 'Stopping after this frame'
 
 	switch (session.phase) {
 		case 'starting':
 			return 'Starting'
 		case 'exposing':
-			return exposure ? `Exposing — ${seconds(exposure.elapsedTime / 1000000)} / ${seconds(total)} s` : 'Exposing'
+			return exposure ? `Exposing — ${tenths(exposure.elapsedTime / 1000000)} / ${seconds(total)} s` : 'Exposing'
 		case 'reading':
 			return 'Reading Frame'
 		case 'saving':
 			return 'Saving Frame'
 		case 'waiting':
-			return delay ? `Waiting — ${seconds(delay.remainingTime / 1000000)} s` : 'Waiting'
+			return delay ? `Waiting — ${tenths(delay.remainingTime / 1000000)} s` : 'Waiting'
 		case 'dithering':
 			return session.dither?.settling ? 'Settling' : 'Dithering'
 		case 'paused':
@@ -262,8 +283,20 @@ export function captureStatus(session: CaptureSession): string {
 		case 'aborted':
 			return 'Aborted'
 		case 'failed':
-			return session.error ? `Failed: ${session.error}` : `Failed (${session.reason ?? 'unknown'})`
+			return session.error ? `Failed: ${session.error}` : session.reason ? `Failed: ${CAPTURE_FAILURE_REASONS[session.reason]}` : 'Failed'
 	}
+}
+
+// Returns the least time a running fixed capture still takes, in seconds: the exposures and delays left, less the part of
+// the exposure or delay in flight already done. Readout, saving, and dithers are not counted, so the capture ends at
+// this time or later; undefined for a loop or an ended capture.
+export function captureRemaining(session: Pick<CaptureSession, 'phase' | 'count' | 'captured' | 'exposure' | 'delay' | 'request'>): number | undefined {
+	if (!captureRunning(session) || session.count === undefined) return undefined
+	const { exposureTime, delay } = session.request
+	const frames = Math.max(0, session.count - session.captured)
+	const exposing = session.phase === 'exposing' && session.exposure ? Math.max(0, session.exposure.elapsedTime) / 1e6 : 0
+	const waiting = session.phase === 'waiting' && session.delay ? Math.max(0, session.delay.remainingTime) / 1e6 : 0
+	return Math.max(0, frames * exposureTime + Math.max(0, frames - 1) * delay - exposing + waiting)
 }
 
 // Returns the frame count of a session: taken out of requested, or taken so far for a loop.

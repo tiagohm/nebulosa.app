@@ -5,7 +5,8 @@ import { moveIndex } from './navigation'
 
 // Row of mutually exclusive options shown side by side, for a choice of two to five short labels, such as
 // an acquisition mode. It is one stop of the Tab order, on the selected option: the arrow keys, Home, and End move the
-// selection and the focus along it, as in a group of radio buttons.
+// selection and the focus along it, as in a group of radio buttons. The selected option says so in visually hidden
+// text, so its state never rests on colour alone.
 
 export interface SegmentedControlProps<T extends string> {
 	readonly label?: string
@@ -56,6 +57,7 @@ export function SegmentedControl<T extends string>({ label, options, value, onCh
 						)}
 					>
 						{format(option)}
+						{option === value && <span className="sr-only">, selected</span>}
 					</button>
 				))}
 			</div>

@@ -19,9 +19,18 @@ Use the user's task to determine the authorized outcome:
 
 ## Architecture Reference
 
-[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) is the base documentation of the whole architecture: its core (the glossary, the layer map, how a feature is added) and an index of the documents under `docs/architecture/`, one per contract or reference (the capability inventory, the workspace and mode contracts, operations and arbitration, persistence, and the contract of each feature). Read the core and the documents a task touches before designing a change, and treat them as binding alongside this file.
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) is the base documentation of the whole architecture: its core (the glossary, the layer map, the rules every feature shares, how a feature is added) and an index of the documents under `docs/architecture/`, one per feature or cross-cutting reference. Read the core and the documents a task touches before designing a change, and treat them as binding alongside this file.
 
-Keep it current: every change that adds, removes, or alters a capability, a contract, an ownership boundary, a route or event, persisted state, or a documented limitation updates the owning document in the same commit; a new contract is a new document under `docs/architecture/`, listed in the index of `docs/ARCHITECTURE.md`. Do not leave it describing behavior the code no longer has.
+What the documents hold, and only this:
+
+- **What it is**: the feature or mechanism in a few sentences, with its workspace and main modules as pointers into the code.
+- **Why it exists**: the operator's need it answers and its importance in the app.
+- **Relations**: what it uses and what uses it: other features, services, devices it holds, the toolkit, external services, persisted data, and the workspace that hosts it.
+- **Rules and limitations**: the invariants other features rely on and the limitations that change how it is used.
+
+They never describe layout, styles, labels, wording, field lists, route paths and parameters, error codes, event payloads, constants, cadences, algorithm steps, or any other detail the code already states; the code is the reference for those.
+
+Update a document in the same commit only when a change makes it wrong or incomplete in one of those four points: a feature is added, removed, or renamed; its purpose changes; it starts or stops using another feature, service, device, external service, or kind of persisted data; it moves to another workspace; an ownership boundary or a shared rule changes; or a documented rule or limitation appears, changes, or goes away. A change of UI, styling, wording, an internal algorithm, a route, a payload, an error code, or a fix that leaves the description true changes no document. A new feature is a new document under `docs/architecture/`, listed in the index of `docs/ARCHITECTURE.md`. Do not leave a document describing behavior the code no longer has.
 
 ## Working Principles
 
@@ -158,7 +167,7 @@ The app is in development and all of its data is test data: the database, settin
 - Changes to `app/`, bundling, Tailwind, `bunfig.toml`, `package.json`, or HTML entry points: also run `bun compile` and smoke-test the executable (`/api/health` and the UI load with styles).
 - UI changes: run `bun dev` and check the affected screen in a browser.
 - Report every skipped or failed verification command and its exact reason, and distinguish pre-existing failures from ones introduced by the task.
-- Confirm `docs/ARCHITECTURE.md` and the documents under `docs/architecture/` still match the change (see Architecture Reference).
+- Confirm `docs/ARCHITECTURE.md` and the documents under `docs/architecture/` still describe the change truthfully, updating them only as the Architecture Reference says.
 - Keep the credits of the About page (`CREDIT_GROUPS` of `web/src/about/about.ts`) current: a change that starts, changes, or stops the use of an external service, dataset, published model or method, protocol, or bundled library or program adds, updates, or removes its entry in the same commit, with the license or acknowledgment its publisher asks for. Check a citation against its publisher before writing it.
 - Review the final diff and status before staging.
 

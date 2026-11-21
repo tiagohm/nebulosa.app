@@ -1,32 +1,28 @@
-# Image Processing Contract
+# Image Processing
 
 Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
 
-- One service, `ImageProcessingService` (`api/src/imageprocessing.ts`), applies a pipeline to an image document: an ordered list of single-image operations of the toolkit (`ImageProcessingOperation`): debayer, automatic background extraction, background neutralization, arcsinh stretch, multiscale linear and median transforms, Gaussian blur, sharpen, cosmetic correction, horizontal and vertical flips, and grayscale.
-  A request carries only the enabled steps, in order, each with the id the editor gave it; the job keeps them as an immutable snapshot.
-  Parameters are the toolkit's own, which clamps them; they are not validated.
-- What a pipeline can apply to an image is checked when it is submitted (`checkPipeline`), from the channels and trusted CFA pattern of the source, following what each step makes of them: debayer needs a mono image and a pattern (the trusted one for `auto`) and makes RGB, grayscale makes mono, background neutralization needs RGB, and a raw CFA mosaic takes only debayer, cosmetic correction (by colour phase), and the flips (which keep the pattern in phase).
-  A refusal is `422 incompatibleImage` with the `stepId`; no operation is skipped or converted silently.
-- The source is never changed: the image worker hands a full copy (`ImageStore.processingImage`, a trusted pattern named at the image origin) to a worker of its own (`api/src/imageprocessing.worker.ts`), which applies the steps in order, announcing each one, and transfers the result back.
-  Only when every step succeeded is the result adopted as **one** derived document (`ImageStore.adopt`, provenance `processing`);
-  a failure names its step (`errorStepId`, `processingFailed`), and a failed or cancelled job adopts nothing, even when the cancel arrives during the adoption.
-- Scheduling is the analysis queue of the [Shared Image Contracts](shared-image.md), with one pipeline at a time and at most one waiting or running pipeline per source image (a second one is `409 busy` with the job).
-  A running pipeline is cancelled, or stopped after 10 min (`timeout`), by terminating its worker.
-  Results are never reused: running again creates another document.
-- Jobs are published as `imageProcessing:updated` (state, `currentStepIndex`, `completedSteps`, `outputImageId`, the failure), never with pixels or paths;
-  `GET /api/image-processing` is the snapshot, `GET /api/image-processing/:jobId` one job, `POST /api/images/:id/processing` submits (202), and `POST /api/image-processing/:jobId/cancel` cancels;
-  there is no result route.
-- The output document of a completed job is handed to a client by `POST /api/image-processing/:jobId/claim`, which answers its `ImageInfo` (again for a repeated claim while it is open; `expired` once closed, `invalidState` before completion).
-  A document never claimed within `CLAIM_GRACE` (10 min) is closed, so a tab that disappeared leaves no orphan;
-  a claimed one belongs to the client that claimed it (`ImageProcessingClaimRequest`) and closes as the documents a client opened do (see [Shared Image Contracts](shared-image.md)).
-- Images → Image Processing (`web/src/images/ImageProcessingPanel.tsx`, `ProcessingStepCard.tsx`, `ProcessingStepForms.tsx`) edits the pipeline of the document (`ImageProcessingDraft` in its view state, so a camera tab keeps it across frames and a reconnection of its camera, started from the pipeline of the profile, `ProfileSettings.imageProcessing`, which every edit of the steps replaces; see [Persistence and State](persistence-and-state.md)) as cards that are added from a grouped selector (`imageprocessing.catalog.ts`), reordered by dragging their handle or with Move and Alt+↑/↓, enabled or disabled (a disabled step keeps its parameters and is never sent), expanded independently of that, edited, duplicated (new id), and removed.
-  Run Pipeline sends a deep copy of the enabled steps, so edits during a run apply to the next one;
-  it is disabled, with the reason, without an image, without an enabled step, while a pipeline of the document runs, or when a step cannot apply (`pipelineIssue`, the same rules as `checkPipeline`), whose card shows why, as it shows a refusal or failure naming it.
-  A camera tab runs on the frame it shows and keeps following the camera.
-- The mirror (`web/src/images/imageprocessing.ts`, in `SERVER_STORES`) never lets a late event take a job back to an earlier state or fewer finished steps.
-  A tab claims only the jobs it submitted, once, on the event or the snapshot that shows them completed (or on the answer of a submission whose job already completed);
-  the output opens as an unsaved derived document, the active one only when its source still is.
-  Stop Processing waits for the server to report the end.
-- Limitations: no preview, no memory budget beyond the size of the image (a pipeline holds several copies of it while it runs);
-  jobs do not survive a restart, and pipelines being edited do not survive a reload;
-  XISF stores the HISTORY of a derived image as one keyword.
+Image processing applies an ordered pipeline of the toolkit's single-image operations (debayer, background extraction and neutralization, stretch, multiscale transforms, blur, sharpen, cosmetic correction, flips, grayscale) to an image document.
+`ImageProcessingService` (`api/src/imageprocessing.ts`, on its own worker `api/src/imageprocessing.worker.ts`) runs the pipeline on a copy and adopts the result as a new derived document.
+Images → Image Processing (`web/src/images/ImageProcessingPanel.tsx`, store `web/src/images/imageprocessing.ts`) edits the pipeline of a document and opens its output.
+
+## Purpose
+
+An operator wants to improve or prepare a single image, for viewing, analysis, or saving, without ever losing the original.
+It keeps every result as its own document beside the source.
+
+## Relations
+
+- Runs on the analysis queue of the [Shared Image](shared-image.md) store and adopts its output there as a derived document with its provenance; it holds no device.
+- The operations and their parameters are the toolkit's (`core`).
+- The output is claimed by the client that submitted the job and closes as that client's documents do.
+- The pipeline of a document starts from the one of the profile (see [Persistence and State](persistence-and-state.md)); on a camera tab it runs on the frame shown (see [Capture Frames](capture-frames.md)).
+- Its output is analyzed and saved like any other document.
+
+## Rules and Limitations
+
+- The source is never changed, and a result is adopted only when every step succeeded.
+- What a pipeline can apply is checked against the image when it is submitted; no step is skipped or converted silently.
+- One pipeline per source runs at a time, and results are never reused: running again creates another document.
+- An output never claimed is closed after a grace period.
+- There is no preview, a running pipeline holds several copies of the image, jobs do not survive a restart, and pipelines being edited do not survive a reload.

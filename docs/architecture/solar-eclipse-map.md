@@ -1,32 +1,28 @@
-# Solar Eclipse Map Contract
+# Solar Eclipse Map
 
 Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
 
-The Solar Eclipse Map tool of the Planning group and its routes.
+The Solar Eclipse Map is a tool of the Planning group that steps through solar eclipses, maps their central path, limits, and sunrise and sunset curves, and gives their local circumstances for one place (`api/src/solareclipses.ts`, `api/src/solareclipses.map.ts`, `web/src/tools/solareclipse/`).
+It is built like the [Lunar Eclipse Map](lunar-eclipse-map.md), with a Local View of the eclipse from the place.
 
-- Solar eclipses (`api/src/solareclipses.ts`, `solareclipses.map.ts`): stateless, read-only queries with the lunar conventions of `api/src/eclipses.ts` (see [Eclipse Ephemeris Contract](eclipse-ephemeris.md)) (id, strict stepping, `404 notFound`), never operations or events.
-  `GET /api/eclipses/solar` steps to the next or previous eclipse;
-  with a place, it skips eclipses whose Sun stays below its horizon during the local eclipse, trying 48 eclipses at most (`404 notFound` beyond) and letting the event loop run between them.
-  `/:id/map` answers the named global points (P1–P4, U1–U4, C1/C2 the ends of the central line, MAX, N1/N2/S1/S2) with their times and the Sun's geometric altitude there, the greatest eclipse and greatest duration, and SVG path data on the degree plane for the total and annular parts of the central line (split where a hybrid eclipse changes), the northern and southern limits of the central and partial eclipse, and the sunrise/sunset curves;
-  separate branches stay separate subpaths.
-  A map costs hundreds of milliseconds, so its geometry is computed on a worker of its own (`api/src/solareclipses.worker.ts`, embedded by `app/build.ts`) from the eclipse and the Besselian elements the API process found on the eclipse's ephemeris, so the worker reads no ephemeris and no kernel; one at a time, with concurrent requests for one eclipse and source sharing a job, a 30 s timeout (`500 computationFailed`), and the latest 8 maps cached.
-  `/:id/local` answers the circumstances of a place computed in the API process with the same ephemeris as the map's Besselian elements: visibility (kind, central phase, Sun rising or setting, completeness of the contacts), C1, C2, MAX, C3, C4 with the Sun's altitude and azimuth, P and Z, and magnitude, the maximum magnitude, Moon/Sun diameter ratio, partial and central durations, the distance from the central line with its compass side, the width of the path here (`pathWidthKm`, the limits across the central line over the passage, as the catalogs publish it, for a place in the central path), the central shadow's chord through the place (`shadowPathWidthKm`, the narrowest width of its footprint at the local maximum, which can be several times smaller at a low Sun), and the Local View's shapes.
-  Units are the lunar ones, widths in kilometers; values an eclipse or a place lacks are absent.
-  Locally, visible means the Sun's center at or above the 0° horizon, without the site's elevation, terrain, or the lunar limb profile; the map's limits use the toolkit's empirical horizon refraction, matching the NASA maps.
-  Obscuration zones and animation of the shadow are not provided.
-- Solar Eclipse Map (`web/src/tools/solareclipse/`): built like the [Lunar Eclipse Map](lunar-eclipse-map.md), with a tab-lived valtio proxy (`solarEclipseState`), the shared place and time zone rules, and request guards.
-  Its global map does not depend on a contact or a place, so a click or a contact asks only for the local circumstances again, and showing or hiding a layer (central line, central limits, partial limits, sunrise/sunset curves, points, point names; all shown at first) asks for nothing.
-  The central line is solid where total and dashed where annular, so a hybrid eclipse reads without color.
-  Each eclipse shown is framed on the map (`eclipseBounds`): the central path of a central eclipse (its line, limits, umbral points, and greatest eclipse and duration), every path and point of a partial one, beside the legend while it is shown, at most 12× the whole map; Frame the eclipse, under the zoom buttons, frames it again, and a place chosen off screen (typed coordinates, Use as Location) is brought into view, while a click on the map moves nothing.
-  The Moon's shadow (the central line, the central limits, and the umbral points) is drawn in the Moon's map hue, as is the Lunar Eclipse Map's region where the Moon is up, so on both maps the accent marks only the place and the chosen point.
-  Every global point is drawn with its name (a layer of its own), with a marker shape per family, and the names of points that nearly coincide are stacked.
-  A global point is chosen in the panel's Global Points list, since a click on the map chooses the place;
-  the map then rings it and centers on it, and the panel tells what it is, where and when, the Sun's altitude, and for the greatest eclipse and duration the Sun's azimuth, the central phase, its duration, and the path width, and can make it the place.
-  The Local Circumstances show the path width at the greatest eclipse, the path width here, and the shadow chord here under their own names.
-  Visibility leads with what the place sees (`visibilityHeadline`: the toolkit's visibility kind told with the place's central phase, so a place outside the path never reads as seeing the whole eclipse), then the duration of the central phase and of the eclipse here, the magnitude here, how far the place is from the central line and on which side (or on it, within about 1 km), and the Sun's altitude at MAX; contact rows give the Sun's altitude and azimuth (`Alt · Az`, as the lunar rows), and the position and zenith angles of the instant drawn sit in the Local View, as on the lunar map: at a contact those of its contact point, between contacts those of the limb point nearest the Moon's center (the shadow's center on the lunar map), both answered by `/:id/local` in `view`.
-  Global points are named apart from the local contacts: C1 and C2 on the map are the ends of the central path, never the contacts of a place.
-  Contacts, durations, and the shadow chord a place lacks are left out, and the magnitude is a fraction of the solar diameter, never an obscured area.
-  The panel runs Location, Visibility, Contacts (closed by the solar filter warning, always shown with an eclipse), Local View, Details (whose notice explains path width and shadow chord only for a central eclipse), Global Points (collapsed at first), and About; the Lunar Eclipse Map keeps the same order, and both name the eclipse once, in the toolbar.
-  A URL that names an eclipse (`/tools/solar-eclipse-map/<eclipse id>`, the id of `/api/eclipses/solar`) shows that eclipse with its map (`showEclipse`, under the same request guard as the searches), whatever the tab showed before, on a link, a reload, back, or forward;
-  an id that names no eclipse (`404`, `unknownLink`) says no eclipse is at that link and offers the next eclipse instead, never showing another eclipse on its own; on both maps.
-  Stepping to another eclipse from such a URL replaces it with the new id, so the URL never names an eclipse other than the one shown; without an id the tool keeps its own choice.
+## Purpose
+
+A solar eclipse is seen only from a narrow strip of the Earth, and its type, magnitude, and duration change from place to place.
+The tool answers where an eclipse is total, annular, or partial, what the operator's site sees, and when its contacts happen, so an observation or a trip can be planned.
+
+## Relations
+
+- Uses the [Eclipse Ephemeris](eclipse-ephemeris.md) for the eclipse, its id, and the Sun, the Earth, and the Moon, and the eclipse computations of the toolkit (`core`).
+- Computes the global map on a worker of its own (`api/src/solareclipses.worker.ts`, embedded by `app/build.ts`) from the Besselian elements the API found, so the worker reads no ephemeris or kernel; local circumstances are computed in the API process on the same ephemeris.
+- Draws on the [World Map](world-map.md) and shares its location, time zone, and legend components with the Lunar Eclipse Map (`web/src/tools/eclipse/`).
+- Observes from its own location, for the tool only (see [Observing Sites and Time Zones](observing-sites-and-time-zones.md)).
+- Stateless, read-only queries: no operation, event, device, or persisted data; the tool's state lives in the tab.
+- Hosted by the Tools workspace (see [Tools Integration](tools-integration.md)); a URL can name an eclipse, which opens the tool on it, and an unknown one offers the next eclipse instead.
+
+## Rules and Limitations
+
+- The global map depends on neither a contact nor a place, so only the local circumstances change with them.
+- Locally, visible means the Sun's center above the 0° horizon, without the site's elevation, terrain, or the lunar limb profile; the map's limits use the toolkit's horizon refraction, as the NASA maps do.
+- Global points (the ends of the central path among them) are never the contacts of a place.
+- The magnitude is a fraction of the solar diameter, never an obscured area.
+- Obscuration zones and an animation of the shadow are not provided.

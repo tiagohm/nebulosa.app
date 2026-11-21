@@ -1,91 +1,36 @@
-# Observing Planner Contract
+# Observing Planner
 
 Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
 
-- The Observing Planner (`api/src/observingplanner.ts` with `observingplanner.astronomy.ts`, `observingplanner.minorbodies.ts`, `observingplanner.minorbodies.store.ts`, `observingplanner.schedule.ts`, and `observingplanner.store.ts`) finds and analyzes targets over a night of a site and keeps the night plans the operator writes.
-  Catalog objects, major bodies, and coordinates are computed locally: the embedded sky catalog, the Sun, the Moon, and the planets of the fast [Ephemeris Chain](ephemeris-chain.md) (`solarSystemSource` and `geocentricOf` of `api/src/sky/ephemeris.ts`, over an interpolated source: the SPK kernels when they cover the night, else VSOP87E, ELPMPP02, and the Pluto model; a night is kept by kernel generation, and so are the analyses of its targets), and the Sun night of Astro Weather (`AstroWeatherService.night`, called in process).
-  Only a minor body is asked of anything else, on demand when it is analyzed: the SPK kernels of the SPICE Kernel Library, and SBDB and Horizons through the shared JPL queue while the ephemeris sources are online (see Minor bodies below).
-  It never asks a forecast or a device, never starts an operation or a session, and moves no mount, Sky clock, profile, or site.
-  Plans are documents to read and edit, not runnable sequences.
-- Targets (`ObservingTargetRef`) are a catalog object by id, a major body by Horizons code (the Moon, the planets, and Pluto; never the Sun), a fixed ICRS/J2000 place with a name, or a minor body (`{ kind: 'minorBody', spkId, designation }`, the shape of the Sky's `SkyObjectRef`) by its canonical SBDB SPK-ID, decimal text never compared as a number;
-  two minor bodies are the same by SPK-ID alone, whatever designation named them.
-  Satellites and constellations are not targets.
-  A meteor shower observation (`{ kind: 'meteorShower', id }`, by its shower id) is an observing event, not a fixed target at its radiant: it is analyzed by the Meteor Showers service (`MeteorShowersService.plannerAnalysis`, the `meteorShowers` option of the service) from the shower's geometric observing windows under the plan's constraints (the minimum altitude is the radiant's, the Sun limit the darkness, the Moon separation applied while the Moon is up), kept when they last the minimum continuous duration; it has no score, airmass, magnitude, or pointing, its windows carry the instant of the highest radiant, and its samples are the radiant's.
-  A shower the catalog no longer knows is `unresolved`; one not active that night is `notObservable` with `meteorShowerInactive`, and one without a radiant with `radiantUnknown`. Its analysis names the support its windows were judged against and whether its id is an IAU number or a record of the catalog's edition, which a refresh may change.
-  The schedule treats its block like any other, and discovery never lists showers.
-  A catalog id the catalog no longer knows, or an SPK-ID SBDB does not know, is `unresolved`, never replaced by another object or by stored coordinates; a moving body is never stored or analyzed as fixed coordinates.
-- Minor bodies (`MinorBodyTrajectories`): the trajectory of a night comes from one source for the whole night, chosen once by the fast mode of the [Ephemeris Chain](ephemeris-chain.md) with the kernels and the offline switch read once:
-  the SPK kernels when they resolve the body and the Earth at every node, then the two-body Kepler model of the SBDB elements (`keplerOrbit`, about the Sun, or about the solar-system barycenter for a closed orbit beyond `BARYCENTRIC_KEPLER_AXIS`, with that center and the Earth of the toolkit's analytical source, VSOP87E), then a geometric Horizons vector table (`VECTOR`, centered on the Earth, ICRF equator, no corrections) through the JPL queue, with a circuit breaker.
-  The elements are those already known (the SBDB cache in memory or those saved with a plan), or asked of SBDB first while online and none is known; a body SBDB does not know is `unresolved` and Horizons is not asked for it.
-  So Horizons gives a trajectory only for elements the Kepler model cannot propagate (B1950), and offline it is never asked.
-  Nodes of two sources are never mixed: a node the kernels miss gives the whole night to the next source, and a kernel that cannot be read is logged and treated as a miss.
-  The trajectory is materialized as geometric geocentric ICRS vectors (no light-time, like the planets) on a grid whose linear interpolation errs by at most 1″, with the observer's offset removed at each instant (`PlanningNight.topocentric`);
-  evaluating it never reads a kernel, asks JPL, or queries the database.
-  Its root-finder step is shortened for a fast body so it moves no more than 2.5° against the stars within a step (the grid and the steps are documented at `COARSE_NODE_MS` and `MAXIMUM_MOTION_PER_STEP` of `api/src/observingplanner.minorbodies.ts`).
-  A body no source covers, or too fast to follow within those limits, is `ephemerisUnavailable` with one reason (`orbitalSolutionUnavailable` for elements the Kepler model cannot propagate when Horizons gives no trajectory either, `ephemerisOffline`, `ephemerisSourceUnavailable`, `trajectoryResolutionExceeded`), answered `200` like `unresolved`, never `notObservable`.
-  Its analysis adds `ephemeris` (`PlannerEphemerisProvenance`: the source (`spk`, `analytical`, or `horizons`), the mode, the `attempts` of the sources tried before it, `approximate` for Kepler, the kernels and their generation, the epoch, solution date, and reading time of the elements, the node spacing, and the search step), `motion` (the highest topocentric rate against the stars, radians per minute), and the distance and estimated magnitude (H–G or M1–K1 from the SBDB photometry, absent without it) of each sample.
-  A two-body orbit ignores the planets, so its error grows with the age of the elements; no accuracy is promised for it.
-  Prepared trajectories are kept in memory by body, night, offline switch, kernel generation, and the reading times of the elements; a body without a trajectory is not kept, so its sources are tried again next time;
-  a cancelled request stops preparing and answers nothing.
-- Saved elements (`observing_minor_bodies`, `ObservingMinorBodyStore`): after every committed save, duplicate, or deletion of a plan, the elements SBDB answered (in memory) for each minor body a plan names but none is saved for are saved, and those no plan names are removed, so a saved plan can still be analyzed offline and after a restart.
-  `POST /minor-bodies/:spkId/refresh` (`ObservingMinorBodyRefresh`) reads a body again from SBDB and saves it, only online (`503 offline` otherwise), `404 notFound` for a body SBDB does not know, and `503 serviceUnavailable` when SBDB or the queue refuses;
-  nothing refreshes by itself, and saving or refreshing elements never changes a plan, its revision, or its events.
-- A night is named by the civil date of its evening in the site's zone (`eveningDate`, YYYY-MM-DD): `zonedDate` of `api/src/sky/sun.ts` gives the bounds of that date, and the night is the Astro Weather night containing its last instant, from the Sun's upper transit of that date to the next one, checked against `sun.localDate`.
-  Times are Unix milliseconds (UTC) throughout; a display zone only formats them.
-- Geometry (`PlanningNight`): the directions given to `visibilityWindows` are ICRS vectors, never coordinates of date.
-  A catalog object is its J2000 place moved by its proper motion to the middle of the night, coordinates are taken as they are, and the Sun, the Moon, and the bodies are geometric geocentric vectors evaluated at each whole UTC hour and interpolated, minus the observer's offset, so the Moon's altitude and separations are topocentric.
-  Every instant of a night carries a fixed precession-nutation matrix and an apparent sidereal time advanced at the sidereal rate, both of the night's middle (`fixedOrientationProviders`), which keeps the error under 0.1″ and makes an analysis about a hundred times cheaper;
-  that orientation and the site offset (`SiteOffset`) are shared with the visibility of [Planetary Events](planetary-events.md).
-  Altitudes are geometric (airless) for the constraints, the airmass (Kasten–Young), the samples, and the score; no refraction, horizon mask, or terrain is applied, and the horizon is the geometric one.
-- Constraints (`ObservingConstraints`, `OBSERVING_PRESETS`, served by `GET /presets`): a mode (`deepSky`, `visual`, `planetary`), a minimum altitude, an optional maximum airmass, a maximum solar altitude, an optional minimum lunar separation enforced only while the Moon is above the geometric horizon (`moonSeparationHorizon` of the toolkit), and a minimum continuous duration of at least 10 minutes, the search step, so a window the search could miss could never qualify.
-  The presets are documented heuristics, not equipment limits.
-- Analysis (`POST /analyze`, `TargetAnalysis`): a catalog object carries its apparent major and minor axes when the catalog knows them. The windows are the stretches of the night satisfying every constraint, found by the toolkit's root search and kept when they last the minimum duration.
-  The status is `observable` (a window as long as the requested duration), `limitedDuration` (only shorter windows, reason `shorterThanRequested`), `notObservable`, or `unresolved`.
-  When there is no window, the reasons come from adding one constraint at a time: `noAstronomicalDarkness` or `sunTooHigh`, `belowMinimumAltitude`, `airmassTooHigh`, `notDuringDarkness`, `moonTooClose`, `windowTooShort`.
-  The culmination is the highest altitude over the night, labeled apart from any meridian transit.
-  Samples every 10 minutes over the night's `display` draw the chart; crossings always come from the windows.
-- Score (`ObservingScore`, model version 1): computed only inside windows, as the best `observationScore` of the toolkit (0–100) at the samples of a window and its middle; the factors of `observationScoreFactors` are returned by name.
-  The altitude factor rises from the minimum altitude, the airmass factor falls to zero at the airmass limit (or airmass 3), and the duration factor compares the window with the requested duration.
-  Twilight and the Moon (`moonInterference` with the illuminated fraction) count in the deep-sky and visual modes, not in planetary.
-  It is a relative ranking heuristic, never a predicted signal-to-noise ratio or sky brightness, and it never makes an unobservable target eligible.
-- Catalog and discovery: `GET /catalog` lists the catalog through `queryCatalog` (text against designations and proper names, classes galaxy, nebula, cluster, star, and other, constellation, magnitude range with unknown magnitudes listed last or left out, and apparent size), ordered by magnitude then id with a keyset cursor and the total count.
-  `POST /discover` evaluates one batch: the bodies with the first one when asked, then up to 100 catalog objects of the filter;
-  a fixed target whose meridian altitude stays more than 1° under the minimum altitude is rejected without a search, and the others are analyzed fully.
-  It answers the observable candidates of the batch (each with its class, constellation, magnitude, and apparent major and minor axes when the catalog knows them), best score first with ties broken by duration and identity, the number evaluated, the total, and the cursor of the next batch; it is never a global ranking until every batch has been read.
-  It yields to the event loop between candidates and stops when the request is aborted.
-  Measured on the generated catalog (131,832 objects): the full listing in about 180 ms, a text search in about 35 ms, a new night in about 600 ms, then about 10 ms per analysis and 400 ms per batch of 100 candidates.
-- Caches: the planning nights and the analyses are `LruCache` entries in memory, keyed by the site's place and zone, the evening, the target, the constraints, the requested duration, and the model version, and for a minor body also the identity of its trajectory's source (the provenance and the trajectory model version), so a new kernel set, offline switch, or orbit solution analyzes it again;
-  nothing derived is written to the database.
-- Plans (`ObservingPlan`, `GET /plans`, `GET`, `PUT`, `DELETE /plans/:id`, `POST /plans/:id/duplicate`): one catalog shared by every profile, tab, and browser.
-  A plan holds a name, the evening date, a copy of the site (name, place, zone) with the id of the saved site it came from, which it never follows (deleting that site keeps the plan), the base constraints, and the items in order.
-  An item holds its target and the name it had, a priority from 1 to 5 that never reorders or schedules anything, the requested continuous duration, an optional start chosen by the operator, optional constraints replacing the plan's field by field, and notes;
-  the same target may appear twice.
-  A save writes the whole document in one transaction from the revision it was edited from (0 creates it, ids come from the tab); another revision answers `409 conflict` with the current plan (`null` when it was deleted).
-  A delete carries `?revision`.
-  Each committed write publishes `observingPlan:updated` with the whole plan or `observingPlan:removed`, through `broadcast`.
-- Preview (`POST /preview`, `ObservingPlanPreview`): analyzes every item of a plan document, saved or not, with its effective constraints (minor bodies one after the other, a failure of one never stopping the others), and diagnoses the schedule as one sequential lane (`diagnoseSchedule`): a block is its start plus its requested duration, and it is valid only inside one window, never across two.
-  The problems are `unresolvedTarget`, `ephemerisUnavailable` (a minor body without a trajectory: its block is kept and never judged against windows nobody knows), `notObservable`, `insufficientContiguousTime`, `outsideNight`, `outsideValidWindow`, and `overlapsItem`;
-  the totals are the requested and scheduled time, the unscheduled items, the observable items, the items with problems, and the scope (the stretches with the Sun below the plan's limit) with the part of it no block covers.
-  Nothing moves, shortens, drops, or reorders an item, and conflicts may be saved.
-- Observing Planner tool (`web/src/tools/observingplanner/`, `/tools/observing-planner` and `/tools/observing-planner/<plan id>`, icon `compass`): it observes from the active site and shows the profile's display zone, and the tab state is `observingPlannerState` (`observingplanner.ts`, tab memory): the section (Discover, Analysis, Night Plan), the evening date (tonight in the active site's zone by default), the constraints (the presets of `GET /presets`, edited in the panel), the catalog filter, and the answers of the catalog listing, the discovery, the analysis, and the preview, each behind its own request guard so a late answer never replaces a newer one.
-  The saved plans are mirrored by `observingPlansState` in `SERVER_STORES`, read on every socket open and kept by revision from `observingPlan:*`, so an older read or event never rolls a plan back.
-  An edit becomes a draft written whole 400 ms later from the revision it was made on, one write at a time per plan; a `409` keeps the draft and shows Keep Theirs (drop it) and Save Mine (write it over the revision the server kept).
-  The line under the header summarizes the night, the mode, the minimum altitude, and the display zone, and opens the panel.
-  Every section opens at its top.
-  Its caveats (the hard limits, the score, the timeline's keys) keep their first sentence in view and fold the rest (`FoldedNote.tsx`), and a plan is named with its night unless its name already says it (`planLabel`).
-  Discover lists the catalog without a location and ranks the night's targets in batches that add up, saying how many objects were evaluated of how many match;
-  the best targets are ordered by score (the server's ranking), name, magnitude, apparent size, best window, or longest window (`candidateSort`, `sortCandidates`; an unknown magnitude or size last), by their table headers on wide screens and by an Order select on phones, where every listing shows two-line rows instead of tables;
-  choosing a row analyzes its target and its own button adds it to a plan;
-  a target of known size says how it fits the field of view the profile plans with, the framing chosen above the line (`FramingSelect`, the profile's `plannerFramingId`, view state; the Equipment Setup's until another is chosen, its sensor completed from the Equipment Catalog when the camera does not report it; `FramingParts.tsx`): Fits well, Fills the field, Small, or Mosaic (`framingfit.ts`, a heuristic comparing its major and minor axes with the long and short sides of the field and, with a known image scale, the pixels it spans), which breaks ties of the score and is an order of its own, never changing the score; a line names the field, or what it lacks;
-  a ranking computed for another location, night, constraints, or filter (`discoveryStale`) is dimmed and labeled with Find Again, and its next batch cannot be asked;
-  its Asteroids & Comets view (`discoverSource`) looks a body up in SBDB on request (`searchMinorBody`, behind its own guard), telling a found body, candidates to choose by designation, no match, and a failure apart, and a found body is analyzed or added by its SPK-ID like any target, never ranked.
-  Analysis shows the status and reasons, the windows, the score with its factors, the chart (`NightChart.tsx`: the target's and the Moon's altitude over the bands of the sky, the windows hatched, the labeled minimum altitude, lines below −10° clipped at the plot's floor rather than flattened onto it, a line at the current time while the night shown contains it, and a cursor moved by a click or the keyboard that opens on now during the night, else on the best instant of the best window, else on the culmination: `defaultSampleIndex`), the size of a catalog object with how it fits the field and the line naming that field, and analyzes fixed coordinates typed in hours and degrees, a form shown first while no target is chosen and folded under the analysis once one is;
-  for a minor body it also shows the Ephemeris (the source and why, the kernels or the elements' epoch and solution, the fastest motion, and the distance and estimated magnitude at the chart's cursor), labels the approximate model, and offers Refresh Orbital Elements, which analyzes it again.
-  Add to Plan proposes the plan of the tool's night at the tool's place, else of that night, else a new plan (`defaultPlanFor`), and warns when the plan chosen is for another night.
-  Night Plan without a plan lists the saved plans (name, night, site, targets) to open; with one, the plan is its night: the totals, then the timeline (`PlanTimeline.tsx`, HTML over percentages of the night so its text keeps its size), one lane per item over the bands of the sky with the windows hatched, the scheduled block, and a line at the current time, then the editor of the item selected on it, then the plan's own details folded away (name, evening, copied site and constraints, Use Active Site, Use Tool Constraints).
-  A lane is selected by a click or, with the timeline focused, the up and down arrows, Home, and End; the selected block is dragged by mouse, pen, or touch or moved with the left and right arrows (5 min, 1 with Shift) to the same canonical start, rounded to the minute, and Enter schedules an unscheduled item at its first window.
-  The item editor holds the requested minutes, the start typed as a local date and time of the display zone, the priority (said to be a note that never reorders or schedules), the notes, the problems in words (an overlap names the other item: `conflictSentence`), the order, Show in Sky, Analyze, and Remove;
-  plans are created, duplicated, and deleted (the delete confirmed in the danger tone);
-  a badge says whether the plan's edits are Saved, Saving, in Conflict, or Not saved (`planSaveStatus`), and the latest item removed can be put back with Undo until another plan is opened.
-  Show in Sky and Add to Plan are the handoffs of the Sky Map Contract.
-  Nothing here moves the mount, changes the Sky clock, or starts an operation.
+The Observing Planner finds and analyzes targets over a night of the active site and keeps the night plans the operator writes.
+Targets are catalog objects, the Moon and planets, fixed coordinates, minor bodies by SPK-ID, and meteor shower observations.
+For each it gives the windows that meet the constraints of a mode (deep sky, visual, planetary), the reasons when there are none, and a relative score; a plan is an ordered list of items whose schedule it diagnoses.
+The server is `api/src/observingplanner.ts` and its siblings (astronomy, minor bodies, schedule, store), and the tool is `web/src/tools/observingplanner/`.
+
+## Purpose
+
+It answers what is worth observing tonight from the site, when, and for how long, and lets the operator draft the night as a plan to read and adjust.
+
+## Relations
+
+- Hosted by the Tools workspace.
+- Observes from the active site and shows the profile's display zone; a plan keeps a copy of its site (see [Observing Sites and Time Zones](observing-sites-and-time-zones.md)).
+- Computes catalog objects, bodies, and coordinates locally from the embedded sky catalog, the toolkit's visibility search and observation score, and the fast [Ephemeris Chain](ephemeris-chain.md) (the kernels of the [SPICE Kernel Library](spice-kernel-library.md) when they cover the night, else the theories).
+- Takes its nights from [Astro Weather](astro-weather.md), in process.
+- Resolves minor bodies on demand from the kernels or their SBDB orbital elements, asking SBDB and Horizons through the shared JPL queue of the [Sky Map](sky-map.md) only while online.
+- Has meteor shower observations analyzed by [Meteor Showers](meteor-showers.md).
+- Shares its night geometry with [Planetary Events](planetary-events.md) and the [Jupiter](jupiter-observing-planner.md) and [Saturn](saturn-observing-planner.md) Observing Planners.
+- Judges how targets fit a framing of [Framing](framing.md), the Equipment Setup's by default.
+- Receives targets from the [Sky Map](sky-map.md) (Add to Observing Planner) and shows them there (Show in Sky).
+- Persists the plans and the orbital elements of the minor bodies they name in the database and publishes every plan change (see [Persistence and State](persistence-and-state.md)); everything derived stays in memory.
+
+## Rules and Limitations
+
+- Plans are documents, not runnable sequences: nothing here moves a device, changes the Sky clock, the profile, or a site, or starts an operation.
+- Altitudes are geometric: no refraction, horizon mask, or terrain is applied.
+- The score is a relative ranking heuristic, never a predicted signal-to-noise ratio, and never makes an unobservable target eligible; the presets are heuristics, not equipment limits.
+- A target the catalog or SBDB no longer knows stays unresolved, never replaced by another object or stored coordinates, and a moving body is never treated as fixed.
+- A minor body takes one source for the whole night; the two-body orbit of its elements ignores the planets, so no accuracy is promised for it.
+- Saved elements let a plan be analyzed offline and after a restart; nothing refreshes them by itself.
+- The schedule is only diagnosed: nothing moves, shortens, drops, or reorders an item, priority included, and conflicts may be saved.
+- Discovery ranks the catalog in batches, so it is never a global ranking until every batch is read.

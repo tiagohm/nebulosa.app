@@ -1,36 +1,26 @@
-# Meridian Flip Contract
+# Meridian Flip
 
 Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
 
-The Meridian Flip tool of the Rig & Observatory group: how it shows the server's monitor and executor of the mount of the Equipment Setup.
+The Meridian Flip tool of the Rig & Observatory group shows the server's monitor and executor for the mount of the active profile's Equipment Setup.
+It reads where the passage stands, enables the monitor, and checks, arms, or runs a flip with the settings it will use.
+It lives in `web/src/tools/meridianflip/`, over `api/src/meridianflip.ts` and `api/src/meridianflipexecutor.ts`.
 
-- Meridian Flip (`api/src/meridianflip.ts`, `api/src/meridianflipexecutor.ts`, `web/src/tools/meridianflip/`, `/tools/meridian-flip`, icon `meridian`), laid out as one passage of the target: a readout of where it stands, the strip of a live flip, then a Monitor or an Executor section, and the contextual panel Flip Settings for what is set rather than read.
-  `MeridianFlipView.tsx` is the tool: it owns what the parts share (the section shown, the draft of the flip window, Enable and Disable) and composes one file per part: `MeridianFlipReadout.tsx`, `MeridianFlipStrip.tsx`, `MeridianFlipMonitorView.tsx`, `MeridianFlipExecutorView.tsx`, `MeridianFlipGuide.tsx`, and the panel `MeridianFlipPanel.tsx`.
-  The tool shows the server's monitor of the MOUNT of the active profile's Equipment Setup (see [Meridian Flip Monitor Contract](meridian-flip-monitor.md); its flips are the [Meridian Flip Executor Contract](meridian-flip-executor.md)), which the status bar also shows while it is enabled.
-  The tool chooses no mount, as [Mount Remote Control](mount-remote-control.md): without a usable MOUNT, Enable (a workspace action, beside the panel toggle) is disabled with the reason, and Equipment Setup is offered.
-  Disable stays in the same place on both sections; it is confirmed while a flip is armed or scheduled (which ends with the monitor) and disabled while a flip runs.
-  The mirror (`meridianFlipState` of `meridianflip.ts`, in `SERVER_STORES`) drops a snapshot or response older than an event it applied by epoch and revision.
-  It keeps the recent transitions of each enablement, loaded from `GET …/transitions` and appended from `meridianFlip:transition`.
-  Closing the tab, switching profile, setup, or workspace, or reloading never enables, disables, or redirects a monitor.
-  The section shown is a view entry of the tab (`meridianFlipSection`, sessionStorage), so a reload keeps it, and the tool opens on the Executor while a flip of the mount runs or is armed.
-  The passage readout (`MeridianFlipReadout`), above both sections, is the one reading of the tool meant to be read from across the room:
-    - the time to or since the transit in large figures (`formatTransitOffset`, `T−09:25` before and `T+06:10` after, as the status bar writes it), interpolated from `sampledAt` with `useNow`, or the availability in words without a forecast, or Stale after 65 s without a publication;
-    - the phase in words, the approach told apart before and after the transit (Approaching the meridian, Past the meridian, `meridianPhaseText`), and the next instant of the forecast with its countdown and time (`nextMeridianEvent`);
-    - the mechanical assessment as a badge (Flip may be needed a warning, a danger past the window, Already on the expected side a success), and the reason in words;
-    - a timeline from the early warning to the closing of the window: the approach neutral, the preferred window and its closing minutes tinted and set apart by a gap, the transit marked and named in the legend, now marked and labelled on the bar, the four instants in the display zone of the active site, and a now off the scale said in words rather than pinned to an edge.
+## Purpose
 
-    The flip strip (`MeridianFlipStrip`), above both sections, shows a flip of the mount that runs (its step, start, and elapsed time, with Stop Flip, confirmed with what a cancel leaves paused), that is armed or scheduled (when it flips, with Disarm), or whose capture it left paused (with Resume Capture, confirmed); nothing otherwise.
-    The Monitor section (`MeridianFlipMonitorView.tsx`) shows the availability, the hour angle (`formatHourAngle`, moved on at the sidereal rate from the sample while the mount tracks a monitored target, `meridianHourAngle`, and "geometry only" without a forecast), the transit and the window as times of day, the forecast quality and tracking, the reported and the geometric pier side, the site the mount reports, and the instant of the sample.
-    When the mount reports a site more than `MOUNT_SITE_LONGITUDE_TOLERANCE` (0.25°) of longitude from the active observing site, a notice says how far east or west and how many minutes early or late the forecast runs for the sky of the site, and points to sending the site from Equipment Control; the active site's coordinates are never shown.
-    Then the recent transitions, newest first.
-    Nothing in the Monitor section commands the mount.
+The operator needs one place to see, from across the room, how far the target is from the meridian and what will happen there, and to hand a flip to the server with the equipment and settings it will use.
 
-    The Executor section (`MeridianFlipExecutorView.tsx`, mirror `meridianFlipExecutorState` of `meridianflipexecutor.ts` in `SERVER_STORES`, ordered by epoch and revision) shows when the window opens and closes with their countdowns, the firmware limit, and what Check answered (Eligible, Not yet for a wait or a window not open, Refused otherwise) with its reason.
-    Requests are built from the setup and the Target Centering, plate solving, exposure, star detection, and Auto Focus forms the profile keeps for the main camera, with a `nanoid` token: Flip When Eligible (the primary action, a one-shot arm the server then flips unattended, refused for a window closing after the firmware limit) and Flip Now, each confirmed with when the mount moves, how, whether a running capture of the main camera is paused, and which guide output is suspended, and Check (read-only eligibility).
-    The three motion requests are disabled, with the reason as their tooltip, while the mount is not connected, the monitor is off or follows no settled target, a request is in flight, a flip runs, or one is armed.
-    The latest flip shows its headline (`meridianFlipExecutionHeadline`: a failed execution whose mount was seen moving after a completed command reads Flipped, not verified or Flipped, not ready, a warning), its outcome, the flip verification apart from Ready for imaging, and its steps with the times of day, a failed step the execution went on from saying so.
-    Flip Settings, the contextual panel (`MeridianFlipPanel.tsx`), holds collapsible sections (`meridianFlip.*`): Flip Window (the settings in minutes, the settle time in seconds, held as a draft clamped by `normalizeMeridianFlipSettings`; Enable and Apply remember them in the profile per mount, and Apply sends them with `expectedRevision`, a conflict showing the running settings), Flip Policy (strategy, mount settle, the firmware limit, entered or cleared, never zero for unknown, and recentering and Auto Focus after the flip), then, collapsed, Advanced Policy (an unknown mount type as German equatorial and resuming after an inferred flip, with when a flip is inferred rather than verified by the pier side), Equipment (the MOUNT, its type, pier side, and commands, and the MAIN_CAMERA, GUIDE_OUTPUT, FOCUSER, and ROTATOR of the Equipment Setup), and, with a main camera, the read-only summaries of the camera tools a flip invokes (`MeridianFlipToolSections.tsx`): Acquisition (`CameraAcquisitionSection`, with the exposure of the Target Centering and Auto Focus frames), Plate Solving (`CameraPlateSolvingSection`), Target Centering, and, with a focuser, Auto Focus, each opening its tool on the camera tab of the Images workspace (`openCameraTool`).
-    These are the forms of the main camera a request copies when it is sent or armed, so a later change applies to the next request.
-    The policy is remembered by the profile per mount and locked while a flip runs.
-    Below both sections, How It Works (`MeridianFlipGuide.tsx`, text only) explains the monitor, the requests, and how a flip pauses the capture and guiding, reserves the setup, verifies the flip by the pier side or by Target Centering and Plate Solving, recenters and refocuses, and gives imaging back or leaves it paused.
-    Equipment Control's manual Flip says it only moves the mount and links here, and Camera Acquisition shows a paused capture and, once a tool released it, Resume.
+## Relations
+
+- Mirrors the [Meridian Flip Monitor](meridian-flip-monitor.md) and the [Meridian Flip Executor](meridian-flip-executor.md); the status bar also shows the monitor (see [UI Structure](ui-and-layout.md)).
+- Hosted by the Tools workspace; like [Mount Remote Control](mount-remote-control.md) it chooses no mount and offers the Equipment Setup without one.
+- Builds its requests from the Equipment Setup and the main camera's Target Centering, plate solving, exposure, star detection, and Auto Focus forms the profile keeps, and opens those camera tools on the camera tab in Images.
+- Remembers the flip window and policy in the profile, per mount.
+- Notices when the site the mount reports differs from the active [observing site](observing-sites-and-time-zones.md), and points to Equipment Control to send it.
+- The manual Flip of [Equipment Control](equipment-control.md) only moves the mount and links here; Camera Acquisition shows a capture a flip left paused and resumes it.
+
+## Rules and Limitations
+
+- Closing the tab, switching profile, setup, or workspace, or reloading never enables, disables, or redirects a monitor.
+- The camera forms are copied when a request is sent or armed, so a later change applies to the next request.
+- Reading the monitor never commands the mount, and the policy is locked while a flip runs.

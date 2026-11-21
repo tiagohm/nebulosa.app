@@ -1,44 +1,29 @@
-# Moon Inspector Contract
+# Moon Inspector
 
 Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
 
-- Lunar almanac (`api/src/sky/moon.ts`, `POST /api/sky/moon/almanac`): a stateless, read-only computation from the toolkit, never the network.
-  For an instant (Unix milliseconds) and an optional observer it answers the Moon's appearance (`MoonAppearance`), the next four principal phases strictly after the instant in time order, and the next perigee and apogee strictly after it with their geocentric distance (km) and apparent diameter.
-  The appearance is topocentric with an observer and geocentric without one: the illuminated fraction and phase angle, the phase name (a principal phase within ±6.1°, half a day of mean synodic motion, of its geocentric Moon−Sun ecliptic longitude difference, otherwise crescent or gibbous, waxing below 180°), the age since the previous geocentric new Moon, the Brown lunation number, distance, apparent diameter (IAU mean radius 1737.4 km), horizontal parallax, the sub-observer point (optical, physical, and with an observer diurnal libration) and sub-solar point (east longitude in (−π, π]), the Sun's selenographic colongitude, the position angles of the pole and of the bright limb, and with an observer the parallactic angle.
-  `bodyToCamera` is the one rotation a renderer needs: from the Moon's IAU body-fixed frame at the light-time retarded instant to a north-up view frame (+X celestial west, +Y celestial north of date, +Z toward the observer);
-  `sunDirection` is the Moon→Sun unit vector in the body-fixed frame.
-  A zenith-up view is the north-up one rotated by −parallacticAngle.
-  The Moon, the Earth, and the Sun of the appearance and of the phases and apsides come from one source of the fast [Ephemeris Chain](ephemeris-chain.md) (the SPK kernels of the SPICE Kernel Library when they cover a month on either side of the instant, else ELPMPP02 and VSOP87E), with the IAU rotation model, so the values may differ slightly from the Horizons-sourced `SkyPosition` of the selection, whose illuminated fraction is the Position section's.
-  The phases and apsides are the toolkit's series instants refined on that source (`nearestLunarPhaseOf`, `nearestLunarApsisOf`: under a second from DE440 on the theories, where Meeus' perigees err by up to half an hour), and the age and the Brown lunation count from the refined previous new Moon.
-  The calendar is cached by the interval in which it holds and by its source (`moonCalendar`, computed on the source interpolated, about half a second on the theories and tens of milliseconds on the kernels); the appearance is computed for the exact instant every time.
-- Moon Inspector (`web/src/sky/moon/`): the Object Inspector of the body `301` (`MoonInspector`, dispatched by `ObjectInspector`); no Sky panel view or navigation entry of its own.
-  Under the name its magnitude when known and a drawing of the Moon (`MoonImage`), its phase name and illuminated fraction, and how it is oriented ("From the observer · Zenith up", or "From the Earth's center · North up" without an observer), the NASA credit, and a larger view in a `Modal` on a click (the Lunar Surface Explorer below);
-  then Open in Framing and Slew to Object.
-  Then Position (with the apparent angular diameter from the position's distance), Visibility (the generic `ObserverSection`: altitude, azimuth, rise, transit, set), Lunar Phases (`lunarPhases`), Perigee & Apogee (`lunarApsides`), Next Lunar Eclipse (`eclipse`: type, greatest eclipse, magnitude, the local visibility of `/api/eclipses/lunar/:id/local` with an observer, and View Lunar Eclipse Map, which opens `/tools/lunar-eclipse-map/<eclipse id>`), and Lunar Physical Data (`physical`: age, lunation, distance, apparent diameter, libration, colongitude, sub-solar latitude, pole and bright-limb position angles, parallax, parallactic angle).
-- The drawing (`MoonCanvas`, `moon.renderer.ts`) is the texture on an orthographic sphere through `moon.geometry.ts`: the API's `bodyToCamera`, turned by −parallacticAngle for zenith up, a viewport in CSS pixels, and a soft terminator from `sunDirection` with a faint earthshine;
-  the shading is illustrative, not photometric.
-  WebGL2 draws it only when the appearance, orientation, size, or view changes;
-  without WebGL2 the same functions run on the CPU at a capped resolution (`CPU_MAX_SIDE`), so the drawing and any marker drawn through `moon.geometry.ts` stay aligned.
-  A lost WebGL context is restored and drawn again; the renderer is disposed with the canvas.
-  The store (`moon.ts`, `moonState`, tab memory) asks for the almanac at every new instant of the selection (the Sky's own refresh cadence) and keeps the last drawing of the same observer faded while the next loads, clears it at once for another observer, and asks for the eclipse only when the instant leaves the interval its search covers;
-  an almanac error never hides the eclipse, and the reverse.
-- Lunar Surface Explorer (`MoonImageModal`, the larger view of the Moon drawing): the 4K map zoomed with the wheel or a pinch (1× to 32×) and panned by dragging (`celestial/gesture.ts`), Zenith up / North up, a category filter (all, craters, maria and plains, mountains, rilles and valleys, other), names on or off, and Whole Moon.
-  The catalog (`moon.features.json.gz`) is fetched and unzipped on the first opening, kept out of the proxy (`moonState.features`), and its absence or failure only disables the names.
-  Markers (`MoonFeaturesOverlay`, `featureMarkers` in `moon.features.ts`) are SVG dots at the official center points drawn through the same view matrix and viewport as the texture, so they stay aligned under zoom, pan, orientation, libration, and time;
-  points on the far hemisphere are never drawn, and those on the night side are dimmed.
-  A feature is drawn when its catalog dimension spans enough CSS pixels, by priority (apparent size times a category weight favoring maria and mountains), and labels go to markers whose label box overlaps no label or marker of a higher priority, on the right of the marker or on its left near the edge;
-  the selected feature is always drawn and labeled (the thresholds and limits are those of `moon.features.ts`).
-  The search ignores case and diacritics, lists names starting with the text first and visible features before those turned away (marked "Not visible now"), and centers and zooms on a visible result.
-  The details (`MoonFeatureDetails`) give the official name, descriptor, center, the approximate diameter or, for elongated features, length, the approval year, the origin of the name, whether the center is on the visible hemisphere and in daylight now (a feature that turns away keeps its details), a link to its Gazetteer page, and the NASA and USGS/IAU credits.
-  Zoom, pan, filter, names, search, and selection are presentation state of the tab (`moonState.explorer`, the view's own transform); none changes the observer or the instant.
-  Center points are markers, never outlines or measured extents; no elevation is shown.
-- Moon assets (`web/assets/moon/`, generated by `bun make:moon` from `bin/src/moon.assets.ts`, not committed): `moon.2k.jpg` is the NASA SVS CGI Moon Kit LROC color map (https://svs.gsfc.nasa.gov/4720/, 2025 version) copied unchanged at 2048×1024;
-  `moon.4k.jpg` is its 16-bit sRGB 4096×2048 TIFF reduced to 8 bits and encoded with the toolkit's TurboJPEG (about 1.9 MB).
-  Both are equirectangular, centered on 0° longitude, east to the right, north up, and illustrative: NASA optimizes them for appearance, not science, and fills latitudes beyond ±70° with LOLA albedo.
-  `moon.features.json.gz` (the gzipped JSON `MoonFeatureCatalog` of `api/src/sky/moon.features.ts`, about 260 KB, 1.2 MB unzipped) holds every IAU-adopted lunar surface feature of the USGS Gazetteer of Planetary Nomenclature center-point archive (`MOON_nomenclature_center_pts.zip`, about 9 100 names) as positional rows (`LunarFeatureRow`), with planetocentric latitude and east longitude in degrees in [-180, 180) (converted once from the archive's [0, 360)).
-  `moon.provenance.json` records each source's URL, SHA-256, size, and download time, each output, and the credits.
-  The generator (`bin/src/moon/`) keeps only the status `Adopted by IAU`, fails on an approval status or descriptor it does not know, and writes the records it leaves out and why to `bin/data/moon/moon.features.audit.json`.
-  Sources are downloaded once into `bin/data/moon/` (not committed);
-  updating the assets is deleting them there and running `bun make:moon --force`, never a refresh at run time;
-  outputs whose bytes are unchanged are left alone, and a changed one is replaced only with the development server stopped, since Windows refuses to replace a file it serves.
-  `bun make:moon --empty` writes a gray 2×1 map and an empty catalog without downloading anything.
+The Moon Inspector is the Object Inspector of the Moon in the Sky workspace (`web/src/sky/moon/`).
+It shows the Moon's appearance (phase, illumination, libration, orientation) as a drawing, its position and visibility, the next principal phases, perigee and apogee, the next lunar eclipse, and physical data.
+Its larger view, the Lunar Surface Explorer, names the IAU lunar surface features on the drawing.
+The lunar almanac is a stateless computation of `api/src/sky/moon.ts`.
+
+## Purpose
+
+It lets the operator see the Moon as it appears from the site at the Sky's instant, plan around its phases and distance, and identify features on its surface.
+
+## Relations
+
+- A view of the [Sky Map](sky-map.md), whose instant and observer drive it; it has no navigation entry of its own.
+- Computes the almanac from the toolkit through the fast [Ephemeris Chain](ephemeris-chain.md): the kernels of the [SPICE Kernel Library](spice-kernel-library.md) when they cover a month on either side of the instant, else the theories.
+- Reads the next lunar eclipse and its local visibility from the [Eclipse Ephemeris](eclipse-ephemeris.md) and opens the [Lunar Eclipse Map](lunar-eclipse-map.md) on it.
+- Observes from the active site, topocentric with a site and geocentric without one (see [Observing Sites and Time Zones](observing-sites-and-time-zones.md)).
+- Offers Open in [Framing](framing.md) and the Sky's mount slew.
+- Draws the NASA SVS CGI Moon Kit color maps and the USGS Gazetteer of Planetary Nomenclature feature catalog, bundled in `web/assets/moon/` by `bun make:moon` (`bin/src/moon.assets.ts`, catalog schema in `api/src/sky/moon.features.ts`).
+
+## Rules and Limitations
+
+- Its values come from the fast chain and may differ slightly from the Horizons-sourced position of the Sky selection.
+- The drawing is illustrative, not photometric, and the color maps are made for appearance, not science.
+- Features are center points, never outlines or measured extents, and no elevation is shown.
+- The explorer's zoom, filter, search, and selection are presentation state; none changes the observer or the instant.
+- The assets change only by running `bun make:moon` again, never at run time; without the feature catalog only the names are missing.

@@ -33,7 +33,7 @@ Workspaces:
 - `web`: React frontend
 - `app`: Bundles `api` and `web` into a single server and executable
 
-See [ARCHITECTURE.md](docs/ARCHITECTURE.md) for the core of the architecture and the index of its documents under `docs/architecture/`: the capability inventory, workspace responsibilities, and shared contracts.
+See [ARCHITECTURE.md](docs/ARCHITECTURE.md) for the core of the architecture and the index of its documents under `docs/architecture/`: what each feature is, why it exists, and how it relates to the rest of the system.
 
 ## Production
 

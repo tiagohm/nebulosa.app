@@ -48,7 +48,7 @@ At the end of the run, update it: the coverage row of the area (date, `git rev-p
 
 ## Before Starting
 
-1. Read `AGENTS.md`, the core of `docs/ARCHITECTURE.md`, `docs/architecture/ui-and-layout.md`, and the document of each feature in scope.
+1. Read `AGENTS.md`, `DESIGN.md`, the core of `docs/ARCHITECTURE.md`, `docs/architecture/ui-and-layout.md`, and the document of each feature in scope.
 2. Inventory the primitives of `web/src/ui/` and `web/src/layout/` and the formatters of `web/src/format.ts` and its tests before proposing anything new, and find the consumers of any primitive you will change.
 3. Inspect `git status --short` and preserve existing changes.
 4. Record a baseline: the `web` tests and `bun lint`, so pre-existing failures are not attributed to this run.

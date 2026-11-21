@@ -1,104 +1,34 @@
-# Artificial Satellites Contract
+# Artificial Satellites
 
 Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
 
-- Catalog (`api/src/satellites.store.ts`, see [Persistence and State](persistence-and-state.md)): objects by NORAD catalog number, always a canonical decimal string of any length (six- and nine-digit ids included, never a number or a five-digit pattern), with their SATCAT metadata when read, one GP and one imported element set each, and group memberships.
-  A group is a membership of the source that listed the object, never a category, and an object is kept with its other groups, metadata, and elements when a group stops listing it.
-  An object without elements is metadata only: searchable, never predicted.
-  The element set the predictions use is the one an operator chose (`PUT /api/satellites/:noradId/element-source`), else GP, else imported, never the most recently downloaded.
-  Search (`GET /api/satellites`) is local, never the network: an exact NORAD id (leading zeros ignored) or international designator first, then names starting with the text, then names containing it, case and diacritics ignored, filtered by group, SATCAT type, status, and a list of ids, paged by offset (at most `SATELLITE_SEARCH_LIMIT`, 100, per page; 50 by default) with its total.
-  `GET /api/satellites/:noradId` answers the details of one object and `GET /api/satellites/sources` the state of every source.
-- Element sets (`api/src/satellites.elements.ts`): every set, downloaded or imported, is validated once by the toolkit (`validateOMM`, `validateTLE`) and stored as a canonical OMM whose SHA-256 is its identity;
-  a set that fails is never stored and is counted with its reason.
-  Imports (`POST /api/satellites/import`) take OMM JSON or TLE text (two lines, optionally after a name line, Alpha-5 numbers converted) and make the imported set the one the object uses; a text that is neither is `422 invalidImport`.
-  Every prediction names its set (`elements`: digest, epoch, kind, source key), so two results from different sets are never confused.
-- Downloads (`api/src/satellites.sync.ts`, `satellites.celestrak.ts`) follow the CelesTrak usage policy (https://celestrak.org/usage-policy.php): only when an operator asks (`POST /api/satellites/sources/:sourceKey/refresh`) or for the groups an operator turned on for automatic downloads, never when the Sky or the tool opens, a selection changes, or time is animated;
-  only allowlisted queries (`gp` or `satcat`, `GROUP` of a fixed list of current-data groups or `CATNR`), always `FORMAT=JSON` from `https://celestrak.org`, with the Nebulosa `User-Agent` (`identifyCelestrakClient`) and redirects not followed;
-  one request at a time for the process and one shared download per source.
-  A source is downloaded at most once per GP update (2 hours) or SATCAT interval (24 hours);
-  the attempt is recorded before the request, so a failure or a crash never leads to a repeat, and a refresh inside the interval is `409 sourceCooldown` with the cached data untouched.
-  Any answer other than 200 or no answer blocks the source for its interval, doubled by each failure since the last success up to a day and at least the `Retry-After` asked for (`409 sourceBlocked` meanwhile);
-  a 301, 403, 429, or 5xx blocks every source, since CelesTrak firewalls clients that keep sending errors.
-  The interval and blocks are kept in `satellite_sources` across restarts.
-  An answer that is not a JSON list, or a group that answers nothing while it listed objects, is `502 invalidResponse` and replaces nothing; a single object without GP data is an empty answer.
-  A GP download of a group that is not large (not ACTIVE, STARLINK, or ONEWEB) also downloads the SATCAT of the group when its own interval allows, whose failure never fails the first.
-  Each successful download is published in one transaction and then `satellites:changed` carries a new revision.
-- Automatic downloads (`api/src/satellites.auto.ts`, `SatelliteAutoDownload`): the allowlisted groups turned on (`PUT /api/satellites/sources/:sourceKey/auto-download` with `{ enabled }`, the GP source key of a group only, else `404 notFound`; kept in `satellite_auto_downloads`, large groups included) are downloaded once when the server starts (`startSatelliteDownloads`, after the database) and then by an in-process `Bun.cron` job every 6 hours (`AUTO_DOWNLOAD_SCHEDULE`), one after the other through the same downloads as an operator's, so the 2-hour GP interval, the SATCAT interval, and the blocks hold: a group not allowed yet waits for a later run, and a failure is recorded in its source and never stops the other groups or the schedule.
-  A run joins the one in progress; a hot reload of the server stops the job before the next run starts again.
-  A large group downloads its elements only, as when asked.
-  Turning a group on downloads nothing by itself and publishes `satellites:changed`.
-- Predictions (`api/src/satellites.ephemeris.ts`) use only the toolkit's SGP4 and frames, from a prepared record per element digest, copied for every computation.
-  Positions (`/position`, `/ephemeris`, `/tracks`) are geometric: no light time (a few milliseconds) and no annual aberration, which a satellite moving with the Earth does not show;
-  topocentric for an observer and geocentric without one, labeled by `center`.
-  RA/Dec are given of date (true equator and equinox, the frame of the Sky map) and in ICRS (J2000); altitude is geometric, with `apparentAltitude` refracted by the model of the Sky; distances are km, rates km/s and radians per second.
-  Illumination is the toolkit's conical umbra and penumbra, with the Sun from one source of the fast [Ephemeris Chain](ephemeris-chain.md) per computation, interpolated (`interpolatedEphemerisSource`): the SPK kernels of the SPICE Kernel Library when they cover its span, else VSOP87E.
-  A position carries the orbital speed (`speedKmPerSecond`, the length of the SGP4 velocity, relative to the Earth's center in inertial axes).
-  `/position` also answers `shadowCrossings`: the next entry into the umbra and exit from it (the satellite's sunset and sunrise) within 1.5 orbits and at most two days, found by the toolkit's `satelliteEclipses` every minute for a low orbit and every five otherwise, to half a second (an eclipse shorter than the step can be missed).
-  One search per element digest covers twice that span and answers every reading in its first half, so the position read every 5 seconds does not repeat it; it runs in parts of 50 samples (about 25 ms each) letting the event loop run between them, about 0.12 s in all for a low orbit and 0.4 s for a geostationary one, and the readings that arrive meanwhile wait for the same search.
-  When SGP4 fails in the span searched, `shadowCrossings` is absent and the position is still answered.
-  A reading costs under a millisecond besides; the Sky's position of a satellite (`locate`) skips the search.
-  `/ephemeris` samples at most 5000 rows (`truncated` beyond them), letting the event loop run between batches.
-  Satellites have no rise, transit, and set events.
-- Passes (`/passes`, the tool keeps the window within 7 days): the intervals above a minimum geometric altitude (`satelliteWindowPasses`), searched a day at a time with the event loop running between days and a pass cut by a day boundary joined again, at most 200.
-  A pass in progress at an edge of the window is kept with its bound at the edge (`startsBeforeWindow`, `endsAfterWindow`), never shown as a rise or set, and a geostationary satellite above the mask is one pass over the whole window.
-  The culmination is the highest point within the window, not a meridian transit or the closest approach.
-  Each pass lists its visible parts: sunlit (outside the umbra) while the observer's Sun is below the twilight limit given;
-  no brightness is estimated, since no source gives the standard magnitude of most objects, so brightness is unknown and never filters.
-  A cancelled request stops computing.
-- Quality of every prediction (`quality`): the age of the elements (instant minus epoch, in days, the worst over a window) against policy limits by orbit (below 225 minutes: caution after 3 days, unavailable after 14; higher: 14 and 60), the decay date of the catalog, an SGP4 failure, and whether the Earth orientation tables hold the instant;
-  `usable`, `caution`, or `unavailable` with its reasons.
-  These are conservative limits, not error bars.
-  Passes are refused when unavailable (`422 predictionUnreliable` with `quality`); positions and ephemerides answer with their quality; an SGP4 failure is `422 predictionUnreliable`.
-  A metadata-only object is `404 noElements`, an unknown one `404 notFound`.
-- Ground tracks (`POST /api/satellites/:noradId/ground-track` with `{ time, orbits }`, `SatelliteGroundTrackResponse`): samples from one orbit before the instant to 1 to 5 orbits after it (`GROUND_TRACK_MAX_ORBITS`), at most 3 days in all (`GROUND_TRACK_MAX_MS`), at a step set by the period (`GROUND_TRACK_SAMPLES_PER_ORBIT`), at most 5000, in parallel arrays: the geodetic subpoint (`satelliteSubpoint`, IERS2010, longitude in (−π, π]) and height, the footprint as the geocentric half-angle of the region that sees the satellite above the horizon (`satelliteGroundFootprint`: a spherical Earth with an ideal horizon, without terrain, refraction, or a minimum altitude), the orbital speed, the shadow state, and the subsolar point (the toolkit's `subpoint` of the interpolated VSOP87E Sun), with the entries into the umbra and the exits from it over the window (`shadowEntries`, `shadowExits`).
-  The crossings are refined with `satelliteEclipses` only between two samples on either side of the umbra's boundary, a few per orbit, so they add about 5% to a ground track; an eclipse shorter than the step can be missed.
-  It needs no observer, lets the event loop run between batches, carries the elements and the quality of its window, and is never refused for the age of the elements; an SGP4 failure is `422 predictionUnreliable`.
-- Tracks for the Sky (`POST /api/satellites/tracks`): samples of RA/Dec of date, geometric altitude, and sunlit state of the ids asked for and of the members of a group above the observer's horizon at the start (by the look angles alone, highest first; the first by id without an observer), at most 50 objects and 20 000 samples, each with its elements and quality or the code of its failure.
-- Sky identity (`api/src/sky/`): a satellite is the `SkyObjectRef` `{ kind: 'satellite', noradId }` (key `satellite:<id>` in the web) of category `satellite`.
-  `GET /api/sky/search` lists at most 5 satellites of the local catalog after the bodies and constellations, never asking the network;
-  `POST /api/sky/position` locates a satellite through the satellite service (`SkySatellites`, `satelliteSkyAdapter`) as a `SkyPosition` of source `local` with the refracted altitude, the distance in AU, and no magnitude or events, `404 noElements` for a metadata-only one and `422 predictionUnreliable` when SGP4 fails.
-  The Sky locator of the mounts has no satellite target, so no mount is ever sent to one.
-- Sky map (`web/src/sky/satellites.sky.ts`, `satellites.track.ts`): the selected satellite and the profile's favorites, at most `SATELLITE_TRACKS_LIMIT` (50), are moving bodies of type `satellite` drawn at every zoom by the map layer of their own, `satellites` (`MovingBodyLayer` and `movingBodyLayerId` of `web/src/sky/celestial/`), which the display layer Artificial satellites shows or hides (`satellites` of `SKY_LAYERS`, shown by default) apart from the Solar system layer.
-  Hidden, no satellite is drawn or sampled, the selected one and its track included.
-  Their positions come from one `/tracks` request per window of samples around the Sky clock's instant (`trackWindow` of `satellites.track.ts`), asked again only when the instant leaves the window or the ids, the observer, or the catalog revision change, and placed between samples by spherical linear interpolation, never a new prediction.
-  The markers move several times a second (less often with reduced motion) while the page is shown, apart from the 15 s tick of the map, but not every frame, since each move rebuilds the pick index.
-- Satellite Inspector (`web/src/sky/satellite/`, `skySatelliteState`, tab memory): the Object Inspector of a satellite, with its identity, the Brightness Unknown, the position of the selection (geometric, of date and J2000, distance in km, geocentric without an observer), the altitude and azimuth, the next pass above the horizon within two days of the Sky's instant on request (Show Next Pass, visible parts with the Sun below civil twilight), and the orbital data.
-  Track on Sky pans the view to the satellite at every marker update until the map is panned (the projection never moves, so a satellite outside the equatorial chart's hemisphere cannot be centred);
-  Show Track draws the samples of its window as a dashed line, broken below the horizon;
-  Open in Artificial Satellites opens the tool on it.
-  No Slew, Framing, rise, transit, or set is offered.
-- Favorites are a profile preference the server keeps (`ProfileSettings.satelliteFavorites`, see [Persistence and State](persistence-and-state.md)); a refresh never removes an id it stops listing.
-  They are also the Sky favorites of satellites: the star of a satellite in the Sky search or Inspector marks the same list, and the Sky lists them by id (see [Sky Map Contract](sky-map.md)).
-  The web mirrors the sources (`satelliteCatalogState` of `web/src/satellites/satellites.ts`, in `SERVER_STORES`), whose revision the views watch to read their own data again after a change.
-- Artificial Satellites tool (`web/src/tools/artificialsatellites/`, `/tools/artificial-satellites[/<noradId>]`): a tab-lived valtio proxy (`artificialSatellitesState`), never persisted, with the views Tonight (the one it opens on), Passes, Ground Track, and Ephemeris, over the routes of the Artificial Satellites Contract;
-  it commands no device.
-  The details of the satellite selected are the contextual panel, a drawer on narrow screens that choosing a satellite never opens.
-  A toolbar above the views holds, as the Sky's does, the satellite search (`SatelliteSearch.tsx`, `searchSatelliteList`) and the views, a segmented control that scrolls sideways when it does not fit.
-  The search lists the server's catalog only, never CelesTrak, by name, NORAD id, or COSPAR id as the text is typed (after 200 ms), at most 20 with the others counted, each with its designations, type, and the source and date of its elements (or catalog data only), and chooses with the mouse or ↑, ↓, Enter, and Escape; / focuses it.
-  Choosing a satellite selects it in the view shown; each one listed has the star of the profile's favorites, which are listed instead while the Favorites toggle beside the field is on (the text then filtering them) and whenever the field is empty.
-  With an empty catalog it offers CelesTrak Groups; it lists again after a change of the catalog.
-  Each view computes its predictions when it shows a satellite (or Tonight's list) without them, and its form only refines them; a failure offers Retry.
-  Tonight (`SatelliteTonight.tsx`, `loadTonight`) lists the passes of the profile's favorites or of the members of a downloaded group that is not large (`tonightGroups`), chosen by its List at once (the first `TONIGHT_LIMIT`, 50, the others counted), that can be seen tonight from the observing site: the night is the one of `POST /api/astro-weather/night` (see [Astro Weather Contract](astro-weather.md)) containing now, named in the site's own zone, or the next one once its morning twilight at the limit is past, and the window runs from now to its closing noon;
-  one `/passes` request per satellite (four at a time) with a minimum altitude (10° by default) and a twilight limit (civil by default), keeping only passes with a visible part, in the order they appear, each with how long until it is seen, its visible span, its highest visible point, and its start and end azimuths.
-  A satellite that cannot be predicted is named with the server's reason, a Sun that never goes below the limit is stated and searches nothing, without a site the view offers Set Location, and the favorites without a favorite offer a downloaded group; a group no longer downloaded falls back to the favorites.
-  It is read again when the list, its favorites, the place of the site, or the catalog revision change (`tonightKey`), or once the night shown is over; choosing a pass selects its satellite, and View in Sky at the Highest Point and All Passes act on it.
-  The workspace actions hold Import Elements, a popover that imports OMM or TLE text (kept in the tab's state when it closes), and CelesTrak Groups, a modal listing the CelesTrak groups with their state (a failed download in words, without the address asked, and whether the elements read before are still used), an Automatic checkbox (the server's choice, shared by every profile), and a Download or Refresh that the server refuses inside its interval with its reason (a disabled button says until when).
-  Every prediction is for the observing site of the active profile, with its elevation, and times are shown in the profile's display zone; the tool has no place or zone of its own.
-  Without a site positions are geocentric and passes cannot be asked for, and Set Location opens Settings → Observing Sites.
-  The Position Now of the panel is read again every `POSITION_REFRESH_MS` (5 s, a third of the Sky's real-time tick) while a satellite with elements is selected and the page is shown, with RA and Dec formatted as the Sky does (`web/src/sky/format.ts`), as are those of the ephemeris table.
-  Its Motion & Illumination section shows the orbital speed and the satellite's next sunset and sunrise (the `shadowCrossings` of the reading) as times of day with a countdown that ticks every second between two readings.
-  The panel's Next Visible Pass, searched when a satellite is selected and again once it is over or the place of the site changes (`loadNextVisiblePass`), is the first pass within two days above 10° with a visible part (the Sun below civil twilight) not over yet, with a countdown, its visible span, its highest visible point, View in Sky, and All Passes; without a site it is absent.
-  The quality of a prediction is named by what it is judged over (Prediction now, Prediction over the window), plain when usable, a warning when approximate, and a failure when unreliable.
-  Passes ask a window of 1 to 7 days from now or from the Sky's time, a minimum altitude, and a twilight limit, list the visible passes (the daylight and shadowed ones on request) with their start (or "in progress"), highest point, end (or "continues"), duration, range, and conditions (visible, daylight, or the shadow), and draw the one chosen (the first listed by default) above the table as altitude against time through its three known points with their times, its visible parts hatched and labeled.
-  A window without a visible pass says so and offers List Daylight Passes and a search of 7 days.
-  Ephemeris samples up to 72 hours (at most 5 000 rows, checked before sending) and exports the rows received as CSV with the units in the header, each time in UTC and in the display zone, whose IANA name is a column of its own (`time_civil`, `time_zone`).
-  Ground Track (`SatelliteGroundTrack.tsx`, `groundtrack.ts`) draws on `WorldMap` (see [World Map Contract](world-map.md)) the subpoint from one orbit before an instant (now or the Sky's time) to 1 to 5 orbits after it, solid in Ember after the instant shown and dashed in ink before it, fainter in the penumbra and fainter still in the umbra, with the satellite (the only other Ember mark), its footprint in ink (a spherical Earth with an ideal horizon), the night side with its terminator, and the observing site with whether it sees the satellite above its horizon;
-  below the map, the instant shown carries the distance from the observing site (from the Earth's center without one, between the Earth-fixed positions of the site and of the interpolated subpoint and height on the IERS 2010 ellipsoid, computed in the browser), the orbital speed, and the next sunset and sunrise of the satellite in the track, counted from that instant;
-  the footprint, night, observer, and shadow are layers of the legend, and hiding one asks for nothing.
-  Points between samples are interpolated on great circles, never predicted again.
-  It is read when the view shows a satellite with elements; a ground track of now follows the real time on the 15 s tick and is read again once the satellite has gone an orbit past its instant, while one of the Sky's time stays put.
-  A cursor chooses another instant of the window by the minute (Live returns to the real time), written beside it, with its subpoint, height, illumination, and quality, and Show in Sky sets `skyClock` to it and selects the satellite there.
-  It needs no observer, so another observer keeps it.
-  Each kind of answer has a request guard, another satellite or another place of the site (`locationKey`, never its name or zone) drops the predictions of the previous one at once (`followSatelliteObserver`), and a change of the catalog (`satellites:changed`) reads the search, details, position, and a ground track shown again.
-  Favorites, the element set used, and Open in Sky (with View in Sky at the Highest Point moving `skyClock` first) are explicit actions.
-- Not provided: SupGP, the Sky display of a whole group (the API samples one), satellite brightness and flares, conjunction or collision screening, trails over images, transits of the Sun or the Moon, and tracking with a mount.
+Artificial Satellites is a local catalog of Earth satellites with their element sets, the SGP4 predictions made from them, and a tool of the Planning group over both (`api/src/satellites.store.ts`, `satellites.elements.ts`, `satellites.sync.ts`, `satellites.auto.ts`, `satellites.ephemeris.ts`, `web/src/tools/artificialsatellites/`).
+The tool lists tonight's visible passes, searches passes, draws ground tracks, and samples ephemerides; the Sky draws satellites as moving bodies and inspects them.
+
+## Purpose
+
+Satellites cross the sky of every night, and the operator wants to know which ones can be seen from the site, when, and where.
+The feature keeps the elements locally, predicts from them with the toolkit without asking the network, and says how much each prediction can be trusted.
+
+## Relations
+
+- Stores objects, element sets, group memberships, and the state of each source in the operational database (see [Persistence and State](persistence-and-state.md)); search is always local.
+- Downloads GP elements and SATCAT data from CelesTrak, following its usage policy, only when the operator asks or for the groups the operator turned on for automatic downloads, which an in-process schedule runs.
+- Imports OMM or TLE element sets the operator provides; every set is validated by the toolkit and identified by its digest.
+- Predicts with the toolkit's (`core`) SGP4, frames, and satellite eclipses; the Sun of each prediction comes from the fast [Ephemeris Chain](ephemeris-chain.md) (kernels of the [SPICE Kernel Library](spice-kernel-library.md), else VSOP87E).
+- Reads the night of [Astro Weather](astro-weather.md) for Tonight, and draws ground tracks on the [World Map](world-map.md).
+- Is a kind of object of the [Sky Map](sky-map.md): searched, located, drawn on its own display layer, and inspected there; the Inspector opens the tool, and the tool hands off to the Sky, setting the Sky clock only on an explicit View in Sky.
+- Favorites are a profile preference, shared with the Sky's satellite favorites.
+- Predicts for the active profile's observing site and shows its display zone; the tool has no place or zone of its own and keeps its state in the tab.
+- Publishes a change event on every new catalog revision, which the web mirrors in `SERVER_STORES`.
+- Commands no device and starts no operation; hosted by the Tools workspace (see [Tools Integration](tools-integration.md)).
+
+## Rules and Limitations
+
+- An object is identified by its NORAD catalog number as a decimal string of any length; a group is a membership of its source, never a category, and an object without elements is never predicted.
+- The element set used is the one the operator chose, else GP, else imported, and every prediction names it.
+- Downloads never happen because a view opens, a selection changes, or time is animated; their intervals and blocks survive restarts, so CelesTrak is never asked too often.
+- Every prediction carries a conservative quality from the age of its elements; passes are refused when it is unavailable.
+- Positions are geometric, without light time or annual aberration; satellites have no rise, transit, or set, and no brightness is estimated.
+- No mount is ever sent to a satellite.
+- Not provided: SupGP, the Sky display of a whole group, brightness and flares, conjunction screening, trails over images, solar and lunar transits, and mount tracking.

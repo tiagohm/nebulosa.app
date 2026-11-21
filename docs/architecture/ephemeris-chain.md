@@ -1,40 +1,29 @@
-# Ephemeris Chain Contract
+# Ephemeris Chain
 
 Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
 
-- Chain (`api/src/ephemeris.chain.ts`): every computation of solar-system positions in the server takes all its states from one source, tried in the order of its mode.
-    - `fast` (maps, planners, events, eclipses, almanacs, dense sweeps): the SPK kernels of the SPICE Kernel Library, then the analytical theories, then JPL Horizons.
-    - `accurate` (the selected object of the Sky, mount targets): the SPK kernels, then JPL Horizons, then the analytical theories.
-    - The analytical theories are those of the toolkit's `analyticalEphemerisSource` (VSOP87E, ELPMPP02, Pluto, MARSSAT, L1.2, TASS 1.7, GUST86) and the two-body Kepler orbit of SBDB elements for a minor body (`keplerOrbit` of `api/src/sky/ephemeris.ts`): heliocentric, or, for a closed orbit whose semi-major axis exceeds `BARYCENTRIC_KEPLER_AXIS` (5.5 AU), barycentric with the mass of the whole Solar System, its state at the epoch moved to the barycenter with the Sun of the analytical theories; from Jupiter outward the Sun's motion about the barycenter makes a heliocentric conic the worse of the two, and inside it the better.
-- Sources (`nebulosa/src/astronomy/ephemeris/source`): the kernels and the theories are both an `EphemerisSource`, addressed by NAIF code and giving barycentric ICRF states, so every computation of the server and of the toolkit is written once over a source: `spkEphemerisSource` over a kernel set, which records the kernels that supplied each body, and `analyticalEphemerisSource`.
-  A computation that samples many instants (window and event searches, eclipse contacts and maps, satellite systems) wraps its source in `interpolatedEphemerisSource`, a Lagrange interpolation on a TDB grid that keeps the kind and the kernels of the source it wraps.
-  No computation of the server calls a theory directly.
-- A computation offers only the sources it can use, and a source it does not offer is skipped without an attempt.
-  Dense sweeps (Jupiter, Saturn, Planetary Events, eclipses, Sky events) offer no Horizons, since Horizons per instant is impractical and their theories always exist; a minor body without elements offers no theory.
-- The kernels are tried when the set has a segment for every body the computation needs (`EphemerisBody`: the target, and the Earth and the Sun an apparent place is reduced with, marked as dependencies), and are used only when they resolve every state of the whole computation.
-  A state they miss at one epoch (`EphemerisMiss` of the toolkit, with the requested body, the body where resolution stopped, the reason, and the epoch) discards the computation, which runs whole on the next source, so one computation never mixes sources.
-  A file that cannot be read is logged and treated as a miss (`kernelReadFailed`).
-- The kernel snapshot is read once per computation and evaluated synchronously; a chunked computation yields to the event loop between chunks, checks its abort signal, and restarts from the first chunk when the kernel generation changed, at most twice, then fails with `generationChanged`.
-- Offline switch (`offline` of the SPICE Kernel Library snapshot, `PATCH /api/spice-kernels/settings` with `{ offline }`, stored in `spice_settings`, edited in Settings, Ephemeris Sources, and shown in the status bar while on): while on, no automatic request reaches JPL.
-  Horizons is removed from every chain, so a computation only Horizons could give fails with `offline`; a minor body is resolved from the SBDB answers already cached, never asking SBDB.
-  Downloading or generating a kernel, explicit acts of an operator, still use the network.
-- Horizons is asked through the shared JPL queue (see [Sky Map Contract](sky-map.md)) with one `HorizonsCircuitBreaker` per service: three consecutive transient failures (timeout, network) skip Horizons for 30 s (`breakerOpen`); a refusal of the queue is a `timeout` that never counts against the breaker; a semantic failure (an unknown target, an empty answer) is reported as is, never replaced by another source.
-- Provenance (`EphemerisProvenance`): the source that gave the computation (`spk`, `analytical`, or `horizons`), the mode, the kernels used with their generation for `spk`, and the `attempts`, the sources tried before it in order, each with its reason:
-    - kernels: `loading`, `noKernel`, `targetMissing`, `missingCenter`, `outOfCoverage`, `unsupportedFrame`, `unsupportedType`, `cycle`, `kernelReadFailed`, with the requested body, the NAIF code where resolution stopped, and the epoch when one was evaluated;
-    - theories: `noModel`;
-    - Horizons: `offline`, `timeout`, `network`, `breakerOpen`.
-- No source (`EphemerisUnavailableError`, answered `503` by `ephemerisUnavailableResponse` with `code` and `attempts`): `offline` when the offline switch removed Horizons, `sourceUnavailable` when Horizons failed, `coverageUnavailable`, `unsupportedKernel`, or `missingDependency` when only the kernels were offered, and `generationChanged`.
-- Results are cached with the kernel generation in their keys (or the source key of `EphemerisContext`: `analytical`, `horizons`, or `spk:<generation>`), so a change of the kernels or of the offline switch, which publishes a new generation, computes them again.
-- Users:
-    - Sky positions (`SkyEphemeris`, see [Sky Map Contract](sky-map.md)): the mode of the request, accurate by default; the map asks fast. Sky events: fast, without Horizons.
-    - Mount slews (`MountCommands.slew`): accurate, with the `source` and `attempts` in `MountSlewResponse`.
-    - Jupiter, Saturn, and Planetary Events (`withSatelliteSource` of `api/src/planetary.source.ts`): fast, kernels then theories, with their own `PlanetarySource` shape (`fallbackReason` is the kernels' attempt).
-    - Solar and lunar eclipses (`eclipseEphemeris` of `api/src/eclipses.ts`): fast, kernels then theories, with the provenance in the map and local answers.
-    - The minor bodies of the Observing Planner (`MinorBodyTrajectories`, see [Observing Planner Contract](observing-planner.md)): fast, kernels, then the Kepler orbit of the SBDB elements, then Horizons vector tables.
-    - Orbital Mechanics Explorer and Close Approaches follow the offline switch: offline, a minor body is read only from the SBDB answers already cached and a page of CAD only from those already read, whatever their age, else `notCached` or `503 offline`.
-    - Computations that evaluate the Sun, the Earth, the Moon, or a planet lazily over a span (`solarSystemSource` of `api/src/sky/ephemeris.ts`): fast, kernels then theories, chosen once per computation by probing every body at the given instants (the ends and the middle of a span), giving the chosen `EphemerisSource`, its provenance, and its cache key.
-      Kernels cover a body over years to centuries, so a probed span never misses inside; a miss there would fail the computation rather than mix sources.
-      Its users: the Astro Weather nights (`AstroWeatherNights`, kept by the source key), the local day, the equation of time, and the equinoxes and solstices of the Sun Inspector (`SunAlmanac`), the appearance, the phases, and the apsides of the Moon Inspector (`MoonAlmanac`), the planning nights of the Observing Planner and of the Jupiter and Saturn planners (`PlanningNight`: the Sun and the Moon of the night from one interpolated source, and each planet with the Earth it is seen from from one of its own, kept by kernel generation, as `SiteNightCache` keeps their nights), the Sun of the satellite predictions (`SatelliteEphemeris`, an interpolated source per prediction), the positions and events of the sky catalog, the Earth and the Sun of each iPolar session (chosen over its first day), and the reduction of the mount pointing models (`pointingEphemeris`, one source per instant).
-    - Meteor showers (see [Meteor Showers Contract](meteor-showers.md)): the Sun and the Moon of a night from `solarSystemSource`, interpolated (`nightEphemeris`), and of one instant, evaluated exactly (`instantEphemeris`), and the solar longitudes of a year (`MeteorSolarLongitudeTable`, one source per year), which the toolkit's window planners, shower contexts, date conversions, and radiant paths require; and the visibility of planetary events (`withVisibilitySource`): fast, kernels then VSOP87E, one source per batch.
-    - Theories alone: the Sun of the Kepler source of a minor body, which is analytical as a whole (`analyticalEphemerisSource`, interpolated).
-      The series of the toolkit (Meeus' phases, apsides, and seasons, and the eclipse series) only seed events that are refined on the chosen source.
+The Ephemeris Chain is how every computation of solar-system positions in the server chooses its source (`api/src/ephemeris.chain.ts`): the SPK kernels of the [SPICE Kernel Library](spice-kernel-library.md), the analytical theories of the toolkit (with a two-body orbit of SBDB elements for a minor body), and JPL Horizons, tried in the order of a mode.
+The `fast` mode (maps, planners, events, eclipses, almanacs, dense sweeps) tries the kernels, the theories, then Horizons; the `accurate` mode (the selected object of the Sky, mount targets) tries the kernels, Horizons, then the theories.
+
+## Purpose
+
+Positions must be as accurate as the installed kernels allow, yet never unavailable when a kernel or the network is missing.
+The chain gives every feature one rule for that trade-off, so results agree across tools and always say where they came from.
+
+## Relations
+
+- Builds on the `EphemerisSource` abstraction of the toolkit (`nebulosa/src/astronomy/ephemeris/source`), over which both the kernels and the theories are written, with an interpolated wrapper for computations that sample many instants.
+- Reads the current generation of the SPICE Kernel Library, and its offline switch, stored with the library and edited in Settings, Ephemeris Sources.
+- Asks Horizons through the shared JPL queue of the [Sky Map](sky-map.md), with a circuit breaker per service.
+- Used by the Sky positions and events, mount slews, the [Jupiter Observing Planner](jupiter-observing-planner.md), the [Saturn Observing Planner](saturn-observing-planner.md), [Planetary Events](planetary-events.md), the [Eclipse Ephemeris](eclipse-ephemeris.md), the minor bodies and nights of the [Observing Planner](observing-planner.md), [Astro Weather](astro-weather.md) nights, the [Sun Inspector](sun-inspector.md) and [Moon Inspector](moon-inspector.md), [Artificial Satellites](artificial-satellites.md), [Meteor Showers](meteor-showers.md), [iPolar](ipolar.md), and the [Mount Pointing Model](mount-pointing-model.md).
+- [Close Approaches](close-approaches.md) and the [Orbital Mechanics Explorer](orbital-mechanics-explorer.md) follow its offline switch.
+
+## Rules and Limitations
+
+- One computation takes all its states from one source; a state the kernels miss discards the computation, which runs whole on the next source.
+- A computation offers only the sources it can use: dense sweeps never offer Horizons, and a minor body without elements offers no theory.
+- No computation of the server calls a theory directly.
+- While the offline switch is on, no automatic request reaches JPL; downloading or generating a kernel, explicit acts of the operator, still use the network.
+- A semantic failure of Horizons is reported as is, never replaced by another source.
+- Every result carries its provenance (the source, the mode, the kernels and their generation, and the sources tried before it), and cached results are keyed by source and generation, so a change of the kernels or the offline switch computes them again.
+- The series of the toolkit only seed events that are refined on the chosen source.

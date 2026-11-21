@@ -1,44 +1,31 @@
-# Framing Contract
+# Framing
 
 Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
 
-A framing is the field of view of one camera behind one telescope: a name, the telescope and camera with where each comes from, the rotation of the sensor, the position angle of its top edge measured from north through east, in degrees in [0, 360), and the colour it is drawn in.
-It never holds a position on the sky: a tool that needs one asks for it itself.
+A framing is the field of view of one camera behind one telescope: a name, the telescope and camera with where each comes from, the rotation of the sensor, and the colour it is drawn in.
+The framings are one catalog shared by every profile, tab, and browser (`api/src/framings.ts`), mirrored and resolved into optics in `web/src/framing/`.
+The Framing tool (`web/src/tools/framing/`) edits them and previews them together around a target, over an offline Mini-Sky of the sky catalog or a survey image (`api/src/framings.hips.ts`).
 
-- **Server.**
-  The framings are one catalog shared by every profile, tab, and browser (`FramingStore` and `FramingService` of `api/src/framings.ts`, table `framings`), with an id the tab that created one generates (`nanoid`), a name unique without regard to case (`409 nameTaken`), a colour (`color`, an index of the `frame-*` tokens in [0, `FRAMING_COLOR_COUNT`)), and a revision: `GET /api/framings` (`FramingsSnapshot`), `PUT /api/framings/:id` writes the whole framing from the revision it was edited from (0 creates it; `409 conflict` with the framing the server kept, `null` when it was deleted), `DELETE /api/framings/:id?revision=` (`409 conflict`, `404 notFound`), and `POST /api/framings/:id/duplicate` (`FramingDuplicateRequest`, with the name and colour of the copy).
-  Every committed write is published as `framing:updated` (the whole framing) or `framing:removed`.
-- **Optics.**
-  The telescope (`FramingTelescope`) and the camera (`FramingCamera`) each name their source (`FramingOpticsSource`): `manual` (typed), `model` (copied from a model of the AstroBin equipment database, whose name is kept), `catalog` (an item of the Equipment Catalog by id), or `setup` (the telescope or guide telescope, or the Main or Guide Camera role, of the Equipment Setup of the active profile of the tab).
-  Each keeps the values last typed or copied: a `catalog` or `setup` source resolves them again from what it refers to and keeps them for what it does not declare or when it no longer exists.
-  The reducer or Barlow factor is always the framing's own.
-- **Field of a preview.**
-  `POST /api/framings/field` answers the stars and deep-sky objects of the sky catalog in a cone around a J2000 center (`FramingFieldRequest`, `FramingField`), through the field query of the image annotation (`fieldObjects` of `api/src/sky/catalog.ts`): positions on the J2000 equator, stars moved by their proper motion to now, at most `FIELD_MAX_STARS` stars and `FIELD_MAX_DEEP_SKY` deep-sky objects, the brightest ones, down to the magnitude `fieldMagnitudeLimit` gives for the radius (9 at 1°, half a magnitude fainter each time the radius is divided by about 1.6, within 6 to 14).
-- **Survey cutouts.**
-  The surveys offered are the CDS image surveys of the MocServer that cover at least 99% of the sky, with the title and the credit their publisher asks for (`HipsSurveyCatalog` of `api/src/framings.surveys.ts`), written by `bun make:surveys` (`bin/src/hips.surveys.ts`) into `web/assets/hips.surveys.json.gz`, not committed, bundled by `web` and loaded on demand: nothing asks the MocServer at run time.
-  `GET /api/framings/cutout` (`api/src/framings.hips.ts`, `FramingCutoutRequest`) proxies one hips2fits cutout: a JPEG in the TAN projection centered on an ICRS position, without rotation, so north is up and east left, whose field angle (`fov`) spans the larger side of the image as the tangent-plane extent 2·tan(fov/2), so a gnomonic projection of the same center with `max(width, height) / (2·tan(fov/2))` pixels per tangent-plane unit draws on it without its WCS (the toolkit's FITS test of `hips2Fits` pins this header: `CDELT1` negative, `CDELT2` positive, `CRPIX` at the center, and 400 × `CDELT` = 2·tan(0.5°) for a 1° field).
-  A cutout is kept for a day, the latest 24 in memory; the mirror (`HIPS2FITS_ALTERNATIVE_URL`) is asked when the main host fails, a failure is remembered for a minute, and when neither host answers a JPEG the route answers `502 upstreamUnavailable`.
-- **Web.**
-  `framingsState` (`web/src/framing/framings.ts`, in `SERVER_STORES`) mirrors the framings by revision, so an older read or event never rolls one back, with the drafts of the tab: an edit is written whole 400 ms later from the revision it was made on, one write at a time per framing, a `409 conflict` keeps the draft and offers Keep Theirs and Save Mine, and a `409 nameTaken` keeps the draft as Not saved.
-  `resolveFramingOptics` (`web/src/framing/resolve.ts`) resolves a framing for the tab into the optical configuration of `web/src/framing/geometry.ts` (`resolveFraming`: angular size, image scale, focal ratio; `framePolygon`, the gnomonic outline), with where each value comes from: a `setup` telescope takes the telescope or guide telescope of the active profile resolved through the Equipment Catalog, its reducer or Barlow included, and a `setup` camera the sensor of its role (`roleSensors`, what the device reports completed by the catalog), naming the role whose camera has none.
-  The pseudo-framing Equipment Setup (`EQUIPMENT_FRAMING_ID`: the Main Camera behind the telescope, without rotation, never saved) comes first in every list.
-  Each saved framing keeps the colour it was given when created or duplicated, the first of the least used (`nextFrameColor`), so renaming one or adding another never repaints it (`frame-1` to `frame-6` of `web/src/index.css`, the low chroma of the map hues a step lighter; `web/src/framing/palette.ts`); the Equipment Setup's pseudo-framing, which has none, draws in Starlight Cream.
-- **Tool.**
-  Framing (`web/src/tools/framing/`, `/tools/framing[/<framing id>]`, icon `frame`, in Planning) shows one framing, the one the URL names (the Equipment Setup's when it names none or one that no longer exists), chosen in the legend of the preview, which names every framing with its colour, field (or what it needs), and rotation and moves with the arrow keys, Home, and End; the eye at the right of each hides it from the preview, saying Hidden, or shows it again (`setFramingHidden`), independently of the framings the Sky hides.
-  The contextual panel edits it, readout first: why its last write failed or conflicted (Keep Theirs, Save Mine), the field and the rotation, the source and values of the telescope and of the camera (a value the source gives is shown and not edited; an AstroBin equipment model is searched in the bundled model catalogs and copied), and its name, Duplicate, and Delete (confirmed, naming the name the server saved); its save status is in the panel header.
-  While the panel is not docked beside the preview, a strip under it holds the framing shown, its rotation, and the button that opens the panel, so a phone or tablet turns it while watching its outline.
-  New Framing starts from the telescope and Main Camera of the Equipment Setup when it gives a field, else from a 600 mm telescope and an APS-C camera typed by hand.
-  Changing a source keeps the values shown as the copy the framing falls back to.
-  Nothing here moves a device, changes the profile, or starts an operation.
-- **Preview.**
-  One preview compares every framing that has a field around a J2000 center that no framing holds: a star or deep-sky object searched in the local sky catalog (`CenterSearch`, its J2000 position from `POST /api/sky/position`), coordinates typed (set once both are), the catalog object selected in Sky (`catalogTarget`), where the mount of the active profile points now (Use Mount Position, its position of date converted to J2000 by `mountCenter`, disabled with the reason while the profile has no connected mount), a point clicked on the preview (`skyPosition`), or the Sky selection sent by Open in Framing, kept with its background, survey, fit, and hidden framings in this browser only (`framingPreviewEntry`, view entry `framingPreview`).
-  It is north up and east left, gnomonic, scaled so every framing not hidden, or only the one shown (Fit) unless it is hidden, turned by its rotation fits with a margin (`previewLayout`, `PREVIEW_MARGIN`), each outline in its colour with a triangle at the middle of its top edge, the framing shown bolder with its rotation handle, a ring beyond its top edge (`rotationHandle`): dragging it, or pressing the left and right arrows while the canvas has the focus (0.5°, 5° with Shift), sets its rotation.
-  Names are placed without overlapping (`placeLabel`): the framings' first, then up to 24 deep-sky objects, each name once.
-  Its background is the Mini-Sky, the default, drawn offline from `POST /api/framings/field`, or a survey cutout of `GET /api/framings/cutout`, offered by optical survey unless every wavelength is asked for.
-  The Mini-Sky is always read and drawn, and a cutout replaces it once downloaded, so nothing waits on a download and nothing is locked: the download shows its progress with Cancel (back to the Mini-Sky), and a failure says why (a `502` as hips2fits not answering, most likely without internet) with Try Again and Show Mini-Sky.
-  The survey image is credited with the survey's title and copyright and with hips2fits.
-- **Consumers.**
-  Every tool that applies a field of view reads the framings, never a copy of its own: the Sky draws every framing that has a field around the selected object, each in its own colour with its name, field, and rotation (`syncFramings` of `planetarium.ts`), while the fields of view are shown, but those its Framing panel hides (`SkyFramingSettings`: `visible` and `hidden`, view state of the profile), and only shows them: they are created and edited in the Framing tool, which the panel opens;
-  the Observing Planner judges how targets fit the framing chosen above its field line (`FramingSelect`, `plannerFramingId`, view state), the Equipment Setup's until another is chosen;
-  and the Calculator imports a framing by value (`framing:<id>` of `web/src/tools/calculator/sources.ts`).
-  Target Centering takes its target from coordinates typed, the Sky selection, or the session it shows, never from a framing, which holds no position.
+## Purpose
+
+It lets the operator compare fields of view on a target and choose a rotation before imaging.
+It is the one source of fields of view for every tool that applies one, so a camera and telescope are described once.
+
+## Relations
+
+- Hosted by the Tools workspace, in Planning.
+- Takes its optics from values typed, from the AstroBin camera and telescope model catalogs bundled by `bun make:cameras` and `bun make:telescopes`, from the [Equipment Catalog](equipment-catalog.md), or from the telescope and camera roles of the Equipment Setup of the active profile.
+- Draws the Mini-Sky from the sky catalog through the field query shared with [Annotation](annotation.md).
+- Proxies CDS hips2fits cutouts of the surveys bundled by `bun make:surveys` from the CDS MocServer.
+- Persists the framings in the database and publishes every change (see [Persistence and State](persistence-and-state.md)).
+- Centers its preview on a catalog search, typed coordinates, the [Sky Map](sky-map.md) selection (Open in Framing, also from the [Moon Inspector](moon-inspector.md)), or the mount's current position, read only.
+- Read by the [Sky Map](sky-map.md), which draws the framings around the selection, by the [Observing Planner](observing-planner.md), which judges how targets fit one, and by the [Calculator](calculator.md), which imports one by value.
+
+## Rules and Limitations
+
+- A framing never holds a position on the sky; a tool that needs one asks for it itself, so [Target Centering](target-centering.md) never takes its target from a framing.
+- Consumers read the framings and never keep a copy; framings are created and edited only in the Framing tool.
+- The Equipment Setup's pseudo-framing comes first everywhere and is never saved.
+- Edits are written from the revision they were made on, and a conflict keeps the draft for the operator to resolve.
+- The Mini-Sky works offline; survey images need hips2fits and never block the preview.
+- Nothing here moves a device, changes the profile, or starts an operation.

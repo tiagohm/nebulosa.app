@@ -1,50 +1,27 @@
-# Saturn Observing Planner Contract
+# Saturn Observing Planner
 
 Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
 
-- The Saturn Observing Planner (`api/src/saturn.ts` with `saturn.astronomy.ts` and `saturn.events.ts`) predicts, on request and read-only, the geometry of Saturn's disk and rings at an instant (`POST /rings/state`) and over a range (`POST /rings/timeline`), the view of the rings and seven major moons at an instant (`POST /moons/state`), the moons' sampled tracks (`POST /moons/track`), their greatest separations (`POST /moons/elongations`), and their phenomena with their visibility from a site (`POST /moons/events`), and reports the kernel readiness of each scope (`POST /source`).
-  It stores nothing, publishes no event, and never changes a device, a site, an operation, or the Sky clock.
-- Scopes and source: a computation of the `rings` scope evaluates only the Sun, the Earth, and Saturn's centre (NAIF 699, never the barycenter 6);
-  a computation of the `moons` scope also evaluates Mimas, Enceladus, Tethys, Dione, Rhea, Titan, and Iapetus (601-606, 608; Hyperion is not planned).
-  Each takes all its states from one source chosen once with the shared `withSatelliteSource` of `api/src/planetary.source.ts`: the SPICE kernels when the set has every body of the scope, else VSOP87E (+ TASS 1.7 for the moons), with the same fallback reasons and full reruns after an `EphemerisMiss` as the Jupiter planner.
-  Each scope chooses its own source: `sat480.bsp` alone gives the rings from the kernels while the moons come from VSOP87E + TASS 1.7.
-  `/moons/state` carries the ring geometry from the same source as its moons, so a drawing never joins two sources; `/rings/state` gives the rings of the ring scope alone.
-- Kernel lifetime: timelines, tracks, separations, and events run in chunks with the restarts and `503 generationChanged` of the [Jupiter Observing Planner](jupiter-observing-planner.md);
-  an aborted request is not answered and caches nothing.
-- Signature (`SaturnSignature`) of every answer: the model version (`SATURN_MODEL_VERSION`, 1), the ring model version (`SATURN_RING_MODEL`, 1), the scope, the source (an analytical rings source names VSOP87E alone), the offline switch, and the kernel generation.
-  Caches: timelines, tracks, separations, and events, keyed by the kind, the model versions, the range, the requested moons and kinds, the site's coordinates and zone for events, the offline switch, and the generation;
-  states and readiness are not cached.
-- Geometry (see the toolkit's Saturn Ring Geometry and Saturnian Satellite Geometry): geocentric observed instants;
-  signed Earth and solar openings B and B′ (planetocentric, north positive), the pole position angle on the true equator of date, and the apparent disk and outer A-ring axes in radians;
-  the moons' sky offsets and depths in Saturn equatorial radii, their separations, position angles, and signed clearances from the oblate limb and the outer A-ring edge in radians, a geometric `ringOverlap` (`front` or `behind`, never an occultation claim), disk and eclipse states, and the shadow centre on the globe.
-  Answers that draw the planet carry the ring model (`SaturnRingModel`: the NSSDC C, B, and A rings and the Cassini Division in km, and Saturn's IAU 1-bar radii).
-- Ring timeline: at most 2000 samples of B and B′ a whole number of minutes apart over the range, and the events with their instant in the range found by root and extremum search on a ring-only interpolator of the source (`interpolatedSaturnianRingEphemeris`): `earthPlaneCrossing`, `solarPlaneCrossing`, `openingMaximum`, `openingMinimum`, and `nearPlaneApproach`.
-  The chart never infers an event from its samples.
-  The solar crossing is when the sunlight reaching the rings is edge-on, about 80 minutes before JPL Horizons' sub-solar zero.
-- Tracks and separations: tracks sample the seven moons at most 2000 times a whole number of minutes apart on the true equator of the middle of the range, with the pole position angle there;
-  separations are the true local maxima of the separation of each requested moon (not east-west elongations), and a slow moon may have none in a short range.
-- Readiness (`/source`): each scope is probed every 6 hours, or at most 2000 evenly spaced epochs over a long range, and reported as `ready`, `partialCoverage`, `unsupported`, or `missingDependencies`, with the source a computation would use;
-  advisory, not a guarantee for a scan.
-- Events (`POST /moons/events`, see the toolkit's Saturnian Satellite Phenomena and Mutual Planetary-Satellite Events): the transits, shadow transits, occultations, and eclipses of the seven moons on Saturn's oblate disk and their mutual occultations and eclipses, scanned over the range padded by 12 hours (a central Iapetus eclipse lasts about 10.5 hours) in day chunks with one moons source, kept when they overlap the range, and filtered by `kinds` and `moons` (a mutual event when either moon is selected).
-  Each has a stable id (`kind|moons|maximum in seconds`), the reached contacts, its range flags, `grazing`, `depth` or `impactParameter`, the ids of the selected events it overlaps, and `ringInterference`: a participating moon is behind the projected rings, or a shadow falls on the disk under the near rings, at one of seven instants sampled across the event.
-  Contacts are geocentric and never change with the site.
-- Visibility (`SaturnEventVisibility`): with a `site`, the shared `api/src/planetary.visibility.ts` intersects the physically visible part of each event (as for the [Jupiter Observing Planner](jupiter-observing-planner.md), using every scanned event) with Saturn's planetary windows on the site's Astro Weather nights (Saturn at least 25° high, the Sun at most −6°, from its local VSOP87E position), and gives `observable`, `partial`, or `notObservable` with `sunTooHigh`, `saturnTooLow`, `moonHidden`, or `shadowHidden`, the windows, the peak altitude and airmass, and a rank;
-  an event with ring interference that could be watched becomes `uncertainRingInterference` with `ringInterferencePossible`, never an exact ring occultation.
-  Without a site the status is `unknownNoSite` and the physical reasons remain; no event is dropped for its visibility, and no detectability or magnitude is predicted.
-- Saturn Observing Planner tool (`web/src/tools/saturn/`, `/tools/saturn-observing-planner`, icon `saturn`): it observes from the active site, which names the evenings, and shows the profile's display zone (the predictions are geocentric), and the tab state is `saturnPlannerState` (`saturn.ts`), tab memory with the shared clock, period, rate, and orientation of `web/src/tools/planetary/`, the phenomenon kinds and moons listed (each with Select All and Select None), the visibility filter (Watchable, the default, or All; a phenomenon the rings may hide counts as watchable), the order of the phenomena (by start, or by rank), whether the rings are drawn, the span of the ring history (the year, ±5 years, or a Saturnian year around the period), the selected entries, and the moons of the event chosen last.
-  Each answer has its own request guard;
-  the tracks, separations, and readiness follow the period, the phenomena (`/moons/events`, asked for whole with the site) the period and the place, the ring timeline its span, and every answer is read again when the SPICE Kernel Library's generation changes (`spiceKernelsState`), which the offline switch also changes.
-  The exact view (`/moons/state`) is read as Jupiter's.
-  The page is laid out as Jupiter's: on a phone the viewer comes first, then the time bar and the chart; from 1024 px the time bar spans the top and the viewer (wider) and the chart stand side by side; then the phenomena, the ring-plane events and greatest separations, and last the Rings section, a disclosure folded by default (`saturn.rings` in `collapsibleSections`) under a one-line summary of the face seen and the history span.
-  `SaturnViewer` draws, in one sky basis with one orientation transform, the far half of the ring annuli, the oblate disk with the moons' shadows, then the near half, from the server's openings and ring model (an edge-on ring keeps a render-only minimum thickness), and layers the moons by depth and ring overlap, outlining a moon the rings may hide, in the same pan and zoom view as Jupiter's with the compass beside it (`PlanetCompass` of `web/src/tools/planetary/`);
-  marks and labels are in CSS pixels, a label that would cover another moon moves beside its own (`placeLabels`), the moons of the event chosen last are ringed in the accent, and the colours are the schematic `saturn-*` and `moon-*` tokens of `web/src/index.css`.
-  `MoonChart` plots, in CSS pixels at its measured width, each moon's offset along the ring plane in arcseconds across, east on the side the orientation puts it, against time running down over the period, with the disk and ring bands, the site's watchable windows, the selected phenomenon, a line and the date at each local midnight, each curve's initial above its start, and an extent fitted to the moons drawn.
-  `RingGeometry` lists B, B′, P, the apparent ring and disk sizes, and which face is seen and lit; `RingHistoryChart` plots B and B′ over the span in CSS pixels at its measured width, labeled on calendar months or years, with the server's searched crossings as diamonds and the extrema as small muted dots.
-  `PhenomenaTable` lists the period's phenomena with their visibility (`Rings may hide it` for `uncertainRingInterference`) and rank, headed by night in time order and ordered from the When and Rank headers, and `PhenomenonInspector`, beside the list from 64 rem of content and under it below, is headed by the phenomenon's name and status and shows the reached contacts in the display zone, the definition, the ring note, the visibility rows, the overlaps, and the source;
-  a notice explains a quiet season, a filter that leaves nothing (with Select All Kinds and Moons, or Show All Phenomena), or a missing site.
-  `SaturnEventList` lists the period's ring-plane events and the greatest separations of the moons drawn.
-  Choosing a phenomenon or a greatest separation moves the tool's clock and frames its moons in the viewer from the sampled tracks (`frameHalfWidth`), a phenomenon also bringing the inspector into view when it stands under the list; choosing a ring-plane event, a marker, or a point of a chart only moves the tool's clock.
-  Manage Kernels opens the SPICE Kernel Library and Show in Sky hands the tool's clock to the Sky as Jupiter's does, then selects Saturn through the Observing Planner's handoff.
-  Show in Sky is its one change of the Sky clock; nothing here moves the mount, changes a site or the profile, or starts an operation.
-- Limits: the routes trust their requests (the tool asks for tracks of at most 14 days, separations of at most a year, and ring timelines of at most a Saturnian year).
-  Ring occultations, ring shadows, the rings' optical depth, and photometry are not modeled; the first visibility of a site computes each of its nights synchronously through the shared Astro Weather night (its Sun only, as Jupiter's).
+The Saturn Observing Planner predicts, on request and read-only, the geometry of Saturn's disk and rings at an instant and over years, the view of the rings and seven major moons, the moons' tracks and greatest separations, and their phenomena (transits, shadow transits, occultations, eclipses, and mutual events) with their visibility from the active site.
+The server is `api/src/saturn.ts` with `saturn.astronomy.ts` and `saturn.events.ts`, and the tool is `web/src/tools/saturn/`, built on the planetary planner pieces of `web/src/tools/planetary/`.
+
+## Purpose
+
+It shows how the rings open and close and when the moons can be seen crossing the disk or each other, so the operator can plan Saturn sessions and ring-plane events.
+
+## Relations
+
+- Hosted by the Tools workspace, with its own clock, never the Sky clock.
+- Takes its states from the fast [Ephemeris Chain](ephemeris-chain.md): the kernels of the [SPICE Kernel Library](spice-kernel-library.md) when they hold every body of the scope, else the theories, through the toolkit's Saturn ring and satellite geometry and phenomena; the rings and the moons choose their source apart.
+- Shares its source selection and visibility with the [Jupiter Observing Planner](jupiter-observing-planner.md), and judges visibility on the nights of [Astro Weather](astro-weather.md) from the active site (see [Observing Sites and Time Zones](observing-sites-and-time-zones.md)).
+- Reads everything again when the kernel generation changes.
+- Opens the [SPICE Kernel Library](spice-kernel-library.md) (Manage Kernels) and the [Sky Map](sky-map.md) (Show in Sky, which sets the Sky clock to the tool's instant and selects Saturn).
+- Stores nothing and publishes no event.
+
+## Rules and Limitations
+
+- Contacts are geocentric and never change with the site; a drawing never joins two sources.
+- Hyperion is not planned.
+- Ring occultations, ring shadows, the rings' optical depth, and photometry are not modeled: a phenomenon the rings may hide is flagged as uncertain, never claimed as a ring occultation.
+- A kernel change during a scan restarts it; nothing partial is answered.
+- Show in Sky is its one change of the Sky clock; nothing here moves the mount, changes a site or the profile, or starts an operation.

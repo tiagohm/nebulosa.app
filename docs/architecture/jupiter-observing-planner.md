@@ -1,56 +1,28 @@
-# Jupiter Observing Planner Contract
+# Jupiter Observing Planner
 
 Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
 
-- The Jupiter Observing Planner (`api/src/jupiter.ts` with `jupiter.astronomy.ts` and `jupiter.store.ts`) predicts, on request and read-only, the view of Jupiter and its Galilean satellites at an instant (`POST /state`), their sampled tracks over a range (`POST /track`), and the phenomena over a range (`POST /events`): Great Red Spot transits, satellite transits, shadow transits, satellite occultations and eclipses, and mutual occultations and eclipses.
-  It moves no device, changes no Sky clock, site, or profile, starts no operation, registers nothing in the operation registry, schedules nothing, and never asks a remote service; only the Great Red Spot model is stored.
-- Source: every computation takes all its states (the Sun, the Earth, Jupiter's centre 599, never the barycenter 5, and 501–504) from one source chosen once per request by the fast [Ephemeris Chain](ephemeris-chain.md): the SPICE kernels when the set has every Jovian body, through `jovianEphemeris` of the toolkit over an `EphemerisSource` (`spkEphemerisSource`), else the same over the analytical source (VSOP87E + L1.2).
-  An `EphemerisMiss` anywhere in a kernel computation discards it and reruns it whole from the theories (`fallbackReason` and the missed `target`, NAIF `body`, and `time` in the source).
-  Horizons is never asked, offline or not.
-  The fallback reasons are the kernel reasons of the chain: `noKernel`, `loading`, `targetMissing`, `missingCenter`, `outOfCoverage`, `unsupportedFrame`, `unsupportedType`, `cycle`, and `kernelReadFailed`; a disabled kernel is outside the set, so it shows as `targetMissing`.
-  Dense scans interpolate the source on a fixed grid (`interpolatedJovianEphemeris`), whose nodes reach up to three days beyond the scan for the planets, so a scan within three days of the end of a kernel's coverage falls back.
-  The orchestration (source choice, chunks, restarts, readiness probes, and the 503 codes) is the planner-agnostic `withSatelliteSource` of `api/src/planetary.source.ts`, shared with the Saturn planner.
-- Kernel lifetime: scans run in chunks that yield to the event loop;
-  after each yield the kernel snapshot is read again and a kernel computation restarts from its first chunk when the generation changed, at most twice, then answers `503 generationChanged`.
-  A kernel set is never read across a yield of another generation, so a rebuild that closes its files is safe.
-  An aborted request stops between chunks and is not answered; nothing partial is returned.
-- Signature (`JupiterSignature`) of every answer: the model version (`JUPITER_MODEL_VERSION`, 1), the source (`spk` with the kernel ids that supplied each body, or `analytical` with its fallback reason), the offline switch, the kernel generation, and the Great Red Spot revision when the model was used.
-  Event and track answers are kept in `LruCache` entries keyed by every input of the request, the model version, the offline switch, the generation, and the Great Red Spot revision; nothing derived is persisted.
-- Geometry and contacts (see the toolkit's Jovian Satellite Geometry and Galilean Satellite Phenomena): geocentric observed instants, never topocentric; an oblate Jupiter (IAU 1-bar radii) and spherical moons; finite-Sun shadow cones.
-  Each event carries only the contacts actually reached (`external1`, `internal1`, `center1`, `center2`, `internal2`, `external2`, and for a shadow transit `visibleStart`/`visibleEnd` while its centre faces the Earth);
-  an eclipse's external contacts are the penumbra and its centre and internal contacts the umbra;
-  a mutual event has only its first and last contacts and its `impactParameter`, with no photometry.
-  `start` and `end` are the external contacts (the maximum when one is missing), `startsBeforeRange` and `endsAfterRange` flag an event reaching beyond the range, `overlaps` lists the ids of the events whose intervals intersect, and the `id` is the kind, the moons, and the maximum to the second.
-  The scan covers the range padded by six hours in day chunks whose events are kept by their maximum, so no event is reported twice.
-- Great Red Spot: one server-global model (`jupiter_grs_settings`, `JupiterGrsStore`): the System II west longitude (radians) at a reference instant, a drift in radians per day (positive toward increasing west longitude), and optional source label and notes, entered by the operator and never fetched or defaulted.
-  `PUT /grs` saves it from a revision (`409 conflict` with the current model under `grs`, `500 writeFailed`) and publishes `jupiter:grsUpdated`.
-  Without a model no transit is predicted and everything else works; a reference more than 60 days from the instant asked about is `stale` but still used.
-  A transit is the System II central meridian crossing the drifting longitude on the near side, with a viewing window while the spot is within 30° of the central meridian, labeled as a window, not contacts.
-  The marker of `/state` is drawn at a schematic 22° S, a display assumption.
-- Visibility (`POST /events` with a `site`; the nights, windows, visibility, overlaps, and ranking, and the physically visible part of a moon event, are the shared `api/src/planetary.visibility.ts`, which the Saturn planner uses too): the nights of the site over the padded range come from the Astro Weather nights (`AstroWeatherService.night`, kept per site by `SiteNightCache`) as `PlanningNight`s of the Observing Planner, and Jupiter's watchable windows are those of the planetary preset (Jupiter's geometric altitude at least 25°, the Sun at most −6°) from its position on the fast [Ephemeris Chain](ephemeris-chain.md) (the kernels of the request's snapshot when they cover the night, else VSOP87E), which only decides when a phenomenon can be watched.
-  An event's watchable part is its interval inside those windows and physically visible: a shadow transit while its centre faces the Earth, an eclipse while the moon is not behind the disk, a mutual event while neither moon is behind the disk or in the umbra.
-  The status is `observable`, `partial`, `notObservable`, or `unknownNoSite` without a site;
-  the reasons are `sunTooHigh`, `jupiterTooLow`, `moonHidden`, and `shadowHidden`;
-  the evening date is that of the night holding the maximum;
-  the rank orders the watchable events by their longest watchable part, then by Jupiter's peak altitude, without hiding any event.
-- Tracks (`POST /track`): one sample per whole number of minutes, at most 2000 per moon, with each moon's sky offsets east and north on the true equator of the middle of the range and its depth, in Jupiter equatorial radii, and its disk and eclipse states;
-  for display and interpolation only, never for contacts.
-  `POST /source` probes every Jovian body every six hours of a range (`readyForJupiter`, `partialCoverage`, `unsupported`, `missingDependencies`) to explain what the kernels lack; it is not a guarantee for a scan, and no readiness is stored.
-- Jupiter Observing Planner tool (`web/src/tools/jupiter/`, `/tools/jupiter-observing-planner`, icon `jupiter`): it observes from the active site and shows the profile's display zone, and the tab state is `jupiterPlannerState` (`jupiter.ts`), tab memory with the first evening (tonight in the active site's zone, else the display zone) and a period of 1, 3, 7, or 14 days from that evening's local noon, the tool's own clock (never the Sky clock: it opens following real now, which the time bar reads again every 30 s (`FOLLOW_INTERVAL_MS`) and when the tab is shown again, with Now pressed, moving the period to tonight (`followedEvening`) once real now leaves it, until another instant or first evening is chosen or play starts; Now follows real now again), the play rate, the event and moon filters, the visibility filter (Watchable, the default, or All), the order of the list (by start, or by rank), the viewer orientation, and the selected event.
-  Each answer has its own request guard (`/state`, `/track`, `/events`, `/source`).
-  Events and the readiness are read again when the period, the place, or the Great Red Spot revision changes, the tracks when the period does; the filters only choose what is listed.
-  On a phone the viewer comes first, then the time bar and the chart; from 1024 px the time bar spans the top and the viewer (wider) and the chart stand side by side.
-  The exact view is read shortly after the clock settles and at a bounded rate while it plays (`STATE_DELAY_MS`, `PLAY_STATE_INTERVAL_MS` of `web/src/tools/planetary/planetary.ts`); between those reads the moons are drawn from a linear interpolation of the tracks, for display only.
-  Play stops when the tab is hidden and jumps once a second under reduced motion.
-  `JupiterViewer` draws the oblate disk turned by its pole's position angle, the central meridian, decorative belts, the moons in front of or behind the disk, the shadows that face the Earth, and the schematic Great Red Spot, north up and east left, south up, or north up and east right, in one view that pans and zooms from the whole system to the disk (`PanZoomSurface` of `web/src/tools/planetary/PanZoom.tsx`, which zooms with a pinch or the wheel held with Ctrl or ⌘ and leaves a plain wheel and a vertical swipe to the page; the zoom is transient React state, and marker and label sizes are in CSS pixels whatever the zoom), with the compass beside the view, and the moons of the selected event (or the spot of a selected transit) ringed in the accent.
-  Its colours are the `jupiter-*` and `moon-*` tokens of `web/src/index.css`.
-  `MoonChart` plots, in CSS pixels at its measured width, each moon's offset along the equator across, east on the side the orientation puts it, against time running down over the period, with the disk's band, the site's watchable windows, the selected event, a line and the date at each local midnight, each curve labelled by its moon's initial, and a cursor moved by a click or the arrow keys, Home, and End.
-  `EventTimeline` lists the events with their visibility and rank: the watchable ones by default (with a site), headed by night in time order, and ordered by start or by rank from the When and Rank headers; `EventInspector`, beside the list from 64 rem of content and under it below, is headed by the event's name and status and shows the reached contacts in the display zone, the definition, overlaps, reasons, and the ephemeris source.
-  Choosing an event moves the tool's clock to its maximum, frames its moons in the viewer from the sampled tracks (`eventHalfWidth`), and brings the inspector into view when it stands under the list.
-  The Great Red Spot model is the server mirror `jupiterGrsState` in `SERVER_STORES` (`GET /api/jupiter/grs` and `jupiter:grsUpdated`), edited in degrees by `GrsSettings` from the revision it knows, its fields empty and Save Model disabled until the longitude, its instant, and the drift are entered; a 409 offers Keep Theirs and Save Mine.
-  Without a model, a notice under the viewer opens the panel on the Great Red Spot section.
-  Manage Kernels opens the SPICE Kernel Library and Show in Sky sets the Sky clock to the tool's instant, or to follow real now when the tool does (`syncSkyClock`), then selects Jupiter through the Observing Planner's handoff.
-  Its clock, period, orientation, track interpolation, time bar, event table, and contact and visibility rows are the shared planetary planner pieces of `web/src/tools/planetary/`.
-  Show in Sky is its one change of the Sky clock; nothing here moves the mount, changes a site or the profile, or starts an operation.
-- Limits: the routes trust their requests (the tool asks for ranges of at most 14 days);
-  the first visibility of a site computes each of its nights synchronously through the shared Astro Weather night (its Sun only, about 60 ms each on the theories and a few milliseconds on the kernels), later ones come from the cache.
+The Jupiter Observing Planner predicts, on request and read-only, the view of Jupiter and its Galilean satellites at an instant, their tracks over a period, and their phenomena: Great Red Spot transits, satellite and shadow transits, occultations and eclipses, and mutual events, with their visibility from the active site.
+The server is `api/src/jupiter.ts` with `jupiter.astronomy.ts` and `jupiter.store.ts`, and the tool is `web/src/tools/jupiter/`, built on the planetary planner pieces of `web/src/tools/planetary/`.
+
+## Purpose
+
+Planetary observers need to know when the moons, their shadows, and the Great Red Spot cross the disk and whether they can watch it from the site; the planner shows the system as it will look and lists the watchable phenomena.
+
+## Relations
+
+- Hosted by the Tools workspace, with its own clock, never the Sky clock.
+- Takes every state from one source of the fast [Ephemeris Chain](ephemeris-chain.md): the kernels of the [SPICE Kernel Library](spice-kernel-library.md) when they hold every Jovian body, else the theories, through the toolkit's Jovian satellite geometry and phenomena.
+- Shares its source selection (`api/src/planetary.source.ts`) and its visibility (`api/src/planetary.visibility.ts`) with the [Saturn Observing Planner](saturn-observing-planner.md).
+- Judges visibility on the nights of [Astro Weather](astro-weather.md) and the planetary windows of the [Observing Planner](observing-planner.md), from the active site (see [Observing Sites and Time Zones](observing-sites-and-time-zones.md)).
+- Persists only the Great Red Spot model, one per server, entered by the operator, and publishes its changes (see [Persistence and State](persistence-and-state.md)).
+- Opens the [SPICE Kernel Library](spice-kernel-library.md) (Manage Kernels) and the [Sky Map](sky-map.md) (Show in Sky, which sets the Sky clock to the tool's instant and selects Jupiter).
+
+## Rules and Limitations
+
+- Contacts are geocentric and never change with the site; the site only decides what can be watched.
+- Horizons is never asked; a kernel computation that misses anything is rerun whole on the theories, so one answer never mixes sources.
+- A kernel change during a scan restarts it; nothing partial is answered.
+- Without a Great Red Spot model no transit is predicted; the model is never fetched or defaulted, and an old one is marked stale but still used.
+- Mutual events carry no photometry, and tracks are for display only, never for contacts.
+- Show in Sky is its one change of the Sky clock; nothing here moves the mount, changes a site or the profile, or starts an operation.

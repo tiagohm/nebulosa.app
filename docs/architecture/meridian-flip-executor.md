@@ -1,38 +1,33 @@
-# Meridian Flip Executor Contract
+# Meridian Flip Executor
 
 Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
 
-- `MeridianFlipExecutor` (`api/src/meridianflipexecutor.ts`, pure decisions in `api/src/meridianflipexecutor.policy.ts`) flips a German equatorial mount at the passage its Meridian Flip Monitor follows and gives imaging back.
-  It reads the monitor, which stays passive, and composes the services that own each step; it commands no device itself.
-  One execution runs per physical mount (`resourceKey`), and nothing starts it but a request: `POST …/meridian-flip/execute` with `mode: 'now'` (refused unless eligible at once) or `mode: 'whenEligible'` (a one-shot arm that then flips unattended);
-  `POST …/meridian-flip/disarm` removes an arm and commands nothing.
-  An arm is consumed by the execution it starts.
-  Requests carry a token, the equipment of the Equipment Setup by exact ids (`MeridianFlipSetup`: main camera, guide output, focuser, rotator), an optional framed target (ICRS; absent, where the mount points is frozen as `derivedFromMount`), the `MeridianFlipExecutorPolicy`, and the Target Centering and Auto Focus settings the policy needs.
-  `POST …/meridian-flip/eligibility` answers what would be decided now and starts nothing.
-- Eligibility (`evaluateEligibility`), in order: the monitor is enabled;
-  the mount is connected, unparked, a German equatorial mount (`UNKNOWN` only when the operator classified it), and supports the strategy (`auto` prefers the driver's `FLIP`, else a forced GoTo);
-  the monitor tracks a settled, sidereal target away from the pole, still the context an arm was decided for;
-  the mount is not already on its post-meridian side, and the passage (`passageKey`: mount, target to the arcminute, transit minute) was not flipped in the last 12 h;
-  the window is open (now refuses `notDue` before it, an arm waits until `windowOpensAt`, and only a manual flip goes past `windowClosesAt`);
-  the flip, after the estimated wait for the capture's frame boundary, ends before `firmwareLimitSeconds` after the transit, and an arm refuses a window closing after that limit.
-  A pier side the driver does not report, or the simulator's, never erases the timing: it makes the verification mode `inference` (with a camera and Target Centering settings) or `none`, now or armed alike.
-- Execution, under one reservation of the execution (`ResourceReservationOwner` kind `mount.meridianFlipExecutor`, also tracked as a `mount.meridianFlipExecutor` operation) and a guiding hold of the setup's guide output: pause the running capture of the main camera at its next frame boundary (`CameraCaptures.suspendForMotion`, which lends its camera and Mount dithering reservation);
-  suspend the guiding runs of the guide output into the reservation (`GuidingSessions.suspendForMotion` with the reservation; a run calibrating or paused refuses `guidingActive`);
-  reserve the mount, guide output, camera, and focuser;
-  decide again and check the mount still points within 1° of the frozen target;
-  with `inference`, measure the target with Target Centering in Verify Only (every Target Centering session of an execution is awaited through `settled` of its admission, so one that blocks, its mount not confirmed stopped, ends the execution `blocked` at once instead of waiting for the operator to dismiss it);
-  flip with `MountCommands.admitMeridianFlip` (always sent, never corrected, never repeated);
-  wait `mountSettleSeconds`;
-  with `inference`, measure again;
-  classify the flip (`classifyFlip`): `verified` only by a driver-reported (not simulated) pier side that changed after a settled arrival, `inferred` only when the mount moved, the two solutions show the field turned by half a turn (`ORIENTATION_TOLERANCE`, 10°) with its parity kept and the rotator still, and the second solution verified the position, and `unverified` otherwise.
-  Only an accepted flip (`verified`, or `inferred` with `allowInferredAutoResume`) goes on to Target Centering in Recenter (`recenterAfterFlip`) and Auto Focus (`autofocusAfterFlip`), both under the reservation with `guiding: 'requireIdle'`, so the Executor alone suspends and restores guiding.
-- Give-back, whatever happened: cancel the reservation's operations, take the camera back to the capture, restore guiding (`restoreAfterMotion`) when imaging is ready or nothing moved (after an uncertain motion it stays suspended), dispose the hold, resume the capture only when every step succeeded (or nothing moved and guiding is as it was), otherwise release it paused for the operator, and release the reservation.
-  The `MeridianFlipExecution` records each step (`steps`), the flip evidence (`execution`, `MountFlipExecution`), and `MeridianFlipOutcome`, which keeps the verification apart from `readyForImaging`, the recentering, Auto Focus, guiding restoration, and capture restoration.
-  States: `completed` (ready), `failed` (with `code`), `blocked` (the flip motion failed with the mount still moving: the operator must look), `cancelled` (`POST /api/meridian-flip/executions/:sessionId/cancel`, which cancels its operations through the reservation).
-- `GET /api/meridian-flip/executions` is the snapshot (`epoch`, `revision`, the running and last 50 executions, the arms), `GET …/executions/:sessionId` one execution;
-  `meridianFlipExecutor:updated` and `meridianFlipExecutor:armed` (arm absent once removed) carry the epoch and the service revision.
-  Notifications report each ended execution once (`meridianFlip.verified`, `.inferred`, `.unverified`, `.failed`, `.blocked`, `.cancelled`), saying when the capture stays paused; an unverified flip whose mount was seen moving after a completed command is a warning (Meridian flip not verified), since the mount did cross the meridian, and every other failure an error.
-- Nothing survives the process: arms, executions, passages, and the reservation are memory only; a restart re-arms nothing and replays no motion.
-  The policy is a profile preference of the web.
-- Limitations: one capture (the main camera's) is paused, a capture admitted under a reservation is never paused, a non-sidereal target is never flipped, the firmware limit is only what the operator enters, a dome is not slaved, no rotator is moved, and the plate-solution inference is supporting evidence, never a mechanical confirmation.
-  Hardware acceptance on a real mount (iOptron CEM26 forced GoTo, firmware Meridian Treatment timing, cable clearance) is the operator's.
+The Meridian Flip Executor flips a German equatorial mount at the passage its monitor follows and gives imaging back: it pauses the capture, suspends guiding, flips, verifies the flip, recenters, refocuses, and resumes.
+It is `MeridianFlipExecutor` (`api/src/meridianflipexecutor.ts`), with its pure decisions in `api/src/meridianflipexecutor.policy.ts`.
+Only a request starts it: a flip now, or a one-shot arm that flips unattended once eligible.
+
+## Purpose
+
+It lets an imaging night continue across the meridian without the operator.
+It composes the services that own each step instead of commanding devices itself, and says plainly how well a flip was verified.
+
+## Relations
+
+- Reads the [Meridian Flip Monitor](meridian-flip-monitor.md), which stays passive.
+- Uses the devices of the Equipment Setup by exact ids: the mount, the main camera, the guide output, the focuser, and the rotator.
+- Pauses the main camera's capture at a frame boundary through Camera Acquisition (`api/src/captures.ts`) and suspends [Guiding](guiding.md) of the setup's guide output.
+- Flips through `MountCommands`, measures and recenters with [Target Centering](target-centering.md), and refocuses with [Auto Focus](auto-focus.md).
+- Holds the mount, guide output, camera, and focuser under one reservation of its own (see [Operation Lifecycle Rules](operation-lifecycle-rules.md)).
+- Started from the [Meridian Flip](meridian-flip.md) tool; its policy is a profile preference of the web.
+- Every ended execution becomes a [Notification](notifications.md).
+- Nothing survives the process: arms, executions, and the reservation are memory only, and a restart re-arms nothing and replays no motion.
+
+## Rules and Limitations
+
+- One execution runs per physical mount, and an arm is consumed by the execution it starts.
+- A flip is always sent, never corrected by a pointing model, and never repeated.
+- A flip is verified only by a pier side the driver reports; an inference from plate solutions is supporting evidence, never a mechanical confirmation.
+- Only an accepted flip goes on to recentering and Auto Focus, and the Executor alone suspends and restores guiding.
+- The capture resumes only when every step succeeded; otherwise it stays paused for the operator, and a flip motion that fails with the mount still moving leaves the execution blocked.
+- Only the main camera's capture is paused, a non-sidereal target is never flipped, the firmware limit is only what the operator enters, no dome is slaved, and no rotator is moved.
+- Hardware acceptance on a real mount (timing against the firmware, cable clearance) is the operator's.

@@ -1,91 +1,35 @@
-# Guiding Contract
+# Guiding
 
 Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
 
-- `GuidingSessions` (`api/src/guiding.ts`) runs native guiding, without any PHD2 process, for one guide camera and one guide output at a time per camera: one toolkit `InteractiveGuidingSession` (`core/src/observation/guiding/session.interactive.ts`) over a `GuiderClient` of its own, from the first looped exposure until the stop route or the loss of a device.
-  The toolkit owns the states, the tracking, the calibration, the controller, the pulse admission and the settle; the service only forwards commands, publishes the snapshot, the native events and the telemetry, and previews the frames.
-  The guide camera and the guide output come from the request as exact device ids; changing roles or profiles never touches a running session.
-- Resources: the session's root holds the guide camera for the whole session, published as a `camera.guiding` operation;
-  while guiding (from Start Guiding until Stop Guiding, the stop, or the loss), its child run holds the guide output (the mount, or the ST4 port of a camera, a capability apart from that camera's sensor, so the ST4 port of the guide camera itself guides while the root keeps it looping), its logical lifecycle resource, and the mount it drives (`GuidingStartRequest.mount`, the setup's `MOUNT`, held through the toolkit's `InteractiveGuidingSessionOptions.mount`), atomically, published as `guideOutput.guiding` with both devices, so no GoTo, nudge or manual pulse moves the mount between two corrections even when the guide output shares no device with it.
-  Every pulse goes through `GuideOutputCommander.dispatch` under that run (the commander of `GuideOutputCommands`), so ending the run waits for the observed end of every pulse and leaves the device blocked with the `guidePulse` cause when that end cannot be observed.
-  While only looping, manual pulses, nudges and slews of the mount stay possible; the camera stays held.
-  Losing the guide camera, the guide output, or the mount it holds ends the session as lost (`failure.reason` `disconnected` or `removed`); a reconnected device needs a new session.
-- Frames: each guide BLOB is decoded on a worker thread of the session (`api/src/guiding.worker.ts`, bundled as an extra entry point of the executable), which takes the grayscale copy (`luminanceImage` of `api/src/imagedecode.ts`, shared with the image worker), detects its stars with the toolkit detector and the built-in settings of the request, samples their peaks, and answers the image, the stars and the FITS/XISF bytes;
-  the tracker reads the stars synchronously.
-  While the run holds the guide output and the previous frame was measured, the built-in detection is limited to squares around the measured star, the lock, and the brightest accepted stars (`guidingRegions` of `api/src/guiding.ts`, `api/src/guideregions.ts`), about 30 ms instead of 500 ms on a 1280 × 1024 frame; looping, selecting, a lost frame, and ASTAP use the whole frame.
-  A session whose detector is ASTAP has the worker decode only and runs ASTAP's extraction on the frame's FITS file in a temporary directory of the session, removed at its end, about half a second per frame, sampling the peaks on the grayscale copy;
-  a run in flight is killed by the end of the session.
-  The bytes of the newest frame are opened as a capture document and recorded as the latest frame of the camera (origin `guiding`, never saved); only the newest frame waits while another one is opened, so the preview never holds the guiding back.
-  `guiding:frame` names the frame's `imageId` with its overlay (lock and search positions, search square, measurement, primary star, detected and accepted stars with their HFD), in pixels of the full decoded frame from its top-left;
-  it is sent before the frame becomes the latest of the camera, so a tab has the overlay when it switches to it, and the tab keeps the overlay of the frame before until then, so the markers never blink.
-- `POST /api/connections/:id/cameras/:deviceId/guiding` starts a session (`GuidingStartRequest`: the guide output, the mount it drives when the setup has one, the exposure in ms, the camera settings sent once, the tracking mode, optional optics, calibration overrides (among them `assumeDecOrthogonalToRa`) and controller overrides passed to the toolkit unchanged (among them `decBacklashCompensation`, the toolkit's adaptive DEC backlash compensation, off unless asked; see `DeclinationBacklashCompensation` of `core/src/observation/guiding/guider.ts`), the guider client settings (`GuidingClientSettings`: dither pattern, search square, sticky lock position, fast recenter, DEC reversal after a flipped calibration, and declination compensation, with the toolkit's defaults of `GuiderClientOptions` in `core/src/observation/guiding/client.ts`), how saved calibrations are reused (`calibrationPolicy`: `autoRestore` and `recalibrateOnEveryStart`, `DEFAULT_GUIDING_CALIBRATION_POLICY` restoring and calibrating only without a match), whether a slew of the mount stops guiding (`stopGuidingOnSlew`, on unless false), the devices snooped into the guide frame headers, set once when the session starts, and the star detector with its settings, the built-in defaults when absent);
-  202 with `sessionId` and `operationId`, and a repeated token answers the same session;
-  404 for an unknown camera or guide output, 409 when one is disconnected or the camera is held, 422 when the guide output cannot pulse guide or the detector is ASTAP while it is not configured.
-- Durable commands answer 202 with a `commandId` once accepted (a repeated token answers the same command) and report their outcome as the `command` of the session record: `POST /api/guiding/:sessionId/start` (`recalibrate`, Force Recalibrate, and settle), `/stop-guiding`, `/pause` (`corrections` keeps exposing, `all` stops the exposures; a pause during calibration is always full and its resume calibrates again), `/resume` (settle), and `/dither` (amount in guide pixels or radians, RA only, guided settle; the toolkit moves the lock as PHD2 does, see `dither` of `core/src/observation/guiding/client.ts`).
-  Immediate commands answer 200 or 204, or the failure of the toolkit: `/target` (a pixel of the current frame, or the best star of the whole frame, even when one is already selected), `/target/clear` and `/calibration/clear` (422 while guiding), and `/exposure` (ms).
-  `POST /api/guiding/:sessionId/stop` ends the session once the guide camera and output were released (204), or answers the failure when the end of a pulse could not be observed.
-  Commands of an ended or unknown session answer 404.
-- Dark: a session asked to (`GuidingStartRequest.dark`, optionally pinning a `masterId`; `POST /api/guiding/:sessionId/dark` with `enabled` and `masterId` changes it while it runs) subtracts a master dark of the Calibration Library from its guide frames before their stars are detected.
-  Whenever the calibration target of the frames changes, the service chooses among the masters the library matches (`resolvePreview`, `matchesTarget`) a dark exposed exactly as long (none when the frame states no exposure), the pinned one only when one is pinned, choosing the closest in temperature, then the newest;
-  it reads it through `pinnedMaster` (its SHA-256 checked) and leases it until another one is chosen, the dark is turned off, or the session ends, so the library refuses its deletion meanwhile.
-  The worker subtracts it from the raw samples before debayering and the luminance only when the frame's exposure is the dark's, so a frame taken before a change of exposure is never calibrated with the dark of another one;
-  `calibrate` refuses a master of another geometry, binning, gain, offset or subframe.
-  The grayscale copy, its stars, the Star Profile, and the FITS ASTAP runs on then come from the calibrated samples;
-  the preview shows the frame as taken.
-  A frame the dark does not apply to is guided uncalibrated.
-  The module descriptions of `api/src/guiding.ts` and `api/src/guiding.worker.ts` give the details.
-  The record says how it went (`darkCalibration`: `pending`, `noCompatibleDark`, `selected`, `applied`, or `failed` with the reason, the master and whether it was pinned), and `GET /api/guiding/:sessionId/dark/candidates` lists the darks matching the latest frame.
-  Only the darks of the camera of the Equipment Catalog the guide camera was bound to when the session started match; a session of a camera bound to none subtracts no dark, lists none, and says so (`noCompatibleDark`, see [Equipment Catalog Contract](equipment-catalog.md)).
-- Slews: while the run holds the mount nothing of the application can move it, so a slew, park or home it reports then (`slewing`, `parking`, `homing` of the mount manager; never `moving`, which pulse guiding sets) was commanded elsewhere.
-  With `stopGuidingOnSlew` the service stops guiding as Stop Guiding does (closing the pulses and waiting for their observed end before the run releases the guide output and the mount), clears the lock, whose pixel the slew made meaningless, and records `interruption` (`externalSlew` with its time) and the `stopGuiding` command in the record;
-  the loop goes on, guiding never starts again by itself, and the next Start Guiding clears the interruption.
-  Without it, a slew changes nothing.
-  A stop whose pulse end cannot be observed leaves the guide output blocked, as Stop Guiding does.
-- Saved calibrations: every calibration that completes is saved by `GuidingCalibrationStore` (`api/src/guidingcalibration.store.ts`, table `guiding_calibrations`) as the toolkit's source record (the solution as measured, with the review of every measured step, and the mount context it was measured in: the declination the mount reports, apparent of date, and its side of the pier), the evidence of the equipment and geometry (`GuidingCalibrationEvidence` of `api/src/guidingcalibration.ts`, keyed by the resource keys of the devices, stable across restarts and reconnects of the same endpoint), and the grade of `assessGuidingCalibration`.
-  A failed save is reported (`calibration.saved` false with `saveError`) and leaves the calibration guiding its session.
-  At Start Guiding, unless it recalibrates (`recalibrate` or `recalibrateOnEveryStart`), a session without a calibration restores the best matching saved one when `autoRestore` is on (`selectGuidingCalibration`: every piece of evidence must match, the pixel scale and guide rates within 1%, and the toolkit's `effectiveGuidingCalibration` must derive it for the current mount context, which it refuses for an unknown side of the pier or declination and the polar regions; the best grade, then the newest, wins), and a calibration in use is derived again from its source when the mount context changed since;
-  a refusal, or no match, calibrates.
-  The rows are validated by the toolkit whenever they are read, so one that cannot be trusted is listed as invalid and never restored.
-  `GET /api/guiding/calibrations?equipmentKey=&limit=` lists the headers, newest first;
-  `GET /api/guiding/calibrations/:calibrationId` is one with its record, evidence and grade;
-  `PATCH` of it (`disabled`) excludes it from restoring or includes it again;
-  `GET /api/guiding/:sessionId/calibration` is the calibration a session uses with its source record;
-  `GET /api/guiding/:sessionId/calibration/candidates` is how each saved calibration of the session's equipment fits it now (`direct`, `transformed`, `incompatible`, `insufficientEvidence`, `requiresRecalibration`, `disabled`, `invalid`, with machine-readable reasons);
-  `POST /api/guiding/:sessionId/calibration/restore` (`calibrationId`) restores one while not guiding (409 `busy` while guiding or before the first frame, 422 `calibrationIncompatible` with the `reasons`).
-  `/calibration/clear` drops only the calibration in use, never a saved one.
-- `GET /api/guiding` lists the latest session of each guide camera;
-  `GET /api/guiding/:sessionId` is its record (`GuidingSessionSummary`: the snapshot, the guide exposure, the calibration in use (`GuidingCalibrationSummary`, as derived for the mount now, with the mount context it was measured in and its generation), the progress of a running calibration (`calibrating`, `GuidingCalibrationProgress`, cleared once the guider leaves `calibrating`), the RMS of the latest `GUIDING_RMS_WINDOW` (50) measured guide steps in guide pixels, the DEC backlash estimate of the adaptive compensation (`decBacklashEstimate`, ms), the pixel scale in arcsec per pixel when the optics are known, the progress of the guide exposure the camera counts down (`exposureProgress`), the Star Profile of the guide star of the latest measured frame (`star`, `api/src/guidingprofile.ts`), the latest frame and command, the latest event sequence and telemetry cursor, and a revision).
-  `GET /api/guiding/:sessionId/events?after=` and `/telemetry?after=` page the control events (every native event except the per-frame ones, at most 500) and the telemetry samples (one per guide step or lost frame, at most 2000, each with the generation of the calibration that converted its errors, the DEC backlash compensation its DEC pulse included, and the `phase` of the guider: `guiding`, `settling`, or `dithering` for the settle and fast recenter of a dither), with `truncated` when the requested position was already forgotten.
-  Events: `guiding:updated` (the record), `guiding:event` (one control event and its sequence), `guiding:telemetry` (one sample and its cursor), and `guiding:frame`.
-  A tab that reconnects reads the record, then the events and telemetry after the positions it has.
-- The web store `web/src/camera/guiding.ts` (`guidingRuntime`, in `SERVER_STORES`) mirrors the latest session of each guide camera, ordered by revision, with the control events and telemetry of those sessions only, filling any gap from the pages (see its module description);
-  a truncated page replaces what it had.
-  `guiding:frame` keeps the newest frame of each session with its overlay; there is no route for the overlay of an earlier frame, so a reload shows it from the next frame.
-  `guidingRequest` builds the start from the profile's guiding form, sending exposures in ms.
-  The Guiding panel (`web/src/camera/GuidingPanel.tsx`) opens Review Calibration (`GuidingCalibrationReview.tsx`) for the calibration a session uses or a saved one, reading it from the server: the measured steps of each leg on the guide image with the excluded ones hollow and an assumed DEC axis dashed (`GuidingCalibrationPlot.tsx`), the solution as measured with its mount context, the calibration in use for where the mount points, the equipment of a saved one, and the findings of its grade, never mixing the measured and the derived values;
-  and lists the saved calibrations of the session's equipment with how each fits it, to review, restore while not guiding, or exclude from restoring.
-  Under the camera tab the guiding graph shows the history or the target (`GuidingGraphs.tsx`, `GuidingTargetGraph.tsx`): the RA and DEC errors on one scale of the latest guide steps, along time for the history (the latest `GUIDING_GRAPH_SAMPLES`, 100) and around the lock for the target (the latest 25 to 500 of `GUIDING_TARGET_POINTS`, as chosen), in arcseconds when the pixel scale is known, only those of the newest calibration generation, with the RMS of the guiding steps alone;
-  Clear Display forgets the steps drawn on the tab only.
-  Which graph and how many steps are view state (`guidingGraph`).
-  Its Corrections section edits the adaptive DEC backlash compensation of the form (`decBacklash`: off by default, the initial estimate, which the backlash measured by the calibration in use can seed, the largest compensation, and the adaptation rate) and shows the estimate of the running session.
-  Its Dark section sends the form's `useCalibrationLibraryDark` at the start and changes the running session too, shows how the dark went, and pins a master among those matching the frames, or goes back to the best match, for the running session only.
-- Other services: `runsOn(guideOutput)` lists the sessions whose run holds that guide output, and `hold(guideOutput, holder)` makes Start Guiding, resume, and dither of the sessions guiding through it answer `409 busy`, naming the first holder still holding it as the one moving the mount, until every hold is disposed, while looping goes on.
-  Both name the exact guide output, the setup's `GUIDE_OUTPUT` that drives the mount the caller moves: a guide output on the ST4 port of a camera shares no device with that mount, so the arbiter alone cannot refuse a slew during its corrections, and the setup says which mount it drives.
-  `suspendForMotion(sessionId, { reservation? })` stops the corrections of a session, keeping its loop and calibration, and resolves once the guide output was released;
-  with a reservation, the guide output and the mount join it before the stop with the session's root as their guest, so they pass from the run to the reservation with no gap, the restored run takes them back inside it, and a reservation that cannot take them refuses as `busy` without stopping anything;
-  `restoreAfterMotion` starts guiding again only if that stop is still the latest command of the session: it clears the lock, since a pixel means nothing after a slew, selects the best star of a frame taken after the motion, and starts guiding with the settle of the latest Start Guiding (`RESTORE_SETTLE` when the session never asked for one), with the calibration in use derived again for where the mount points now, or calibrating when it does not apply there, when there is none, or with `recalibrateOnEveryStart`.
-  An abort stops waiting and stops guiding.
-  Only Target Centering and the Meridian Flip Executor use `suspendForMotion` and `restoreAfterMotion`, and they answer results, never responses, so its outcome does not depend on the record of the latest command, which another tab may replace.
-  `claimDither(sessionId, holder)` gives the dither commands of a living session to one claimant until it is disposed: the claim's own `admitDither` is the only dither admitted meanwhile, while the manual route and a second claim answer `409 busy` naming the holder;
-  corrections, pause, resume, and stop are untouched, and a dither already admitted runs to its own settle.
-  `summaryOf(sessionId)` is the record of a session that still lives.
-- A caller inside the process admits a session with `admit(connectionId, deviceId, request, invocation)`, which answers a `CommandRefusal` or the session and operation ids and `ended`, the final summary.
-  Under an invocation, the guide camera and the guide output must be reserved by it, and the root, every run, command, and stop of the session acquire inside the reservation through its token scope (`reservedScope`, the toolkit's exception for a root a service keeps of its own), whoever sends the command, the caller or a tab.
-  `admitStartGuiding`, `admitStopGuiding`, `admitPause`, `admitResume`, and `admitDither` answer the command id and `settled`, the outcome of that exact command once it settled, which the single `command` of the record no longer shows once a newer command replaced it;
-  the routes answer through them.
-  `rootOf(sessionId)` is the id of the root holding the guide camera, which a holder draining its reservation (`drainByReservationOwner`) preserves so guiding, its run included, outlives the interruption of the other work;
-  cancelling the reservation (`cancelByReservationOwner`) ends the session.
-- Limitations: the controller and tracking settings are fixed when the session starts (only the exposure changes on a running session);
-  a mount that reports no side of the pier never has a calibration restored or derived, so it calibrates again after every motion;
-  a target pixel is not checked against the frame the tab shows;
-  sessions, events, and telemetry live in memory and do not survive a restart.
+Guiding is native autoguiding, without any PHD2 process: one guide camera loops exposures, a guide star is tracked, and corrections are pulsed through a guide output (the mount, or the ST4 port of a camera).
+The session lives in `api/src/guiding.ts`, decodes and measures its frames on a worker of its own (`api/src/guiding.worker.ts`), and runs the toolkit's interactive guiding session (`core/src/observation/guiding/`), which owns the states, the tracking, the calibration, the controller, the pulses, dithering, and the settle.
+Saved calibrations live in `api/src/guidingcalibration.store.ts`.
+The web tool is a camera operation of the Images camera tabs (`web/src/images/GuidingTool.tsx`, `web/src/camera/GuidingPanel.tsx`, store `web/src/camera/guiding.ts`), with the guiding graphs under the camera tab and the calibration review.
+
+## Purpose
+
+Long exposures need the mount to follow the sky more precisely than its tracking can, and dithering between frames needs a guider that moves the lock and settles.
+Guiding is what keeps every long light frame sharp, and the capture, centering, and meridian flip workflows coordinate with it.
+
+## Relations
+
+- The guide camera is held for the whole session; while guiding, a run also holds the guide output and the mount it drives (the setup's mount), so no GoTo, nudge, or manual pulse moves the mount between two corrections (see [Operation Lifecycle Rules](operation-lifecycle-rules.md)).
+- Pulses go through the guide output commander, so ending a run waits for the observed end of every pulse.
+- Detects the stars of its frames with the toolkit detector, or with ASTAP through [External Tools](external-tools.md) (see [Star Detection](star-detection.md)).
+- Can subtract a master dark of the [Calibration Library](calibration-library.md), chosen among those of the guide camera's [Equipment Catalog](equipment-catalog.md) camera or pinned by the operator, and leased while used.
+- Saves every completed calibration in the database and restores a matching one at Start Guiding, derived for where the mount points now (see [Persistence and State](persistence-and-state.md)).
+- Records the newest frame in the [Capture Frames](capture-frames.md) registry so the camera tab shows it, never saved.
+- Camera Acquisition claims the dither commands of a session to dither between its frames.
+- [Target Centering](target-centering.md) and the [Meridian Flip Executor](meridian-flip-executor.md) hold guiding through a guide output and suspend and restore it around a motion of its mount, handing the guide output and the mount to their reservation with no gap.
+- Its events raise [notifications](notifications.md).
+
+## Rules and Limitations
+
+- The Equipment Setup says which mount a guide output drives; services that move a mount coordinate with the guiding of exactly the setup's guide output, since a guide output on a camera's ST4 port shares no device with the mount.
+- Losing the guide camera, the guide output, or the mount ends the session; a reconnected device needs a new session.
+- A slew commanded elsewhere stops guiding unless the request says otherwise, and guiding never starts again by itself.
+- A caller inside the process can admit a session under a reservation that holds the guide camera and the guide output; every command of the session then runs inside it, whoever sends it.
+- The controller and tracking settings are fixed when the session starts; only the exposure changes on a running session.
+- A mount that reports no side of the pier never has a calibration restored or derived, so it calibrates again after every motion.
+- Sessions, events, and telemetry live in memory and do not survive a restart; only the saved calibrations persist.

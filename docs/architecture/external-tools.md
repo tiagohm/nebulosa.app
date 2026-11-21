@@ -1,27 +1,28 @@
-# External Tools Contract
+# External Tools
 
 Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
 
-- External programs and services the backend uses are registered in `api/src/externaltools.ts` with the capabilities their adapters provide and the settings they take besides a timeout (`fields`): ASTAP (plate solving and star detection, through `core/src/astrometry/solvers/astap.ts`; executable), Astrometry.net Local (`solve-field`; executable and an optional backend configuration file naming the index directories), and Nova Astrometry.net (the web service; endpoint, empty for the public one), and MediaMTX (the media gateway of the [Observatory Cameras Contract](observatory-cameras.md); executable), the only one the server keeps running instead of running per operation: its timeout is the time it may take to become ready after starting (1 to 60 s, 15 s by default; `defaultTimeout` gives each program the timeout it has before any save).
-  The native `detectStars` and the libastrometry binding are not external tools: the binding is not integrated, because `solver_run` is one blocking native call that cannot be interrupted and whose crash would take the server down, and because it takes stars already detected, which would need a detection configuration of its own.
-  No route runs an arbitrary command.
-- A web service (`session: true`) is signed in to with the API key of an account: `POST /api/settings/external-tools/:id/login` sends the key once to the saved endpoint and keeps only the session the service returns, in the memory of the server, so a restart signs out;
-  neither the key nor the session is ever stored, and the key is never logged.
-  A refused key is 422 with the service's message, an unreachable service 502.
-  `POST …/logout` forgets the session, and saving another endpoint signs out.
-  Clients only see `signedIn`; the session itself reaches only the services through `resolve`.
-  A web service is configured when signed in.
-  Its Test checks the endpoint and the session the server holds without contacting the service, so an expired session is found by the next run.
-- Settings belong to the server instance, never to a profile or a browser: Settings (the top bar gear button) → External Tools (`/settings/external-tools/<id>`) edits a draft, and only Save writes it (`PUT /api/settings/external-tools/:id`), with the revision it was edited from;
-  a save from an outdated revision is refused with `409 conflict` and the current state, and every change is published as `externalTool:updated`.
-  `GET /api/settings/external-tools` lists every program and `GET …/:id` one.
-- With no executable saved (no session for a web service), a program is Not Configured and `ExternalToolsStore.resolve` returns undefined, so its services must refuse to run it; no platform default path is assumed.
-  A service resolves the settings once when an operation starts and keeps that snapshot until the operation ends, so a save applies to the next operations without a restart.
-- Test (`POST …/:id/test`) checks a draft on the server's filesystem without saving it: the path exists, is a regular file, and may be executed (on Windows any existing file passes);
-  a bare name is looked up on the server's PATH;
-  a configuration file, when set, must exist.
-  It never starts the program, so it proves neither that the program runs nor that it analyzes images, and the version is reported as unknown.
-  Only a check of the saved settings becomes the program's latest check, kept in memory until the server restarts.
-- There is no authentication: any client that can reach the API can change the executable the server runs and check paths of its filesystem, like `/api/files` lists them.
-  Keep the host the server listens on (`--host`, `APP_HOST` else `HOST`; `app/src/options.ts`) on localhost when untrusted clients can reach the network.
-- Settings are rows of `external_tool_settings` in the operational database, one per program saved at least once; a program without a row runs with the defaults.
+External Tools registers the programs and services the backend uses but does not ship, with the settings each one takes: ASTAP, Astrometry.net Local, Nova Astrometry.net, and MediaMTX.
+The registry and its store are `api/src/externaltools.ts`, edited in Settings → External Tools.
+
+## Purpose
+
+Plate solving, star detection, and the observatory video gateway depend on programs installed beside Nebulosa.
+The operator configures and checks them once per server, and every service finds them in one place.
+
+## Relations
+
+- ASTAP serves [Plate Solving](plate-solving.md) and [Star Detection](star-detection.md) through the toolkit's adapter (`core/src/astrometry/solvers/astap.ts`); Astrometry.net Local and Nova Astrometry.net serve [Plate Solving](plate-solving.md).
+- MediaMTX is the media gateway of [Observatory Cameras](observatory-cameras.md), the only program the server keeps running instead of running it per operation.
+- Nova Astrometry.net is a web service signed in to with the API key of an account.
+- Settings belong to the server instance, never to a profile or a browser, and are rows of the operational database (see [Persistence and State](persistence-and-state.md)).
+
+## Rules and Limitations
+
+- A program that is not configured resolves to nothing, so its services refuse to run it; no platform default path is assumed.
+- A service resolves the settings once when an operation starts, so a save applies to the next operations without a restart.
+- No route runs an arbitrary command.
+- A test checks the file on the server's filesystem and never starts the program, so it proves neither that it runs nor that it analyzes images.
+- An API key is never stored or logged; only the session it opens is kept, in memory, so a restart signs out.
+- The native star detection and the libastrometry binding are not external tools; the binding is not integrated, since its single blocking native call cannot be interrupted and its crash would take the server down.
+- There is no authentication: anyone who reaches the API can change the executables the server runs, so keep the server on localhost when untrusted clients can reach the network.

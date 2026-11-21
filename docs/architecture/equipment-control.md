@@ -1,27 +1,27 @@
-# Equipment Control Contract
+# Equipment Control
 
 Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
 
-- The page lists the devices of the active profile's connection only, grouped by hardware id, so the interfaces of one physical device (a flip-flat's cover and flat panel, a mount and its guide output) appear once.
-  The INDI directory adds every device the connection reports that no interface manages, named in the URL by its hardware id (`web/src/equipment-control/groups.ts`).
-  Each device also has read-only Diagnostics (`DeviceDiagnostics.tsx`, collapsed): the identity and driver of each interface, the capabilities it declares, its last errors, the operations holding it, and its raw state.
-  Opening it, switching devices, or reloading never connects, disconnects, or commands anything.
-- Every command goes through `api` under the shared contract of `api/src/commands.ts`: settings answer 204 once the driver reports the commanded state (504 `timeout` when it never does), motions answer 202 with an operation id and report their outcome only through `operation:updated`.
-  Durable requests carry a client token, so a repeated request never moves a device twice;
-  the web generates tokens and ids with `nanoid`, never `crypto.randomUUID`, which browsers only provide in a secure context (HTTPS or localhost) and the app is usually opened over plain HTTP on the local network.
-- The command controls of a device are disabled while this tab has a command of it in flight or a running operation holds it, whichever tab or service started it (`useDeviceBusy` of `web/src/equipment-control/useControl.ts`), since the server would refuse them as busy;
-  the stop buttons never are.
-- Stops never wait for a lease: `POST …/stop` cancels the operation of the physical device and sends the commander's `stopMotion` (`stopResponse` of `api/src/commands.ts`).
-  A filter wheel has no abort.
-  Guide pulse stops never cancel another operation of the mount.
-- Manual motion held by a lease (mount nudge, dome rotation) shares `api/src/leases.ts` and `web/src/press.ts`.
-- The state of a camera also says whether it is exposing (`exposing`), for whichever tool asked for the frame; the progress of an exposure stays with the capture that runs it, so this field changes only when an exposure starts or ends.
-- The sensor temperature of a camera (`CCD_TEMPERATURE`) or a focuser (`FOCUS_TEMPERATURE`) is read by the toolkit's `ThermometerManager`, registered in `DeviceRegistry` after the managed types, and published in the parent's state (`temperature` of `camera:capabilities` and `focuser:updated`);
-  its thermometer proxies are not a managed type.
-  A camera reports a `cooler` only when it has a cooler switch or a settable target temperature, so a camera with a bare thermometer shows only its temperature.
-- The mechanical type of a mount (`mountType`) comes from `TELESCOPE_MOUNT_TYPE` or the Alpaca `alignmentmode`, and is `UNKNOWN` until reported;
-  only `ALTAZ` is evidence against a polar alignment, and the INDI base class reports `EQ_GEM` unless its driver says otherwise.
-- Known driver differences: Alpaca mounts expose only Go Home (no find or set home, no set park, no flip); Alpaca domes cannot unpark or rotate manually; Alpaca focusers have no sync or reverse; Alpaca rotators have no home.
-  Pier side and the INDI Alignment Subsystem are reported but have no commander, so the controls show them read-only; power, weather, safety monitor, and GPS devices are not managed.
-  The vectors of all of them can still be seen and written in INDI Properties (see [INDI Properties Contract](indi-properties.md)).
-  The simulator has no composite cover with a heater; that path is tested with a fake client.
+Equipment Control is the management page that lists the devices of the active profile's connection, one entry per physical device, with the controls of each interface, read-only diagnostics, and the INDI views of the devices an INDI server reports.
+It lives in `web/src/equipment-control/`, and every command goes through `api` under the shared command contract of `api/src/commands.ts`.
+
+## Purpose
+
+It is the operator's place for direct manual control and inspection of each device: connecting, cooling, moving, parking, stopping, and seeing what a driver reports, including devices no other feature manages.
+
+## Relations
+
+- Commands follow the command contract: settings answer once the driver reports them, and motions run as operations under the [Operation Lifecycle Rules](operation-lifecycle-rules.md); held manual motions such as a mount nudge or a dome rotation share the leases of `api/src/leases.ts`.
+- Reads the device managers of the toolkit through `DeviceRegistry`, including its `ThermometerManager` for sensor temperatures.
+- Hosts the [INDI Properties](indi-properties.md) and [INDI Messages](indi-messages.md) views of a device.
+- Device links of the camera operations, [Mount Remote Control](mount-remote-control.md), the [Mount Pointing Model](mount-pointing-model.md), the status bar, and [Notifications](notifications.md) open a device here.
+- Its manual Flip only moves the mount and links to [Meridian Flip](meridian-flip.md).
+
+## Rules and Limitations
+
+- Opening the page, switching devices, or reloading never connects, disconnects, or commands anything.
+- Command controls are disabled while a command of the device is in flight or an operation holds it; stop buttons never are.
+- A stop never waits for a lease: it cancels whatever holds the physical device and stops its motion; a filter wheel has no abort, and a guide pulse stop never cancels another operation of the mount.
+- The mount type is unknown until reported, and only alt-azimuth is evidence against a polar alignment.
+- Drivers differ: Alpaca mounts only go home, Alpaca domes cannot unpark or rotate manually, Alpaca focusers have no sync or reverse, and Alpaca rotators have no home.
+- Pier side and the INDI Alignment Subsystem are shown read-only, and power, weather, safety monitor, and GPS devices are not managed; all of them can still be written in INDI Properties.

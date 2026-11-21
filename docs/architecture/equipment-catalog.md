@@ -1,55 +1,29 @@
-# Equipment Catalog Contract
+# Equipment Catalog
 
 Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
 
-The Equipment Catalog is the stable identity of the physical cameras that calibration frames and masters are recorded against, whatever connection, endpoint, or driver reaches them, and of the telescopes and lenses the Equipment Setup looks through.
-It has three parts: the cameras and the telescopes of the catalog, both kept with the workspace, and the binding of each camera device to a camera, kept by the `api`.
+The Equipment Catalog is the stable identity of the physical cameras that calibration frames and masters are recorded against, and of the telescopes and lenses the Equipment Setup looks through.
+It holds the cameras and telescopes of the catalog (`api/src/workspace.ts`), part of the workspace, and the binding of each camera device to a camera (`api/src/equipmentcatalog.ts`), kept by the server.
+It is edited in Settings → Equipment Catalog (`web/src/settings/EquipmentCatalogSettings.tsx`), and bindings in the Equipment Setup (`web/src/equipment/`).
 
-- **Cameras.**
-  A camera of the catalog (`CatalogCamera` of `api/src/workspace.ts`) has an id the tab that created it generates (`nanoid`) and that never changes, a name unique without regard to case (`409 nameTaken`), an optional model, serial number, and notes for people only, an optional declared sensor (`CatalogCameraSensor`: unbinned width and height in pixels, pixel size in micrometers, CFA pattern, bits), and whether it is archived.
-  It is one catalog shared by every profile, tab, and browser, like the observing sites: read in `GET /api/workspace` (`cameras`), written unit by unit from its revision by `WorkspaceSync` (`PUT` and `DELETE /api/catalog-cameras/:id`, `409 conflict` with the camera the server kept), and published as `catalogCamera:updated` and `catalogCamera:removed`.
-  Nothing compares a model, a serial number, or a name with a frame; the declared sensor warns of a binding to a device that reports another one, and completes the field of view of the Equipment Setup with every value its bound device does not report, all of them while it is disconnected (`roleSensors` of `web/src/sky/sensors.ts`); while the connection is closed, the camera is found by the device id the Equipment Setup keeps (`boundCameraId`).
-  An archived camera is no longer offered to new bindings, imports, or declarations, and keeps everything recorded against it.
-  A camera calibration frames or masters are recorded against cannot be deleted (`409 cameraInUse` with `usage`, `CatalogCameraUsage`), which the database enforces too (`ON DELETE RESTRICT`); deleting one removes its bindings (`ON DELETE CASCADE`, published as unbound) and clears it from the captured frames and stacked lights that named it (`ON DELETE SET NULL`).
-- **Telescopes.**
-  A telescope of the catalog (`CatalogTelescope` of `api/src/workspace.ts`, table `equipment_telescopes`) has an id the tab that created it generates (`nanoid`) and that never changes, a name unique without regard to case (`409 nameTaken`), an optional model, serial number, and notes for people only, an optional declared clear aperture and native focal length (millimeters, without reducer or Barlow), and whether it is archived.
-  Like the cameras it is one catalog shared by every profile, tab, and browser: read in `GET /api/workspace` (`telescopes`), written unit by unit from its revision by `WorkspaceSync` (`PUT` and `DELETE /api/catalog-telescopes/:id`, `409 conflict` with the telescope the server kept), and published as `catalogTelescope:updated` and `catalogTelescope:removed`.
-  The Telescope and the Guide Telescope of a profile's Equipment Setup refer to one by id (`TelescopeOptics.telescopeId`, inside the `telescope` and `guideTelescope` preferences) or are entered by hand: a referenced telescope gives the aperture and focal length it declares, each value it does not declare is the profile's, and the reducer or Barlow is always the profile's (`resolveTelescope` and `useProfileTelescopes` of `web/src/equipment/telescopes.ts`, which the Sky, the framings, Guiding, the Observing Planner, and the Calculator read).
-  Choosing a telescope copies what it declares into the profile, so a telescope deleted later leaves its profiles on the values last copied; the Equipment Setup then names it a deleted telescope until another one, or none, is chosen.
-  Nothing is recorded against a telescope, so deleting one is never refused; an archived telescope is no longer offered to the Equipment Setup and the calculators, and still resolves for the profiles that refer to it.
-- **Bindings.**
-  A binding (`CameraBinding` of `api/src/equipmentcatalog.ts`) says which camera of the catalog a camera device is, keyed by its hardware id (the MD5 of its client id, which the endpoint gives, and its driver name), with the connection, the device id, and the driver name it had when it was bound.
-  The device id of a camera, the MD5 of the same client id and name with its type, determines its hardware id, so the operations (`OperationDevice`), the Equipment Setup, and the field of view find a binding by device id, also while the connection is closed (`EquipmentCatalog.binding` and `boundCameraId` of `web/src/equipment/catalog.ts`).
-  A physical device can only be identified this far: no protocol gives a serial number, so the risk of the limitations below is accepted.
-  It belongs to the physical device, not to a profile: the wizards, the captures, and the calibrators run on the server and only know the device, never the profile that started them, so it holds for every profile that uses the device.
-  It is edited in the Equipment Setup (`CatalogBinding` of `web/src/equipment/`, under the Main Camera and Guide Camera roles), through `PUT /api/equipment-catalog/bindings` (`{ connectionId, deviceId, cameraId | null }`, `404 notFound` for a device that is not a camera of an open connection or a camera that is not in the catalog), read by `GET /api/equipment-catalog/bindings`, and published as `catalogCamera:bindingChanged` (`{ hardwareId, binding? }`); the web mirrors it in `cameraBindingsState` (`web/src/equipment/catalog.ts`, in `SERVER_STORES`).
-  While the assigned device is not on an open connection, the line still shows the camera, found by the device id the Equipment Setup keeps as for the field of view, with the select disabled, since only a device of an open connection can be bound.
-  A camera of the catalog is bound to one device at most, since one camera cannot be two devices: binding it to a device unbinds the device it was bound to, published as unbound, which moves it from a device of an endpoint that changed.
-  Like a device that already fills another role, the Equipment Setup does not offer a camera another device of the same connection is bound to (`cameraBoundElsewhere`, by the connection the binding was made through), naming that device, and does not suggest it.
-  The last write wins, and no history is kept: every frame records the camera of its binding once, when it is taken, so binding a device again never changes what was recorded.
-  `EquipmentCatalog.cameraOf(device)` resolves the camera of a device from memory; the services that record or calibrate frames receive it as `CameraBindings`.
-- **Resolution.**
-  The Dark Library Wizard resolves the camera when it makes a plan (`DarkCapturePlan.camera.cameraId`), and the Flat Wizard when its session starts (`FlatFrameRegistration.cameraId`); both refuse to start a device bound to none (`409 cameraNotCataloged`).
-  An import of the Calibration Library takes the camera from the operator, for the whole import or file by file, and commits nothing while a file that would enter has none (`409 cameraRequired`); the review suggests the camera of the one binding whose driver name is the `INSTRUME` every file of the page gives, which the operator confirms, since two units of one model give the same name.
-  `CaptureFrameRegistry` records in `capture_frames.camera_id` the camera bound when it first learns of a frame, and never refuses a capture of a device bound to none.
-  Guiding and Live Stacking resolve the camera when their session starts, iPolar when a pinned dark is checked at its start, and Image Stacking from `capture_frames` by the path of each light (see the [Calibration Library Contract](calibration-library.md)).
-- **Settings.**
-  Settings → Equipment Catalog (`web/src/settings/EquipmentCatalogSettings.tsx`, `/settings/equipment-catalog[/cameras|/telescopes[/<id>]]`, the cameras without a kind) lists the cameras or the telescopes, switched by a control above the list: the cameras with how many devices are bound to each and how many frames and masters the library records against it, the telescopes with how many profiles use each; it edits one at a time as a local draft only Save writes, and asks before discarding unsaved changes to show another item or kind.
-  A telescope (`CatalogTelescopeEditor`) declares its aperture and native focal length as numeric fields where 0 leaves a value undeclared.
-  Its Model field is also the search of the telescope model catalog (`TelescopeModelSearch` of `web/src/equipment/`), and a model chosen there fills the model and the optics: the telescopes and lenses of the AstroBin equipment database that declare an aperture or a focal length (`TelescopeModelCatalog` of `api/src/equipmentcatalog.models.ts`), written by `bun make:telescopes` (`bin/src/telescope.models.ts`) into `web/assets/telescopes.json.gz`, not committed, bundled by `web` and loaded once on demand (`web/src/equipment/telescopemodels.ts`).
-  AstroBin lists a zoom, or a telescope with its reducer or extender, as a range of focal lengths, and such a model fills the shortest, which the editor asks to check; a value a model does not declare keeps the one typed.
-  The Imaging Setup, Eyepiece & Telescope, Aperture Comparison, and Diffraction & Focus calculators also fill their optics from a telescope model, and every telescope of the catalog that is not archived is a source the calculators import from (see [Calculator Contract](calculator.md)).
-  In both editors the Model field edits the model as typed and lists, while typing or on the arrow keys, only the models that match, so a model the catalog does not hold is kept as typed and Enter submits the form while the list is closed; the calculators keep a search field of their own, cleared once a model is chosen.
-  Both model searches share `ModelSearch` and the loader and word search of `web/src/equipment/models.ts`, and both generators the paging, writing, `--force`, and `--empty` of `bin/src/astrobin.ts`.
-  The sensor size, pixel size, and bits are numeric fields where 0 leaves a value undeclared, and the CFA pattern is one of the toolkit's `CfaPattern` or Mono (no pattern).
-  The model and sensor can be copied from a connected camera, or filled from a model of the camera model catalog, which the Model field also searches (`CameraModelSearch` of `web/src/equipment/`, a list floating under the field, which the Imaging Setup, Sampling, and Diffraction & Focus calculators also use as a search field of their own): the cameras of the AstroBin equipment database whose sensor declares its size, with pixel size, ADC bits, and color or mono (`CameraModelCatalog` of `api/src/equipmentcatalog.models.ts`), written by `bun make:cameras` (`bin/src/camera.models.ts`) into `web/assets/cameras.json.gz`, not committed, bundled by `web` and loaded once on demand (`web/src/equipment/cameramodels.ts`); nothing asks AstroBin at run time.
-  AstroBin never gives the CFA pattern, so a color model keeps the pattern chosen, or takes RGGB over Mono, and a mono model sets Mono.
-  New Camera of the Equipment Setup creates a camera named after the device, with the model and sensor it reports, through the route at once, and binds the device to it.
-  The edit button beside the select of the Equipment Setup closes it and shows the bound camera in Settings → Equipment Catalog; it is disabled while the device is bound to none.
-  The Telescope and Guide Telescope sections of the Equipment Setup choose a telescope of the catalog or Entered by hand, with the same edit button; the values the chosen telescope declares are shown and not edited there, nor in the Framing tool, only in the catalog.
-- **Limitations.**
-  A telescope is not a device: nothing checks that the optics in use are the telescope chosen, and a profile keeps the last copy of a deleted telescope's values.
-  The client id comes from the endpoint, so a device reached through another host, port, or protocol is another device, unbound until bound again; the Equipment Setup suggests the camera bound to a device of the same driver name.
-  An INDI client takes its id from the address the host resolves to, so a server whose address changes (a new DHCP lease, `localhost` resolved to IPv4 or IPv6) also gives other devices, while one address reached through two host names keeps its bindings; an Alpaca client takes it from the host as typed.
-  One camera reached through INDI and through Alpaca is two devices, each bound to it on purpose.
-  Two cameras a driver names by enumeration order and that swap USB ports keep their names, so their bindings follow the names, not the cameras: without a serial number nothing can tell, and the sensor warning only catches different models.
+## Purpose
+
+Calibration only holds when frames and masters are known to come from the same physical camera, whatever connection, endpoint, or driver reached it.
+The catalog gives that camera one identity, and gives profiles shared optics instead of values typed again in each one.
+
+## Relations
+
+- One catalog is shared by every profile, tab, and browser, like the observing sites (see [Persistence and State](persistence-and-state.md)).
+- The [Dark Library Wizard](dark-library-wizard.md) and the [Flat Wizard](flat-wizard.md) resolve the camera of their device, and an import of the [Calibration Library](calibration-library.md) takes it from the operator.
+- [Capture Frames](capture-frames.md) records the bound camera of each frame, and [Guiding](guiding.md), [Live Stacking](live-stacking.md), [iPolar](ipolar.md), and [Image Stacking](image-stacking.md) resolve theirs from bindings or recorded frames.
+- A camera's declared sensor completes the field of view of the Equipment Setup with what its device does not report.
+- A telescope gives its aperture and focal length to the Telescope and Guide Telescope of a profile, read by the Sky, the framings, Guiding, the Observing Planner, and the [Calculator](calculator.md).
+- Model searches fill cameras and telescopes from catalogs of the AstroBin equipment database that `bun make:cameras` and `bun make:telescopes` bundle into `web`; nothing asks AstroBin at run time.
+
+## Rules and Limitations
+
+- A camera's id never changes, and a camera that frames or masters are recorded against cannot be deleted; an archived camera or telescope is no longer offered and keeps what refers to it.
+- A binding belongs to the physical device, not to a profile, and a camera is bound to one device at most.
+- A frame records its camera once, when it is taken, so binding again never changes what was recorded; nothing compares a model, serial number, or name with a frame.
+- A telescope is not a device: nothing checks that it is the one in use, and choosing one copies its values into the profile.
+- No protocol gives a serial number, so a device is known only by its endpoint and driver name: another host, port, or protocol is another device, an INDI server whose address changes gives other devices, and two cameras that swap enumerated names swap bindings.

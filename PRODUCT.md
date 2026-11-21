@@ -36,7 +36,7 @@ Nebulosa is an integrated astronomical imaging application. It replaces the chai
 - The full inventory and its status (Implemented, Partial, Integration Required, Planned) is [docs/architecture/capability-inventory.md](docs/architecture/capability-inventory.md). The next delivery is the Sequencer.
 - Terminology is fixed by the glossary of [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): connection, device, profile, equipment setup and role, Equipment Catalog, operation, reservation, session, image document, camera tab, lease.
 - The equipment setup is the absolute source of truth about the devices in use; no screen second-guesses it.
-- The shell, workspace frame, contextual panel, status bar, shared primitives, formatters, and screen behaviors are binding contracts in [docs/architecture/ui-and-layout.md](docs/architecture/ui-and-layout.md).
+- Where each feature lives in the UI and the structural rules it follows are in [docs/architecture/ui-and-layout.md](docs/architecture/ui-and-layout.md); the visual system is in [DESIGN.md](DESIGN.md).
 - The UI works from phone width up, never scrolls the page horizontally, and turns the contextual panel into a drawer below 1024 px.
 - Values shown are the ones the server reports. Inputs hold pending values until an explicit action. Absence is shown as absence, never as zero.
 

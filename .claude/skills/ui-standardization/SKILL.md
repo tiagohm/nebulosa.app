@@ -11,7 +11,7 @@ Make a part of the frontend read as if one team had designed it from the start: 
 
 Prefer simplification over new layers. A little explicit duplication beats an abstraction that hides behavior. Optimize for clarity and consistency, not for files touched or lines deleted.
 
-`AGENTS.md` governs style, the frontend conventions (named function components, Tailwind, `tv`, `cn`, Valtio for shared state, no `aria-*`, buttons without `size="sm"`), documentation comments, tests, verification, and commits. Architecture, lifecycle, and backend problems belong to `/cqa`: record any found here in the ledger's Outside section instead of fixing them.
+`AGENTS.md` governs style, the frontend conventions, documentation comments, tests, verification, and commits. Architecture, lifecycle, and backend problems belong to `/cqa`: record any found here in the ledger's Outside section instead of fixing them.
 
 ## Boundaries
 

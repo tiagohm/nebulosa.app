@@ -166,7 +166,6 @@ export function StatusDetails({ hidden, errors }: StatusDetailsProps) {
 				className={cn('flex min-w-7 cursor-pointer items-center justify-center rounded-sm px-1 text-ink-200 hover:text-ink-100 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent', HIT_CLASS, open && 'bg-base-300 text-ink-100')}
 			>
 				{hidden > 0 ? `+${hidden}` : <Icon name="info" className="size-3.5" />}
-				<span className="sr-only">{hidden > 0 ? ' more in the status details' : 'Status details'}</span>
 			</button>
 			{placement && <StatusDetailsPanel ref={panelRef} placement={placement} onClose={() => setPlacement(undefined)} />}
 		</span>

@@ -133,6 +133,7 @@ Follow the OXC configuration (`.oxfmtrc.json`, `.oxlintrc.json`) and `.editorcon
 - Never use aria-* attributes.
 - Avoid using size="sm" on buttons, unless it is highly recommended for the layout.
 - Never call "crypto.randomUUID", use nanoid instead.
+- Never use "sr-only" or anything related to screen readers.
 
 ## Documentation Comments
 

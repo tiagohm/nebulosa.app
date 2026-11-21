@@ -203,7 +203,7 @@ function ToolCard({ tool, planned, readiness }: ToolCardProps) {
 					{readiness && <StatusBadge tone={readiness.tone} label={readiness.label} title={readiness.reason} />}
 				</span>
 				<span className="line-clamp-2 text-sm leading-5 text-pretty text-ink-200 max-sm:hidden">{tool.summary}</span>
-				{readiness && <span className="text-xs leading-4 text-pretty text-ink-300 [@media(hover:hover)_and_(min-width:40rem)]:sr-only">{readiness.reason}</span>}
+				{readiness && <span className="text-xs leading-4 text-pretty text-ink-300 [@media(hover:hover)_and_(min-width:40rem)]:hidden">{readiness.reason}</span>}
 			</span>
 		</button>
 	)

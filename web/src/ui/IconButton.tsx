@@ -33,7 +33,6 @@ export function IconButton({ icon, label, pressed, filled, className, type = 'bu
 	return (
 		<button type={type} title={label} className={iconButton({ pressed, className })} {...props}>
 			<Icon name={icon} filled={filled} className="size-5" />
-			<span className="sr-only">{label}</span>
 		</button>
 	)
 }

@@ -76,7 +76,6 @@ export function Modal({ open, onClose, title, className, fit = false, children }
 						className="-mt-1 -mr-2 flex size-8 flex-none cursor-pointer items-center justify-center rounded-full border-0 bg-transparent p-0 text-ink-200 transition-colors duration-150 hover:bg-base-300 hover:text-ink-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
 					>
 						<Icon name="close" strokeWidth={1.8} />
-						<span className="sr-only">Close</span>
 					</button>
 				</header>
 				<ModalActionsContext value={registerActions}>

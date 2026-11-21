@@ -127,7 +127,7 @@ export function PlanTimeline({ plan, preview, timeZone, now, selected, onSelect,
 				<div className="border-r border-b border-line-100" />
 				<div className="relative h-7 border-b border-line-100 text-xs tabular-nums">
 					{labels.map((time) => (
-						<span key={time} className="absolute top-1/2 -translate-x-1/2 -translate-y-1/2 text-ink-300 max-sm:[&:nth-child(even)]:hidden" style={{ left: at(time) }}>
+						<span key={time} className="absolute top-1/2 -translate-x-1/2 -translate-y-1/2 text-ink-300 max-sm:even:hidden" style={{ left: at(time) }}>
 							{formatClockTime(time, timeZone)}
 						</span>
 					))}
@@ -147,12 +147,7 @@ export function PlanTimeline({ plan, preview, timeZone, now, selected, onSelect,
 								onClick={() => onSelect(item.id)}
 								className={cn('flex min-w-0 cursor-pointer items-center gap-1.5 border-b border-line-100 px-2 text-xs last:border-b-0', LANE_HEIGHT, item.id === selected ? 'bg-accent-subtle text-accent' : 'text-ink-200 hover:bg-base-300')}
 							>
-								{conflicts.length > 0 && (
-									<>
-										<Icon name="warning" className="size-3.5 flex-none text-danger" />
-										<span className="sr-only">Problem:</span>
-									</>
-								)}
+								{conflicts.length > 0 && <Icon name="warning" className="size-3.5 flex-none text-danger" />}
 								<span className="truncate">{item.targetName}</span>
 							</div>
 						)

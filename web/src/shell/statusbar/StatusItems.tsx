@@ -107,7 +107,7 @@ export function ServerLinkItem({ ref }: ServerLinkItemProps) {
 	return (
 		<span ref={ref} title={online ? text : `${text}: the bar shows the last state known`} className={cn('flex flex-none items-center gap-1', online ? 'text-success' : 'text-danger')}>
 			<Icon name="server" className="size-3.5" />
-			<span className={online ? 'sr-only' : undefined}>{text}</span>
+			{!online && <span>{text}</span>}
 		</span>
 	)
 }
@@ -134,7 +134,6 @@ export function StatusChip({ icon, label, name, value, device, measure }: Status
 	const content = (
 		<>
 			<Icon name={icon} className="size-3.5 text-ink-300" />
-			<span className="sr-only">{title}</span>
 			{value.text && <span className={cn('max-w-44 truncate', TONE_CLASSES[value.tone])}>{value.text}</span>}
 		</>
 	)
@@ -179,7 +178,6 @@ export function MeridianFlipItem({ monitor, name, executor }: MeridianFlipItemPr
 	return (
 		<button type="button" data-fixed title={`${title} · Open the tool`} onClick={() => navigate(routeState, { workspace: 'tools', tool: 'meridian-flip' })} className={cn('flex flex-none items-center gap-1', BUTTON_CLASS)}>
 			<Icon name="meridian" className="size-3.5 text-ink-300" />
-			<span className="sr-only">{title}</span>
 			<span className={cn('tabular-nums', TONE_TEXT[tone])}>{text}</span>
 		</button>
 	)
@@ -193,7 +191,6 @@ export function EphemerisOfflineItem() {
 	return (
 		<button type="button" data-fixed title={`${title} · Open the setting`} onClick={() => navigate(routeState, { workspace: 'settings', section: 'ephemeris-sources' })} className={cn('flex flex-none items-center gap-1', BUTTON_CLASS)}>
 			<Icon name="database" className="size-3.5 text-ink-300" />
-			<span className="sr-only">{title}</span>
 			<span className="text-ink-200">Ephemeris offline</span>
 		</button>
 	)
@@ -216,7 +213,6 @@ export function MountRemoteItem({ servers, name }: MountRemoteItemProps) {
 	return (
 		<button type="button" data-fixed title={`${title} · Open the tool`} onClick={() => navigate(routeState, { workspace: 'tools', tool: 'mount-remote-control' })} className={cn('flex flex-none items-center gap-1', BUTTON_CLASS)}>
 			<Icon name="remote" className="size-3.5 text-ink-300" />
-			<span className="sr-only">{title}</span>
 			<span className="text-ink-200">{text}</span>
 		</button>
 	)

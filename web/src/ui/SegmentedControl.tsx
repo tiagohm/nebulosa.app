@@ -57,7 +57,6 @@ export function SegmentedControl<T extends string>({ label, options, value, onCh
 						)}
 					>
 						{format(option)}
-						{option === value && <span className="sr-only">, selected</span>}
 					</button>
 				))}
 			</div>

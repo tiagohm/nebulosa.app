@@ -24,7 +24,7 @@ export function Checkbox({ label, checked, onChange, disabled, className, title,
 	return (
 		<label title={title} className={cn('flex cursor-pointer items-center gap-2 text-sm text-ink-200 select-none has-disabled:cursor-not-allowed has-disabled:text-ink-300', className)}>
 			<input type="checkbox" checked={checked} disabled={disabled} onChange={(e) => onChange(e.target.checked)} className="m-0 size-3.5 cursor-pointer accent-accent disabled:cursor-not-allowed" />
-			{hideLabel ? <span className="sr-only">{label}</span> : label}
+			{!hideLabel && label}
 		</label>
 	)
 }

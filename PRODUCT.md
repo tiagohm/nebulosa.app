@@ -63,6 +63,6 @@ Nebulosa is an integrated astronomical imaging application. It replaces the chai
 
 - Status is always text; colour only reinforces it.
 - Lists, rails, tabs, carousels, and selectable table rows are operable with the arrow keys, Home, End, Enter, and Space.
-- Controls are named with native elements, `title`, and visually hidden text. `aria-*` attributes are not used, by project rule (`AGENTS.md`).
+- Controls are named with native elements, `title`, and visually hidden text. Neither ARIA attributes nor attributes for screen readers are used, by project rule (`AGENTS.md`).
 - Transitions honour reduced motion, and focus is always visible.
 - Unavailable actions stay visible and disabled, with the reason as their tooltip.

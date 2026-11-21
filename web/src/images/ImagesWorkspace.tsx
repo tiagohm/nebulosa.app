@@ -679,7 +679,6 @@ function DocumentTabs({ documents, activeKey, onClose }: DocumentTabsProps) {
 								className={cn('mr-1 flex size-5 flex-none cursor-pointer items-center justify-center rounded-sm border-0 bg-transparent p-0 text-ink-300 hover:bg-base-300 hover:text-ink-100', active ? 'opacity-100' : 'opacity-0 group-hover:opacity-100')}
 							>
 								<Icon name="close" className="size-3.5" strokeWidth={2} />
-								<span className="sr-only">Close</span>
 							</button>
 						)}
 					</div>

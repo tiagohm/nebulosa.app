@@ -93,7 +93,6 @@ export function NotificationButton({ className }: NotificationButtonProps) {
 		<span ref={rootRef} onBlur={handleBlur} className="relative flex flex-none">
 			<button ref={buttonRef} type="button" title="Notifications" className={cn(className, open && 'bg-base-300 text-ink-100')} onClick={() => setPlacement(open || !buttonRef.current ? undefined : placementOf(buttonRef.current))}>
 				<Icon name="bell" />
-				<span className="sr-only">Notifications, {unreadText(unread)}</span>
 			</button>
 			{level && (
 				<span className={cn('pointer-events-none absolute top-0.5 right-0.5 box-border flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-xs leading-none font-semibold text-on-accent tabular-nums', BADGE_CLASS[level])}>

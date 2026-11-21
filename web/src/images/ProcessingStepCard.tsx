@@ -68,11 +68,9 @@ export function ProcessingStepCard({ step, index, count, expanded, dragging, err
 					className="flex h-8 w-6 flex-none cursor-grab touch-none items-center justify-center rounded-sm border-0 bg-transparent p-0 text-ink-300 hover:text-ink-100 focus-visible:outline-2 focus-visible:outline-accent active:cursor-grabbing"
 				>
 					<Icon name="grip" strokeWidth={3} className="size-4" />
-					<span className="sr-only">Reorder {label}</span>
 				</button>
 				<label title={step.enabled ? 'Enabled: Run applies this step' : 'Disabled: Run skips this step'} className="flex size-6 flex-none cursor-pointer items-center justify-center">
 					<input type="checkbox" checked={step.enabled} onChange={(e) => onEnabledChange(e.target.checked)} className="m-0 size-3.5 cursor-pointer accent-accent" />
-					<span className="sr-only">Enable {label}</span>
 				</label>
 				<button type="button" onClick={onToggleExpanded} title={expanded ? 'Collapse' : 'Expand'} className="flex min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-sm border-0 bg-transparent px-1 py-0.5 text-left hover:bg-base-300 focus-visible:outline-2 focus-visible:outline-accent">
 					<span className="flex min-w-0 flex-1 flex-col">

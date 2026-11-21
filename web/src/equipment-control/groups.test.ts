@@ -1,8 +1,8 @@
 import { expect, test } from 'bun:test'
 import type { DeviceSummary, ManagedDeviceType, MountState } from 'api'
 import { newControlRuntime } from './control'
-import { slotLabel } from './controls/FilterWheelControls'
 import { findGroup, groupActivity, groupConnected, groupDevices, groupTypes, INDI_DEVICE_LABEL, searchGroups } from './groups'
+import { slotLabel } from './lexicon'
 
 function device(id: string, type: ManagedDeviceType, name: string, hardwareId = name, connectionId = 'c', connected = true): DeviceSummary {
 	return { id, type, name, connected, connectionId, hardwareId, interfaces: [type], driver: { executable: '', version: '' } }

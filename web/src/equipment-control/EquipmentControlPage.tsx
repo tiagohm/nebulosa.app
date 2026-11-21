@@ -63,7 +63,7 @@ export function EquipmentControlPage() {
 		const detail = selected ? (
 			<DeviceDetail key={selected.hardwareId} group={selected} view={view} messages={connection.type === 'INDI'} />
 		) : (
-			<EmptyState title={deviceId ? 'Device not found' : 'No device selected'} description={deviceId ? `${connection.name} has no such device. It may have been removed.` : 'Select a device to see its state and controls.'} />
+			<EmptyState title={deviceId ? 'Device not found' : 'No device selected'} description={deviceId ? `${connection.name} has no such device. It may have been removed.` : 'Select a device to control it.'} />
 		)
 
 		return wide ? (

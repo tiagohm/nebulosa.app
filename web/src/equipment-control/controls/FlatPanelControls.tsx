@@ -4,14 +4,14 @@ import { PanelSection } from '../../shell/ContextualPanel'
 import { Actions } from '../../ui/Actions'
 import { Button } from '../../ui/Button'
 import { Checkbox } from '../../ui/Checkbox'
-import { DataRow } from '../../ui/DataRow'
 import { Notice } from '../../ui/Notice'
 import { Slider } from '../../ui/Slider'
 import { controlRuntime, deviceStateOf, sendCommand } from '../control'
 import type { InterfaceProps } from '../parts'
-import { useDeviceBusy } from '../useControl'
+import { firstReason, useBusyReason } from '../useControl'
 
-// Controls of a flat panel: its light switch and brightness as the panel reports them. The slider and its
+// Controls of a flat panel: its light switch and brightness; the panel's reported light and brightness are in the
+// header of the device. The slider and its
 // number field only change a pending brightness, sent once with Apply Brightness, so dragging never sends a
 // stream of commands; the light state is the reported one, never inferred from the brightness.
 
@@ -21,7 +21,8 @@ export function FlatPanelControls({ device }: InterfaceProps) {
 	const panel = deviceStateOf(control.states, 'flatPanel', device.id)!
 	const { intensity } = panel
 	const [pending, setPending] = useState<number>()
-	const busy = useDeviceBusy(device)
+	const busy = useBusyReason(device)
+	const applyReason = firstReason(busy, !panel.enabled && 'Turn the light on first', (pending === undefined || pending === intensity.value) && 'Move the slider first')
 	const value = pending ?? intensity.value
 	const step = intensity.step > 0 ? intensity.step : 1
 
@@ -31,9 +32,7 @@ export function FlatPanelControls({ device }: InterfaceProps) {
 
 	return (
 		<PanelSection title="Flat Panel">
-			<DataRow label="Light">{panel.enabled ? 'On' : 'Off'}</DataRow>
-			<DataRow label="Brightness">{`${intensity.value} of ${intensity.min}–${intensity.max}`}</DataRow>
-			<Checkbox label="Light on" checked={panel.enabled} disabled={busy} onChange={(enabled) => void sendCommand(controlRuntime, { type: 'flatPanel', deviceId: device.id, action: 'light', label: enabled ? 'Light on' : 'Light off', body: { enabled } })} />
+			<Checkbox label="Light on" checked={panel.enabled} disabled={!!busy} title={busy} onChange={(enabled) => void sendCommand(controlRuntime, { type: 'flatPanel', deviceId: device.id, action: 'light', label: enabled ? 'Light on' : 'Light off', body: { enabled } })} />
 			{intensity.max > intensity.min && (
 				<>
 					<Slider disabled={!panel.enabled} label="Brightness" value={value} min={intensity.min} max={intensity.max} step={step} onChange={setPending} />
@@ -43,7 +42,7 @@ export function FlatPanelControls({ device }: InterfaceProps) {
 								Discard
 							</Button>
 						)}
-						<Button disabled={!panel.enabled || busy || pending === undefined || pending === intensity.value} onClick={() => void apply()}>
+						<Button disabled={!!applyReason} title={applyReason} onClick={() => void apply()}>
 							Apply Brightness
 						</Button>
 					</Actions>

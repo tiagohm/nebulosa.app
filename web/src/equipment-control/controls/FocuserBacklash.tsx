@@ -1,7 +1,6 @@
 import type { FocuserBacklashConfig, FocuserBacklashMode, FocuserState } from 'api'
 import { useEffect, useState } from 'react'
 import { useSnapshot } from 'valtio'
-import { PanelSection } from '../../shell/ContextualPanel'
 import { Actions } from '../../ui/Actions'
 import { Button } from '../../ui/Button'
 import { Checkbox } from '../../ui/Checkbox'
@@ -10,9 +9,11 @@ import { Notice } from '../../ui/Notice'
 import { NumberInput } from '../../ui/NumberInput'
 import { Select } from '../../ui/Select'
 import { focuserBacklashKey, focuserBacklashRuntime, loadFocuserBacklash, saveFocuserBacklash } from '../focuserBacklash'
+import { CollapsedSection } from '../parts'
 
-// Backlash compensation of a focuser: whether it is enabled, its mode and its amounts in steps, edited as a
-// draft and applied at once. The server applies the saved compensation to every positioning move of the
+// Backlash compensation of a focuser, in a section closed by default that opens by itself while the compensation
+// conflicts with the driver's own: whether it is enabled, its mode and its amounts in steps, edited as a draft and
+// applied at once. The server applies the saved compensation to every positioning move of the
 // focuser, from any tool; a move in progress keeps the settings it started with.
 
 // Compensation modes in display order.
@@ -50,13 +51,20 @@ export function FocuserBacklash({ focuser }: FocuserBacklashProps) {
 		void loadFocuserBacklash(focuserBacklashRuntime, connectionId, id)
 	}, [connectionId, id])
 
-	if (!backlash) return <PanelSection title="Backlash Compensation">{loadError ? <Notice error>{loadError}</Notice> : <Notice>Loading…</Notice>}</PanelSection>
+	if (!backlash)
+		return (
+			<CollapsedSection title="Backlash Compensation" summary={loadError ? 'Not loaded' : 'Loading…'}>
+				{loadError ? <Notice error>{loadError}</Notice> : <Notice>Loading…</Notice>}
+			</CollapsedSection>
+		)
 
 	const saved = backlash.config
 	const edited = draft ?? saved
 	const dirty = !sameConfig(edited, saved)
 	const supported = focuser.canAbsoluteMove
 	const status = !supported ? 'Unsupported' : saved.enabled ? `Enabled (${MODE_LABELS[saved.mode]})` : 'Disabled'
+	// Both compensations at once make the server refuse compensated moves, which deserves to be seen without opening.
+	const driverConflict = focuser.backlashEnabled && saved.enabled
 
 	function edit(patch: Partial<FocuserBacklashConfig>) {
 		setDraft({ ...edited, ...patch })
@@ -71,7 +79,7 @@ export function FocuserBacklash({ focuser }: FocuserBacklashProps) {
 	}
 
 	return (
-		<PanelSection title="Backlash Compensation">
+		<CollapsedSection title="Backlash Compensation" summary={driverConflict ? 'Conflicts with the driver' : status} open={driverConflict || undefined}>
 			<DataRow label="Status">{status}</DataRow>
 			{saved.enabled && saved.mode === 'ABSOLUTE' && backlash.offset !== 0 && <DataRow label="Offset">{`${backlash.offset} steps`}</DataRow>}
 			{!supported && <Notice>This focuser cannot move to a position, so its moves cannot be compensated.</Notice>}
@@ -82,7 +90,7 @@ export function FocuserBacklash({ focuser }: FocuserBacklashProps) {
 				<NumberInput className="min-w-0 flex-1" label="Backlash OUT" value={edited.backlashOut} min={0} step={1} suffix="steps" disabled={apply.status === 'saving'} onChange={(backlashOut) => edit({ backlashOut })} />
 			</div>
 			<Actions>
-				<Button disabled={!dirty || apply.status === 'saving'} onClick={() => void save()}>
+				<Button disabled={!dirty || apply.status === 'saving'} title={apply.status === 'saving' ? 'Saving the compensation' : dirty ? undefined : 'Change a setting first'} onClick={() => void save()}>
 					Apply Configuration
 				</Button>
 				{dirty && (
@@ -94,8 +102,9 @@ export function FocuserBacklash({ focuser }: FocuserBacklashProps) {
 			{dirty && <Notice>{focuser.moving ? 'Unsaved changes. The move in progress keeps the applied settings.' : 'Unsaved changes. Moves use the applied settings.'}</Notice>}
 			{apply.status === 'conflict' && <Notice error>Another tab changed these settings; the form shows them now.</Notice>}
 			{apply.status === 'error' && <Notice error>{`Save failed: ${apply.error}`}</Notice>}
-			{focuser.backlashEnabled && (saved.enabled ? <Notice error>{`The driver compensates the backlash itself (${focuser.backlash.value} steps), so compensated moves are refused. Turn one of them off.`}</Notice> : <Notice>{`The driver compensates the backlash itself (${focuser.backlash.value} steps).`}</Notice>)}
+			{focuser.backlashEnabled &&
+				(driverConflict ? <Notice error>{`The driver compensates the backlash itself (${focuser.backlash.value} steps), so compensated moves are refused. Turn one of them off.`}</Notice> : <Notice>{`The driver compensates the backlash itself (${focuser.backlash.value} steps).`}</Notice>)}
 			<Notice>Backlash compensation is applied automatically to supported focuser positioning commands across Nebulosa.</Notice>
-		</PanelSection>
+		</CollapsedSection>
 	)
 }

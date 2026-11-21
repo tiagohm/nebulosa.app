@@ -1,5 +1,6 @@
 import type { DeviceSummary, IndiDeviceSummary, ManagedDeviceType } from 'api'
 import { type ControlStates, deviceStateOf } from './control'
+import { coverStateWord, domeMoving, domeStateWord, guideOutputStateWord } from './lexicon'
 import { mountMotion } from './mountActivity'
 
 // Physical devices of the Equipment Control page. The server lists one entry per interface of a device
@@ -130,23 +131,21 @@ function interfaceActivity(states: Readonly<ControlStates>, device: DeviceSummar
 		case 'dome': {
 			const dome = deviceStateOf(states, 'dome', device.id)
 			if (!dome) return undefined
-			if (dome.homing) return { label: 'Homing', tone: 'active' }
-			if (dome.parking) return { label: 'Parking', tone: 'active' }
-			if (dome.slewing || dome.moving) return { label: 'Moving', tone: 'active' }
-			if (dome.shutterState === 'OPENING' || dome.shutterState === 'CLOSING') return { label: 'Shutter moving', tone: 'active' }
+			if (domeMoving(dome)) return { label: domeStateWord(dome), tone: 'active' }
 			if (dome.shutterState === 'ERROR') return { label: 'Shutter error', tone: 'warning' }
 			return dome.parked ? { label: 'Parked', tone: 'idle' } : undefined
 		}
 		case 'cover': {
 			const cover = deviceStateOf(states, 'cover', device.id)
 			if (!cover?.canPark) return undefined
-			if (cover.parking) return { label: 'Moving', tone: 'active' }
-			return { label: cover.parked ? 'Closed' : 'Open', tone: 'idle' }
+			return { label: coverStateWord(cover), tone: cover.parking ? 'active' : 'idle' }
 		}
 		case 'flatPanel':
 			return deviceStateOf(states, 'flatPanel', device.id)?.enabled ? { label: 'Light on', tone: 'idle' } : undefined
-		case 'guideOutput':
-			return deviceStateOf(states, 'guideOutput', device.id)?.pulsing ? { label: 'Pulsing', tone: 'active' } : undefined
+		case 'guideOutput': {
+			const output = deviceStateOf(states, 'guideOutput', device.id)
+			return output?.pulsing ? { label: guideOutputStateWord(output), tone: 'active' } : undefined
+		}
 		default:
 			return undefined
 	}

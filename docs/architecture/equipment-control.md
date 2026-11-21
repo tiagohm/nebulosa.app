@@ -21,6 +21,8 @@ It is the operator's place for direct manual control and inspection of each devi
 
 - Opening the page, switching devices, or reloading never connects, disconnects, or commands anything.
 - Command controls are disabled while a command of the device is in flight or an operation holds it; stop buttons never are.
+- Fields that type a request follow the value the device reports until the operator edits them, so a command never starts from a value read when the page opened.
+- Disconnecting a device asks first while an operation holds it or it reports an activity a disconnection would leave out of reach (a motion, tracking, a cooler on).
 - A stop never waits for a lease: it cancels whatever holds the physical device and stops its motion; a filter wheel has no abort, and a guide pulse stop never cancels another operation of the mount.
 - The mount type is unknown until reported, and only alt-azimuth is evidence against a polar alignment.
 - Drivers differ: Alpaca mounts only go home, Alpaca domes cannot unpark or rotate manually, Alpaca focusers have no sync or reverse, and Alpaca rotators have no home.

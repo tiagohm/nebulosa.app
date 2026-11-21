@@ -3,15 +3,14 @@ import { useSnapshot } from 'valtio'
 import { PanelSection } from '../../shell/ContextualPanel'
 import { Actions } from '../../ui/Actions'
 import { Button } from '../../ui/Button'
-import { DataRow } from '../../ui/DataRow'
 import { Notice } from '../../ui/Notice'
 import { Slider } from '../../ui/Slider'
 import { controlRuntime, deviceStateOf, sendCommand } from '../control'
 import type { InterfaceProps } from '../parts'
-import { useDeviceBusy } from '../useControl'
+import { firstReason, useBusyReason } from '../useControl'
 
-// Controls of a dew heater: its duty cycle as reported, and a pending duty cycle sent only with Apply, so
-// dragging the slider never sends a stream of commands.
+// Controls of a dew heater: a pending duty cycle sent only with Apply, so dragging the slider never sends a stream of
+// commands; the duty cycle it reports is in the header of the device.
 
 // Controls of a dew heater.
 export function DewHeaterControls({ device }: InterfaceProps) {
@@ -19,7 +18,8 @@ export function DewHeaterControls({ device }: InterfaceProps) {
 	const heater = deviceStateOf(control.states, 'dewHeater', device.id)!
 	const { dutyCycle } = heater
 	const [pending, setPending] = useState<number>()
-	const busy = useDeviceBusy(device)
+	const busy = useBusyReason(device)
+	const applyReason = firstReason(busy, (pending === undefined || pending === dutyCycle.value) && 'Move the slider first')
 	const value = pending ?? dutyCycle.value
 	const step = dutyCycle.step > 0 ? dutyCycle.step : 1
 
@@ -37,7 +37,6 @@ export function DewHeaterControls({ device }: InterfaceProps) {
 
 	return (
 		<PanelSection title="Dew Heater">
-			<DataRow label="Duty cycle">{`${dutyCycle.value} of ${dutyCycle.min}–${dutyCycle.max}`}</DataRow>
 			<Slider label="Duty cycle" value={value} min={dutyCycle.min} max={dutyCycle.max} step={step} onChange={setPending} />
 			<Actions>
 				{pending !== undefined && (
@@ -45,7 +44,7 @@ export function DewHeaterControls({ device }: InterfaceProps) {
 						Discard
 					</Button>
 				)}
-				<Button disabled={busy || pending === undefined || pending === dutyCycle.value} onClick={() => void apply()}>
+				<Button disabled={!!applyReason} title={applyReason} onClick={() => void apply()}>
 					Apply Duty Cycle
 				</Button>
 			</Actions>

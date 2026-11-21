@@ -3,14 +3,17 @@ import { useState } from 'react'
 import { Actions } from '../../ui/Actions'
 import { Button } from '../../ui/Button'
 import { Checkbox } from '../../ui/Checkbox'
+import { ConfirmButton } from '../../ui/ConfirmButton'
 import { DataRow } from '../../ui/DataRow'
 import { Select } from '../../ui/Select'
+import { switchGuardOf } from './guards'
 import { indiView, writeIndiVector } from './indi'
 import { labelOf } from './indi.format'
 import { useAppliedWrite, useWriting } from './IndiWriteStatus'
 
 // Editor of a switch vector, by its rule: AtMostOne is a row of action buttons that send at once (the active one
-// marked, never turned off locally after sending) with an explicit Clear; OneOfMany is a select applied with
+// marked, never turned off locally after sending), except the motion and reference switches guards.ts names, which ask
+// first, with an explicit Clear; OneOfMany is a select applied with
 // Apply; AnyOfMany is a wrapping row of checkboxes applied with Apply, which sends every switch. A read-only
 // vector shows which switches are on. The states shown are always those the driver reports.
 
@@ -50,17 +53,29 @@ function write(vector: IndiSwitchProperty, elements: Record<string, boolean>) {
 	return writeIndiVector(indiView, vector.name, elements)
 }
 
-// Buttons of an AtMostOne vector: a click sends that switch on and the others off.
+// Buttons of an AtMostOne vector: a click sends that switch on and the others off, once confirmed for a guarded switch.
 function ActionSwitches({ vector, writing }: RuleEditorProps) {
 	const any = vector.elementNames.some((name) => vector.elements[name].value)
 
 	return (
 		<Actions>
-			{vector.elementNames.map((name) => (
-				<Button key={name} variant={vector.elements[name].value ? 'primary' : 'secondary'} title={`${name}: ${vector.elements[name].value ? 'on' : 'off'}`} disabled={writing} onClick={() => void write(vector, { [name]: true })}>
-					{labelOf(vector.elements[name])}
-				</Button>
-			))}
+			{vector.elementNames.map((name) => {
+				const element = vector.elements[name]
+				const label = labelOf(element)
+				const variant = element.value ? 'primary' : 'secondary'
+				const tooltip = `${name}: ${element.value ? 'on' : 'off'}`
+				const guard = switchGuardOf(vector.name, name)
+
+				return guard ? (
+					<ConfirmButton key={name} variant={variant} tooltip={tooltip} disabled={writing} title={`Send ${label} of ${labelOf(vector)}?`} message={guard} confirmLabel={`Send ${label}`} onConfirm={() => void write(vector, { [name]: true })}>
+						{label}
+					</ConfirmButton>
+				) : (
+					<Button key={name} variant={variant} title={tooltip} disabled={writing} onClick={() => void write(vector, { [name]: true })}>
+						{label}
+					</Button>
+				)
+			})}
 			{any && (
 				<Button variant="ghost" title="Turn every switch off" disabled={writing} onClick={() => void write(vector, {})}>
 					Clear

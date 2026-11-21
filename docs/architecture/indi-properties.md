@@ -23,6 +23,7 @@ It is the escape hatch of the device layer: the operator can see and set anythin
 - The stream of a device reaches only the sockets subscribed to it, and a device without subscribers costs nothing.
 - A write names the revision of the vector it was edited from and is refused when the vector changed since; it writes only text, number, and switch vectors the driver allows, and sends the whole vector.
 - Values are not checked against the declared ranges, which the driver applies.
+- Switches are sent as the driver defines them, except the standard motion and reference switches (latched mount and dome motion, find and set home, park options), which ask for a confirmation as their commands in Equipment Control do.
 - A draft is never replaced by what the device reports.
 - Success only means the driver ended the change: a driver may report it while its hardware still moves, which then no longer holds the device.
 - BLOB bytes are never kept, and the Alpaca client ignores writes of vectors it does not map, which then time out.

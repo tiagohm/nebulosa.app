@@ -33,6 +33,9 @@ export interface ControlRuntime {
 	errors: Record<string, string>
 	// Operation of the last durable command this tab started on each device, by device id.
 	operations: Record<string, string>
+	// Short description of the last durable command this tab started on each device, by device id, such as "Open
+	// shutter", which names its outcome.
+	labels: Record<string, string>
 }
 
 // Returns an empty set of control states.
@@ -42,7 +45,7 @@ function emptyStates(): ControlStates {
 
 // Returns a new control runtime watching nothing.
 export function newControlRuntime(): ControlRuntime {
-	return { states: emptyStates(), loading: false, pending: {}, errors: {}, operations: {} }
+	return { states: emptyStates(), loading: false, pending: {}, errors: {}, operations: {}, labels: {} }
 }
 
 // Control runtime of the tab.
@@ -96,6 +99,7 @@ function forgetDevice(state: ControlRuntime, id: string) {
 	delete state.pending[id]
 	delete state.errors[id]
 	delete state.operations[id]
+	delete state.labels[id]
 }
 
 // Returns the state of a device of a type, or undefined while none was reported.
@@ -163,6 +167,7 @@ export function watchControl(state: ControlRuntime, serverId: string | undefined
 	state.pending = {}
 	state.errors = {}
 	state.operations = {}
+	state.labels = {}
 	state.loadError = undefined
 	queued = []
 
@@ -262,9 +267,11 @@ export async function stopCommand(state: ControlRuntime, { type, deviceId, actio
 }
 
 // Starts a durable command, such as a motion, under a token generated once for this action, and records
-// the id of the operation running it; its progress and outcome arrive as operation events.
+// the id of the operation running it and the command's label; its progress and outcome arrive as operation events.
 export async function startCommand(state: ControlRuntime, command: DeviceCommand, request: ApiFetch = browserFetch): Promise<void> {
 	const token = nanoid()
 	const accepted = (await send(state, { ...command, body: { ...command.body, token } }, request)) as CommandAccepted | undefined
-	if (accepted?.operationId) state.operations[command.deviceId] = accepted.operationId
+	if (!accepted?.operationId) return
+	state.operations[command.deviceId] = accepted.operationId
+	state.labels[command.deviceId] = command.label
 }

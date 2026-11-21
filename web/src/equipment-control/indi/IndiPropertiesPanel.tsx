@@ -11,7 +11,8 @@ import { useIndiSubscription, useWatchedIndiDevices } from './useIndi'
 
 // INDI Properties view of one physical device in Equipment Control: every vector its driver defines, grouped by
 // the driver's groups in driver order, with a search over group, vector, and element names and labels, and
-// collapsible groups (several may be open; the first one is open at first). Groups and vectors appear, change,
+// collapsible groups (several may be open; the first one is open at first). It is the driver's own console: values are
+// sent as entered, and only the switches that start a lasting motion or replace a reference ask first (guards.ts). Groups and vectors appear, change,
 // and disappear as the driver defines, updates, and deletes them. Showing the view subscribes to the device's
 // property stream, and leaving it unsubscribes; neither connects, disconnects, nor stops anything.
 
@@ -65,6 +66,7 @@ export function IndiPropertiesPanel({ connectionId, hardwareId }: IndiProperties
 					Collapse all
 				</Button>
 			</div>
+			<Message>Values go to the driver as entered. Only the switches that start a lasting motion or replace a reference ask first.</Message>
 			{shown.length === 0 && <Message>No property matches the search.</Message>}
 			{shown.map((group) => (
 				<details key={group.name} open={searching || open.has(group.name)} onToggle={(event) => toggle(group.name, event.currentTarget.open)} className="border-b border-line-100 px-4">

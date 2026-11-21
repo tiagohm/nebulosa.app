@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { type KeyboardEvent, useState } from 'react'
 import { useSnapshot } from 'valtio'
 import type { DeviceView } from '../equipment/equipment'
 import { deviceBusy, operationsState } from '../operations'
@@ -10,8 +10,10 @@ import { type DeviceGroup, groupActivity, groupTypes, searchGroups } from './gro
 import { TONE_COLORS } from './parts'
 
 // Device list of the Equipment Control page: every physical device of the connection, once, with its type
-// and what it reports doing, searchable by name or type. Wide screens show it as a sidebar; narrow ones
-// show a select instead. Selecting a device only shows it: nothing is connected or commanded.
+// and what it reports doing, searchable by name or type; ArrowDown in the search moves into the list. Wide screens show
+// it as a sidebar, the activity on the line under the name so names keep the whole row; narrow ones show a select
+// instead, whose entries name the activity before the type so a cut entry still says it. Selecting a device only shows
+// it: nothing is connected or commanded.
 
 export interface DeviceListProps {
 	// Physical devices of the connection.
@@ -37,6 +39,15 @@ function useActivity(runtime: DeviceView) {
 	}
 }
 
+// Moves the focus from the search into the list on ArrowDown, to its first device.
+function enterList(event: KeyboardEvent<HTMLInputElement>) {
+	if (event.key !== 'ArrowDown') return
+	const first = event.currentTarget.closest('aside')?.querySelector<HTMLButtonElement>('li button')
+	if (!first) return
+	event.preventDefault()
+	first.focus()
+}
+
 // Searchable list of the devices, for wide screens.
 export function DeviceSidebar({ groups, runtime, selected, onSelect }: DeviceListProps) {
 	const [query, setQuery] = useState('')
@@ -46,13 +57,19 @@ export function DeviceSidebar({ groups, runtime, selected, onSelect }: DeviceLis
 	return (
 		<aside className="flex w-80 flex-none flex-col border-r border-line-100 bg-base-000">
 			<div className="flex-none p-3">
-				<TextInput placeholder="Search devices" value={query} onChange={(e) => setQuery(e.target.value)} />
+				<TextInput placeholder="Search devices" value={query} onChange={(e) => setQuery(e.target.value)} onKeyDown={enterList} />
 			</div>
 			<List emptyText={query ? 'No device matches the search.' : 'No devices.'} className="min-h-0 flex-1 overflow-y-auto px-2 pb-2">
 				{shown.map((group) => {
 					const activity = activityOf(group)
 
-					return <ListItem key={group.hardwareId} title={group.name} description={groupTypes(group)} meta={<span className={TONE_COLORS[activity.tone]}>{activity.label}</span>} selected={group === selected} onClick={() => onSelect(group)} />
+					const description = (
+						<>
+							{groupTypes(group)} · <span className={TONE_COLORS[activity.tone]}>{activity.label}</span>
+						</>
+					)
+
+					return <ListItem key={group.hardwareId} title={group.name} description={description} selected={group === selected} onClick={() => onSelect(group)} />
 				})}
 			</List>
 		</aside>
@@ -69,7 +86,7 @@ export function DeviceSelect({ groups, runtime, selected, onSelect }: DeviceList
 
 	function format(id: string) {
 		const group = groups.find((g) => g.id === id)
-		return group ? `${group.name} · ${groupTypes(group)} · ${activityOf(group).label}` : 'Select a device'
+		return group ? `${group.name} · ${activityOf(group).label} · ${groupTypes(group)}` : 'Select a device'
 	}
 
 	return (

@@ -261,7 +261,7 @@ The root font is 14 px, so every rem-based size is a multiple of 14 px (Tailwind
 
 The application is a fixed console frame around one workspace. From top to bottom: the top bar (49 px), then the navigation rail (56 px wide) beside the workspace, then the status bar (24.5 px). Only the workspace swaps on navigation.
 
-Each workspace has a header at least 42 px tall (title, context controls, actions, panel toggle; actions wrap to their own line rather than clip), its content, which scrolls itself, and the contextual panel on the right: 280 px, 308 px from 1280 px, docked from 1024 px and a drawer over the content below it. Pages (Equipment Control, Settings) use a sidebar list and a detail area instead.
+Each workspace has a header at least 42 px tall (title, context controls, actions, panel toggle; actions wrap to their own line rather than clip), its content, which scrolls itself, and the contextual panel on the right: 280 px, 308 px from 1280 px, docked from 1024 px and a drawer over the content below it, or, for a live view its controls change, a flat sheet taking the lower half under that content. Pages (Equipment Control, Settings) use a sidebar list and a detail area instead.
 
 Spacing follows Tailwind's 0.25 rem step, which is 3.5 px here. The working rhythm is 3.5 / 7 / 10.5 / 14 / 21 px: 7 px between controls in a group, 10.5 px inside cards and popovers, 14 px gutter of bars and panel sections, 21 px inside modals. Grids of cards use `repeat(auto-fill, minmax(224px, 1fr))` with 7 px gaps.
 

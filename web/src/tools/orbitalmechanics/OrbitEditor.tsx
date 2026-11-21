@@ -2,6 +2,7 @@ import type { OrbitCenterPayload } from 'api'
 import { useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { CollapsibleSection } from '../../shell/CollapsibleSection'
+import { useMediaQuery, WIDE_SCREEN } from '../../shell/useMediaQuery'
 import { Actions } from '../../ui/Actions'
 import { Button } from '../../ui/Button'
 import { Notice } from '../../ui/Notice'
@@ -84,9 +85,10 @@ export function CenterEditor() {
 	const centers = state.reference?.centers ?? []
 	const value = state.center?.code === undefined ? CUSTOM : String(state.center.code)
 	const choose = (center: OrbitCenterPayload) => setCenter(orbitalMechanicsState, center)
+	const wide = useMediaQuery(WIDE_SCREEN)
 
 	return (
-		<CollapsibleSection id="orbitalmechanics.center" title="Center" summary={state.center?.name}>
+		<CollapsibleSection id="orbitalmechanics.center" title="Center" summary={state.center?.name} defaultOpen={wide}>
 			<Select
 				label="Center, shared by every orbit"
 				options={[...centers.map((e) => String(e.code)), CUSTOM]}

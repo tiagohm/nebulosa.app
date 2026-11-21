@@ -4,6 +4,7 @@ import { useSnapshot } from 'valtio'
 import { formatDegrees, MISSING, formatZonedDateTime } from '../../format'
 import { useActiveSite, useActiveTimeZone } from '../../location/useLocation'
 import { CollapsibleSection } from '../../shell/CollapsibleSection'
+import { useMediaQuery, WIDE_SCREEN } from '../../shell/useMediaQuery'
 import { Actions } from '../../ui/Actions'
 import { Button } from '../../ui/Button'
 import { DataRow } from '../../ui/DataRow'
@@ -65,6 +66,8 @@ function components(v: OrbitVector, convert: (value: number) => number, symbol: 
 // Inspector of the selected orbit.
 export function OrbitInspector({ orbit }: { readonly orbit: ExplorerOrbit }) {
 	const state = useSnapshot(orbitalMechanicsState) as OrbitalMechanicsState
+	// On a narrow screen the exact values start collapsed, so the sheet opens on the definition.
+	const wide = useMediaQuery(WIDE_SCREEN)
 	const { inspection } = state
 	// The inspection of this orbit's current definition, at whatever instant it was read.
 	const inspected = inspection && orbit.definition && inspection.orbitId === orbit.id && inspection.key === definitionKey(orbit.definition) ? inspection.solution : undefined
@@ -73,7 +76,7 @@ export function OrbitInspector({ orbit }: { readonly orbit: ExplorerOrbit }) {
 
 	if (!solution) {
 		return (
-			<CollapsibleSection id="orbitalmechanics.instant" title="Exact Values">
+			<CollapsibleSection id="orbitalmechanics.instant" title="Exact Values" defaultOpen={wide}>
 				<Notice>{orbit.loading ? 'Solving…' : 'No solution yet.'}</Notice>
 			</CollapsibleSection>
 		)
@@ -86,7 +89,7 @@ export function OrbitInspector({ orbit }: { readonly orbit: ExplorerOrbit }) {
 
 	return (
 		<>
-			<CollapsibleSection id="orbitalmechanics.instant" title="Exact Values" summary={instantNote}>
+			<CollapsibleSection id="orbitalmechanics.instant" title="Exact Values" summary={instantNote} defaultOpen={wide}>
 				<Notice>Exact values {instantNote}.</Notice>
 				<span className="text-xs text-ink-300 tabular-nums">
 					{formatTdb(solution.time)} · JD {solution.time.toFixed(6)} · {new Date(solution.utc).toISOString().replace('T', ' ').slice(0, 19)} UTC
@@ -98,9 +101,9 @@ export function OrbitInspector({ orbit }: { readonly orbit: ExplorerOrbit }) {
 					<Notice key={e}>{WARNING_TEXTS[e]}</Notice>
 				))}
 			</CollapsibleSection>
-			<ElementsSection elements={elements} unit={unit} plane={plane} />
-			<GeometrySection elements={elements} solution={solution} unit={unit} />
-			<DynamicsSection solution={solution} unit={unit} />
+			<ElementsSection elements={elements} unit={unit} plane={plane} defaultOpen={wide} />
+			<GeometrySection elements={elements} solution={solution} unit={unit} defaultOpen={wide} />
+			<DynamicsSection solution={solution} unit={unit} defaultOpen={wide} />
 			<StateSection solution={solution} unit={unit} />
 			<SourceSection orbit={orbit} solution={solution} />
 		</>
@@ -108,9 +111,9 @@ export function OrbitInspector({ orbit }: { readonly orbit: ExplorerOrbit }) {
 }
 
 // Classical elements on the reference plane.
-function ElementsSection({ elements, unit, plane }: { readonly elements: OrbitElementsPayload; readonly unit: DistanceUnit; readonly plane: OrbitalMechanicsState['plane'] }) {
+function ElementsSection({ elements, unit, plane, defaultOpen }: { readonly elements: OrbitElementsPayload; readonly unit: DistanceUnit; readonly plane: OrbitalMechanicsState['plane']; readonly defaultOpen: boolean }) {
 	return (
-		<CollapsibleSection id="orbitalmechanics.elements" title="Elements" summary={`${elements.conic}, e = ${elements.eccentricity.toFixed(6)}`}>
+		<CollapsibleSection id="orbitalmechanics.elements" title="Elements" summary={`${elements.conic}, e = ${elements.eccentricity.toFixed(6)}`} defaultOpen={defaultOpen}>
 			<DataRow label="Referred to">{plane === 'ecliptic' ? 'J2000 ecliptic' : 'J2000 equator'}</DataRow>
 			<DataRow label="Class">{elements.conic}</DataRow>
 			<DataRow label="Eccentricity e">{elements.eccentricity.toPrecision(10)}</DataRow>
@@ -130,10 +133,10 @@ function ElementsSection({ elements, unit, plane }: { readonly elements: OrbitEl
 }
 
 // Size and shape of the conic.
-function GeometrySection({ elements, solution, unit }: { readonly elements: OrbitElementsPayload; readonly solution: OrbitSolveResponse; readonly unit: DistanceUnit }) {
+function GeometrySection({ elements, solution, unit, defaultOpen }: { readonly elements: OrbitElementsPayload; readonly solution: OrbitSolveResponse; readonly unit: DistanceUnit; readonly defaultOpen: boolean }) {
 	const n = solution.diagnostics.normal
 	return (
-		<CollapsibleSection id="orbitalmechanics.geometry" title="Geometry" summary={`q = ${distance(elements.periapsisDistance, unit)}`}>
+		<CollapsibleSection id="orbitalmechanics.geometry" title="Geometry" summary={`q = ${distance(elements.periapsisDistance, unit)}`} defaultOpen={defaultOpen}>
 			<DataRow label="Periapsis distance q">{distance(elements.periapsisDistance, unit)}</DataRow>
 			<DataRow label="Apoapsis distance Q">{elements.apoapsisDistance === undefined ? 'none (open orbit)' : distance(elements.apoapsisDistance, unit)}</DataRow>
 			<DataRow label="Semi-minor axis b">{elements.semiMinorAxis === undefined ? 'not applicable' : distance(elements.semiMinorAxis, unit)}</DataRow>
@@ -146,12 +149,12 @@ function GeometrySection({ elements, solution, unit }: { readonly elements: Orbi
 }
 
 // Energy, momentum, and speeds.
-function DynamicsSection({ solution: { diagnostics: d }, unit }: { readonly solution: OrbitSolveResponse; readonly unit: DistanceUnit }) {
+function DynamicsSection({ solution: { diagnostics: d }, unit, defaultOpen }: { readonly solution: OrbitSolveResponse; readonly unit: DistanceUnit; readonly defaultOpen: boolean }) {
 	const kms = fromAuPerDay(1, 'km')
 	const energy = unit === 'km' ? `${significant(d.specificEnergy * kms * kms)} km²/s²` : `${significant(d.specificEnergy)} AU²/day²`
 	const momentum = unit === 'km' ? `${significant(fromAu(fromAuPerDay(d.angularMomentumMagnitude, 'km'), 'km'))} km²/s` : `${significant(d.angularMomentumMagnitude)} AU²/day`
 	return (
-		<CollapsibleSection id="orbitalmechanics.dynamics" title="Dynamics" summary={velocity(d.speed, unit)}>
+		<CollapsibleSection id="orbitalmechanics.dynamics" title="Dynamics" summary={velocity(d.speed, unit)} defaultOpen={defaultOpen}>
 			<DataRow label="Distance r">{distance(d.radius, unit)}</DataRow>
 			<DataRow label="Speed |v|">{velocity(d.speed, unit)}</DataRow>
 			<DataRow label="Radial speed">{velocity(d.radialSpeed, unit)}</DataRow>

@@ -141,7 +141,7 @@ export function replaceSceneWithPending(state: OrbitalMechanicsState, io: Orbita
 	addOrbit(state, orbit.definition, orbit.name, orbit.source, io)
 	state.time = anchorOf(orbit.definition)
 	state.view = initialView()
-	state.fitPending = true
+	state.fitPending = 'scene'
 	state.ratePending = true
 }
 

@@ -31,6 +31,9 @@ export type Projection = 'perspective' | 'orthographic'
 // How the central body is drawn: at its true radius, or as a fixed marker that is not to scale.
 export type CenterDrawing = 'true' | 'marker'
 
+// What the camera frames: every orbit drawn, or the selected one.
+export type FitKind = 'scene' | 'selected'
+
 // An orbit as edited, in display units.
 export interface OrbitDraft {
 	// Kind of definition.
@@ -198,8 +201,9 @@ export interface OrbitalMechanicsState {
 	view: OrbitView
 	// Why an imported scenario was refused.
 	importError?: string
-	// Whether the camera frames the scene once its curves arrive, after a preset or a scenario replaced it.
-	fitPending: boolean
+	// What the camera frames once the curves are drawn: every orbit (after a preset or a scenario replaced the scene, or
+	// when asked), the selected orbit, or nothing (false).
+	fitPending: FitKind | false
 	// Whether the rate is chosen from the selected orbit's timeline once it is solved, after a preset replaced the scene.
 	ratePending: boolean
 	// A minor body another tool handed over, resolved once the reference is read.
@@ -572,7 +576,7 @@ export function loadPreset(state: OrbitalMechanicsState, preset: OrbitPreset, io
 	addOrbit(state, plain(preset.definition), preset.name, source, io)
 	state.time = anchorOf(preset.definition)
 	state.view = initialView()
-	state.fitPending = true
+	state.fitPending = 'scene'
 	state.ratePending = true
 }
 
@@ -1074,7 +1078,7 @@ export function importScenario(state: OrbitalMechanicsState, text: string, io: O
 
 	state.selected = state.orbits[0]?.id
 	state.view = initialView()
-	state.fitPending = true
+	state.fitPending = 'scene'
 }
 
 // Columns of the state table export: header with its unit, and the value of a sample.

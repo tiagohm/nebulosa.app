@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { subscribe } from 'valtio'
 import { orbitalMechanicsState, PITCH_LIMIT, selectOrbit } from './orbitalmechanics'
-import { buildSceneModel, cameraOf, drawScene, FIELD_OF_VIEW, fitDistance, pickOrbit, readTheme } from './scene'
+import { buildSceneModel, cameraOf, drawScene, FIELD_OF_VIEW, fitDistance, pickOrbit, readTheme, selectedExtent } from './scene'
 
 // The 3D view of the Orbital Mechanics Explorer: a canvas sized to its container that draws the tab's scene whenever its
 // state changes, at most once per animation frame, and never otherwise, so an idle tool costs nothing. Dragging orbits
@@ -40,17 +40,13 @@ export function OrbitScene() {
 		let height = 0
 		let frame = 0
 
-		// Draws the scene now, framing it first when a preset or scenario asked for it.
+		// Draws the scene now, framing it first across the canvas's shape when a preset, a scenario, or the view asked for
+		// it. While the curves of a framing are still on their way, the canvas stays empty rather than drawing the center
+		// and its labels piled at an unframed distance.
 		const draw = () => {
 			frame = 0
 			if (width === 0 || height === 0) return
 			const model = buildSceneModel(state)
-
-			if (state.fitPending && model.orbits.length > 0) {
-				state.fitPending = false
-				state.view.distance = fitDistance(model.extent)
-				state.view.target = [0, 0, 0]
-			}
 
 			const ratio = window.devicePixelRatio || 1
 			if (element.width !== Math.round(width * ratio) || element.height !== Math.round(height * ratio)) {
@@ -59,6 +55,19 @@ export function OrbitScene() {
 			}
 
 			ctx.setTransform(ratio, 0, 0, ratio, 0, 0)
+
+			if (state.fitPending && model.orbits.length === 0 && state.orbits.some((e) => e.loading)) {
+				ctx.clearRect(0, 0, width, height)
+				return
+			}
+
+			if (state.fitPending && model.orbits.length > 0) {
+				const extent = state.fitPending === 'selected' ? selectedExtent(model) : model.extent
+				state.fitPending = false
+				state.view.distance = fitDistance(extent, width / height)
+				state.view.target = [0, 0, 0]
+			}
+
 			drawScene(ctx, cameraOf(state.view, width, height), model, theme)
 		}
 

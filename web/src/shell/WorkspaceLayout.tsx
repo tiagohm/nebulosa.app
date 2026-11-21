@@ -12,7 +12,8 @@ import { useMediaQuery, WIDE_SCREEN } from './useMediaQuery'
 // and actions, which wrap to a line of their own when they do not fit beside the title, the main content, and the
 // collapsible contextual panel. On
 // wide screens the panel's visibility is a preference of the active profile, kept per workspace; on
-// narrow screens it is a drawer that starts closed and is never persisted. A workspace whose own controls
+// narrow screens it is a drawer, or a sheet under a live content that asked for one, that starts closed and is never
+// persisted. A workspace whose own controls
 // show the panel holds that state itself with useWorkspacePanel.
 
 // Contextual panel content of a workspace.
@@ -24,6 +25,9 @@ export interface WorkspacePanel {
 	// Actions on the subject of the content, shown in the panel's header before its close button, such as marking the
 	// inspected object as a favorite.
 	readonly actions?: ReactNode
+	// Whether, on narrow screens, the panel is a sheet under the content rather than a drawer over it, for a workspace
+	// whose content is a live view its controls change, so both stay in sight while editing.
+	readonly sheet?: boolean
 }
 
 // Visibility of the contextual panel of a workspace.
@@ -80,11 +84,13 @@ export function WorkspaceLayout({ workspace, title, context, contextFill = false
 	const { route } = useSnapshot(routeState)
 	// A tool of the Tools workspace leads its title with the way back to the catalog.
 	const inTool = workspace === 'tools' && route.workspace === 'tools' && route.tool !== undefined
+	// A narrow panel that asked for a sheet stacks under the content instead of sliding over it.
+	const sheet = !docked && panel?.sheet === true
 
 	// Clips rather than hides its overflow: a hidden box can still be scrolled by script or by focus, and the closed
 	// drawer waiting beside it would then pull the workspace sideways.
 	const frame = (
-		<section className="relative flex min-h-0 min-w-0 flex-1 overflow-clip">
+		<section className={cn('relative flex min-h-0 min-w-0 flex-1 overflow-clip', sheet && 'flex-col')}>
 			<div className="flex min-w-0 flex-1 flex-col">
 				<header className="flex min-h-12 flex-none flex-wrap items-center gap-x-3 gap-y-1 border-b border-line-100 bg-base-100 px-4 py-1">
 					<span className="flex min-w-0 flex-none items-center gap-2 text-sm">
@@ -114,7 +120,7 @@ export function WorkspaceLayout({ workspace, title, context, contextFill = false
 				<div className="relative min-h-0 flex-1 overflow-hidden">{children}</div>
 			</div>
 			{panel && (
-				<ContextualPanel title={panel.title} actions={panel.actions} open={open} docked={docked} onClose={() => setOpen(false)}>
+				<ContextualPanel title={panel.title} actions={panel.actions} open={open} docked={docked} sheet={sheet} onClose={() => setOpen(false)}>
 					{panel.content}
 				</ContextualPanel>
 			)}

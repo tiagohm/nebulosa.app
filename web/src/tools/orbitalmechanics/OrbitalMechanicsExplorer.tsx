@@ -4,6 +4,7 @@ import { type ChangeEvent, useEffect, useRef, useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { downloadText } from '../../download'
 import { CollapsibleSection } from '../../shell/CollapsibleSection'
+import { useMediaQuery, WIDE_SCREEN } from '../../shell/useMediaQuery'
 import { EmptyState, WorkspaceLayout } from '../../shell/WorkspaceLayout'
 import { Actions } from '../../ui/Actions'
 import { Button } from '../../ui/Button'
@@ -20,7 +21,7 @@ import { OrbitInspector } from './OrbitInspector'
 import { OrbitScene } from './OrbitScene'
 import { OrbitSources } from './OrbitSources'
 import { OrbitTimeline, usePlayback } from './OrbitTimeline'
-import { buildSceneModel, fitDistance, PALETTE_TOKENS, presetAngles, toDisplay } from './scene'
+import { PALETTE_TOKENS, presetAngles, toDisplay } from './scene'
 
 // Orbital Mechanics Explorer: a two-body laboratory where an orbit is defined by elements or a state, drawn in 3D,
 // played in time, and inspected, with every physical value computed by the server's single Kepler model. The scene is
@@ -66,11 +67,11 @@ export function OrbitalMechanicsExplorer() {
 	)
 
 	return (
-		<WorkspaceLayout workspace="tools" title="Orbital Mechanics Explorer" actions={<ExplorerActions />} panel={{ title: orbit?.name ?? 'Orbit', content: panel }}>
+		<WorkspaceLayout workspace="tools" title="Orbital Mechanics Explorer" actions={<ExplorerActions />} panel={{ title: orbit?.name ?? 'Orbit', content: panel, sheet: true }}>
 			<div className="flex h-full min-h-0 flex-col">
 				<div className="relative min-h-0 flex-1">
 					{state.referenceError ? <EmptyState title="The explorer could not start" description={state.referenceError} action={<Button onClick={() => void openOrbitalMechanics(orbitalMechanicsState)}>Retry</Button>} /> : <OrbitScene />}
-					<p className="pointer-events-none absolute bottom-2 left-3 m-0 text-xs text-ink-300">
+					<p className="pointer-events-none absolute bottom-2 left-3 m-0 text-xs text-ink-300 max-sm:hidden">
 						Two-body model · {state.plane === 'ecliptic' ? 'J2000 ecliptic' : 'J2000 equator'} · {state.centerDrawing === 'marker' ? 'center not to scale' : 'center to scale'} · vectors v, h, e show directions only
 					</p>
 				</div>
@@ -157,7 +158,7 @@ function OrbitList() {
 							{orbit.name}
 							{orbit.loading && <span className="text-ink-300"> · updating</span>}
 						</button>
-						<Checkbox label="Shown" checked={orbit.visible} onChange={(visible) => (orbitalMechanicsState.orbits.find((e) => e.id === orbit.id)!.visible = visible)} />
+						<Checkbox label="Shown" hideLabel title="Shown in the scene" checked={orbit.visible} onChange={(visible) => (orbitalMechanicsState.orbits.find((e) => e.id === orbit.id)!.visible = visible)} />
 						<IconButton icon="duplicate" label="Copy" disabled={refusal !== undefined || !orbit.definition} onClick={() => cloneOrbit(orbitalMechanicsState, orbit.id)} />
 						<IconButton icon="trash" label="Remove" disabled={state.orbits.length === 1} onClick={() => removeOrbit(orbitalMechanicsState, orbit.id)} />
 					</div>
@@ -197,13 +198,10 @@ function ViewSection() {
 		Object.assign(orbitalMechanicsState.view, presetAngles(kind, normal))
 	}
 
-	const fit = () => {
-		orbitalMechanicsState.view.distance = fitDistance(buildSceneModel(orbitalMechanicsState).extent)
-		orbitalMechanicsState.view.target = [0, 0, 0]
-	}
+	const wide = useMediaQuery(WIDE_SCREEN)
 
 	return (
-		<CollapsibleSection id="orbitalmechanics.view" title="View" summary={state.plane === 'ecliptic' ? 'Ecliptic' : 'Equator'}>
+		<CollapsibleSection id="orbitalmechanics.view" title="View" summary={state.plane === 'ecliptic' ? 'Ecliptic' : 'Equator'} defaultOpen={wide}>
 			<SegmentedControl label="Reference plane" options={['equator', 'ecliptic'] as const} value={state.plane} format={(e) => (e === 'equator' ? 'J2000 equator' : 'J2000 ecliptic')} onChange={(plane) => setPlane(orbitalMechanicsState, plane)} />
 			<SegmentedControl label="Projection" options={['perspective', 'orthographic'] as const} value={state.view.projection} format={(e) => (e === 'perspective' ? 'Perspective' : 'Orthographic')} onChange={(projection) => (orbitalMechanicsState.view.projection = projection)} />
 			<SegmentedControl label="Center" options={['true', 'marker'] as const} value={state.centerDrawing} format={(e) => (e === 'true' ? 'To scale' : 'Marker (not to scale)')} onChange={(drawing) => (orbitalMechanicsState.centerDrawing = drawing)} />
@@ -217,8 +215,11 @@ function ViewSection() {
 				<Button variant="secondary" onClick={() => look('normal')}>
 					Face-on
 				</Button>
-				<Button variant="secondary" onClick={fit}>
-					Fit
+				<Button variant="secondary" title="Frames every orbit drawn" onClick={() => (orbitalMechanicsState.fitPending = 'scene')}>
+					Fit All
+				</Button>
+				<Button variant="secondary" title="Frames the selected orbit" disabled={!state.selected} onClick={() => (orbitalMechanicsState.fitPending = 'selected')}>
+					Fit Selected
 				</Button>
 			</Actions>
 			{(Object.keys(OVERLAY_LABELS) as OverlayKey[]).map((key) => (

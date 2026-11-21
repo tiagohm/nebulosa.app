@@ -124,9 +124,21 @@ function pixelsPerAu(camera: Camera, depth: number) {
 	return camera.projection === 'perspective' ? camera.scale / depth : camera.scale
 }
 
-// Camera distance (AU) that frames a sphere of radius `extent` (AU) around the target.
-export function fitDistance(extent: number) {
-	return (extent * 1.15) / Math.sin(FIELD_OF_VIEW / 2)
+// Camera distance (AU) that frames a sphere of radius `extent` (AU) around the target on a canvas whose width is
+// `aspect` times its height, so a narrow portrait canvas frames it across its width.
+export function fitDistance(extent: number, aspect: number = 1) {
+	const half = Math.min(FIELD_OF_VIEW / 2, Math.atan(Math.tan(FIELD_OF_VIEW / 2) * aspect))
+	return (extent * 1.15) / Math.sin(half)
+}
+
+// Radius (AU) of the region the selected orbit's curve spans about the center, at least three radii of the center;
+// the scene's extent when no orbit drawn is selected.
+export function selectedExtent(model: Pick<SceneModel, 'orbits' | 'center' | 'extent'>) {
+	const orbit = model.orbits.find((e) => e.selected)
+	if (!orbit) return model.extent
+	let extent = 3 * model.center.radius
+	for (const p of orbit.points) extent = Math.max(extent, Math.hypot(p[0], p[1], p[2]))
+	return extent > 0 ? extent : model.extent
 }
 
 // Yaw and pitch of a preset view: from above the reference plane (+X right, +Y up on screen), from its edge (looking along

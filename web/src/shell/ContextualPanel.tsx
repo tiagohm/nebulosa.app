@@ -5,7 +5,8 @@ import { SectionHeading } from '../ui/SectionHeading'
 
 // Collapsible right-hand panel of a workspace with the controls of its current context. On wide screens
 // it is a docked column that takes no space when collapsed; on narrow screens it slides over the
-// workspace as a drawer. The panel only presents controls: collapsing or replacing it never stops what
+// workspace as a drawer, or, for a live content that asked for it, opens as a sheet under that content, which then
+// shrinks to stay in sight. The panel only presents controls: collapsing or replacing it never stops what
 // those controls started, so it holds no operational state of its own. While docked and open it carries
 // data-docked-panel, which the notification toasts read to stay beside it.
 
@@ -16,8 +17,10 @@ export interface ContextualPanelProps {
 	readonly actions?: ReactNode
 	// Whether the panel is shown.
 	readonly open: boolean
-	// Whether the panel is docked (wide screen) rather than a drawer.
+	// Whether the panel is docked (wide screen) rather than a drawer or a sheet.
 	readonly docked: boolean
+	// Whether the undocked panel is a sheet in the layout under the content rather than a drawer over it.
+	readonly sheet?: boolean
 	// Hides the panel.
 	readonly onClose: () => void
 	// Controls of the current context; scrolls vertically when taller than the panel.
@@ -25,10 +28,12 @@ export interface ContextualPanelProps {
 }
 
 // Right-hand panel of a workspace.
-export function ContextualPanel({ title, actions, open, docked, onClose, children }: ContextualPanelProps) {
+export function ContextualPanel({ title, actions, open, docked, sheet = false, onClose, children }: ContextualPanelProps) {
+	const drawer = !docked && !sheet
+
 	return (
 		<>
-			{!docked && open && <button type="button" title="Close panel" onClick={onClose} className="absolute inset-0 z-20 cursor-default border-0 bg-scrim/60 p-0" />}
+			{drawer && open && <button type="button" title="Close panel" onClick={onClose} className="absolute inset-0 z-20 cursor-default border-0 bg-scrim/60 p-0" />}
 			<aside
 				inert={!open}
 				data-docked-panel={docked && open ? '' : undefined}
@@ -37,7 +42,9 @@ export function ContextualPanel({ title, actions, open, docked, onClose, childre
 					'flex-none overflow-hidden bg-base-000 motion-reduce:transition-none',
 					docked
 						? cn('h-full border-line-100 transition-[width] duration-200', open ? 'w-80 border-l xl:w-88' : 'w-0')
-						: cn('absolute inset-y-0 right-0 z-30 w-[min(20rem,calc(100%-3rem))] border-l border-line-100 shadow-[-16px_0_48px_rgb(0_0_0/0.45)] transition-transform duration-200', open ? 'translate-x-0' : 'translate-x-full'),
+						: sheet
+							? cn('w-full border-line-100 transition-[height] duration-200', open ? 'h-1/2 border-t' : 'h-0')
+							: cn('absolute inset-y-0 right-0 z-30 w-[min(20rem,calc(100%-3rem))] border-l border-line-100 shadow-[-16px_0_48px_rgb(0_0_0/0.45)] transition-transform duration-200', open ? 'translate-x-0' : 'translate-x-full'),
 				)}
 			>
 				<div className={cn('flex h-full flex-col', docked ? 'w-80 xl:w-88' : 'w-full')}>

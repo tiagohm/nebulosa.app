@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { formatGeographic } from '../format'
 import { activeSite, forgetSite, MAX_SITE_ELEVATION, MIN_SITE_ELEVATION, normalizeObservingSite, type ObservingSite, type ObservingSiteInput, parseGeographicAngle, removeSite, saveSite, selectSite, siteState } from '../location/site'
@@ -9,8 +9,8 @@ import { Actions } from '../ui/Actions'
 import { Button } from '../ui/Button'
 import { ConfirmButton } from '../ui/ConfirmButton'
 import { Notice } from '../ui/Notice'
-import { Select } from '../ui/Select'
 import { TextInput } from '../ui/TextInput'
+import { VirtualSelect } from '../ui/VirtualSelect'
 import { WorldMap, WorldMapSymbol } from '../ui/WorldMap'
 
 // Editor of one observing site: its name, latitude and longitude (decimal or sexagesimal, signed or with a hemisphere
@@ -86,7 +86,10 @@ export function ObservingSiteEditor({ site, onDirtyChange, onSaved, onClosed }: 
 	const located = latitude !== undefined && longitude !== undefined && Math.abs(latitude) <= 90 && Math.abs(longitude) <= 180
 	const active = site !== undefined && activeSite(activeProfile(profiles), sites)?.id === site.id
 	const users = site ? profiles.profiles.filter((profile) => profile.activeSiteId === site.id).length : 0
-	const now = Date.now()
+	// Current hour, Unix milliseconds rounded down: the instant the UTC offsets of the zones are named at, kept for the hour
+	// so the zone texts the search reads are not rebuilt on every render.
+	const hour = Math.floor(Date.now() / 3_600_000) * 3_600_000
+	const zoneLabel = useCallback((zone: string) => `${zone} (${formatUtcOffset(zone, hour)})`, [hour])
 
 	function edit(patch: Partial<Draft>) {
 		setDraft({ ...draft, ...patch })
@@ -154,7 +157,7 @@ export function ObservingSiteEditor({ site, onDirtyChange, onSaved, onClosed }: 
 							{located && <Notice>{formatGeographic(latitude, longitude, MAP_DECIMALS)}</Notice>}
 							<TextInput label="Elevation" suffix="m" inputMode="decimal" value={draft.elevation} onChange={(e) => edit({ elevation: e.target.value })} />
 							<Notice>Height above the WGS84 ellipsoid, not above sea level; the two differ by up to about 100 m.</Notice>
-							<Select label="Time Zone" options={TIME_ZONES} value={draft.timeZone} onChange={(timeZone) => edit({ timeZone })} format={(zone) => `${zone} (${formatUtcOffset(zone, now)})`} />
+							<VirtualSelect label="Time Zone" options={TIME_ZONES} value={draft.timeZone} onChange={(timeZone) => edit({ timeZone })} format={zoneLabel} searchable searchPlaceholder="Zone or UTC offset…" />
 							{draft.timeZone !== BROWSER_TIME_ZONE && (
 								<Button variant="ghost" className="self-start" onClick={() => edit({ timeZone: BROWSER_TIME_ZONE })}>
 									Use the Browser Time Zone ({BROWSER_TIME_ZONE})

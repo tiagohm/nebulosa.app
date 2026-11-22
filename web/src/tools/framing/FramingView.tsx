@@ -24,7 +24,7 @@ import { moveIndex } from '../../ui/navigation'
 import { Notice } from '../../ui/Notice'
 import { SectionHeading } from '../../ui/SectionHeading'
 import { SegmentedControl } from '../../ui/SegmentedControl'
-import { Select } from '../../ui/Select'
+import { VirtualSelect } from '../../ui/VirtualSelect'
 import { CenterSearch } from './CenterSearch'
 import { framingPreviewState, mountCenter, newFramingDocument, newFramingName, type PreviewFit, type PreviewSource, setFramingHidden, setPreviewCenter, showFraming } from './framing'
 import { FramingEditor, RotationInput, SaveStatus } from './FramingEditor'
@@ -212,8 +212,10 @@ function ViewControls() {
 					<Notice>The survey catalog is empty; run bun make:surveys to download it.</Notice>
 				) : (
 					<>
-						<Select
+						<VirtualSelect
 							label="Survey"
+							searchable
+							searchPlaceholder="Survey or wavelength…"
 							className="w-full flex-none sm:w-72"
 							options={options.length > 0 ? options : [preview.survey]}
 							value={options.includes(preview.survey) ? preview.survey : (options[0] ?? DEFAULT_SURVEY)}

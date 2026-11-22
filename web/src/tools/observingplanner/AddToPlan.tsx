@@ -5,8 +5,8 @@ import type { SiteLocation } from '../../location/site'
 import { Button } from '../../ui/Button'
 import { Modal, ModalActions } from '../../ui/Modal'
 import { Notice } from '../../ui/Notice'
-import { Select } from '../../ui/Select'
 import { TextInput } from '../../ui/TextInput'
+import { VirtualSelect } from '../../ui/VirtualSelect'
 import { createPlan, defaultPlanFor, editPlan, planLabel, type NamedTarget, newItem, newPlanDocument, observingPlannerState, observingPlansState, openPlan, sortedPlans } from './observingplanner'
 
 // Dialog adding a target to a night plan: an existing plan, or a new one for the active site and the tool's night and constraints.
@@ -75,8 +75,10 @@ export function AddToPlan({ target, onClose, location, siteId, eveningDate, cons
 	return (
 		<Modal open={!!target} onClose={onClose} title={`Add ${target?.name ?? 'target'} to a plan`} className="max-w-md">
 			<div className="flex flex-col gap-3">
-				<Select
+				<VirtualSelect
 					label="Plan"
+					searchable
+					searchPlaceholder="Plan name…"
 					options={options}
 					value={selected}
 					onChange={setChoice}

@@ -22,12 +22,12 @@ import { Actions } from '../ui/Actions'
 import { Button } from '../ui/Button'
 import { Checkbox } from '../ui/Checkbox'
 import { DataRow } from '../ui/DataRow'
-import { List, ListItem } from '../ui/List'
 import { Notice } from '../ui/Notice'
 import { NumberInput } from '../ui/NumberInput'
 import { SegmentedControl } from '../ui/SegmentedControl'
 import { Select } from '../ui/Select'
 import { TextInput } from '../ui/TextInput'
+import { VirtualList } from '../ui/VirtualList'
 import { useNow } from '../useNow'
 import { holdCameraFrame } from './cameratabs'
 import { type AnnotationDensity, type AnnotationLayers, centerImageView, type ImageAnnotationState, imagesState, imageUnavailableReason, selectAnnotation, setAnnotationView } from './images'
@@ -43,8 +43,25 @@ import type { ImageToolPanelProps } from './tools'
 // catalog, and Find the only one that asks the SkyBoT service for the solar-system objects:
 // showing, hiding, or restyling the overlay never does. A result always belongs to the image it annotated.
 
-// Objects listed at most; the overlay still draws every one.
-const MAX_LISTED = 300
+// Id of an object, its key in the list.
+function objectKey(object: AnnotationObject) {
+	return object.id
+}
+
+// Name of an object, the title of its row.
+function objectName(object: AnnotationObject) {
+	return object.name
+}
+
+// Kind of an object, the description of its row.
+function objectType(object: AnnotationObject) {
+	return object.typeName
+}
+
+// Magnitude of an object, the meta of its row; nothing when it has none.
+function objectMagnitude(object: AnnotationObject) {
+	return object.magnitude === undefined ? undefined : formatMagnitude(object.magnitude)
+}
 
 // Display names of the groups.
 const LAYER_LABELS: Readonly<Record<AnnotationLayer, string>> = { star: 'Stars', deepSky: 'Deep-sky objects', solarSystem: 'Sun, Moon, and planets', satellite: 'Satellites', minorBody: 'Asteroids and comets' }
@@ -406,12 +423,8 @@ function Objects({ job, solarJob, objects, warnings, resultError, annotation, se
 					<TextInput label="Filter" value={filter} placeholder="Name or designation" onChange={(event) => setFilter(event.currentTarget.value)} />
 					<Select label="Type" options={types} value={chosen} format={(option) => (option === ANY_TYPE ? 'All types' : option)} onChange={setType} />
 					<Checkbox label="Center the selected object" checked={annotation.centerSelected} onChange={onCenterSelectedChange} />
-					<List emptyText={objects.length > 0 ? 'No object matches.' : 'No catalog object in this field.'} className="max-h-80 overflow-y-auto">
-						{shown.slice(0, MAX_LISTED).map((object) => (
-							<ListItem key={object.id} title={object.name} description={object.typeName} meta={object.magnitude === undefined ? undefined : formatMagnitude(object.magnitude)} selected={object.id === selected} onClick={() => onSelect(object.id)} />
-						))}
-					</List>
-					{shown.length > MAX_LISTED && <Notice>{`${shown.length - MAX_LISTED} more objects are drawn but not listed; filter by name or type to find them.`}</Notice>}
+					{/* Every drawn object is listed, however many, in a frame of at most 280 px that draws only the rows in view. */}
+					<VirtualList items={shown} itemKey={objectKey} title={objectName} description={objectType} meta={objectMagnitude} selected={selected} onSelect={(object) => onSelect(object.id)} emptyText={objects.length > 0 ? 'No object matches.' : 'No catalog object in this field.'} className="max-h-80" />
 				</>
 			) : (
 				<Notice>{job && isActive(job) ? 'Annotating…' : 'No results.'}</Notice>

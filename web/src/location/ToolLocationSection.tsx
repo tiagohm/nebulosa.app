@@ -8,6 +8,7 @@ import { DataRow } from '../ui/DataRow'
 import { Notice } from '../ui/Notice'
 import { Select } from '../ui/Select'
 import { TextInput } from '../ui/TextInput'
+import { VirtualSelect } from '../ui/VirtualSelect'
 import { activeSite, isValidLocation, MAX_SITE_ELEVATION, MIN_SITE_ELEVATION, openObservingSites, parseGeographicAngle, type ResolvedLocation, siteState, type ToolLocation } from './site'
 import { TIME_ZONES } from './zone'
 
@@ -85,7 +86,7 @@ function ManualForm({ start, elevation, onApply }: ManualFormProps) {
 				<TextInput label="Longitude" suffix="°" value={longitude} onChange={(e) => setLongitude(e.target.value)} />
 			</div>
 			{elevation && <TextInput label="Elevation" suffix="m" inputMode="decimal" value={height} onChange={(e) => setHeight(e.target.value)} />}
-			<Select label="Time Zone of the Place" options={TIME_ZONES} value={timeZone} onChange={setTimeZone} />
+			<VirtualSelect label="Time Zone of the Place" options={TIME_ZONES} value={timeZone} onChange={setTimeZone} searchable searchPlaceholder="Zone, such as Sao_Paulo…" />
 			<Notice>Degrees, north and east positive, or with N, S, E, or W. The zone names the place's local days and nights; it is never guessed from the coordinates.</Notice>
 			{error && <Notice error>{error}</Notice>}
 			<Button type="submit" variant="secondary" className="self-start">

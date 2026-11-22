@@ -1,11 +1,12 @@
+import { useCallback } from 'react'
 import { useSnapshot } from 'valtio'
 import { activeProfile, dateTimePreferences, profileState } from '../profile/profile'
-import { Select } from '../ui/Select'
+import { VirtualSelect } from '../ui/VirtualSelect'
 import { BROWSER_TIME_ZONE, describeDisplayZone, type DisplayZoneOverride, resolveDisplayZone, TIME_ZONES } from './zone'
 
 // Selector of the zone a tool shows its civil times in: the profile's default (named with the zone it gives now), the
 // site of the tool, UTC, the browser's, or any IANA zone. It changes how times read only: never an instant, a request,
-// the profile's default, or a site.
+// the profile's default, or a site. The hundreds of zones are drawn only as they scroll into view and searched by name.
 
 export interface TimeZoneSelectProps {
 	// Label above the selector.
@@ -36,6 +37,11 @@ function optionOf(value: DisplayZoneOverride): ZoneOption {
 	return value.mode === 'zone' ? `zone:${value.zone}` : value.mode
 }
 
+// Group of an option: the modes, then the zones.
+function groupOf(option: ZoneOption) {
+	return MODES.includes(option) ? 'Display' : 'Time zones'
+}
+
 // Choice of an option.
 function valueOf(option: ZoneOption): DisplayZoneOverride {
 	return option.startsWith('zone:') ? { mode: 'zone', zone: option.slice(5) } : { mode: option as Exclude<ZoneOption, `zone:${string}`> }
@@ -47,20 +53,24 @@ export function TimeZoneSelect({ label = 'Time Zone', value, onChange, site, sel
 	const preference = dateTimePreferences(activeProfile(profiles).settings).displayTimeZone
 	const siteName = selectedSite ? 'Selected Site' : 'Observing Site'
 
-	function format(option: ZoneOption) {
-		switch (option) {
-			case 'default':
-				return `Default: ${describeDisplayZone(resolveDisplayZone(preference, undefined, site))}`
-			case 'site':
-				return site ? `${siteName}: ${site.timeZone}` : `${siteName}: none, browser ${BROWSER_TIME_ZONE}`
-			case 'utc':
-				return 'UTC'
-			case 'browser':
-				return `Browser: ${BROWSER_TIME_ZONE}`
-			default:
-				return option.slice(5)
-		}
-	}
+	// Text of an option, kept stable while the preference and the site stay, so the search texts are not rebuilt.
+	const format = useCallback(
+		(option: ZoneOption) => {
+			switch (option) {
+				case 'default':
+					return `Default: ${describeDisplayZone(resolveDisplayZone(preference, undefined, site))}`
+				case 'site':
+					return site ? `${siteName}: ${site.timeZone}` : `${siteName}: none, browser ${BROWSER_TIME_ZONE}`
+				case 'utc':
+					return 'UTC'
+				case 'browser':
+					return `Browser: ${BROWSER_TIME_ZONE}`
+				default:
+					return option.slice(5)
+			}
+		},
+		[preference, site, siteName],
+	)
 
-	return <Select label={label} options={OPTIONS} value={optionOf(value)} format={format} group={(option) => (MODES.includes(option) ? 'Display' : 'Time zones')} onChange={(option) => onChange(valueOf(option))} className={className} />
+	return <VirtualSelect label={label} options={OPTIONS} value={optionOf(value)} format={format} group={groupOf} onChange={(option) => onChange(valueOf(option))} className={className} searchable searchPlaceholder="Zone, such as Sao_Paulo…" />
 }

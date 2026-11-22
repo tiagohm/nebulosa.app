@@ -13,10 +13,10 @@ import { Icon } from '../../ui/Icon'
 import { IconButton } from '../../ui/IconButton'
 import { Notice } from '../../ui/Notice'
 import { NumberInput } from '../../ui/NumberInput'
-import { Select } from '../../ui/Select'
 import { StatusBadge, type StatusTone } from '../../ui/StatusBadge'
 import { Cell, Row, Table } from '../../ui/Table'
 import { TextInput } from '../../ui/TextInput'
+import { VirtualSelect } from '../../ui/VirtualSelect'
 import { useNow } from '../../useNow'
 import { FoldedNote } from './FoldedNote'
 import {
@@ -201,7 +201,16 @@ export function PlanSection({ planId, location, siteId, activeSite, onAnalyze }:
 
 	const header = (
 		<div className="flex flex-wrap items-end gap-2">
-			<Select label="Plan" className="min-w-56 flex-1" options={['', ...list.map((plan) => plan.id)]} value={planId && saved ? planId : ''} onChange={(id) => openPlan(observingPlannerState, id || undefined)} format={(id) => (id && plans.plans[id] ? planLabel(plans.plans[id]) : 'All plans')} />
+			<VirtualSelect
+				label="Plan"
+				searchable
+				searchPlaceholder="Plan name…"
+				className="min-w-56 flex-1"
+				options={['', ...list.map((plan) => plan.id)]}
+				value={planId && saved ? planId : ''}
+				onChange={(id) => openPlan(observingPlannerState, id || undefined)}
+				format={(id) => (id && plans.plans[id] ? planLabel(plans.plans[id]) : 'All plans')}
+			/>
 			{saved && (
 				<span className="flex h-9.5 items-center">
 					<StatusBadge {...SAVE_STATUS_LABELS[planSaveStatus(plans, saved.id)]} />

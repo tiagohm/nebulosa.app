@@ -91,6 +91,9 @@ interface ImageToolBase {
 	readonly panelTitle: string
 	// Contextual panel content; absent for a tool that is not implemented yet.
 	readonly panel?: ComponentType<ImageToolPanelProps>
+	// Whether, on narrow screens, the panel is a sheet under the viewer rather than a drawer over it, for a tool whose
+	// controls change what the viewer shows while they are used.
+	readonly sheet?: boolean
 }
 
 // Definition of an image tool, which works on any document.
@@ -121,7 +124,7 @@ export const IMAGE_TOOL_DEFINITIONS: Readonly<Record<ImageToolId, ImageToolDefin
 	'camera-acquisition': { id: 'camera-acquisition', label: 'Acquisition', panelTitle: 'Acquisition', icon: 'shutter', category: 'camera', panel: CameraAcquisitionTool },
 	'live-stacking': { id: 'live-stacking', label: 'Live Stacking', panelTitle: 'Live Stacking', icon: 'liveStack', category: 'camera', panel: LiveStackingTool },
 	'auto-focus': { id: 'auto-focus', label: 'Auto Focus', panelTitle: 'Auto Focus', icon: 'focusCurve', category: 'camera', panel: AutoFocusTool },
-	'mount-nudge': { id: 'mount-nudge', label: 'Mount Nudge', panelTitle: 'Mount Nudge', icon: 'move', category: 'camera', panel: MountNudgeTool },
+	'mount-nudge': { id: 'mount-nudge', label: 'Mount Nudge', panelTitle: 'Mount Nudge', icon: 'move', category: 'camera', panel: MountNudgeTool, sheet: true },
 	guiding: { id: 'guiding', label: 'Guiding', panelTitle: 'Guiding', icon: 'guideStar', category: 'camera', panel: GuidingTool },
 	darv: { id: 'darv', label: 'DARV', panelTitle: 'DARV', icon: 'darv', category: 'camera', panel: DarvTool },
 	tppa: { id: 'tppa', label: 'TPPA', panelTitle: 'TPPA', icon: 'threePoint', category: 'camera', panel: TppaTool },

@@ -92,8 +92,10 @@ import { IMAGE_TOOL_DEFINITIONS, type ImageToolId, imageToolsFor } from './tools
 
 // Images workspace: a permanent camera tab for each connected camera of the watched connection, showing the frames
 // its camera takes, then FITS and XISF images opened from the server, one closable tab each, shown in the shared
-// viewer, with the contextual tool each document selected (the Image Inspector at first) in the contextual panel. It
-// works without any connection or equipment; only the camera operations of a camera tab command its camera, and the
+// viewer, with the contextual tool each document selected (the Image Inspector at first) in the contextual panel, a
+// sheet under the viewer on narrow screens for a tool that asks for one (Mount Nudge), which hides the bottom area while
+// open so the frame stays in sight. It works without any connection or equipment; only the camera operations of a
+// camera tab command its camera, and the
 // toolbar of a camera tab shows the state of its capture whatever tool is selected, and its bottom area the Focus
 // Curve of its Auto Focus or the graph of its guiding on request; while Guiding is the tool, a click on the session's
 // current guide frame selects the star nearest it. Documents, with their own zoom,
@@ -217,6 +219,9 @@ export function ImagesWorkspace() {
 	const panelState = useWorkspacePanel('images')
 	const { setOpen: setPanelOpen } = panelState
 	const panelRequested = state.panelRequested === true
+	// Whether the panel is open as a sheet under the viewer on a narrow screen; the bottom area then yields its room to the
+	// viewer, so the frame the tool changes stays in sight.
+	const sheetOpen = definition.sheet === true && !panelState.docked && panelState.open
 
 	// Opens the panel on the tool just chosen, from the tool bar, a panel, or another page, as a drawer on narrow screens
 	// as well as docked.
@@ -245,7 +250,15 @@ export function ImagesWorkspace() {
 	const savingDocument = state.documents.find((d) => d.key === saving?.key)
 
 	return (
-		<WorkspaceLayout workspace="images" title="Images" actions={openButton} context={toolBar} contextFill panelState={panelState} panel={{ title: definition.panelTitle, content: <Panel key={document?.key} document={document} view={view} camera={camera} onOpen={() => setChoosing(true)} /> }}>
+		<WorkspaceLayout
+			workspace="images"
+			title="Images"
+			actions={openButton}
+			context={toolBar}
+			contextFill
+			panelState={panelState}
+			panel={{ title: definition.panelTitle, content: <Panel key={document?.key} document={document} view={view} camera={camera} onOpen={() => setChoosing(true)} />, sheet: definition.sheet }}
+		>
 			<div ref={viewerRef} className="flex h-full flex-col bg-base-000">
 				{state.documents.length > 0 && <DocumentTabs documents={state.documents} activeKey={state.activeKey} onClose={requestClose} />}
 				<div className="min-h-0 flex-1">
@@ -359,7 +372,7 @@ export function ImagesWorkspace() {
 						}
 					/>
 				</div>
-				{document?.camera && framesShown && <CameraBottom document={document} />}
+				{document?.camera && framesShown && !sheetOpen && <CameraBottom document={document} />}
 				{/* Inside the column, so the menu stays visible while it fills the screen. */}
 				{menu && solution && document?.info && menu.key === document.key && (
 					<ImageMenu

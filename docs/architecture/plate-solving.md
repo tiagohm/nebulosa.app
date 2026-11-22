@@ -15,7 +15,7 @@ One service gives all of them the same solve, hints, and acceptance rules.
 
 - An analysis job of the [Shared Image](shared-image.md) store; the service holds no device.
 - Consumers: the Plate Solver, [TPPA](tppa.md), [iPolar](ipolar.md) (which may solve private pixels of a frame), [Mount Pointing Model](mount-pointing-model.md), and [Target Centering](target-centering.md).
-- Its solutions feed [Annotation](annotation.md), [Streak Detection](streak-detection.md), the [Star Profile Inspector](star-profile-inspector.md), and the celestial [Overlay](overlay.md).
+- Its solutions feed [Annotation](annotation.md), [Streak Detection](streak-detection.md), the [Star Profile Inspector](star-profile-inspector.md), the celestial [Overlay](overlay.md), and Mount Nudge, whose pad moves by the orientation of the latest solved frame of the camera.
 - Providers are configured in [External Tools](external-tools.md); Nova uploads the image to the Astrometry.net web service.
 - On a camera tab the settings belong to the physical camera and are shared with the operations of that camera.
 - The toolkit (`core`) parses and proves the WCS and does the spherical geometry.

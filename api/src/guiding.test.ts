@@ -493,7 +493,7 @@ describe('guiding', () => {
 	})
 
 	test.skipIf(SKIP)(
-		'a calibration that fails at the pole stays on the record with the progress of its legs until another calibration starts',
+		'a calibration that fails at the pole releases the guide output and the mount, and stays on the record with the progress of its legs until another calibration starts',
 		async () => {
 			const context = await setup()
 			// The mount starts at the pole, where an RA pulse moves nothing.
@@ -504,6 +504,11 @@ describe('guiding', () => {
 			expect(context.summary()?.calibrationFailure).toMatchObject({ code: 'too_many_ra_no_motion_steps', progress: { raSteps: expect.any(Number) } })
 			expect(context.summary()?.calibrationFailure?.progress?.raSteps).toBeGreaterThan(0)
 			expect(context.summary()?.calibrating).toBeUndefined()
+			// Nothing guides, so nothing holds the guide output or the mount.
+			expect(context.summary()).toMatchObject({ active: true, guideOutputHeld: false, pulsesAdmitted: false })
+			expect(context.summary()?.runOperationId).toBeUndefined()
+			await waitUntil(() => context.running('guideOutput.guiding').length === 0)
+			expect(context.operations.available(context.mount)).toBeTrue()
 
 			// Another calibration takes its place.
 			await context.guiding.startGuiding(sessionId, { token: `token-${tokens++}`, recalibrate: true, settle: SETTLE }).json()

@@ -85,9 +85,8 @@ import { SessionStateText } from './SessionStateText'
 // star search, calibration, corrections, settle and dither, and the equipment. Every solved calibration is saved by the
 // server, which restores a matching one at the next Start Guiding when the form allows it, so the start command says
 // whether it will calibrate; a calibration the panel knows would fail (the mount at the pole, a zero guide rate) is
-// warned of beside it. A run whose guiding did not start while it still holds the guide output says so and offers only
-// Stop Guiding, which releases it and the mount. Saved Calibrations lists those of the same equipment with how each fits
-// the session, to review, restore while not guiding, or exclude from restoring. Dark subtracts a master dark of the
+// warned of beside it; a calibration that failed released the guide output and the mount. Saved Calibrations lists
+// those of the same equipment with how each fits the session, to review, restore while not guiding, or exclude from restoring. Dark subtracts a master dark of the
 // Calibration Library from the guide frames: the form's choice is sent at the start and changes the running session too,
 // and while it runs a master can be pinned among those matching its frames. The camera is the panel's target and the
 // guide output the GUIDE_OUTPUT of the setup, which only the Guide Camera has; a missing or unsuitable one says why. The
@@ -324,17 +323,10 @@ export function GuidingSections({ device, availability, guideOutput, mount, sett
 	)
 }
 
-// Returns the guider state of a session in words: its state while it lives, with the guide output it still holds when
-// guiding did not start; Lost or Stopped once it ended.
+// Returns the guider state of a session in words: its state while it lives; Lost or Stopped once it ended.
 function sessionStateText(session: GuidingSessionSummary): string {
 	if (!session.active) return session.lost ? 'Lost' : 'Stopped'
-	return outputHeldIdle(session) ? `${GUIDING_STATE_LABELS[session.state]}, guide output held` : GUIDING_STATE_LABELS[session.state]
-}
-
-// Returns whether a session's run holds the guide output (and the mount) although the guider is not guiding: a start
-// whose calibration or settle failed leaves the guider looping or on its star with the run still open.
-function outputHeldIdle(session: GuidingSessionSummary): boolean {
-	return session.guideOutputHeld && (session.state === 'looping' || session.state === 'selected')
+	return GUIDING_STATE_LABELS[session.state]
 }
 
 // Returns a length of the guide frame in arcseconds when the pixel scale (arcsec/px) is known, else in pixels.
@@ -556,14 +548,13 @@ interface SessionControlsProps {
 // session has no calibration and none of the saved ones will be restored.
 function SessionControls({ session, settings, pending, restorable, calibrationWarning }: SessionControlsProps) {
 	const busy = pending || session.command?.state === 'running'
-	const held = outputHeldIdle(session)
-	const guiding = session.guideOutputHeld && !held
+	const guiding = session.guideOutputHeld
 	const paused = session.state === 'paused'
 	const calibrates = settings.recalibrateOnEveryStart || (!session.calibrated && !(settings.autoRestoreCalibration && restorable !== false))
 
 	return (
 		<>
-			{!session.guideOutputHeld && (
+			{!guiding && (
 				<div className="flex flex-wrap gap-2">
 					<Button disabled={busy} onClick={() => void startGuiding(guidingRuntime, session, guidingStartRequest(settings))}>
 						{calibrates ? 'Calibrate and Guide' : 'Start Guiding'}
@@ -594,15 +585,7 @@ function SessionControls({ session, settings, pending, restorable, calibrationWa
 					)}
 				</div>
 			)}
-			{!session.guideOutputHeld && calibrates && calibrationWarning && <Notice warning>{calibrationWarning}</Notice>}
-			{held && (
-				<>
-					<Button className="self-start" disabled={pending} title="Release the guide output and the mount, and keep looping" onClick={() => void stopGuiding(guidingRuntime, session)}>
-						Stop Guiding
-					</Button>
-					<Notice warning>Guiding did not start, but the guide output and the mount are still held: Stop Guiding releases them.</Notice>
-				</>
-			)}
+			{!guiding && calibrates && calibrationWarning && <Notice warning>{calibrationWarning}</Notice>}
 			{guiding && (
 				<div className="flex flex-wrap gap-2">
 					<Button disabled={pending} onClick={() => void stopGuiding(guidingRuntime, session)}>
@@ -637,7 +620,7 @@ function SessionControls({ session, settings, pending, restorable, calibrationWa
 			<Button variant="secondary" className="self-start" disabled={pending} title="Stop the guide exposures and end the session" onClick={() => void stopGuidingSession(guidingRuntime, session)}>
 				Stop Looping
 			</Button>
-			{!session.guideOutputHeld && <Notice>{session.lockPosition ? 'Click another star on the current frame to move the lock to it.' : 'Click a star on the current frame to select it.'}</Notice>}
+			{!guiding && <Notice>{session.lockPosition ? 'Click another star on the current frame to move the lock to it.' : 'Click a star on the current frame to select it.'}</Notice>}
 		</>
 	)
 }

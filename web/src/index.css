@@ -75,6 +75,15 @@
 	--color-map-radiant: oklch(0.6 0.08 360);
 }
 
+/* Colours of the two axes of a measurement plotted together, the RA and DEC of the guiding graphs and the horizontal
+   and vertical cuts of a star profile: the framings' low chroma and lightness, so no curve glows on a night screen, a
+   slate and a mauve far from the clay of the ember accent and from the signal colours, so a curve never reads as the
+   selection or as a state. */
+@theme static {
+	--color-axis-1: oklch(0.72 0.08 245);
+	--color-axis-2: oklch(0.72 0.08 330);
+}
+
 /* Outline colours of the framings (web/src/framing/palette.ts reads them for the canvases of the Framing preview and the
    Sky, and the legends show them as swatches): the low chroma of the map hues, so nothing on a night screen glows, a
    step lighter, so a field of view reads over the stars and a survey image, and 55 to 60° apart in hue (rust, ochre,

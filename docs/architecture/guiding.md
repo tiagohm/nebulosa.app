@@ -29,6 +29,7 @@ Guiding is what keeps every long light frame sharp, and the capture, centering, 
 - The Equipment Setup says which mount a guide output drives; services that move a mount coordinate with the guiding of exactly the setup's guide output, since a guide output on a camera's ST4 port shares no device with the mount.
 - Losing the guide camera, the guide output, or the mount ends the session; a reconnected device needs a new session.
 - A slew commanded elsewhere stops guiding unless the request says otherwise, and guiding never starts again by itself.
+- A start whose calibration or settle fails leaves the guide output and the mount held, guiding nothing, until Stop Guiding releases them; the session keeps the failed calibration, with the progress of its legs, until another calibration starts or one is solved or restored.
 - A caller inside the process can admit a session under a reservation that holds the guide camera and the guide output; every command of the session then runs inside it, whoever sends it.
 - The controller and tracking settings are fixed when the session starts; only the exposure changes on a running session.
 - A mount that reports no side of the pier never has a calibration restored or derived, so it calibrates again after every motion.

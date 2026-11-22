@@ -23,7 +23,7 @@ export const GUIDING_GRAPH_SAMPLES = 100
 
 // Stroke of each control event marked on the graph.
 const MARKERS: Readonly<Partial<Record<GuidingEventRecord['event']['type'], { readonly stroke: string; readonly label: string }>>> = {
-	dithered: { stroke: 'var(--color-accent)', label: 'Dither' },
+	dithered: { stroke: 'var(--color-ink-200)', label: 'Dither' },
 	paused: { stroke: 'var(--color-ink-300)', label: 'Paused' },
 	resumed: { stroke: 'var(--color-ink-300)', label: 'Resumed' },
 	guidingStarted: { stroke: 'var(--color-success)', label: 'Guiding started' },
@@ -139,10 +139,10 @@ function Chart({ samples, events, pixelScale, width }: ChartProps) {
 				</line>
 			))}
 			{lines((sample) => sample.raDistance * scale).map((points, index) => (
-				<polyline key={`ra${index}`} points={points} fill="none" stroke="var(--color-accent)" strokeWidth={1.5} />
+				<polyline key={`ra${index}`} points={points} fill="none" stroke="var(--color-axis-1)" strokeWidth={1.5} />
 			))}
 			{lines((sample) => sample.decDistance * scale).map((points, index) => (
-				<polyline key={`dec${index}`} points={points} fill="none" stroke="var(--color-success)" strokeWidth={1.5} />
+				<polyline key={`dec${index}`} points={points} fill="none" stroke="var(--color-axis-2)" strokeWidth={1.5} />
 			))}
 			{samples.map((sample, index) => {
 				const x = sx(index) - slot / 2
@@ -152,8 +152,8 @@ function Chart({ samples, events, pixelScale, width }: ChartProps) {
 					<g key={sample.cursor}>
 						<title>{sample.lost ? `#${sample.frameId}: star lost` : `#${sample.frameId}: RA ${sample.ra.duration} ms ${sample.ra.direction ?? ''}, DEC ${sample.dec.duration} ms ${sample.dec.direction ?? ''}, SNR ${sample.snr.toFixed(1)}`}</title>
 						{sample.lost && <rect x={x} y={MARGIN.top} width={slot} height={plotHeight} fill="var(--color-danger)" fillOpacity={0.12} />}
-						{ra > 0 && <rect x={x + slot * 0.1} y={band + PULSE_BAND - ra} width={slot * 0.4} height={ra} fill="var(--color-accent)" fillOpacity={sample.ra.limited ? 1 : 0.5} />}
-						{dec > 0 && <rect x={x + slot * 0.5} y={band + PULSE_BAND - dec} width={slot * 0.4} height={dec} fill="var(--color-success)" fillOpacity={sample.dec.limited ? 1 : 0.5} />}
+						{ra > 0 && <rect x={x + slot * 0.1} y={band + PULSE_BAND - ra} width={slot * 0.4} height={ra} fill="var(--color-axis-1)" fillOpacity={sample.ra.limited ? 1 : 0.5} />}
+						{dec > 0 && <rect x={x + slot * 0.5} y={band + PULSE_BAND - dec} width={slot * 0.4} height={dec} fill="var(--color-axis-2)" fillOpacity={sample.dec.limited ? 1 : 0.5} />}
 					</g>
 				)
 			})}
@@ -161,7 +161,7 @@ function Chart({ samples, events, pixelScale, width }: ChartProps) {
 				{unit}
 			</text>
 			<text x={MARGIN.left} y={HEIGHT - 2} fill="var(--color-ink-300)">
-				<tspan fill="var(--color-accent)">RA</tspan> <tspan fill="var(--color-success)">DEC</tspan>
+				<tspan fill="var(--color-axis-1)">RA</tspan> <tspan fill="var(--color-axis-2)">DEC</tspan>
 				{` error and corrections (up to ${longest} ms), latest ${samples.length} steps`}
 			</text>
 		</svg>

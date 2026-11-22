@@ -902,6 +902,7 @@ export type {
 	GuidingCalibrationList,
 	GuidingCalibrationPatch,
 	GuidingCalibrationPolicy,
+	GuidingCalibrationFailureSummary,
 	GuidingCalibrationProgress,
 	GuidingCalibrationSummary,
 	GuidingCameraSettings,

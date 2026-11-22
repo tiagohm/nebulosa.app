@@ -180,8 +180,8 @@ function Measurement({ imageId, star, settings, selected }: MeasurementProps) {
 			<CollapsibleSection id="images.star-profile.intensity" title="Intensity Profile">
 				<StarProfilePlot series={plotSeries(star, settings.modelCurves)} halfMaximum={profile.peak === undefined ? undefined : profile.peak / 2} />
 				<p className="m-0 flex flex-wrap gap-x-3 text-xs leading-4 text-ink-300">
-					<span className="whitespace-nowrap text-accent">— Horizontal</span>
-					<span className="whitespace-nowrap text-success">— Vertical</span>
+					<span className="whitespace-nowrap text-axis-1">— Horizontal</span>
+					<span className="whitespace-nowrap text-axis-2">— Vertical</span>
 					{moffat && settings.modelCurves && <span className="whitespace-nowrap">··· Moffat fit</span>}
 					<span className="whitespace-nowrap">- - Half peak</span>
 				</p>
@@ -215,12 +215,12 @@ function Measurement({ imageId, star, settings, selected }: MeasurementProps) {
 // Returns the lines of the plot of a star: its two cuts and, when asked for, the accepted Moffat fit at the same pixels.
 function plotSeries({ horizontal, vertical }: StarProfileMeasured, modelCurves: boolean): readonly StarProfileSeries[] {
 	const series: StarProfileSeries[] = [
-		{ offsets: horizontal.offsets, values: horizontal.values, stroke: 'var(--color-accent)' },
-		{ offsets: vertical.offsets, values: vertical.values, stroke: 'var(--color-success)' },
+		{ offsets: horizontal.offsets, values: horizontal.values, stroke: 'var(--color-axis-1)' },
+		{ offsets: vertical.offsets, values: vertical.values, stroke: 'var(--color-axis-2)' },
 	]
 
-	if (modelCurves && horizontal.model) series.push({ offsets: horizontal.offsets, values: horizontal.model, stroke: 'var(--color-accent)', dash: '1 3' })
-	if (modelCurves && vertical.model) series.push({ offsets: vertical.offsets, values: vertical.model, stroke: 'var(--color-success)', dash: '1 3' })
+	if (modelCurves && horizontal.model) series.push({ offsets: horizontal.offsets, values: horizontal.model, stroke: 'var(--color-axis-1)', dash: '1 3' })
+	if (modelCurves && vertical.model) series.push({ offsets: vertical.offsets, values: vertical.model, stroke: 'var(--color-axis-2)', dash: '1 3' })
 	return series
 }
 

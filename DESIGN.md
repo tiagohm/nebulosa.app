@@ -31,6 +31,8 @@ colors:
     map-asteroid: 'oklch(0.6 0.14 20)'
     map-comet: 'oklch(0.6 0.14 160)'
     map-radiant: 'oklch(0.6 0.08 360)'
+    axis-1: 'oklch(0.72 0.08 245)'
+    axis-2: 'oklch(0.72 0.08 330)'
 typography:
     headline:
         fontFamily: "'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"
@@ -223,6 +225,10 @@ A warm, low-light palette: near-black surfaces with a faint olive warmth, cream 
 ### Star Map
 
 The Sky's star map is drawn on a canvas in the same palette, read from the tokens (`web/src/sky/palette.ts`): stars keep their B−V colours; names are Zodiacal Gray; the grid and constellation lines and boundaries are faint Graticule; the field of view is Starlight Cream, the footprint and mark sent from an image dashed Moonlight; the selection reticle is Ember Clay and nothing else on the map is; the connected mount is Aurora Green. Kinds of objects and reference lines are told apart by muted `map-*` hues that never glow: the reference lines, deep-sky objects, and meteor radiants at the lowest chroma (horizon umber, celestial equator slate, ecliptic mauve, local meridian sage, deep-sky objects olive, meteor radiants dusty rose), and the bodies of the Solar System a step more saturated so they read as points against them (planets violet, asteroids brick, comets jade, the Moon steel blue, and the Sun pale gold, the one lighter hue). The Display panel shows each hue beside its layer, so it is the map's legend. Framings draw in six `frame-*` hues of the same low chroma a step lighter (rust, ochre, sage, gray-teal, slate, rose), each kept by its framing from creation, and the Equipment Setup's in Starlight Cream. Labels are JetBrains Mono. The eclipse maps follow the same rule on the world map: the Moon's shadow on a solar map (the central line, the limits of the central eclipse, and the umbral global points) and the region where the Moon is up on a lunar map are drawn in the Moon's steel blue, the partial limits and sunrise/sunset curves in the neutrals, and only the chosen place and the chosen point are Ember Clay; the Sun of a solar Local View is a dim pale gold, never Starlight Cream. The Orbital Mechanics Explorer's 3D scene keeps the rule too: its orbits draw in six `orbit-*` hues of the framings' low chroma with no red or clay among them, the axes in Graticule told apart by their letters, the grid in Faint Meridian, and the selected orbit by a heavier stroke in its own hue; Ember Clay marks only its row in the orbit list.
+
+### Measurement Axes
+
+Two axes of one measurement plotted together, the RA and DEC of the guiding graphs and the horizontal and vertical cuts of a star profile, draw in `axis-1` slate and `axis-2` mauve, the framings' low chroma, never Ember Clay or a signal colour, so a curve never reads as the selection or as a state. On a guide frame the detected stars are Moonlight circles (rejected ones dashed Graticule) and the measured star Starlight Cream; only the lock cross is Ember Clay.
 
 ### Named Rules
 

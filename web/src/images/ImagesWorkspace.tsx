@@ -93,7 +93,7 @@ import { IMAGE_TOOL_DEFINITIONS, type ImageToolId, imageToolsFor } from './tools
 // Images workspace: a permanent camera tab for each connected camera of the watched connection, showing the frames
 // its camera takes, then FITS and XISF images opened from the server, one closable tab each, shown in the shared
 // viewer, with the contextual tool each document selected (the Image Inspector at first) in the contextual panel, a
-// sheet under the viewer on narrow screens for a tool that asks for one (Mount Nudge), which hides the bottom area while
+// sheet under the viewer on narrow screens for a tool that asks for one (Mount Nudge, Guiding), which hides the bottom area while
 // open so the frame stays in sight. It works without any connection or equipment; only the camera operations of a
 // camera tab command its camera, and the
 // toolbar of a camera tab shows the state of its capture whatever tool is selected, and its bottom area the Focus

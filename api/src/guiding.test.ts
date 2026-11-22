@@ -493,6 +493,29 @@ describe('guiding', () => {
 	})
 
 	test.skipIf(SKIP)(
+		'a calibration that fails at the pole stays on the record with the progress of its legs until another calibration starts',
+		async () => {
+			const context = await setup()
+			// The mount starts at the pole, where an RA pulse moves nothing.
+			const { sessionId } = await start(context, guided(context))
+			await waitUntil(() => context.guiding.selectTarget(sessionId, {}).status === 200)
+			const started = await context.guiding.startGuiding(sessionId, { token: `token-${tokens++}`, recalibrate: true, settle: SETTLE }).json()
+			await waitUntil(() => context.summary()?.command?.commandId === started.commandId && context.summary()?.command?.state === 'failed', 60000)
+			expect(context.summary()?.calibrationFailure).toMatchObject({ code: 'too_many_ra_no_motion_steps', progress: { raSteps: expect.any(Number) } })
+			expect(context.summary()?.calibrationFailure?.progress?.raSteps).toBeGreaterThan(0)
+			expect(context.summary()?.calibrating).toBeUndefined()
+
+			// Another calibration takes its place.
+			await context.guiding.startGuiding(sessionId, { token: `token-${tokens++}`, recalibrate: true, settle: SETTLE }).json()
+			await waitUntil(() => context.summary()?.state === 'calibrating')
+			expect(context.summary()?.calibrationFailure).toBeUndefined()
+
+			expect((await context.guiding.stop(sessionId)).status).toBe(204)
+		},
+		90000,
+	)
+
+	test.skipIf(SKIP)(
 		'a completed calibration is saved, and a later session of the same equipment restores it instead of calibrating',
 		async () => {
 			const store = new GuidingCalibrationStore(AppDatabase.memory())

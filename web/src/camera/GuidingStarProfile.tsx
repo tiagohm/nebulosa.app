@@ -11,7 +11,8 @@ import { Notice } from '../ui/Notice'
 // measured frame, plotted above its half maximum, and every measurement of its profile (position, quality, SNR, flux,
 // peak, background and noise, HFD, FWHM and its axes, shape and orientation, the model, and the flags of a degraded
 // measurement). Positions and widths are guide-camera pixels, with arcseconds when the pixel scale is known;
-// intensities are ADU for an integer frame and normalized samples for a floating one.
+// intensities are ADU for an integer frame and normalized samples for a floating one. It starts collapsed, summarized by
+// the HFD and the SNR, so the session above it stays in view.
 
 interface StarProfileSectionProps {
 	// Profile of the guide star of the latest measured frame.
@@ -28,16 +29,16 @@ export function StarProfileSection({ star, pixelScale, frameId }: StarProfileSec
 	const { horizontal, vertical } = star
 
 	return (
-		<CollapsibleSection id="images.guiding.star-profile" title="Star Profile">
+		<CollapsibleSection id="images.guiding.star-profile" title="Star Profile" summary={`HFD ${formatFixed(star.hfd, 2)} px · SNR ${formatFixed(star.snr, 1)}`} defaultOpen={false}>
 			<StarProfilePlot
 				series={[
-					{ offsets: consecutiveOffsets(horizontal.from, horizontal.values.length), values: horizontal.values, stroke: 'var(--color-accent)' },
-					{ offsets: consecutiveOffsets(vertical.from, vertical.values.length), values: vertical.values, stroke: 'var(--color-success)' },
+					{ offsets: consecutiveOffsets(horizontal.from, horizontal.values.length), values: horizontal.values, stroke: 'var(--color-axis-1)' },
+					{ offsets: consecutiveOffsets(vertical.from, vertical.values.length), values: vertical.values, stroke: 'var(--color-axis-2)' },
 				]}
 			/>
 			<p className="m-0 flex flex-wrap gap-x-3 text-xs leading-4 text-ink-300">
-				<span className="whitespace-nowrap text-accent">— Horizontal</span>
-				<span className="whitespace-nowrap text-success">— Vertical</span>
+				<span className="whitespace-nowrap text-axis-1">— Horizontal</span>
+				<span className="whitespace-nowrap text-axis-2">— Vertical</span>
 				<span className="whitespace-nowrap">- - Half maximum</span>
 			</p>
 			<DataList>

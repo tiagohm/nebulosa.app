@@ -3,13 +3,14 @@ import { tv } from 'tailwind-variants'
 // The thin progress bar of a running exposure, delay, measurement, or calibration step. The share done is shown as a filled
 // track; while it is not known yet, such as before a driver reports its countdown, the track pulses instead of showing 0.
 
-// Filled part of the track, by tone: running, or a step that is done.
+// Filled part of the track, by tone: running, a step that is done, or a step that failed.
 const fill = tv({
 	base: 'h-full transition-[width] duration-200 motion-reduce:transition-none',
 	variants: {
 		tone: {
 			accent: 'bg-accent',
 			success: 'bg-success',
+			danger: 'bg-danger',
 		},
 	},
 	defaultVariants: {
@@ -20,8 +21,8 @@ const fill = tv({
 export interface ProgressBarProps {
 	// Share done, from 0 to 1 (clamped), or undefined while it is not known.
 	readonly fraction?: number
-	// Colour of the filled part: accent while running, success once done.
-	readonly tone?: 'accent' | 'success'
+	// Colour of the filled part: accent while running, success once done, danger where it failed.
+	readonly tone?: 'accent' | 'success' | 'danger'
 }
 
 // Progress of one task.

@@ -13,6 +13,10 @@ import {
 	GUIDING_TELEMETRY_KEPT,
 	guidingBlocker,
 	guidingCalibrationBlocker,
+	guidingCalibrationWarning,
+	guidingCalibrationWarningsText,
+	guidingCommandErrorText,
+	guidingPixelScale,
 	guidingCalibrationPulse,
 	guidingDitherRequest,
 	guidingExposureRange,
@@ -138,6 +142,30 @@ describe('requests', () => {
 		expect(guidingCalibrationBlocker({}, 1)).toStartWith('Calculate needs the focal length of the Guide Telescope, entered in Equipment Setup, the pixel size')
 		expect(guidingCalibrationBlocker({ ...known, declination: Math.PI / 2 }, 1)).toStartWith('The RA motion of a pulse vanishes')
 		expect(guidingCalibrationBlocker({ ...known, guideRate: 0 }, 1)).toStartWith('The RA motion of a pulse vanishes')
+	})
+
+	test('warns before a calibration only where its RA motion vanishes, with every input known', () => {
+		const known = { focalLength: 200, pixelSize: 3.75, guideRate: 0.5, declination: 0 }
+		expect(guidingCalibrationWarning(known, 1)).toBeUndefined()
+		expect(guidingCalibrationWarning({ ...known, declination: undefined }, 1)).toBeUndefined()
+		expect(guidingCalibrationWarning({ ...known, declination: Math.PI / 2 }, 1)).toStartWith('The mount points at the pole')
+		expect(guidingCalibrationWarning({ ...known, guideRate: 0 }, 1)).toStartWith('The guide output reports a zero RA guide rate')
+	})
+
+	test('the pixel scale of the guide camera is 206.265 × pixel size × binning / focal length', () => {
+		expect(guidingPixelScale(200, 3.75, 1)).toBeCloseTo(3.8675, 4)
+		expect(guidingPixelScale(200, 3.75, 2)).toBeCloseTo(7.735, 3)
+		expect(guidingPixelScale(0, 3.75, 1)).toBeUndefined()
+	})
+
+	test('the warnings of a calibration are sentences, an unknown one as it came', () => {
+		expect(guidingCalibrationWarningsText(['dec_return_short', 'Something else.'])).toBe('The DEC return stopped short of where the calibration began. Something else.')
+	})
+
+	test('a failed command speaks without the settle status of the toolkit', () => {
+		expect(guidingCommandErrorText('settle failed with status 1: RA calibration pulses did not produce measurable motion')).toBe('RA calibration pulses did not produce measurable motion.')
+		expect(guidingCommandErrorText('settle failed with status 2')).toBe('Guiding did not settle.')
+		expect(guidingCommandErrorText('The guide output is busy.')).toBe('The guide output is busy.')
 	})
 
 	test('the calibration pulse moves the star 25 px in 12 RA steps, as the PHD2 calculator', () => {

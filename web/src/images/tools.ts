@@ -125,7 +125,7 @@ export const IMAGE_TOOL_DEFINITIONS: Readonly<Record<ImageToolId, ImageToolDefin
 	'live-stacking': { id: 'live-stacking', label: 'Live Stacking', panelTitle: 'Live Stacking', icon: 'liveStack', category: 'camera', panel: LiveStackingTool },
 	'auto-focus': { id: 'auto-focus', label: 'Auto Focus', panelTitle: 'Auto Focus', icon: 'focusCurve', category: 'camera', panel: AutoFocusTool },
 	'mount-nudge': { id: 'mount-nudge', label: 'Mount Nudge', panelTitle: 'Mount Nudge', icon: 'move', category: 'camera', panel: MountNudgeTool, sheet: true },
-	guiding: { id: 'guiding', label: 'Guiding', panelTitle: 'Guiding', icon: 'guideStar', category: 'camera', panel: GuidingTool },
+	guiding: { id: 'guiding', label: 'Guiding', panelTitle: 'Guiding', icon: 'guideStar', category: 'camera', panel: GuidingTool, sheet: true },
 	darv: { id: 'darv', label: 'DARV', panelTitle: 'DARV', icon: 'darv', category: 'camera', panel: DarvTool },
 	tppa: { id: 'tppa', label: 'TPPA', panelTitle: 'TPPA', icon: 'threePoint', category: 'camera', panel: TppaTool },
 	ipolar: { id: 'ipolar', label: 'iPolar', panelTitle: 'iPolar', icon: 'polarScope', category: 'camera', panel: IPolarTool },

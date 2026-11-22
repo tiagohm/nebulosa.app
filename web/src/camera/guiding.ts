@@ -4,6 +4,7 @@ import type {
 	StarDetectionSettings,
 	GuidingCalibrationCandidates,
 	GuidingCalibrationEntry,
+	GuidingCalibrationFailureSummary,
 	GuidingCalibrationPatch,
 	GuidingCalibrationProgress,
 	GuidingCalibrationSummary,
@@ -178,11 +179,18 @@ const ARCSEC_PER_RADIAN = 206264.80624709636
 // (a zero rate, or the pole). A pulse beyond the bounds is clamped, so the calibration may then fall short of the
 // distance.
 export function guidingCalibrationPulse(focalLength: number, pixelSize: number, binning: number, guideRate: number, declination: number): number | undefined {
-	const scale = (ARCSEC_PER_RADIAN * pixelSize * 1e-3 * binning) / focalLength
+	const scale = guidingPixelScale(focalLength, pixelSize, binning)
 	const speed = guideRate * SIDEREAL_RATE * Math.cos(declination)
-	if (!(scale > 0 && Number.isFinite(scale)) || !(speed > 1e-6)) return undefined
+	if (scale === undefined || !(speed > 1e-6)) return undefined
 	const pulse = Math.round(((GUIDING_CALIBRATION_DISTANCE * scale) / speed / GUIDING_CALIBRATION_STEPS) * 1000)
 	return Math.min(GUIDING_MAXIMUM_PULSE, Math.max(GUIDING_MINIMUM_PULSE, pulse))
+}
+
+// Returns the pixel scale of the guide camera, in arcseconds per pixel, from the focal length of the guide optics in mm,
+// the unbinned pixel size in µm and the binning; undefined unless both are positive.
+export function guidingPixelScale(focalLength: number, pixelSize: number, binning: number): number | undefined {
+	const scale = (ARCSEC_PER_RADIAN * pixelSize * 1e-3 * binning) / focalLength
+	return scale > 0 && Number.isFinite(scale) ? scale : undefined
 }
 
 // Inputs of the calibration step calculator that a guiding panel knows; each is absent while unknown.
@@ -211,6 +219,53 @@ export function guidingCalibrationBlocker({ focalLength, pixelSize, guideRate, d
 	if (focalLength === undefined || pixelSize === undefined || guideRate === undefined || declination === undefined) return undefined
 	if (guidingCalibrationPulse(focalLength, pixelSize, binning, guideRate, declination) === undefined) return 'The RA motion of a pulse vanishes: the guide rate is zero or the mount points at the pole. Calibrate away from the pole.'
 	return undefined
+}
+
+// Returns why a calibration started now would fail before it begins: every input of the calculator is known and the RA
+// motion of a pulse vanishes, because the guide rate is zero or the mount points at the pole; undefined otherwise.
+export function guidingCalibrationWarning({ focalLength, pixelSize, guideRate, declination }: GuidingCalibrationInputs, binning: number): string | undefined {
+	if (focalLength === undefined || pixelSize === undefined || guideRate === undefined || declination === undefined) return undefined
+	if (guidingCalibrationPulse(focalLength, pixelSize, binning, guideRate, declination) !== undefined) return undefined
+	return guideRate > 0 ? 'The mount points at the pole, where RA pulses barely move the star, so a calibration fails here. Slew away from the pole first.' : 'The guide output reports a zero RA guide rate, so RA pulses move nothing and a calibration fails.'
+}
+
+// What went wrong in a failed calibration and what to do about it, by the reason of the toolkit's calibrator.
+export const GUIDING_CALIBRATION_FAILURES: Readonly<Record<GuidingCalibrationFailureSummary['code'], { readonly problem: string; readonly remedy: string }>> = {
+	invalid_config: { problem: 'The calibration settings are invalid.', remedy: 'Stop looping and check the Calibration Step in Calibration.' },
+	no_usable_star: { problem: 'No usable star to calibrate on.', remedy: 'Select a brighter star or lengthen the guide exposure.' },
+	bad_frame: { problem: 'Too many frames could not be measured.', remedy: 'Select a brighter star or lengthen the guide exposure, and check the focus and the clouds.' },
+	star_lost: { problem: 'The star was lost.', remedy: 'Select a brighter star or lengthen the guide exposure, and check the focus and the clouds.' },
+	star_near_edge: { problem: 'The star came too close to the edge of the frame.', remedy: 'Select a star nearer the centre of the frame.' },
+	impossible_jump: { problem: 'The star jumped farther than a step can move it.', remedy: 'Check that the mount tracks and nothing else moves it, and select an isolated star.' },
+	insufficient_ra_movement: { problem: 'The star did not travel far enough in RA.', remedy: 'Stop looping, raise the Calibration Step or Calculate it, and calibrate again.' },
+	insufficient_dec_movement: { problem: 'The star did not travel far enough in DEC.', remedy: 'Check the DEC backlash, stop looping to raise the Calibration Step, and calibrate again.' },
+	too_many_ra_no_motion_steps: { problem: 'RA pulses did not move the star.', remedy: 'Slew away from the pole, check that the mount tracks and that the guide output reaches it, then calibrate again.' },
+	too_many_dec_no_motion_steps: { problem: 'DEC pulses did not move the star.', remedy: 'Check the DEC backlash and that the guide output reaches the mount, stop looping to raise the Calibration Step, and calibrate again.' },
+	ra_clearing_failed: { problem: 'The star did not come back near its start after the RA leg.', remedy: 'Check the RA backlash and the balance, then calibrate again.' },
+	axis_rate_invalid: { problem: 'An axis moved the star at an implausible rate.', remedy: 'Check the guide rate the mount reports and the guide focal length, then calibrate again.' },
+	axis_direction_inconsistent: { problem: 'An axis moved the star back and forth instead of steadily.', remedy: 'Check the balance, the backlash and the wind, then calibrate again.' },
+	axes_too_parallel: { problem: 'RA and DEC moved the star in nearly the same direction.', remedy: 'Slew away from the pole and check the guide output, then calibrate again.' },
+	matrix_singular: { problem: 'The calibration could not be solved from its moves.', remedy: 'Calibrate again, on another star if it fails the same way.' },
+}
+
+// Words of the warnings of a solved calibration, by the code of the toolkit's calibrator.
+const CALIBRATION_WARNING_TEXTS: Readonly<Record<string, string>> = {
+	ra_clearing_finished_near_threshold: 'The RA return ended near its limit, so the DEC leg started away from where the RA leg began.',
+	dec_return_short: 'The DEC return stopped short of where the calibration began.',
+}
+
+// Returns the warnings of a solved calibration as sentences; a warning without words of its own is shown as it came.
+export function guidingCalibrationWarningsText(warnings: readonly string[]): string {
+	return warnings.map((warning) => CALIBRATION_WARNING_TEXTS[warning] ?? warning).join(' ')
+}
+
+// Returns the error of a failed command in the operator's words: without the toolkit's "settle failed with status N:"
+// lead, starting with a capital and ending with a period.
+export function guidingCommandErrorText(error: string): string {
+	const text = error.replace(/^settle failed with status \d+(: )?/, '').trim()
+	if (text === '') return 'Guiding did not settle.'
+	const sentence = text[0].toUpperCase() + text.slice(1)
+	return /[.!?]$/.test(sentence) ? sentence : `${sentence}.`
 }
 
 // Labels of the phases of a calibration, as the session shows them.

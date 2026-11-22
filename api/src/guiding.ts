@@ -14,7 +14,7 @@ import { numericKeyword } from 'nebulosa/src/io/formats/fits/util'
 import type { CameraCaptureTime } from 'nebulosa/src/observation/capture/types'
 import { assessGuidingCalibration, type GuidingCalibrationAssessment } from 'nebulosa/src/observation/guiding/calibration.quality'
 import { DECLINATION_SCALE_TOLERANCE, type GuidingCalibrationRecord, type GuidingCalibrationTransformation, type GuidingCalibrationTransformOptions } from 'nebulosa/src/observation/guiding/calibration.transform'
-import { DEFAULT_GUIDING_CALIBRATOR_CONFIG, type GuidingCalibrationConfig, type GuidingCalibrationDiagnostics, type GuidingCalibrationPhase } from 'nebulosa/src/observation/guiding/calibrator'
+import { DEFAULT_GUIDING_CALIBRATOR_CONFIG, type GuidingCalibrationConfig, type GuidingCalibrationDiagnostics, type GuidingCalibrationFailureCode, type GuidingCalibrationPhase } from 'nebulosa/src/observation/guiding/calibrator'
 import { GuiderClient, type GuideFrameImage, type GuiderClientConnectOptions, type GuiderClientGuiderOptions, type GuiderClientOptions } from 'nebulosa/src/observation/guiding/client'
 import type { DitherAmount } from 'nebulosa/src/observation/guiding/ditherer'
 import type { GuiderState, GuidingEvent } from 'nebulosa/src/observation/guiding/events'
@@ -353,6 +353,20 @@ export interface GuidingCalibrationProgress {
 	readonly maxBadFrames: number
 }
 
+// Calibration that failed: why, the phase it failed in, and the progress of its legs at its last step.
+export interface GuidingCalibrationFailureSummary {
+	// Machine-readable reason of the toolkit's calibrator.
+	readonly code: GuidingCalibrationFailureCode
+	// Phase active when it failed.
+	readonly phase: GuidingCalibrationPhase
+	// The calibrator's explanation, in English.
+	readonly message: string
+	// Progress of the legs at the last calibration step; absent when it failed before the first step.
+	readonly progress?: GuidingCalibrationProgress
+	// Instant it failed, Unix milliseconds (UTC).
+	readonly time: number
+}
+
 // Root-mean-square guide error over the latest measured guide steps, in guide pixels.
 export interface GuidingRms {
 	readonly ra: number
@@ -416,6 +430,8 @@ export interface GuidingSessionSummary {
 	readonly calibration?: GuidingCalibrationSummary
 	// Progress of the calibration while one runs; absent otherwise.
 	readonly calibrating?: GuidingCalibrationProgress
+	// Latest calibration that failed, until another calibration starts or a calibration is solved or restored.
+	readonly calibrationFailure?: GuidingCalibrationFailureSummary
 	readonly rms?: GuidingRms
 	// Estimate of the DEC backlash the adaptive compensation adds to a reversal, in milliseconds; absent without it.
 	readonly decBacklashEstimate?: number
@@ -1683,9 +1699,18 @@ export class GuidingSessions implements Disposable {
 	// telemetry, and the record follows the snapshot of the session.
 	#event(session: Session, event: GuidingEvent) {
 		if (event.type === 'guideStep' || event.type === 'starLost') this.#telemetry(session, event)
-		else if (event.type === 'calibrationCompleted') this.#calibrated(session, event.calibration)
-		else if (event.type === 'calibrationRestored' || event.type === 'calibrationTransformed' || event.type === 'calibrationFlipped') this.#publishCalibration(session)
-		else if (event.type === 'calibrationCleared') {
+		else if (event.type === 'calibrationCompleted') {
+			this.#update(session, { calibrationFailure: undefined })
+			this.#calibrated(session, event.calibration)
+		} else if (event.type === 'calibrationRestored' || event.type === 'calibrationTransformed' || event.type === 'calibrationFlipped') {
+			if (event.type === 'calibrationRestored') this.#update(session, { calibrationFailure: undefined })
+			this.#publishCalibration(session)
+		} else if (event.type === 'calibrationStarted') this.#update(session, { calibrationFailure: undefined })
+		else if (event.type === 'calibrationFailed') {
+			// The progress of the last step is still on the record: the guider leaves the calibrating state after this event.
+			const { code, phase, message } = event.failure
+			this.#update(session, { calibrationFailure: { code, phase, message, ...(session.summary.calibrating && { progress: session.summary.calibrating }), time: Date.now() } })
+		} else if (event.type === 'calibrationCleared') {
 			session.calibration = undefined
 			this.#update(session, { calibration: undefined })
 		} else if (event.type === 'calibrationStep') this.#update(session, { calibrating: calibrationProgressOf(event.diagnostics, session.calibrator) })

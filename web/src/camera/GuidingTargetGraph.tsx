@@ -95,7 +95,7 @@ export function GuidingTargetGraph({ session, telemetry, points }: GuidingTarget
 					))}
 					<path d={`M${-RADIUS} 0H${RADIUS}M0 ${-RADIUS}V${RADIUS}`} vectorEffect="non-scaling-stroke" />
 				</g>
-				{rms && <circle r={rms.total * factor} fill="none" stroke="var(--color-accent)" strokeDasharray="4 3" vectorEffect="non-scaling-stroke" />}
+				{rms && <circle r={rms.total * factor} fill="none" stroke="var(--color-ink-200)" strokeDasharray="4 3" vectorEffect="non-scaling-stroke" />}
 				<g fill="var(--color-ink-300)" fontSize={11} textAnchor="middle" dominantBaseline="central">
 					<text x={RADIUS + 9}>RA</text>
 					<text y={-RADIUS - 9}>DEC</text>
@@ -105,7 +105,7 @@ export function GuidingTargetGraph({ session, telemetry, points }: GuidingTarget
 					const x = Math.max(-RADIUS, Math.min(RADIUS, ra * factor))
 					const y = Math.max(-RADIUS, Math.min(RADIUS, -dec * factor))
 					return (
-						<circle key={cursor} cx={x} cy={y} r={last ? 4 : 2.2} fill={last ? 'var(--color-accent)' : guiding ? 'var(--color-success)' : 'none'} stroke={guiding || last ? 'none' : 'var(--color-ink-300)'} fillOpacity={last ? 1 : 0.7} vectorEffect="non-scaling-stroke">
+						<circle key={cursor} cx={x} cy={y} r={last ? 4 : 2.2} fill={last ? 'var(--color-ink-100)' : guiding ? 'var(--color-axis-1)' : 'none'} stroke={guiding || last ? 'none' : 'var(--color-ink-300)'} fillOpacity={last ? 1 : 0.7} vectorEffect="non-scaling-stroke">
 							<title>{`RA ${format(ra)}, DEC ${format(dec)}${guiding ? '' : ', settling'}`}</title>
 						</circle>
 					)
@@ -117,7 +117,7 @@ export function GuidingTargetGraph({ session, telemetry, points }: GuidingTarget
 					<>
 						<span>{`RMS RA ${format(rms.ra)}`}</span>
 						<span>{`RMS DEC ${format(rms.dec)}`}</span>
-						<span>{`RMS total ${format(rms.total)} (${rms.count}), dashed`}</span>
+						<span>{`RMS total ${format(rms.total)} (${rms.count}), the dashed ring`}</span>
 					</>
 				) : (
 					<span>No guiding step yet</span>

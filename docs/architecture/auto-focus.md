@@ -26,6 +26,7 @@ Auto Focus gives the operator, and the automations that run unattended, a measur
 - Nothing is fitted in `api` or `web`; the toolkit's runner is the only judge of the curve.
 - A caller inside the process can admit a session under a reservation that holds the camera and the focuser; every operation of the session, the move back included, then runs inside it.
 - Focusers that only move relatively are refused.
+- The web refuses a run whose first pass would leave the travel the focuser reports; a sweep that later extends past it fails. The session names that cause and a rejected curve apart from other failures, and says whether the focuser stands at its start position afterwards.
 - One frame per position, no repeated samples, and the filter wheel is never moved.
 - A slew during a session goes unnoticed, since the mount is not held.
 - Sessions live in memory and do not survive a restart.

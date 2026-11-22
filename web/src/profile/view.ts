@@ -10,8 +10,8 @@ import { type WorkspaceSyncState, workspaceSyncState } from './sync'
 // View state of the tab: the fields of a profile the server never keeps (panels, last directories, the time bar, which
 // framings the Sky draws and the one the Observing Planner judges against, the bottom area of the camera tabs, the Image
 // Processing pipeline, the preferences of Close Approaches and Astro Weather), which profile is active, and the view
-// entries kept outside the profiles (which panel sections are expanded, the tool of each camera tab, the camera tab
-// selected last, the target being typed for each camera in Target Centering, the preview of the Framing tool, the section of the
+// entries kept outside the profiles (which panel sections are expanded, the tool and the bottom area of each camera tab, the
+// camera tab selected last, the target being typed for each camera in Target Centering, the preview of the Framing tool, the section of the
 // Meridian Flip tool, whether the video of the observatory cameras is dimmed, whether a deletion in the Calibration Library also
 // deletes the files).
 // VIEW_STORAGE says, for each one, the browser storage areas it is kept in: sessionStorage keeps it for this tab across
@@ -96,7 +96,7 @@ export type ViewFieldKey = keyof typeof VIEW_FIELDS
 const VIEW_FIELD_KEYS = Object.keys(VIEW_FIELDS) as ViewFieldKey[]
 
 // View state kept outside the profiles, each under one key of browser storage (ViewEntry).
-export type ViewEntryName = 'sections' | 'cameraTools' | 'activeCameraTab' | 'centeringTargets' | 'pixelInspection' | 'framingPreview' | 'meridianFlipSection' | 'observatoryCamerasView' | 'calibrationLibraryView'
+export type ViewEntryName = 'sections' | 'cameraTools' | 'activeCameraTab' | 'centeringTargets' | 'pixelInspection' | 'framingPreview' | 'meridianFlipSection' | 'observatoryCamerasView' | 'calibrationLibraryView' | 'cameraBottomViews'
 
 // Storage areas of each field of the view, of the active profile, and of each view entry, in the order they are read;
 // every one listed is written. An empty list keeps it in the memory of the page only.
@@ -126,6 +126,8 @@ export const VIEW_STORAGE: Readonly<Record<ViewFieldKey | ViewEntryName | 'activ
 	// What this tab was doing with each camera, and which camera it was showing.
 	cameraTools: ['session'],
 	activeCameraTab: ['session'],
+	// The bottom area of each camera tab and the Auto Focus session it last followed.
+	cameraBottomViews: ['session'],
 	centeringTargets: ['session'],
 	// The section of the Meridian Flip tool this tab shows.
 	meridianFlipSection: ['session'],

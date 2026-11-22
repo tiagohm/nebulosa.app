@@ -26,6 +26,7 @@ import { deviceState, handleDeviceEvent, refreshDevices } from './equipment/equi
 import { CAMERA_ROLES } from './equipment/roles'
 import { onClose, onOpen, subscribe } from './events'
 import { framingsState, handleFramingEvent, refreshFramings } from './framing/framings'
+import { cameraBottomViews, cameraBottomViewsEntry } from './images/bottomview'
 import { type CameraTabSource, followLiveStacks, handleCapturedFrame, reconcileCameraTabs, reconcileCapturedFrames, releaseLeasesOnHide } from './images/cameratabs'
 import { captureFramesState, handleCaptureFramesEvent, refreshCaptureFrames } from './images/captureframes'
 import { handleImageProcessingEvent, imageProcessingState, refreshImageProcessing } from './images/imageprocessing'
@@ -161,6 +162,7 @@ const stops = [
 	keepViewEntries([
 		sectionsEntry(collapsibleSections),
 		cameraToolsEntry(imagesState),
+		cameraBottomViewsEntry(cameraBottomViews),
 		activeCameraTabEntry(imagesState),
 		centeringTargetsEntry(targetCenteringRuntime),
 		pixelInspectionEntry(pixelInspection),

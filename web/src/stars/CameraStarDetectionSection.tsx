@@ -21,15 +21,17 @@ interface CameraStarDetectionSectionProps {
 	readonly provider: StarDetectorProvider
 	// How the operation detects stars in its frames and uses them, given the highlighted detector name.
 	readonly description: (detector: ReactNode) => ReactNode
+	// Whether the section starts expanded before the operator opens or closes it; true by default.
+	readonly defaultOpen?: boolean
 }
 
 // Section with the operation's use of the star detector and a link to the settings.
-export function CameraStarDetectionSection({ id, device, provider, description }: CameraStarDetectionSectionProps) {
+export function CameraStarDetectionSection({ id, device, provider, description, defaultOpen }: CameraStarDetectionSectionProps) {
 	const astapConfigured = useAstapConfigured()
 	const label = PROVIDER_LABELS[provider]
 
 	return (
-		<CollapsibleSection id={id} title="Star Detection" summary={label}>
+		<CollapsibleSection id={id} title="Star Detection" summary={label} defaultOpen={defaultOpen}>
 			<Notice>{description(<span className="text-accent">{label}</span>)}</Notice>
 			{provider === 'astap' && !astapConfigured && <Notice error>{label} is not configured.</Notice>}
 			{device && (

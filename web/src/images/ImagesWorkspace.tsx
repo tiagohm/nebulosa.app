@@ -6,7 +6,7 @@ import { AnnotationOverlay, shownAnnotations } from '../annotations/AnnotationOv
 import { annotationMatchesWcs, annotationPlateSolveJobId } from '../annotations/annotations'
 import { mergeProjections, pickAnnotation, projectAnnotations } from '../annotations/geometry'
 import { useAnnotationResult } from '../annotations/useAnnotationResult'
-import { AUTO_FOCUS_STATE_LABELS, autoFocusRuntime } from '../camera/autofocus'
+import { AUTO_FOCUS_STATE_LABELS, autoFocusRunning, autoFocusRuntime } from '../camera/autofocus'
 import { cameraKey, captureCount, captureRuntime, captureRunning, captureStatus, FILE_STATE_LABELS, fileState } from '../camera/capture'
 import { DarvOverlay, useDarvOverlay } from '../camera/DarvOverlay'
 import { FocusCurve } from '../camera/FocusCurve'
@@ -47,6 +47,7 @@ import { Reticle } from '../viewer/Reticle'
 import { FIT_VIEW, pixelAt, type Point } from '../viewer/transform'
 import { useFullscreen } from '../viewer/useFullscreen'
 import { useAstrometryTool } from './astrometryTool'
+import { BOTTOM_VIEWS, type BottomView, cameraBottomViews, chooseBottomView, followAutoFocus } from './bottomview'
 import { useCameraOperationContext } from './cameracontext'
 import { holdCameraFrame, selectCameraFrame } from './cameratabs'
 import { captureFramesState, frameSourceKey } from './captureframes'
@@ -138,7 +139,6 @@ export function ImagesWorkspace() {
 	// Whether camera tabs show their bottom area (frames carousel or Focus Curve); collapsing it keeps the selection.
 	const framesShown = cameraFramesShown(activeProfile(profiles).settings)
 	// View of the bottom area of each camera tab, by document key; the frames carousel when absent.
-	const [bottomViews, setBottomViews] = useState<Readonly<Record<string, BottomView>>>({})
 	// Camera tabs whose viewer draws the central reticle, by document key; a presentation choice of the tab only.
 	const [reticles, setReticles] = useState<Readonly<Record<string, boolean>>>({})
 	// Unsaved document whose closing waits for a confirmation.
@@ -359,7 +359,7 @@ export function ImagesWorkspace() {
 						}
 					/>
 				</div>
-				{document?.camera && framesShown && <CameraBottom document={document} view={bottomViews[document.key] ?? 'frames'} onView={(next) => setBottomViews({ ...bottomViews, [document.key]: next })} />}
+				{document?.camera && framesShown && <CameraBottom document={document} />}
 				{/* Inside the column, so the menu stays visible while it fills the screen. */}
 				{menu && solution && document?.info && menu.key === document.key && (
 					<ImageMenu
@@ -538,42 +538,41 @@ function CaptureStatus({ connectionId, deviceId }: CaptureStatusProps) {
 	)
 }
 
-// View of the bottom area of a camera tab: the capture frames carousel, the Focus Curve of its camera's Auto Focus, the
-// graph of its camera's guiding, or the Pointing Map of its camera's mount pointing session.
-type BottomView = 'frames' | 'curve' | 'guiding' | 'pointing'
-
-// Views of the bottom area, in display order.
-const BOTTOM_VIEWS: readonly BottomView[] = ['frames', 'curve', 'guiding', 'pointing']
-
 // Label of each view of the bottom area.
 const BOTTOM_VIEW_LABELS: Readonly<Record<BottomView, string>> = { frames: 'Captured Frames', curve: 'Focus Curve', guiding: 'Guiding Graph', pointing: 'Pointing Map' }
 
 interface CameraBottomProps {
 	// Camera tab.
 	readonly document: ImageDocument
-	// View chosen for the tab.
-	readonly view: BottomView
-	// Chooses the view of the tab.
-	readonly onView: (view: BottomView) => void
 }
 
 // Bottom area of a camera tab: the capture frames carousel, and, once its camera has an Auto Focus, a guiding, or a mount
 // pointing session, a switch to the Focus Curve, the guiding graph, or the Pointing Map of that session. They belong to the session, never to the frame
 // selected, so they keep updating whatever frame or tool is shown; choosing a view never changes the selection. A view
-// whose session is gone shows the carousel.
-function CameraBottom({ document, view: chosen, onView }: CameraBottomProps) {
+// whose session is gone shows the carousel. The view is kept per camera tab (bottomview.ts), and a new Auto Focus session
+// of the camera shows its Focus Curve once.
+function CameraBottom({ document }: CameraBottomProps) {
 	const autoFocus = useSnapshot(autoFocusRuntime)
+	const bottom = useSnapshot(cameraBottomViews)
 	const guidingState = useSnapshot(guidingRuntime)
 	const mountPointing = useSnapshot(mountPointingRuntime)
-	if (document.source.kind !== 'camera') return null
+	const key = document.source.kind === 'camera' ? cameraKey(document.source.connectionId, document.source.deviceId) : undefined
+	const session = key ? autoFocus.sessions[key] : undefined
+	const following = session && autoFocusRunning(session) ? session.sessionId : undefined
 
-	const key = cameraKey(document.source.connectionId, document.source.deviceId)
-	const session = autoFocus.sessions[key]
+	useEffect(() => {
+		if (following) followAutoFocus(cameraBottomViews, document.key, following)
+	}, [document.key, following])
+
+	if (!key) return null
+
 	const guiding = guidingState.sessions[key]
 	const pointing = mountPointing.sessions[key]
 	const available = BOTTOM_VIEWS.filter((option) => option === 'frames' || (option === 'curve' && session) || (option === 'guiding' && guiding) || (option === 'pointing' && pointing))
 	if (available.length === 1) return <CaptureFramesCarousel document={document} />
+	const chosen = bottom.views[document.key] ?? 'frames'
 	const view = available.includes(chosen) ? chosen : 'frames'
+	const onView = (next: BottomView) => chooseBottomView(cameraBottomViews, document.key, next)
 
 	const views = (
 		<span className="flex gap-3">

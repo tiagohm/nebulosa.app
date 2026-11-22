@@ -200,10 +200,22 @@ describe('sessions', () => {
 		const { sessionId } = await start(autoFocus, id, cameraId, request(focuserDevice, { rmsdThreshold: 1e-12 }))
 		await waitUntil(ended, 120000)
 
-		expect(summary()).toMatchObject({ state: 'failed', reason: 'commandFailed', verification: 'skipped' })
+		expect(summary()).toMatchObject({ state: 'failed', reason: 'commandFailed', failure: 'curveRejected', restored: true, verification: 'skipped' })
 		expect(summary()!.estimatedPosition).toBeUndefined()
 		expect(summary()!.finalPosition).toBeUndefined()
 		expect((await session(sessionId)).measurements.length).toBeGreaterThan(0)
+		expect(focuser.position.value).toBe(START)
+		expect(released()).toBeTrue()
+	})
+
+	test('a sweep beyond the travel of the focuser fails before moving it, naming the position and the travel', async () => {
+		const { id, cameraId, autoFocus, focuserDevice, focuser, ended, summary, released } = await setup()
+		const { min, max } = focuser.position
+		await start(autoFocus, id, cameraId, request(focuserDevice, { stepSize: 30000 }))
+		await waitUntil(ended)
+
+		expect(summary()).toMatchObject({ state: 'failed', reason: 'unexpectedState', failure: 'outOfRange', restored: true, measurementCount: 0 })
+		expect(summary()!.error).toBe(`the sweep would move ${focuser.name} to ${START + 4 * 30000} steps, outside its travel of ${min} to ${max} steps`)
 		expect(focuser.position.value).toBe(START)
 		expect(released()).toBeTrue()
 	})

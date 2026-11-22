@@ -27,12 +27,14 @@ interface CameraAcquisitionSectionProps {
 	readonly children?: ReactNode
 	// Whether the section starts expanded before the operator opens or closes it; true by default.
 	readonly defaultOpen?: boolean
+	// One-line summary shown beside the heading while collapsed.
+	readonly summary?: string
 }
 
 // Section with the operation's exposure controls, the camera settings it applies, and a link to them.
-export function CameraAcquisitionSection({ id, device, exposure, capabilities, description, children, defaultOpen }: CameraAcquisitionSectionProps) {
+export function CameraAcquisitionSection({ id, device, exposure, capabilities, description, children, defaultOpen, summary }: CameraAcquisitionSectionProps) {
 	return (
-		<CollapsibleSection id={id} title="Acquisition" defaultOpen={defaultOpen}>
+		<CollapsibleSection id={id} title="Acquisition" summary={summary} defaultOpen={defaultOpen}>
 			{children}
 			<CameraSummary exposure={exposure} capabilities={capabilities} />
 			<Notice>{description}</Notice>

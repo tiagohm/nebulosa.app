@@ -39,7 +39,8 @@ import { StarDetectionError, type StarDetectionPreparation, type StarDetectionRe
 // stopped only by its stop route, an Equipment Control stop of its focuser, or a disconnection, and its record (the
 // measurements and the fitted curve, never pixels) is kept in memory until the next session of the same camera.
 // A stop moves the focuser back to the start position once the session released it when the request asks for it, and
-// otherwise leaves it where it stands; a failure lets the runner restore the start position. The progress of the frame
+// otherwise leaves it where it stands; a failure lets the runner restore the start position, and records whether the
+// focuser stands there and, for a rejected curve or a sweep beyond the focuser's travel, its cause. The progress of the frame
 // being exposed is published as the driver reports it. Positions are focuser
 // steps, HFD is in pixels, request durations are seconds. Every frame snoops the focuser of the session and the
 // mount, filter wheel and rotator the request names into its header.
@@ -103,6 +104,13 @@ export type AutoFocusState = 'preparing' | 'moving' | 'settling' | 'exposing' | 
 // - failed: the frame could not be taken or measured; the reason is verificationError.
 // - skipped: the session ended before reaching the best focus.
 export type AutoFocusVerification = 'pending' | 'measured' | 'noStars' | 'failed' | 'skipped'
+
+// Cause of a failed session the service tells apart, so the operator is told what to change:
+// - curveRejected: the runner judged the sampled curve unusable (too poor a fit, a minimum at the edge of the travel,
+//   or too many positions without one).
+// - outOfRange: the next position of the sweep lies outside the travel the focuser reports.
+// Any other failure has none; its reason and error describe it.
+export type AutoFocusFailure = 'curveRejected' | 'outOfRange'
 
 // One sampled frame of a session.
 export interface FocusMeasurement {
@@ -174,10 +182,13 @@ export interface AutoFocusSessionSummary {
 	// Progress of the frame being exposed, as the driver reports it (times in microseconds, progress in percent);
 	// absent outside an exposure and before the driver reported any.
 	readonly exposure?: CameraCaptureTime
-	// Whether a stop moved the focuser back to the start position; absent when the session did not try.
+	// Whether the focuser stood at the start position once a stop that restores, or a failure, ended the session; absent
+	// when it ended otherwise or before the start position was known.
 	readonly restored?: boolean
 	// Why the session failed.
 	readonly reason?: OperationFailureReason
+	// Cause of the failure, when the service tells it apart.
+	readonly failure?: AutoFocusFailure
 	// Detail of the failure meant for people.
 	readonly error?: string
 	// Instant the session started, Unix milliseconds (UTC).
@@ -255,6 +266,11 @@ interface Session {
 	restore?: OperationHandle<void>
 	// Frame being taken or measured, before the runner reports its sample.
 	frame?: { readonly capture: number; readonly requestedPosition: number; readonly observedPosition: number; readonly time: number; imageId?: string; detail?: Pick<FocusMeasurement, 'detectedCount' | 'acceptedCount' | 'elapsed' | 'warnings'> }
+	// Position the runner moves to next, in steps, from the plan of its last step; absent when it plans no move. It is
+	// kept after the move, which only happens within the travel, so a later failure never reads as out of range.
+	next?: number
+	// Whether the runner rejected the curve of the samples.
+	rejected?: boolean
 }
 
 // Result of measuring one frame.
@@ -413,6 +429,8 @@ export class AutoFocusSessions {
 				const capture: AutoFocusCaptureOptions = { ...request.capture, exposureTimeUnit: 'second', frameType: 'LIGHT', compressed: false, mount, wheel, rotator }
 				const mover = this.#settlingMover(session, request.settleDelay)
 				const measure = (path: string, signal: AbortSignal) => this.#measure(session, path, preparation, signal)
+				// The runner first moves to the far end of the sweep from where the focuser stands.
+				session.next = mover.position(focuser) + (request.reversed ? -1 : 1) * request.initialOffsetSteps * request.stepSize
 
 				const result = await runAutoFocus(
 					context,
@@ -492,7 +510,10 @@ export class AutoFocusSessions {
 					...detail,
 					time: frame?.time ?? Date.now(),
 				}
+				const { step } = event
 				session.frame = undefined
+				session.next = step.type === 'MOVE' ? (step.absolute ?? event.position + (step.relative ?? 0)) : undefined
+				session.rejected = step.type === 'FAILED'
 				session.measurements.push(measurement)
 				session.curve = focusCurve(event.autoFocus, session.summary.request.fittingMode)
 				this.#sessions.update(session, { measurementCount: session.measurements.length, lastMeasurement: measurement })
@@ -592,7 +613,26 @@ export class AutoFocusSessions {
 		const endedAt = Date.now()
 		if (result.ok) this.#sessions.update(session, { state: 'completed', target: undefined, exposure: undefined, verification, endedAt })
 		else if (result.reason === 'aborted') this.#sessions.update(session, { state: 'cancelled', target: undefined, exposure: undefined, verification, endedAt })
-		else this.#sessions.update(session, { state: 'failed', target: undefined, exposure: undefined, verification, reason: result.reason, ...(result.error !== undefined && { error: result.error }), endedAt })
+		else {
+			const { failure, error } = this.#failure(session, result.reason, result.error)
+			const restored = summary.initialPosition !== undefined ? this.mover.position(session.focuser) === summary.initialPosition : undefined
+			this.#sessions.update(session, { state: 'failed', target: undefined, exposure: undefined, verification, reason: result.reason, ...(failure && { failure }), ...(error !== undefined && { error }), ...(restored !== undefined && { restored }), endedAt })
+		}
+	}
+
+	// Returns the cause of a failure with reason and error (the runner's detail) and the detail meant for people, which
+	// completes a sentence such as "Auto Focus failed: <error>.": a sweep that would leave the focuser's travel names the
+	// position and the travel in steps; a rejected curve keeps the runner's detail; any other failure has no cause.
+	#failure(session: Session, reason: OperationFailureReason, error: string | undefined): { readonly failure?: AutoFocusFailure; readonly error?: string } {
+		const { next, focuser } = session
+		const { min, max } = focuser.position
+
+		if (reason === 'unexpectedState' && next !== undefined && !(next >= min && next <= max)) {
+			return { failure: 'outOfRange', error: `the sweep would move ${session.summary.focuserName} to ${next} steps, outside its travel of ${min} to ${max} steps` }
+		}
+
+		if (reason === 'commandFailed' && session.rejected) return { failure: 'curveRejected', error }
+		return { error }
 	}
 
 	// Moves the focuser of a stopped session back to position (steps) with its backlash compensation and resolves

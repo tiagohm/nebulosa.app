@@ -439,11 +439,14 @@ export class NotificationClassifier {
 		const base = { key: `autofocus:${sessionId}`, source: this.#source('autofocus', camera.connectionId, session.focuser.deviceId, session.operationId, sessionId), target: cameraTool(camera.connectionId, camera.deviceId, 'auto-focus') }
 
 		if (state === 'completed') {
-			const position = session.finalPosition === undefined ? '' : ` at position ${session.finalPosition}`
-			return [{ ...base, level: 'success', code: 'autofocus.completed', title: 'Auto Focus completed', message: `${focuserName} was focused${position}.` }]
+			const { finalPosition, verifiedHfd } = session
+			const position = finalPosition === undefined ? '' : ` at ${finalPosition} steps`
+			const verified = verifiedHfd === undefined ? '' : `, verified at ${verifiedHfd.toFixed(2)} px HFD`
+			return [{ ...base, level: 'success', code: 'autofocus.completed', title: 'Auto Focus completed', message: `${focuserName} was focused${position}${verified}.` }]
 		}
 
-		if (state === 'failed' && !this.#quiet(camera.connectionId, reason)) return [{ ...base, level: 'error', code: 'autofocus.failed', title: 'Auto Focus failed', message: `Auto Focus of ${focuserName} failed: ${failureText(reason, session.error)}.` }]
+		// The error of a session is written for people, and the Auto Focus panel shows the same words.
+		if (state === 'failed' && !this.#quiet(camera.connectionId, reason)) return [{ ...base, level: 'error', code: 'autofocus.failed', title: 'Auto Focus failed', message: `Auto Focus of ${focuserName} failed: ${session.error ?? reasonText(reason)}.` }]
 		return []
 	}
 

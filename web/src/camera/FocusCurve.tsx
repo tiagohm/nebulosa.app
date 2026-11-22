@@ -1,25 +1,26 @@
 import type { AutoFocusSession, AutoFocusSessionSummary, FocusCurveSeriesKind } from 'api'
-import { useEffect, useRef, useState } from 'react'
+import { type ReactNode, useLayoutEffect, useRef, useState } from 'react'
 import { formatPixelLength } from '../format'
 
 // Focus Curve of an Auto Focus session, drawn under the viewer: the HFD measured at each focuser position, the
 // curves the server's runner fitted (sampled by the server from its own regressions, never recomputed here),
 // the best focus the curve placed, the position the focuser reached, and the HFD verified there. Positions are
 // focuser steps on the horizontal axis; HFD is in pixels on the vertical one. A frame without a valid HFD is
-// marked at the bottom of its position. Nothing estimated is drawn for a session whose curve was rejected.
+// marked at the bottom of its position. Nothing estimated is drawn for a session whose curve was rejected. A legend under
+// the chart names every mark it draws and states the best focus in words, so nothing is read from hover alone.
 
 // Height of the chart, in CSS pixels.
-const HEIGHT = 180
+const HEIGHT = 168
 
 // Margins around the plot area for the axis labels, in CSS pixels.
-const MARGIN = { top: 10, right: 12, bottom: 24, left: 40 } as const
+const MARGIN = { top: 10, right: 12, bottom: 28, left: 40 } as const
 
-// Stroke of each fitted curve.
+// Stroke of each fitted curve: neutral, since Ember Clay marks only what is chosen or running.
 const SERIES_STYLE: Readonly<Record<FocusCurveSeriesKind, { readonly stroke: string; readonly dash?: string }>> = {
 	trendLeft: { stroke: 'var(--color-ink-300)', dash: '4 3' },
 	trendRight: { stroke: 'var(--color-ink-300)', dash: '4 3' },
-	parabolic: { stroke: 'var(--color-accent)' },
-	hyperbolic: { stroke: 'var(--color-accent)' },
+	parabolic: { stroke: 'var(--color-ink-200)' },
+	hyperbolic: { stroke: 'var(--color-ink-200)' },
 }
 
 // Range of the chart: [min, max] of the positions (steps) and of the HFD (pixels).
@@ -73,9 +74,11 @@ export function FocusCurve({ summary, session }: FocusCurveProps) {
 	const container = useRef<HTMLDivElement>(null)
 	const [width, setWidth] = useState(0)
 
-	useEffect(() => {
+	// Measured before the first paint, so a session with measurements never shows the empty text for a frame.
+	useLayoutEffect(() => {
 		const element = container.current
 		if (!element) return
+		setWidth(element.getBoundingClientRect().width)
 		const observer = new ResizeObserver(([entry]) => setWidth(entry.contentRect.width))
 		observer.observe(element)
 		return () => observer.disconnect()
@@ -84,9 +87,75 @@ export function FocusCurve({ summary, session }: FocusCurveProps) {
 	const bounds = session && curveBounds(session)
 
 	return (
-		<div ref={container} className="relative w-full" style={{ height: HEIGHT }}>
-			{!bounds || width <= 0 ? <p className="m-0 flex h-full items-center justify-center text-xs text-ink-300">{summary.endedAt === undefined ? 'Waiting for the first measurements…' : 'No measurements.'}</p> : <Chart session={session} bounds={bounds} width={width} />}
+		<div className="flex flex-col gap-1">
+			<div ref={container} className="relative w-full" style={{ height: HEIGHT }}>
+				{!bounds ? <p className="m-0 flex h-full items-center justify-center text-xs text-ink-300">{summary.endedAt === undefined ? 'Waiting for the first measurements…' : 'No measurements.'}</p> : width > 0 && <Chart session={session} bounds={bounds} width={width} />}
+			</div>
+			{session && bounds && <Legend summary={summary} session={session} />}
 		</div>
+	)
+}
+
+// Legend of the chart: the best focus in words, then a swatch and a name for each kind of mark the chart draws now.
+function Legend({ summary, session }: { readonly summary: AutoFocusSessionSummary; readonly session: AutoFocusSession }) {
+	const { estimatedPosition, finalPosition, verifiedHfd } = session
+	const measured = session.measurements.some((measurement) => measurement.hfd !== undefined)
+	const missing = session.measurements.some((measurement) => measurement.hfd === undefined)
+	const fitted = session.curve?.series.some((series) => series.kind === 'parabolic' || series.kind === 'hyperbolic') === true
+	const trends = session.curve?.series.some((series) => series.kind === 'trendLeft' || series.kind === 'trendRight') === true
+	const best = summary.state === 'completed' && finalPosition !== undefined ? `Best focus ${finalPosition} steps${verifiedHfd === undefined ? '' : `, ${formatPixelLength(verifiedHfd)} verified`}` : estimatedPosition !== undefined ? `Estimated best ${estimatedPosition} steps` : undefined
+
+	return (
+		<div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-1 text-xs leading-4 text-ink-300">
+			{best && <span className="text-ink-100 tabular-nums">{best}</span>}
+			{measured && (
+				<LegendItem label="Sample">
+					<circle cx={6} cy={6} r={3.5} fill="var(--color-ink-100)" />
+				</LegendItem>
+			)}
+			{missing && (
+				<LegendItem label="No HFD">
+					<path d="M3,3l6,6m0,-6l-6,6" stroke="var(--color-danger)" strokeWidth={1.5} />
+				</LegendItem>
+			)}
+			{fitted && (
+				<LegendItem label="Fitted curve">
+					<line x1={0} x2={12} y1={6} y2={6} stroke="var(--color-ink-200)" strokeWidth={1.5} />
+				</LegendItem>
+			)}
+			{trends && (
+				<LegendItem label="Trend lines">
+					<line x1={0} x2={12} y1={6} y2={6} stroke="var(--color-ink-300)" strokeWidth={1.5} strokeDasharray="4 3" />
+				</LegendItem>
+			)}
+			{estimatedPosition !== undefined && (
+				<LegendItem label="Estimated best">
+					<line x1={6} x2={6} y1={0} y2={12} stroke="var(--color-ink-100)" strokeDasharray="2 3" />
+				</LegendItem>
+			)}
+			{finalPosition !== undefined && (
+				<LegendItem label="Final position">
+					<path d="M6,6l-4,6h8z" fill="var(--color-success)" />
+				</LegendItem>
+			)}
+			{finalPosition !== undefined && verifiedHfd !== undefined && (
+				<LegendItem label="Verified HFD">
+					<rect x={2} y={2} width={8} height={8} fill="none" stroke="var(--color-success)" strokeWidth={2} />
+				</LegendItem>
+			)}
+		</div>
+	)
+}
+
+// Swatch of one kind of mark, drawn in a 12 px square, beside its name.
+function LegendItem({ label, children }: { readonly label: string; readonly children: ReactNode }) {
+	return (
+		<span className="inline-flex items-center gap-1">
+			<svg width={12} height={12} className="block flex-none">
+				{children}
+			</svg>
+			{label}
+		</span>
 	)
 }
 
@@ -105,7 +174,7 @@ function Chart({ session, bounds, width }: ChartProps) {
 	const sy = (y: number) => MARGIN.top + (1 - (y - bounds.y[0]) / (bounds.y[1] - bounds.y[0])) * plotHeight
 	const bottom = MARGIN.top + plotHeight
 	const { estimatedPosition, finalPosition, verifiedHfd } = session
-	const xTicks = ticks(bounds.x[0], bounds.x[1], Math.max(2, Math.floor(plotWidth / 90)))
+	const xTicks = ticks(bounds.x[0], bounds.x[1], Math.max(4, Math.floor(plotWidth / 60)))
 	const yTicks = ticks(bounds.y[0], bounds.y[1], 4)
 
 	return (
@@ -124,13 +193,13 @@ function Chart({ session, bounds, width }: ChartProps) {
 					{formatTick(x)}
 				</text>
 			))}
-			<text x={MARGIN.left} y={HEIGHT - 1} fill="var(--color-ink-300)">
+			<text x={MARGIN.left} y={HEIGHT - 2} fill="var(--color-ink-300)">
 				Focuser Position (steps)
 			</text>
 			<text x={4} y={MARGIN.top} dy="0.7em" fill="var(--color-ink-300)">
 				HFD (px)
 			</text>
-			{estimatedPosition !== undefined && <line x1={sx(estimatedPosition)} x2={sx(estimatedPosition)} y1={MARGIN.top} y2={bottom} stroke="var(--color-accent)" strokeDasharray="2 3" />}
+			{estimatedPosition !== undefined && <line x1={sx(estimatedPosition)} x2={sx(estimatedPosition)} y1={MARGIN.top} y2={bottom} stroke="var(--color-ink-100)" strokeDasharray="2 3" />}
 			{session.curve?.series.map((series) => {
 				const style = SERIES_STYLE[series.kind]
 				return <polyline key={series.kind} points={series.points.map((point) => `${sx(point.x)},${sy(point.y)}`).join(' ')} fill="none" stroke={style.stroke} strokeWidth={1.5} strokeDasharray={style.dash} />

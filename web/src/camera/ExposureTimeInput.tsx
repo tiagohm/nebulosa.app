@@ -4,8 +4,8 @@ import { NumberInput } from '../ui/NumberInput'
 import { RadioGroup } from '../ui/RadioGroup'
 
 // Exposure time field of the camera operations that set one (Camera Acquisition, Auto Focus, TPPA, Guiding, Dark Library Wizard), each
-// with its own value: a whole number of the unit chosen below it (minutes, seconds, milliseconds, or microseconds),
-// committed to the form in seconds. The unit opens as the largest in which the exposure is a whole number, and a
+// with its own value: a whole number of the unit chosen below it (minutes, seconds, milliseconds, or microseconds, or
+// the fewer an operation offers), committed to the form in seconds. The unit opens as the largest in which the exposure is a whole number, and a
 // chosen unit in which the exposure is not one gives way to that unit, so the field always shows the exposure that is
 // sent. Choosing another unit keeps the duration, rounded to a whole number of the new unit and never below one.
 
@@ -47,12 +47,21 @@ export interface ExposureTimeInputProps {
 	// Exposure range accepted, in seconds, when known: the one the camera reports, or a narrower one of the operation.
 	readonly exposure?: CameraCapabilities['exposure']
 	readonly disabled?: boolean
+	// Units offered, from the largest; every unit by default. The unit of an exposure none of them shows as a whole
+	// number is offered besides them.
+	readonly units?: readonly ExposureUnit[]
+}
+
+// Returns the largest of units in which a positive duration in seconds is a whole number, else exposureUnitOf.
+function unitOf(seconds: number, units: readonly ExposureUnit[]): ExposureUnit {
+	return units.find((unit) => Number.isInteger(fromSeconds(seconds, unit))) ?? exposureUnitOf(seconds)
 }
 
 // Exposure time input with its unit.
-export function ExposureTimeInput({ value, onChange, exposure, disabled }: ExposureTimeInputProps) {
-	const [chosen, setChosen] = useState(() => exposureUnitOf(value))
-	const unit = Number.isInteger(fromSeconds(value, chosen)) ? chosen : exposureUnitOf(value)
+export function ExposureTimeInput({ value, onChange, exposure, disabled, units = EXPOSURE_UNITS }: ExposureTimeInputProps) {
+	const [chosen, setChosen] = useState(() => unitOf(value, units))
+	const unit = Number.isInteger(fromSeconds(value, chosen)) ? chosen : unitOf(value, units)
+	const options = units.includes(unit) ? units : EXPOSURE_UNITS.filter((option) => units.includes(option) || option === unit)
 	const min = exposure ? Math.max(1, Math.ceil(fromSeconds(exposure.min, unit))) : 1
 	const max = exposure && Math.floor(fromSeconds(exposure.max, unit))
 
@@ -60,7 +69,7 @@ export function ExposureTimeInput({ value, onChange, exposure, disabled }: Expos
 		<>
 			<NumberInput label="Exposure Time" suffix={unit} value={Math.max(1, Math.round(fromSeconds(value, unit)))} min={min} max={max !== undefined && max >= min ? max : undefined} disabled={disabled} onChange={(count) => onChange(toSeconds(count, unit))} />
 			<RadioGroup
-				options={EXPOSURE_UNITS}
+				options={options}
 				value={unit}
 				disabled={disabled}
 				onChange={(next) => {

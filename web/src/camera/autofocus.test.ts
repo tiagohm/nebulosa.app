@@ -3,7 +3,25 @@ import type { AutoFocusRequest, AutoFocusSession, AutoFocusSessionSummary, Camer
 import { proxy } from 'valtio'
 import { DEFAULT_EXPOSURE_SETTINGS, DEFAULT_AUTO_FOCUS_SETTINGS } from '../profile/schema'
 import { DEFAULT_STAR_REQUEST } from '../stars/stars'
-import { autoFocusBlocker, autoFocusFrameFocus, autoFocusRequest, autoFocusRunning, type AutoFocusRuntime, defaultStepSize, handleAutoFocusEvent, refreshAutoFocus, NO_FOCUSER, startAutoFocus, stopAutoFocus } from './autofocus'
+import {
+	autoFocusBlocker,
+	autoFocusFailureText,
+	autoFocusFrameFocus,
+	autoFocusLeftAt,
+	autoFocusRemedy,
+	autoFocusRequest,
+	autoFocusRunning,
+	type AutoFocusRuntime,
+	autoFocusStepSize,
+	autoFocusSummaryText,
+	autoFocusSweep,
+	defaultStepSize,
+	handleAutoFocusEvent,
+	refreshAutoFocus,
+	NO_FOCUSER,
+	startAutoFocus,
+	stopAutoFocus,
+} from './autofocus'
 import { cameraKey } from './capture'
 import { curveBounds, ticks } from './FocusCurve'
 
@@ -184,4 +202,49 @@ test('an Auto Focus frame takes the focuser position its session recorded, and n
 	expect(autoFocusFrameFocus(session, { sessionId: 's1', generation: 3, imageId: 'img-3' })).toBeUndefined()
 	expect(autoFocusFrameFocus(session, { sessionId: 'other', generation: 1 })).toBeUndefined()
 	expect(autoFocusFrameFocus(undefined, { sessionId: 's1', generation: 1 })).toBeUndefined()
+})
+
+test('the first pass of a sweep is planned from the start position, and one beyond the focuser travel cannot start', () => {
+	const ready = { status: 'ready' } as const
+	const focuser = { canAbsoluteMove: true, position: { min: 0, max: 100000 } }
+
+	expect(autoFocusSweep(50000, { initialOffsetSteps: 4, reversed: false }, 500)).toEqual({ far: 52000, near: 49500 })
+	expect(autoFocusSweep(50000, { initialOffsetSteps: 4, reversed: true }, 500)).toEqual({ far: 48000, near: 50500 })
+	expect(autoFocusBlocker(ready, ready, focuser, false, { far: 52000, near: 49500 })).toBeUndefined()
+	expect(autoFocusBlocker(ready, ready, focuser, false, { far: 170000, near: 20000 })).toBe('The sweep would move the focuser to 170000 steps, outside its travel of 0 to 100000 steps. Lower Step Size or Positions per Side.')
+	expect(autoFocusBlocker(ready, ready, focuser, false, { far: 4000, near: -1000 })).toBe('The sweep would move the focuser to -1000 steps, outside its travel of 0 to 100000 steps. Lower Step Size or Positions per Side.')
+})
+
+test('a form without a saved step size takes a two-hundredth of the travel of a connected focuser, else a fixed one', () => {
+	const travel = { min: 0, max: 100000 }
+
+	expect(autoFocusStepSize(250, { connected: true, position: travel })).toBe(250)
+	expect(autoFocusStepSize(undefined, { connected: true, position: travel })).toBe(500)
+	expect(autoFocusStepSize(undefined, { connected: false, position: { min: 0, max: 0 } })).toBe(100)
+	expect(autoFocusStepSize(undefined, undefined)).toBe(100)
+})
+
+test('a session that did not complete says why, what to change, and where it left the focuser', () => {
+	const failed = summary({ state: 'failed', reason: 'unexpectedState', failure: 'outOfRange', error: 'the sweep would move Focuser to 170000 steps, outside its travel of 0 to 100000 steps', initialPosition: 50000, restored: true })
+
+	expect(autoFocusFailureText(failed)).toBe('Auto Focus failed: the sweep would move Focuser to 170000 steps, outside its travel of 0 to 100000 steps.')
+	expect(autoFocusFailureText(summary({ state: 'failed', reason: 'disconnected' }))).toBe('Auto Focus failed: a device disconnected.')
+	expect(autoFocusRemedy(failed)).toBe('Lower Step Size or Positions per Side so the sweep stays within the focuser’s travel.')
+	expect(autoFocusRemedy(summary({ state: 'failed', failure: 'curveRejected' }))).toBe('Widen Step Size so the sweep crosses focus well on both sides.')
+	expect(autoFocusRemedy({ ...summary({ state: 'failed', failure: 'curveRejected' }), request: { ...summary().request, rmsdThreshold: 0.1 } })).toBe('Widen Step Size so the sweep crosses focus well on both sides, or raise Max RMSD / HFD.')
+	expect(autoFocusRemedy(summary({ state: 'failed', reason: 'timeout' }))).toBe(`Raise Measurement Timeout, ${summary().request.measureTimeout} s, in Advanced Settings.`)
+	expect(autoFocusRemedy(summary({ state: 'failed', reason: 'disconnected' }))).toBeUndefined()
+
+	expect(autoFocusLeftAt(failed, 50000)).toBe('The focuser stands at its start position, 50000 steps.')
+	expect(autoFocusLeftAt({ ...failed, restored: false }, 51200)).toBe('The focuser could not be moved back to its start position, 50000 steps, and stands at 51200 steps.')
+	expect(autoFocusLeftAt(summary({ state: 'cancelled' }), 51200)).toBe('The focuser was left where the stop found it, at 51200 steps.')
+	expect(autoFocusLeftAt(summary({ state: 'completed' }), 51200)).toBeUndefined()
+	expect(autoFocusLeftAt(summary({ state: 'failed' }), 51200)).toBeUndefined()
+})
+
+test('the summary of a session states how it ended and, once completed, where and how sharp', () => {
+	expect(autoFocusSummaryText(summary({ state: 'completed', finalPosition: 50000, verification: 'measured', verifiedHfd: 2.774 }))).toBe('Completed · 50000 steps · 2.77 px')
+	expect(autoFocusSummaryText(summary({ state: 'completed', finalPosition: 50000, verification: 'noStars' }))).toBe('Completed · 50000 steps')
+	expect(autoFocusSummaryText(summary({ state: 'failed' }))).toBe('Failed')
+	expect(autoFocusSummaryText(summary({ state: 'measuring' }))).toBe('Measuring')
 })

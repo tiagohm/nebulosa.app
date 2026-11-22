@@ -125,8 +125,10 @@ test('stopped, aborted, and cancelled sessions are quiet', () => {
 
 test('reports Auto Focus and TPPA transitions', () => {
 	const classifier = new NotificationClassifier()
-	expect(classifier.classify(autoFocus({ state: 'completed', finalPosition: 1200 }))[0]).toMatchObject({ code: 'autofocus.completed', message: 'Focuser was focused at position 1200.', target: { tool: 'auto-focus', deviceId: 'cam' } })
-	expect(classifier.classify(autoFocus({ state: 'failed', reason: 'commandFailed' }))[0]).toMatchObject({ code: 'autofocus.failed', level: 'error' })
+	expect(classifier.classify(autoFocus({ state: 'completed', finalPosition: 1200 }))[0]).toMatchObject({ code: 'autofocus.completed', message: 'Focuser was focused at 1200 steps.', target: { tool: 'auto-focus', deviceId: 'cam' } })
+	expect(classifier.classify(autoFocus({ sessionId: 'a2', state: 'completed', finalPosition: 1200, verifiedHfd: 2.774 }))[0]).toMatchObject({ message: 'Focuser was focused at 1200 steps, verified at 2.77 px HFD.' })
+	expect(classifier.classify(autoFocus({ state: 'failed', reason: 'commandFailed' }))[0]).toMatchObject({ code: 'autofocus.failed', level: 'error', message: 'Auto Focus of Focuser failed: a command failed.' })
+	expect(classifier.classify(autoFocus({ sessionId: 'a3', state: 'failed', reason: 'commandFailed', error: 'the focus curve of 9 frames was rejected' }))[0]).toMatchObject({ message: 'Auto Focus of Focuser failed: the focus curve of 9 frames was rejected.' })
 	expect(classifier.classify(tppa({ state: 'readyToRefine' }))[0]).toMatchObject({ key: 'tppa.ready:t1', level: 'info', code: 'tppa.readyToRefine' })
 	expect(classifier.classify(tppa({ state: 'refinementPaused' }))).toEqual([])
 	expect(classifier.classify(tppa({ state: 'completed' }))).toEqual([])

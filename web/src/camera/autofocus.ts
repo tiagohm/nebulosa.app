@@ -2,6 +2,7 @@ import type { AutoFocusRequest, AutoFocusSession, AutoFocusSessionSummary, AutoF
 import { nanoid } from 'nanoid'
 import { proxy } from 'valtio'
 import type { RoleAvailability } from '../equipment/availability'
+import { formatPixelLength } from '../format'
 import { type ApiFetch, browserFetch, deviceUrl, jsonInit } from '../http'
 import type { AutoFocusSettings, CameraExposureSettings } from '../profile/schema'
 import { SnapshotRefreshes } from '../refresh'
@@ -64,17 +65,93 @@ export const FITTING_MODES = Object.keys(FITTING_MODE_LABELS) as AutoFocusReques
 // Why an Auto Focus cannot run on a camera that has no focuser associated with it.
 export const NO_FOCUSER = 'Auto Focus moves the Focuser of the Equipment Setup, which belongs to its Main Camera; assign this camera as the Main Camera to focus with it.'
 
+// Positions the first pass of a sweep visits, in steps: the runner moves to the far end, then one step at a time
+// back past the start position by one step, and only then extends the side that lacks positions.
+export interface AutoFocusSweep {
+	// Position the sweep starts at, Positions per Side steps outward (inward when reversed) of the start.
+	readonly far: number
+	// Position the first pass ends at, one step past the start on the other side.
+	readonly near: number
+}
+
+// Returns the first pass of a sweep from a start position (steps) with the routine of a form and its step size
+// (steps), as the toolkit's runner plans it.
+export function autoFocusSweep(position: number, settings: Pick<AutoFocusSettings, 'initialOffsetSteps' | 'reversed'>, stepSize: number): AutoFocusSweep {
+	const direction = settings.reversed ? -1 : 1
+	return { far: position + direction * settings.initialOffsetSteps * stepSize, near: position - direction * stepSize }
+}
+
 // Returns why no session can start now, or undefined when one can, from the availability of the camera and of its
 // focuser (undefined when the camera has no focuser associated with it), the focuser's reported state (undefined
-// while unknown), and whether the detector is ASTAP while ASTAP is not configured. The server checks again.
-export function autoFocusBlocker(camera: RoleAvailability, focuser: RoleAvailability | undefined, focuserState: { readonly canAbsoluteMove: boolean } | undefined, astapMissing: boolean): string | undefined {
+// while unknown), whether the detector is ASTAP while ASTAP is not configured, and the first pass of the sweep, which
+// must stay within the travel the focuser reports. The server checks again.
+export function autoFocusBlocker(camera: RoleAvailability, focuser: RoleAvailability | undefined, focuserState: { readonly canAbsoluteMove: boolean; readonly position?: { readonly min: number; readonly max: number } } | undefined, astapMissing: boolean, sweep?: AutoFocusSweep): string | undefined {
 	if (camera.status !== 'ready') return camera.message
 	if (!focuser) return NO_FOCUSER
 	if (focuser.status !== 'ready') return focuser.message
 	if (!focuserState) return 'The focuser state is not known yet.'
 	if (!focuserState.canAbsoluteMove) return 'The focuser cannot move to absolute positions, which the Auto Focus needs.'
+
+	if (sweep && focuserState.position) {
+		const { min, max } = focuserState.position
+		const beyond = [sweep.far, sweep.near].find((position) => position < min || position > max)
+		if (beyond !== undefined) return `The sweep would move the focuser to ${beyond} steps, outside its travel of ${min} to ${max} steps. Lower Step Size or Positions per Side.`
+	}
+
 	if (astapMissing) return 'ASTAP is not configured.'
 	return undefined
+}
+
+// Description of each failure reason of a session without a detail, completing "Auto Focus failed: <text>."; the
+// same words as the server's notification.
+const FAILURE_REASON_TEXT: Readonly<Record<NonNullable<AutoFocusSessionSummary['reason']>, string>> = {
+	busy: 'the device was busy',
+	aborted: 'it was aborted',
+	disconnected: 'a device disconnected',
+	removed: 'a device was removed',
+	timeout: 'it timed out',
+	alert: 'the driver reported an alert',
+	commandFailed: 'a command failed',
+	unexpectedState: 'a device reached an unexpected state',
+}
+
+// Returns why a failed session failed, as its notification words it.
+export function autoFocusFailureText(session: Pick<AutoFocusSessionSummary, 'reason' | 'error'>): string {
+	return `Auto Focus failed: ${session.error ?? (session.reason ? FAILURE_REASON_TEXT[session.reason] : 'the cause was not reported')}.`
+}
+
+// Returns what to change before running again after a failed session, from its cause and the request it ran; undefined
+// when nothing in the form would help.
+export function autoFocusRemedy(session: Pick<AutoFocusSessionSummary, 'failure' | 'reason' | 'request'>): string | undefined {
+	if (session.failure === 'outOfRange') return 'Lower Step Size or Positions per Side so the sweep stays within the focuser’s travel.'
+	if (session.failure === 'curveRejected') return `Widen Step Size so the sweep crosses focus well on both sides${session.request.rmsdThreshold > 0 ? ', or raise Max RMSD / HFD' : ''}.`
+	if (session.reason === 'timeout') return `Raise Measurement Timeout, ${session.request.measureTimeout} s, in Advanced Settings.`
+	return undefined
+}
+
+// Returns where a session that did not complete left the focuser, from whether it stands at the start position and the
+// position the focuser reports now (steps; undefined while unknown); undefined for a running or completed session, or a
+// failure that never knew the start position.
+export function autoFocusLeftAt(session: Pick<AutoFocusSessionSummary, 'state' | 'restored' | 'initialPosition'>, position: number | undefined): string | undefined {
+	if (session.state !== 'failed' && session.state !== 'cancelled') return undefined
+	const now = position === undefined ? '' : ` and stands at ${position} steps`
+	if (session.restored && session.initialPosition !== undefined) return `The focuser stands at its start position, ${session.initialPosition} steps.`
+	if (session.restored === false) return `The focuser could not be moved back to its start position${session.initialPosition === undefined ? '' : `, ${session.initialPosition} steps,`}${now}.`
+	if (session.state === 'cancelled') return `The focuser was left where the stop found it${position === undefined ? '' : `, at ${position} steps`}.`
+	return undefined
+}
+
+// Returns the one-line summary of a session: its state, and once completed the position reached and the HFD verified
+// there.
+export function autoFocusSummaryText(session: Pick<AutoFocusSessionSummary, 'state' | 'finalPosition' | 'verification' | 'verifiedHfd'>): string {
+	const parts = [AUTO_FOCUS_STATE_LABELS[session.state]]
+
+	if (session.state === 'completed') {
+		if (session.finalPosition !== undefined) parts.push(`${session.finalPosition} steps`)
+		if (session.verification === 'measured' && session.verifiedHfd !== undefined) parts.push(formatPixelLength(session.verifiedHfd))
+	}
+
+	return parts.join(' · ')
 }
 
 // Focuser position of an Auto Focus frame, as its session recorded it.
@@ -105,6 +182,16 @@ export function autoFocusRunning(session: Pick<AutoFocusSessionSummary, 'endedAt
 // none: a two-hundredth of the travel, at least one step.
 export function defaultStepSize(min: number, max: number) {
 	return Math.max(1, Math.round((max - min) / 200))
+}
+
+// Step size of a form without a saved one while the focuser reports no travel, in steps.
+const FALLBACK_STEP_SIZE = 100
+
+// Returns the step size of a form, in steps: the saved one, else a two-hundredth of the travel of a connected focuser
+// that reports one, else FALLBACK_STEP_SIZE.
+export function autoFocusStepSize(saved: number | undefined, focuser: { readonly connected: boolean; readonly position: { readonly min: number; readonly max: number } } | undefined): number {
+	if (saved !== undefined) return saved
+	return focuser?.connected && focuser.position.max > focuser.position.min ? defaultStepSize(focuser.position.min, focuser.position.max) : FALLBACK_STEP_SIZE
 }
 
 // Builds the start request of the Auto Focus form of a camera for a focuser. The frames take the exposure time of the
@@ -161,7 +248,8 @@ export function startAutoFocus(state: AutoFocusRuntime, connectionId: string, de
 	return command(state, cameraKey(connectionId, deviceId), url, { ...body, token: nanoid() } satisfies AutoFocusRequest, request)
 }
 
-// Stops the session of a camera where it stands; the focuser is not moved back.
+// Stops the session of a camera. A first stop of a session whose request restores on stop moves the focuser back to the
+// start position; any other stop leaves it where it stands.
 export function stopAutoFocus(state: AutoFocusRuntime, session: Pick<AutoFocusSessionSummary, 'sessionId' | 'camera'>, request: ApiFetch = browserFetch) {
 	return command(state, cameraKey(session.camera.connectionId, session.camera.deviceId), `/api/autofocus/${encodeURIComponent(session.sessionId)}/stop`, undefined, request)
 }

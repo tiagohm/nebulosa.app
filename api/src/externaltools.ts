@@ -5,16 +5,19 @@ import { login, NOVA_ASTROMETRY_NET_URL } from 'nebulosa/src/astrometry/solvers/
 import type { AppDatabase } from './database'
 import { errorResponse } from './http'
 import { parseVersion, supportedVersion } from './observatorycameras.gateway'
+import { findQuadIndexFiles, findStarDatabases, starDatabaseName } from './platesolving.native'
 import { errorCode } from './util'
 
-// Server-side settings of the external programs and services the backend uses: ASTAP, the local solve-field
-// of astrometry.net, the nova.astrometry.net web service, and MediaMTX, the media gateway of Observatory Cameras. Each one is registered here with the capabilities
-// its adapters provide and the settings it takes; nothing else can be configured, and no route runs an
-// arbitrary command. Settings belong to the server instance (not to a browser, profile, or workspace), are
+// Server-side settings of the external programs, services, and data the backend uses: ASTAP, the local solve-field
+// of astrometry.net, the nova.astrometry.net web service, MediaMTX, the media gateway of Observatory Cameras, and the
+// folders of the index files and star database of the built-in plate solver, which ships with the server while its
+// data does not. Each one is registered here with the capabilities its adapters provide and the settings it takes;
+// nothing else can be configured, and no route runs an arbitrary command. Settings belong to the server instance (not to a browser, profile, or workspace), are
 // persisted in the operational database, and are applied to the next runs without a restart. A test
 // checks the executable (and the configuration file) on the server's filesystem, then starts the program once
 // with a fixed argument that only prints its help or version, and reads the version it prints; for ASTAP it also
-// looks for a star database beside the program, and for MediaMTX it checks the version the gateway needs. It never
+// looks for a star database beside the program, and for MediaMTX it checks the version the gateway needs. The folders
+// of the built-in solver are checked for the index files and star databases they hold, and nothing is started. It never
 // analyzes an image, so it proves that the program runs, not that it solves. The saved settings of every program
 // are checked again when the server starts, since checks are kept in memory only. A web service is
 // signed in to with its API key, which is sent once to the service and never stored: the session the service
@@ -22,15 +25,15 @@ import { errorCode } from './util'
 // learn whether there is one. Any client that can reach the API can change and test these settings, like every other route.
 
 // Identifier of a supported external program; also its key in the database and its route segment.
-export type ExternalToolId = 'astap' | 'astrometryLocal' | 'nova' | 'mediamtx'
+export type ExternalToolId = 'astap' | 'astrometryLocal' | 'nova' | 'nebulosa' | 'mediamtx'
 
 // Capability an adapter of an external program provides to the services that use it; video-gateway is the media
 // gateway the server keeps running to relay the observatory cameras to browsers.
 export type ExternalToolCapability = 'plate-solving' | 'star-detection' | 'video-gateway'
 
-// Setting a program takes besides its timeout: its executable, the configuration file passed to it, or the
-// endpoint of a web service.
-export type ExternalToolField = 'executable' | 'config' | 'endpoint'
+// Setting a program takes besides its timeout: its executable, the configuration file passed to it, the endpoint of a
+// web service, or the folders of the index files and of the star database of the built-in solver.
+export type ExternalToolField = 'executable' | 'config' | 'endpoint' | 'indexDirectory' | 'catalogDirectory'
 
 // Valid range of a timeout, in milliseconds.
 export interface TimeoutLimits {
@@ -74,6 +77,12 @@ export interface ExternalToolConfig {
 	readonly config?: string
 	// Base URL of a web service; its public endpoint when empty.
 	readonly endpoint?: string
+	// Folder of quad index files on the server's filesystem, searched with its subfolders: Nebulosa .nqi tiles and
+	// Astrometry.net index files; empty for none.
+	readonly indexDirectory?: string
+	// Folder of an ASTAP (.1476) or HNSKY (.290) star database on the server's filesystem, searched around a known
+	// position and scale; empty for none.
+	readonly catalogDirectory?: string
 }
 
 // Settings a run uses: the saved settings plus the session of a web service.
@@ -82,7 +91,8 @@ export interface ResolvedExternalTool extends ExternalToolConfig {
 	readonly session?: string
 }
 
-// State of the saved settings: not configured (no executable, or a web service not signed in to), or configured.
+// State of the saved settings: not configured (no executable, a web service not signed in to, or no folder of the
+// built-in solver), or configured.
 export type ExternalToolConfigStatus = 'notConfigured' | 'configured'
 
 // Outcome of a check: the program answered when started (or the web service is signed in to), it is not where the
@@ -104,7 +114,9 @@ export type ExternalToolCheckStatus = 'available' | 'unavailable' | 'failed'
 // - noAnswer: the program did not end within PROBE_TIMEOUT when started to print its help or version.
 // - noDatabase: ASTAP answered but no star database is in its folder; available, since it may read one from elsewhere.
 // - incompatibleVersion: the program is not MediaMTX 1.21 or a later 1.x, which the gateway needs.
-export type ExternalToolCheckCode = 'ok' | 'empty' | 'missing' | 'notFile' | 'notExecutable' | 'inaccessible' | 'configMissing' | 'invalidEndpoint' | 'signedOut' | 'notStarted' | 'noAnswer' | 'noDatabase' | 'incompatibleVersion'
+// - notDirectory: a folder of the built-in solver is a file or another non-directory.
+// - noIndexes: the folders of the built-in solver hold no index file and no supported star database.
+export type ExternalToolCheckCode = 'ok' | 'empty' | 'missing' | 'notFile' | 'notExecutable' | 'inaccessible' | 'configMissing' | 'invalidEndpoint' | 'signedOut' | 'notStarted' | 'noAnswer' | 'noDatabase' | 'incompatibleVersion' | 'notDirectory' | 'noIndexes'
 
 // Result of checking the executable of a configuration on the server's filesystem.
 export interface ExternalToolCheck {
@@ -114,7 +126,7 @@ export interface ExternalToolCheck {
 	readonly code: ExternalToolCheckCode
 	// Configuration checked, so a client can tell whether the result still applies to what it edits.
 	readonly config: ExternalToolConfig
-	// Absolute path the executable resolved to; absent when it was not found.
+	// Absolute path the executable (for the built-in solver, its first folder set) resolved to; absent when it was not found.
 	readonly resolvedPath?: string
 	// Version the program printed when started; absent when it printed none, when it was not started, and for a web service.
 	readonly version?: string
@@ -227,6 +239,17 @@ export const EXTERNAL_TOOLS: readonly ExternalToolDefinition[] = [
 		defaultTimeout: DEFAULT_EXTERNAL_TOOL_TIMEOUT,
 	},
 	{
+		id: 'nebulosa',
+		name: 'Nebulosa',
+		description: 'Plate solver built into Nebulosa, which searches quad index files and a star database on this server; images never leave it.',
+		requirements: 'Solving needs quad index files whose bands cover the field of view of your images (Nebulosa .nqi tiles or Astrometry.net index files), or, around a known position and scale, a star database of ASTAP or HNSKY, such as D50.',
+		capabilities: ['plate-solving'],
+		fields: ['indexDirectory', 'catalogDirectory'],
+		session: false,
+		timeoutLimits: { min: 1000, max: 3600000 },
+		defaultTimeout: DEFAULT_EXTERNAL_TOOL_TIMEOUT,
+	},
+	{
 		id: 'mediamtx',
 		name: 'MediaMTX',
 		description: 'Media gateway the server keeps running while observatory cameras are enabled; it reads their RTSP streams and relays them to browsers over WebRTC.',
@@ -251,6 +274,8 @@ interface ToolRow {
 	readonly timeout: number
 	readonly config: string | null
 	readonly endpoint: string | null
+	readonly index_directory: string | null
+	readonly catalog_directory: string | null
 	readonly revision: number
 }
 
@@ -266,14 +291,27 @@ function definition(id: ExternalToolId): ExternalToolDefinition {
 
 // Whether two configurations are the same; an absent field equals an empty one.
 function sameConfig(a: ExternalToolConfig, b: ExternalToolConfig) {
-	return a.executable === b.executable && a.timeout === b.timeout && (a.config ?? '') === (b.config ?? '') && (a.endpoint ?? '') === (b.endpoint ?? '')
+	return a.executable === b.executable && a.timeout === b.timeout && (a.config ?? '') === (b.config ?? '') && (a.endpoint ?? '') === (b.endpoint ?? '') && (a.indexDirectory ?? '') === (b.indexDirectory ?? '') && (a.catalogDirectory ?? '') === (b.catalogDirectory ?? '')
 }
 
 // Returns the settings of a program that it takes, from any configuration: the fields it does not take are left
 // out, and the executable of a program without one is empty.
-function configOf(id: ExternalToolId, { executable, timeout, config, endpoint }: ExternalToolConfig): ExternalToolConfig {
+function configOf(id: ExternalToolId, { executable, timeout, config, endpoint, indexDirectory, catalogDirectory }: ExternalToolConfig): ExternalToolConfig {
 	const { fields } = definition(id)
-	return { executable: fields.includes('executable') ? executable : '', timeout, ...(fields.includes('config') && { config: config ?? '' }), ...(fields.includes('endpoint') && { endpoint: endpoint ?? '' }) }
+	return {
+		executable: fields.includes('executable') ? executable : '',
+		timeout,
+		...(fields.includes('config') && { config: config ?? '' }),
+		...(fields.includes('endpoint') && { endpoint: endpoint ?? '' }),
+		...(fields.includes('indexDirectory') && { indexDirectory: indexDirectory ?? '' }),
+		...(fields.includes('catalogDirectory') && { catalogDirectory: catalogDirectory ?? '' }),
+	}
+}
+
+// Whether the settings of a program that is not a web service are set up enough to run: an executable, or for the
+// built-in solver a folder of index files or of a star database.
+function hasSettings({ executable, indexDirectory, catalogDirectory }: ExternalToolConfig) {
+	return executable.trim() !== '' || (indexDirectory?.trim() ?? '') !== '' || (catalogDirectory?.trim() ?? '') !== ''
 }
 
 // Returns the base URL of a web service: the endpoint without a trailing slash, or the public nova endpoint when
@@ -407,6 +445,8 @@ async function inspectTool(id: ExternalToolId, config: ExternalToolConfig, signe
 		return { status: 'available', code: 'ok', message: 'Signed in. The service was not contacted, so the session may have expired.' }
 	}
 
+	if (id === 'nebulosa') return await inspectSolverFolders(config)
+
 	const inspection = await inspectExecutable(config.executable)
 	if (inspection.status !== 'available' || !inspection.resolvedPath) return inspection
 	const { resolvedPath } = inspection
@@ -445,6 +485,42 @@ async function inspectTool(id: ExternalToolId, config: ExternalToolConfig, signe
 	return { status: 'available', code: 'ok', resolvedPath, version, message: `${named} answered when started.${configured}` }
 }
 
+// Inspects a folder of the built-in solver: undefined when it is a folder the server may read, else why it cannot be used.
+async function inspectFolder(path: string, label: string): Promise<Inspection | undefined> {
+	try {
+		if (!(await stat(path)).isDirectory()) return { status: 'failed', code: 'notDirectory', resolvedPath: path, message: `The ${label} is not a folder.` }
+		await readdir(path)
+		return undefined
+	} catch (error) {
+		const code = errorCode(error)
+		if (code === 'ENOENT' || code === 'ENOTDIR') return { status: 'unavailable', code: 'missing', message: `No folder exists at the path of the ${label} on the server.` }
+		return { status: 'failed', code: 'inaccessible', resolvedPath: path, message: `The ${label} cannot be read by the server.` }
+	}
+}
+
+// Inspects the folders of the built-in solver (resolved against the server's working directory): each one set must be
+// a folder the server reads, and together they must hold an index file or a supported star database. Nothing is started.
+async function inspectSolverFolders({ indexDirectory = '', catalogDirectory = '' }: ExternalToolConfig): Promise<Inspection> {
+	if (!indexDirectory.trim() && !catalogDirectory.trim()) return { status: 'failed', code: 'empty', message: 'No index folder or star database folder is set.' }
+
+	const indexPath = indexDirectory.trim() ? resolve(indexDirectory) : undefined
+	const catalogPath = catalogDirectory.trim() ? resolve(catalogDirectory) : undefined
+	const problem = (indexPath && (await inspectFolder(indexPath, 'index folder'))) || (catalogPath && (await inspectFolder(catalogPath, 'star database folder')))
+	if (problem) return problem
+
+	const resolvedPath = (indexPath ?? catalogPath)!
+	const files = indexPath ? await findQuadIndexFiles(indexPath) : { nebulosa: [], astrometryNet: [] }
+	const databases = catalogPath ? await findStarDatabases(catalogPath) : []
+	const found: string[] = []
+	if (files.nebulosa.length > 0) found.push(`${files.nebulosa.length} Nebulosa index ${files.nebulosa.length === 1 ? 'file' : 'files'}`)
+	if (files.astrometryNet.length > 0) found.push(`${files.astrometryNet.length} Astrometry.net index ${files.astrometryNet.length === 1 ? 'file' : 'files'}`)
+	if (databases.length > 0) found.push(`star database ${databases.map(starDatabaseName).join(', ')}`)
+
+	if (found.length === 0) return { status: 'unavailable', code: 'noIndexes', resolvedPath, message: 'The folders hold no index file and no supported star database (ASTAP D05, D20, D50, D80, or HNSKY G14, G16).' }
+	const blind = files.nebulosa.length + files.astrometryNet.length > 0 ? '' : ' Without index files, only images with a known position and scale are solved.'
+	return { status: 'available', code: 'ok', resolvedPath, message: `Found ${found.join(', ')}.${blind} The files are read once a solve needs them.` }
+}
+
 // Settings of the supported external programs, persisted in the operational database. Changes are applied one at a
 // time, so a save waits for a sign-in in progress; a save made from an outdated revision is refused, so concurrent
 // clients never overwrite each other silently. The sessions of the web services and the latest check of each
@@ -467,28 +543,29 @@ export class ExternalToolsStore {
 
 	// Returns the saved settings of a program, the defaults when never saved.
 	#tool(id: ExternalToolId): StoredTool {
-		const row = this.database.db.query<ToolRow, [string]>('SELECT executable, timeout, config, endpoint, revision FROM external_tool_settings WHERE tool_id = ?').get(id)
+		const row = this.database.db.query<ToolRow, [string]>('SELECT executable, timeout, config, endpoint, index_directory, catalog_directory, revision FROM external_tool_settings WHERE tool_id = ?').get(id)
 		if (!row) return { ...configOf(id, { executable: '', timeout: definition(id).defaultTimeout }), revision: 0 }
-		const { executable, timeout, config, endpoint, revision } = row
-		return { ...configOf(id, { executable, timeout, config: config ?? undefined, endpoint: endpoint ?? undefined }), revision }
+		const { executable, timeout, config, endpoint, index_directory, catalog_directory, revision } = row
+		return { ...configOf(id, { executable, timeout, config: config ?? undefined, endpoint: endpoint ?? undefined, indexDirectory: index_directory ?? undefined, catalogDirectory: catalog_directory ?? undefined }), revision }
 	}
 
 	// Saves the settings of a program under revision. Throws when the database cannot be written.
-	#write(id: ExternalToolId, { executable, timeout, config, endpoint }: ExternalToolConfig, revision: number) {
+	#write(id: ExternalToolId, { executable, timeout, config, endpoint, indexDirectory, catalogDirectory }: ExternalToolConfig, revision: number) {
 		this.database.db
 			.query(
-				'INSERT INTO external_tool_settings (tool_id, executable, timeout, config, endpoint, revision, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT (tool_id) DO UPDATE SET executable = excluded.executable, timeout = excluded.timeout, config = excluded.config, endpoint = excluded.endpoint, revision = excluded.revision, updated_at = excluded.updated_at',
+				'INSERT INTO external_tool_settings (tool_id, executable, timeout, config, endpoint, index_directory, catalog_directory, revision, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (tool_id) DO UPDATE SET executable = excluded.executable, timeout = excluded.timeout, config = excluded.config, endpoint = excluded.endpoint, index_directory = excluded.index_directory, catalog_directory = excluded.catalog_directory, revision = excluded.revision, updated_at = excluded.updated_at',
 			)
-			.run(id, executable, timeout, config ?? null, endpoint ?? null, revision, Date.now())
+			.run(id, executable, timeout, config ?? null, endpoint ?? null, indexDirectory ?? null, catalogDirectory ?? null, revision, Date.now())
 	}
 
-	// Returns the state of a program. A web service is configured once signed in, a program once its executable is set.
+	// Returns the state of a program. A web service is configured once signed in, a program once its executable (the
+	// built-in solver, a folder) is set.
 	#state(id: ExternalToolId): ExternalToolState {
 		const { revision, ...config } = this.#tool(id)
 		const tool = definition(id)
 		const lastCheck = this.#checks.get(id)
 		const signedIn = this.#sessions.has(id)
-		const status = (tool.session ? signedIn : config.executable) ? 'configured' : 'notConfigured'
+		const status = (tool.session ? signedIn : hasSettings(config)) ? 'configured' : 'notConfigured'
 		return { ...tool, status, config, revision, ...(lastCheck && { lastCheck }), ...(tool.session && { signedIn }) }
 	}
 
@@ -586,25 +663,25 @@ export class ExternalToolsStore {
 		return check
 	}
 
-	// Checks the saved settings of every program with an executable set, all at once, so their states are known after a
+	// Checks the saved settings of every program with an executable (the built-in solver, a folder) set, all at once, so their states are known after a
 	// restart without anyone testing them; each result becomes the program's latest check. Web services are left out,
 	// since a restart signs out of them.
 	async checkSaved(): Promise<void> {
 		await Promise.all(
 			EXTERNAL_TOOLS.filter((tool) => !tool.session).map(async ({ id }) => {
 				const { revision: _, ...config } = this.#tool(id)
-				if (config.executable.trim()) await this.check(id, config)
+				if (hasSettings(config)) await this.check(id, config)
 			}),
 		)
 	}
 
 	// Returns the settings a run of a program uses, or undefined when the program is not configured (a web service
-	// not signed in to). A service resolves them once when an operation starts and keeps the returned snapshot for the
+	// not signed in to, the built-in solver without a folder). A service resolves them once when an operation starts and keeps the returned snapshot for the
 	// whole operation, so a later save applies to the next operations only.
 	resolve(id: ExternalToolId): Promise<Readonly<ResolvedExternalTool> | undefined> {
 		const { revision: _, ...tool } = this.#tool(id)
 		const session = this.#sessions.get(id)
-		if (!(definition(id).session ? session : tool.executable)) return Promise.resolve(undefined)
+		if (!(definition(id).session ? session : hasSettings(tool))) return Promise.resolve(undefined)
 		return Promise.resolve(Object.freeze({ ...tool, ...(session && { session }) }))
 	}
 

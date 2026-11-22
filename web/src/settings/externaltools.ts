@@ -2,7 +2,8 @@ import type { ExternalToolCapability, ExternalToolCheck, ExternalToolConfig, Ext
 import { proxy } from 'valtio'
 import { type ApiFetch, browserFetch, jsonInit, responseError } from '../http'
 
-// External programs and web services the server supports (ASTAP, solve-field, nova.astrometry.net), with their
+// External programs and web services the server supports (ASTAP, solve-field, nova.astrometry.net, the folders of the
+// built-in solver, MediaMTX), with their
 // saved settings and latest check, as the server reports them. The server owns the settings: this store mirrors
 // its snapshot and its externalTool:updated events, and sends saves, checks, sign-ins, and sign-outs. An API key is
 // only sent with a sign-in, never kept here. The edits of a tab stay in the page until
@@ -45,7 +46,13 @@ function toolUrl(id: string) {
 
 // Whether two configurations are the same; an absent field equals an empty one.
 export function sameConfig(a: ExternalToolConfig, b: ExternalToolConfig) {
-	return a.executable === b.executable && a.timeout === b.timeout && (a.config ?? '') === (b.config ?? '') && (a.endpoint ?? '') === (b.endpoint ?? '')
+	return a.executable === b.executable && a.timeout === b.timeout && (a.config ?? '') === (b.config ?? '') && (a.endpoint ?? '') === (b.endpoint ?? '') && (a.indexDirectory ?? '') === (b.indexDirectory ?? '') && (a.catalogDirectory ?? '') === (b.catalogDirectory ?? '')
+}
+
+// Whether the settings of a program that is not a web service are set up enough to be used: an executable, or for the
+// built-in solver a folder of index files or of a star database.
+export function hasSettings({ executable, indexDirectory, catalogDirectory }: ExternalToolConfig) {
+	return executable.trim() !== '' || (indexDirectory?.trim() ?? '') !== '' || (catalogDirectory?.trim() ?? '') !== ''
 }
 
 // Whether a check was made with the given configuration, so it still describes it.

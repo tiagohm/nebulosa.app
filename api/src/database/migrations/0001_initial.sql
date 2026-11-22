@@ -21,7 +21,7 @@ CREATE TABLE schema_migrations (
 -- never been saved and runs with the defaults. The session of a web service is never stored.
 CREATE TABLE external_tool_settings (
 	-- Supported program.
-	tool_id TEXT PRIMARY KEY CHECK (tool_id IN ('astap', 'astrometryLocal', 'nova', 'mediamtx')),
+	tool_id TEXT PRIMARY KEY CHECK (tool_id IN ('astap', 'astrometryLocal', 'nova', 'nebulosa', 'mediamtx')),
 	-- Path or PATH name of the executable on the server; empty when not configured or not taken.
 	executable TEXT NOT NULL,
 	-- Default time limit of a run, in milliseconds.
@@ -30,6 +30,10 @@ CREATE TABLE external_tool_settings (
 	config TEXT,
 	-- Base URL of a web service; NULL when the program is not one.
 	endpoint TEXT,
+	-- Folder of the quad index files of the built-in solver; NULL for another program.
+	index_directory TEXT,
+	-- Folder of the star database of the built-in solver; NULL for another program.
+	catalog_directory TEXT,
 	-- Revision of the settings, increased by every save, sign-in, and sign-out; >= 1.
 	revision INTEGER NOT NULL CHECK (revision > 0),
 	-- When the settings last changed, Unix milliseconds (UTC).

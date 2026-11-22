@@ -11,14 +11,17 @@ import { type ExternalToolConfig, type ExternalToolId, type ExternalToolsStore, 
 import { errorResponse } from './http'
 import type { ImageStore } from './images'
 import { type PlateSolveHints, type PlateSolveStrategy, POINTING_KEYWORDS, type ResolvedPlateSolveHints, resolvePlateSolveHints } from './platesolving.hints'
+import { NativePlateSolver, NativeSolveError } from './platesolving.native'
 import { NOVA_POLL_INTERVAL, NovaError, type NovaStage, novaSolve } from './platesolving.nova'
 
 // Plate solving service of the manual solves of the Images workspace, on files and camera frames alike. A solve finds the World Coordinate System of an image document
 // of the image store, addressed by its id (a document never changes, so the id is its scientific identity), with
-// one of three providers configured in External Tools, whose settings are resolved once per job (or once per
+// one of four providers configured in External Tools, whose settings are resolved once per job (or once per
 // capture session) and never come from a request: ASTAP and the local solve-field of astrometry.net, run on a FITS
-// copy of the document in a directory of their own, and the nova.astrometry.net web service, to which the copy is
-// uploaded once. There is no fallback between providers: a local failure never uploads an image.
+// copy of the document in a directory of their own, the nova.astrometry.net web service, to which the copy is
+// uploaded once, and the built-in solver (platesolving.native.ts), run on a worker of its own over the grayscale copy
+// of the document with the index files and star database of its folders. There is no fallback between providers: a
+// local failure never uploads an image.
 //
 // The result keeps the whole WCS header of the solver (CD matrix, SIP terms, frame) as the toolkit's PlateSolution,
 // whose center, scale, orientation, parity, and field size are radians of the ICRS. A solution is accepted only when
@@ -27,15 +30,15 @@ import { NOVA_POLL_INTERVAL, NovaError, type NovaStage, novaSolve } from './plat
 // failure. Hints come from the operator, then from the header (see platesolving.hints.ts), and the job keeps those it
 // used with their origins. The WCS a header already had is reported apart, never replaced, and no file is written.
 //
-// Jobs run in memory under the shared analysis scheduling (analysis.ts): one ASTAP and one solve-field process and
-// two nova solves at a time, at most MAX_QUEUED jobs waiting, in arrival order. A job
+// Jobs run in memory under the shared analysis scheduling (analysis.ts): one ASTAP and one solve-field process, one
+// built-in solve, and two nova solves at a time, at most MAX_QUEUED jobs waiting, in arrival order. A job
 // retains its image until it ends. An equivalent request is answered with the job already waiting or running, or
 // with its kept result, so a repeated request never solves twice. Results are kept only in memory until their image
 // is released; a nova job is not followed again after a restart. Every change of a job is published as a compact
 // plateSolving:updated event without the WCS. No device is held, and nothing moves a mount.
 
 // Plate solver of a job.
-export type PlateSolverProvider = 'astap' | 'astrometryLocal' | 'nova'
+export type PlateSolverProvider = 'astap' | 'astrometryLocal' | 'nova' | 'nebulosa'
 
 // What a plate solve searches and how.
 export interface PlateSolveRequest {
@@ -45,9 +48,11 @@ export interface PlateSolveRequest {
 	readonly strategy: PlateSolveStrategy
 	// Hints of the operator; the image supplies the missing ones.
 	readonly hints?: PlateSolveHints
-	// Fractional tolerance of the scale hint, in (0, 1); DEFAULT_SCALE_TOLERANCE when absent. Only nova takes it.
+	// Fractional tolerance of the scale hint, in (0, 1); DEFAULT_SCALE_TOLERANCE when absent. Only nova and the
+	// built-in solver take it.
 	readonly scaleTolerance?: number
-	// Downsampling factor applied before detecting stars, a positive integer; the provider's default when absent.
+	// Downsampling factor applied before detecting stars, a positive integer; the provider's default when absent. The
+	// built-in solver detects stars at full resolution and ignores it.
 	readonly downsample?: number
 }
 
@@ -106,13 +111,15 @@ export type PlateSolveOrigin =
 // State of a job: waiting for its solver, running, or ended (completed, failed, or cancelled).
 export type PlateSolveJobState = AnalysisJobState
 
-// Step a running job reached: preparing the image, solving it locally, or a step of a nova solve.
+// Step a running job reached: preparing the image, solving it locally (the built-in solver: detecting its stars too),
+// or a step of a nova solve.
 export type PlateSolveStage = 'preparing' | 'solving' | NovaStage
 
 // Why a job did not complete:
 // - queueFull: too many jobs were waiting when it was submitted.
 // - notConfigured: the provider is not configured in External Tools (nova: not signed in).
 // - unavailable: the solver could not be started.
+// - workerFailed: the worker of the built-in solver died.
 // - timeout: the solve ran longer than the provider's timeout.
 // - failed: the solver reported an error, or the service refused the upload.
 // - invalidSolution: the solver produced a WCS that is not a valid solution of the image.
@@ -121,7 +128,7 @@ export type PlateSolveStage = 'preparing' | 'solving' | NovaStage
 // - expired: the image was released before the job could read it, or the result is no longer kept.
 // - sessionExpired: nova refused the saved session; signing in again is needed.
 // - network: nova could not be reached.
-export type PlateSolveErrorCode = 'queueFull' | 'notConfigured' | 'unavailable' | 'timeout' | 'failed' | 'invalidSolution' | 'invalidImage' | 'cancelled' | 'expired' | 'sessionExpired' | 'network'
+export type PlateSolveErrorCode = 'queueFull' | 'notConfigured' | 'unavailable' | 'workerFailed' | 'timeout' | 'failed' | 'invalidSolution' | 'invalidImage' | 'cancelled' | 'expired' | 'sessionExpired' | 'network'
 
 // Outcome of a completed job: a solution, or a search that ended without one.
 export type PlateSolveOutcome = 'solved' | 'noSolution'
@@ -281,20 +288,21 @@ export class PlateSolvingError extends Error {
 }
 
 // External Tools entry of each provider.
-const PROVIDER_TOOLS: Readonly<Record<PlateSolverProvider, ExternalToolId>> = { astap: 'astap', astrometryLocal: 'astrometryLocal', nova: 'nova' }
+const PROVIDER_TOOLS: Readonly<Record<PlateSolverProvider, ExternalToolId>> = { astap: 'astap', astrometryLocal: 'astrometryLocal', nova: 'nova', nebulosa: 'nebulosa' }
 
 // Name of each provider, for messages.
-const PROVIDER_NAMES: Readonly<Record<PlateSolverProvider, string>> = { astap: 'ASTAP', astrometryLocal: 'Astrometry.net Local', nova: 'Astrometry.net Online' }
+const PROVIDER_NAMES: Readonly<Record<PlateSolverProvider, string>> = { astap: 'ASTAP', astrometryLocal: 'Astrometry.net Local', nova: 'Astrometry.net Online', nebulosa: 'Nebulosa' }
 
 // Solves running at once: one ASTAP and one solve-field process, each a full multithreaded program with a FITS copy on
-// disk; two nova solves, which mostly wait for the service.
-const PROVIDER_LIMITS: Readonly<Record<PlateSolverProvider, number>> = { astap: 1, astrometryLocal: 1, nova: 2 }
+// disk; one built-in solve, which takes the single thread of its worker; two nova solves, which mostly wait for the service.
+const PROVIDER_LIMITS: Readonly<Record<PlateSolverProvider, number>> = { astap: 1, astrometryLocal: 1, nova: 2, nebulosa: 1 }
 
 // Fractional tolerance of a scale hint when the request gives none.
 export const DEFAULT_SCALE_TOLERANCE = 0.2
 
-// Downsampling of each provider when the request gives none: ASTAP chooses (0), solve-field and nova halve.
-const DEFAULT_DOWNSAMPLE: Readonly<Record<PlateSolverProvider, number>> = { astap: 0, astrometryLocal: 2, nova: 2 }
+// Downsampling of each provider when the request gives none: ASTAP chooses (0), solve-field and nova halve, and the
+// built-in solver never downsamples (1).
+const DEFAULT_DOWNSAMPLE: Readonly<Record<PlateSolverProvider, number>> = { astap: 0, astrometryLocal: 2, nova: 2, nebulosa: 1 }
 
 // Pixels a solution's image size may differ from the document: ASTAP rebuilds NAXIS1/NAXIS2 from CRPIX, which rounds an
 // odd size down by one.
@@ -307,11 +315,14 @@ const DERIVED_FIELDS = new Set(['orientation', 'scale', 'width', 'height', 'pari
 const MANUAL_ORIGIN: PlateSolveOrigin = { kind: 'manual' }
 
 // Returns the key of an equivalent solve: the same image, provider, strategy, effective hints, tolerance,
-// downsampling, provider settings, and pixels (the fingerprint of private pixels, empty for the image itself). The
-// timeout and the session are left out, since they do not change a result.
+// downsampling (none for the built-in solver, which ignores it), provider settings, and pixels (the fingerprint of
+// private pixels, empty for the image itself). The timeout and the session are left out, since they do not change a
+// result; so are the contents of the folders of the built-in solver, so a solve after their index files changed
+// answers with the kept result of the same request.
 export function plateSolveCacheKey(imageId: string, { provider, strategy, scaleTolerance, downsample }: PlateSolveRequest, hints: ResolvedPlateSolveHints, tool: ExternalToolConfig, fingerprint: string = ''): string {
 	const values = [hints.rightAscension?.value, hints.declination?.value, hints.radius?.value, hints.scale?.value]
-	return JSON.stringify([imageId, provider, strategy, values, scaleTolerance ?? DEFAULT_SCALE_TOLERANCE, downsample || DEFAULT_DOWNSAMPLE[provider], tool.executable, tool.config ?? '', tool.endpoint ?? '', fingerprint])
+	const effectiveDownsample = provider === 'nebulosa' ? DEFAULT_DOWNSAMPLE.nebulosa : downsample || DEFAULT_DOWNSAMPLE[provider]
+	return JSON.stringify([imageId, provider, strategy, values, scaleTolerance ?? DEFAULT_SCALE_TOLERANCE, effectiveDownsample, tool.executable, tool.config ?? '', tool.endpoint ?? '', tool.indexDirectory ?? '', tool.catalogDirectory ?? '', fingerprint])
 }
 
 // Returns the solution of a WCS header for an image of width × height pixels, or undefined when plateSolutionFrom
@@ -337,6 +348,8 @@ export class PlateSolvingService implements Disposable {
 	readonly #scheduler: AnalysisScheduler<PlateSolveJob, PlateSolveResult, JobPreparation, PlateSolverProvider>
 	// Wait between two polls of a nova job, in milliseconds.
 	readonly #pollInterval: number
+	// Client of the worker of the built-in solver.
+	readonly #native = new NativePlateSolver()
 
 	// Creates the service over the image store and the External Tools settings, publishing every job change to
 	// listener. The results of an image are dropped when the store releases it.
@@ -472,16 +485,11 @@ export class PlateSolvingService implements Disposable {
 
 	// Runs a job with its provider and validates the WCS it found.
 	async #execute(entry: JobEntry): Promise<AnalysisCompletion<PlateSolveJob, PlateSolveResult>> {
-		const { jobId, imageId, hints } = entry.job
+		const { jobId, hints } = entry.job
 		const { request } = entry.preparation
 		this.#scheduler.update(jobId, { stage: 'preparing' })
 
-		// Private pixels replace the copy of the image; the image stays retained, so its size and its result are its own.
-		const bytes = entry.preparation.pixels?.bytes ?? (await this.images.detectionFile(imageId, request.strategy === 'blind' ? POINTING_KEYWORDS : undefined))
-		if (!bytes) throw new PlateSolvingError('expired', 'The image was released before it could be solved')
-		if (entry.controller.signal.aborted) throw new PlateSolvingError('cancelled', 'The plate solve was cancelled')
-
-		const header = request.provider === 'nova' ? await this.#solveNova(entry, bytes) : await this.#solveLocal(entry, bytes)
+		const { header, warnings: solverWarnings = [] } = request.provider === 'nebulosa' ? await this.#solveNative(entry) : { header: await this.#solveCopy(entry) }
 		const { width, height } = entry.size
 		const solution = header && validatedSolution(header, width, height)
 		if (header && !solution) throw new PlateSolvingError('invalidSolution', `${PROVIDER_NAMES[request.provider]} produced a WCS that is not a solution of this ${width}×${height} image`)
@@ -493,8 +501,57 @@ export class PlateSolvingService implements Disposable {
 			: { outcome: 'noSolution', elapsed }
 		const { session: _, ...tool } = entry.preparation.tool
 		const remote = this.#scheduler.job(jobId)?.remote
-		const result: PlateSolveResult = { ...summary, jobId, imageId, request, hints, tool, ...(solution && { solution }), ...(remote && { remote }), widthInPixels: width, heightInPixels: height, queueTime, warnings: warnings(request, hints, solution) }
+		const result: PlateSolveResult = { ...summary, jobId, imageId: entry.job.imageId, request, hints, tool, ...(solution && { solution }), ...(remote && { remote }), widthInPixels: width, heightInPixels: height, queueTime, warnings: [...warnings(request, hints, solution), ...solverWarnings] }
 		return { patch: { summary }, result }
+	}
+
+	// Solves a job with ASTAP, solve-field, or nova on a FITS copy of the image. Resolves to the WCS header, or undefined
+	// when the search ended without a solution.
+	async #solveCopy(entry: JobEntry): Promise<FitsHeader | undefined> {
+		const { request } = entry.preparation
+		// Private pixels replace the copy of the image; the image stays retained, so its size and its result are its own.
+		const bytes = entry.preparation.pixels?.bytes ?? (await this.images.detectionFile(entry.job.imageId, request.strategy === 'blind' ? POINTING_KEYWORDS : undefined))
+		if (!bytes) throw new PlateSolvingError('expired', 'The image was released before it could be solved')
+		if (entry.controller.signal.aborted) throw new PlateSolvingError('cancelled', 'The plate solve was cancelled')
+		return request.provider === 'nova' ? await this.#solveNova(entry, bytes) : await this.#solveLocal(entry, bytes)
+	}
+
+	// Solves a job with the built-in solver on its worker, over the grayscale copy of the image or its private pixels, with
+	// the scale hint widened by the scale tolerance. Resolves to the WCS header, undefined when the search ended without a
+	// solution, with the warnings of the solver.
+	async #solveNative(entry: JobEntry): Promise<{ readonly header?: FitsHeader; readonly warnings: readonly string[] }> {
+		const { request, tool, pixels } = entry.preparation
+		const { jobId, imageId, hints } = entry.job
+		const { width, height } = entry.size
+		const { signal } = entry.controller
+		// Private pixels replace the copy of the image; the image stays retained, so its size and its result are its own.
+		const image = pixels ? undefined : await this.images.detectionImage(imageId)
+		if (!pixels && !image) throw new PlateSolvingError('expired', 'The image was released before it could be solved')
+		if (signal.aborted) throw new PlateSolvingError('cancelled', 'The plate solve was cancelled')
+
+		const tolerance = request.scaleTolerance ?? DEFAULT_SCALE_TOLERANCE
+		const scale = hints.scale && { lower: hints.scale.value * (1 - tolerance), upper: hints.scale.value * (1 + tolerance) }
+		const position = hints.rightAscension && hints.declination && hints.radius ? { rightAscension: hints.rightAscension.value, declination: hints.declination.value, radius: hints.radius.value } : undefined
+		this.#scheduler.update(jobId, { stage: 'solving' })
+
+		try {
+			return await this.#native.solve(
+				{
+					pixels: pixels ? { kind: 'fits', bytes: pixels.bytes } : { kind: 'image', image: image! },
+					indexDirectory: tool.indexDirectory?.trim() ?? '',
+					catalogDirectory: tool.catalogDirectory?.trim() ?? '',
+					width,
+					height,
+					...(position && { position }),
+					...(scale && { scale }),
+					timeout: tool.timeout,
+				},
+				signal,
+			)
+		} catch (error) {
+			if (!(error instanceof NativeSolveError)) throw error
+			throw new PlateSolvingError(error.code, error.message)
+		}
 	}
 
 	// Solves a job with ASTAP or solve-field on a FITS copy of the image, in a directory of its own removed afterwards.
@@ -554,10 +611,11 @@ export class PlateSolvingService implements Disposable {
 		}
 	}
 
-	// Stops a server in place: cancels every job waiting or running, which kills a solver process and ends a remote poll,
-	// so none outlives the run.
+	// Stops a server in place: cancels every job waiting or running, which kills a solver process, ends a remote poll,
+	// and terminates the worker of the built-in solver, so none outlives the run.
 	[Symbol.dispose]() {
 		this.#scheduler.cancelAll()
+		this.#native[Symbol.dispose]()
 	}
 }
 
@@ -577,7 +635,7 @@ function warnings(request: PlateSolveRequest, hints: ResolvedPlateSolveHints, so
 	if (request.strategy === 'assisted' && !hints.rightAscension) warnings.push('No position was known: the search covered the whole sky.')
 	if (hints.rightAscension?.source === 'header') warnings.push('The search center is the pointing recorded in the header.')
 	if (hints.radius?.source === 'default') warnings.push('The search radius is the default one.')
-	if (request.scaleTolerance !== undefined && request.provider !== 'nova') warnings.push(`${PROVIDER_NAMES[request.provider]} applies its own scale tolerance.`)
+	if (request.scaleTolerance !== undefined && request.provider !== 'nova' && request.provider !== 'nebulosa') warnings.push(`${PROVIDER_NAMES[request.provider]} applies its own scale tolerance.`)
 	if (!solution && request.provider !== 'nova') warnings.push('A search without a solution may need index files or a star database covering this field and scale.')
 	return warnings
 }

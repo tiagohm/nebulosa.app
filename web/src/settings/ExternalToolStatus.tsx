@@ -7,8 +7,9 @@ import { StatusBadge, type StatusTone, TONE_TEXT } from '../ui/StatusBadge'
 // label always accompanies the color, and the tooltip says what the state proves.
 
 // State of a program as shown: not set up, signed out of, not checked yet, being checked in this tab, available (a
-// program that answered when started, a service signed in to), available without a star database, not found, or failed.
-export type ToolDisplay = 'notSetUp' | 'signedOut' | 'notChecked' | 'checking' | 'available' | 'signedIn' | 'noDatabase' | 'notFound' | 'failed'
+// program that answered when started, a service signed in to, folders holding index files), available without a star
+// database, folders without index files, not found, or failed.
+export type ToolDisplay = 'notSetUp' | 'signedOut' | 'notChecked' | 'checking' | 'available' | 'signedIn' | 'noDatabase' | 'noIndexes' | 'notFound' | 'failed'
 
 // Label of each state.
 export const TOOL_LABELS: Readonly<Record<ToolDisplay, string>> = {
@@ -19,28 +20,31 @@ export const TOOL_LABELS: Readonly<Record<ToolDisplay, string>> = {
 	available: 'Available',
 	signedIn: 'Signed In',
 	noDatabase: 'No Star Database',
+	noIndexes: 'No Index Files',
 	notFound: 'Not Found',
 	failed: 'Failed',
 }
 
 // Tone of each state.
-const TOOL_TONES: Readonly<Record<ToolDisplay, StatusTone>> = { notSetUp: 'muted', signedOut: 'muted', notChecked: 'muted', checking: 'active', available: 'success', signedIn: 'success', noDatabase: 'warning', notFound: 'danger', failed: 'danger' }
+const TOOL_TONES: Readonly<Record<ToolDisplay, StatusTone>> = { notSetUp: 'muted', signedOut: 'muted', notChecked: 'muted', checking: 'active', available: 'success', signedIn: 'success', noDatabase: 'warning', noIndexes: 'warning', notFound: 'danger', failed: 'danger' }
 
 // What each state proves, for its tooltip.
 const TOOL_HINTS: Readonly<Record<ToolDisplay, string>> = {
-	notSetUp: 'No executable is set, so the services that need it refuse to run',
+	notSetUp: 'Nothing is set up, so the services that need it refuse to run',
 	signedOut: 'The server holds no session of the service, so solving with it is refused',
 	notChecked: 'The settings have not been tested since the server started',
 	checking: 'The server is testing the settings',
-	available: 'The program answered when the server started it',
+	available: 'The program answered when the server started it, or its folders hold what it reads',
 	signedIn: 'The server holds a session of the service; the service was not contacted',
 	noDatabase: 'The program answered, but no star database is beside it',
+	noIndexes: 'The folders hold no index file and no supported star database',
 	notFound: 'Nothing exists where the settings point on the server',
 	failed: 'The server cannot use the program with these settings',
 }
 
 // Returns the state of a program from a check of its settings, or, without one, from whether those settings are set
-// up: configured, for a program, means an executable is set, and, for a web service, that it is signed in to.
+// up: configured, for a program, means an executable (the built-in solver, a folder) is set, and, for a web service,
+// that it is signed in to.
 export function toolDisplay(check: ExternalToolCheck | undefined, session: boolean, configured: boolean): ToolDisplay {
 	if (!check) return configured ? 'notChecked' : session ? 'signedOut' : 'notSetUp'
 
@@ -53,6 +57,8 @@ export function toolDisplay(check: ExternalToolCheck | undefined, session: boole
 			return 'signedOut'
 		case 'noDatabase':
 			return 'noDatabase'
+		case 'noIndexes':
+			return 'noIndexes'
 		case 'missing':
 		case 'configMissing':
 			return 'notFound'

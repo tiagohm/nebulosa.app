@@ -7,7 +7,7 @@ import bunTailwindPlugin from './tailwind.plugin'
 // directory of the build (app/), and the workers are embedded outside of it, under a path nothing finds.
 const ROOT = join(import.meta.dir, '..')
 
-// Image, image processing, star detection, star profile, streak detection, DARV analysis, Flat Wizard measurement, Dark Library Wizard measurement, Calibration Library integration, master dark subtraction, Live Stacking, Image Stacking, guide frame, mount pointing fit, solar eclipse map, and SPICE kernel integration workers, bundled as extra entry points so
+// Image, image processing, star detection, star profile, streak detection, DARV analysis, Flat Wizard measurement, Dark Library Wizard measurement, Calibration Library integration, master dark subtraction, Live Stacking, Image Stacking, guide frame, mount pointing fit, solar eclipse map, SPICE kernel integration, and built-in plate solving workers, bundled as extra entry points so
 // the executable embeds them transpiled with their imports. Inside the executable a worker is only found by its
 // path relative to the embedded root, never through `new URL(..., import.meta.url)`, which points at the
 // executable itself.
@@ -27,6 +27,7 @@ const MOUNTPOINTING_WORKER = join(ROOT, 'api/src/mountpointing.worker.ts')
 const GUIDING_WORKER = join(ROOT, 'api/src/guiding.worker.ts')
 const SOLARECLIPSE_WORKER = join(ROOT, 'api/src/solareclipses.worker.ts')
 const SPICEKERNELS_WORKER = join(ROOT, 'api/src/spicekernels.worker.ts')
+const PLATESOLVING_WORKER = join(ROOT, 'api/src/platesolving.worker.ts')
 
 // Path of a worker relative to the embedded root, as the executable finds it, as a define value.
 function embeddedPath(path: string) {
@@ -70,6 +71,7 @@ await build({
 		MOUNTPOINTING_WORKER,
 		SOLARECLIPSE_WORKER,
 		SPICEKERNELS_WORKER,
+		PLATESOLVING_WORKER,
 	],
 	root: ROOT,
 	// Code shared by the entry points goes into chunks embedded once. Without it every entry point carries its own
@@ -101,6 +103,7 @@ await build({
 		'process.env.NEBULOSA_GUIDING_WORKER': embeddedPath(GUIDING_WORKER),
 		'process.env.NEBULOSA_MOUNTPOINTING_WORKER': embeddedPath(MOUNTPOINTING_WORKER),
 		'process.env.NEBULOSA_SOLARECLIPSE_WORKER': embeddedPath(SOLARECLIPSE_WORKER),
+		'process.env.NEBULOSA_PLATESOLVING_WORKER': embeddedPath(PLATESOLVING_WORKER),
 		// Provenance shown by the About page, recorded once when compiling.
 		'process.env.NEBULOSA_BUILD_COMMIT': defineString(gitHead(ROOT)),
 		'process.env.NEBULOSA_CORE_COMMIT': defineString(gitHead(join(ROOT, 'core'))),

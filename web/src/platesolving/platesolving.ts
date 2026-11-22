@@ -33,13 +33,13 @@ export interface PlateSolvingState {
 }
 
 // Display names of the solvers.
-export const PROVIDER_LABELS: Readonly<Record<PlateSolverProvider, string>> = { astap: 'ASTAP', astrometryLocal: 'Astrometry.net Local', nova: 'Astrometry.net Online' }
+export const PROVIDER_LABELS: Readonly<Record<PlateSolverProvider, string>> = { astap: 'ASTAP', astrometryLocal: 'Astrometry.net Local', nova: 'Astrometry.net Online', nebulosa: 'Nebulosa' }
 
 // Solvers, in selector order.
-export const PROVIDERS: readonly PlateSolverProvider[] = ['astap', 'astrometryLocal', 'nova']
+export const PROVIDERS: readonly PlateSolverProvider[] = ['astap', 'astrometryLocal', 'nova', 'nebulosa']
 
 // External Tools entry of each solver, for its availability and its settings link.
-export const PROVIDER_TOOLS: Readonly<Record<PlateSolverProvider, string>> = { astap: 'astap', astrometryLocal: 'astrometryLocal', nova: 'nova' }
+export const PROVIDER_TOOLS: Readonly<Record<PlateSolverProvider, string>> = { astap: 'astap', astrometryLocal: 'astrometryLocal', nova: 'nova', nebulosa: 'nebulosa' }
 
 // Display names of the steps of a running job.
 export const STAGE_LABELS: Readonly<Record<PlateSolveStage, string>> = { preparing: 'Preparing the image', solving: 'Solving', uploading: 'Uploading to the service', submitted: 'Waiting for the remote job', retrieving: 'Retrieving the solution' }

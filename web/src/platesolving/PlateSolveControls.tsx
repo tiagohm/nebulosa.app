@@ -110,13 +110,16 @@ export function HintControls({ request, onChange, offered, disabled }: PlateSolv
 	)
 }
 
-// Advanced settings the chosen solver takes: downsampling, and the scale tolerance of nova.
+// Advanced settings the chosen solver takes: downsampling, except for the built-in solver, which detects stars at full
+// resolution, and the scale tolerance of nova and the built-in solver.
 export function AdvancedControls({ request, onChange, disabled }: PlateSolveControlsProps) {
+	const builtin = request.provider === 'nebulosa'
+
 	return (
 		<>
-			<NumberInput label="Downsample" min={0} max={16} step={1} value={request.downsample ?? 0} disabled={disabled} onChange={(downsample) => onChange({ ...request, downsample: downsample > 0 ? Math.trunc(downsample) : undefined })} />
-			{request.provider === 'nova' && <NumberInput label="Scale Tolerance" suffix="%" min={1} max={90} step={1} value={(request.scaleTolerance ?? 0.2) * 100} disabled={disabled} onChange={(percent) => onChange({ ...request, scaleTolerance: percent / 100 })} />}
-			<Notice>Downsample 0 lets the solver choose. The solution is always given for the full-size image.</Notice>
+			{!builtin && <NumberInput label="Downsample" min={0} max={16} step={1} value={request.downsample ?? 0} disabled={disabled} onChange={(downsample) => onChange({ ...request, downsample: downsample > 0 ? Math.trunc(downsample) : undefined })} />}
+			{(builtin || request.provider === 'nova') && <NumberInput label="Scale Tolerance" suffix="%" min={1} max={90} step={1} value={(request.scaleTolerance ?? 0.2) * 100} disabled={disabled} onChange={(percent) => onChange({ ...request, scaleTolerance: percent / 100 })} />}
+			<Notice>{builtin ? 'The scale is searched within the tolerance around the pixel scale, when one is known.' : 'Downsample 0 lets the solver choose. The solution is always given for the full-size image.'}</Notice>
 		</>
 	)
 }

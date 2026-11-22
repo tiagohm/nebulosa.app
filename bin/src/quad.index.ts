@@ -1,15 +1,14 @@
 import fs from 'fs/promises'
 import { join } from 'path'
 import { exit } from 'process'
+import { findStarDatabases, type StarDatabaseKind, SUPPORTED_STAR_DATABASES } from 'api/platesolving.native'
 import { DEFAULT_QUAD_STARS_PER_CELL, healpixCellSize, quadCellNside } from 'nebulosa/src/astrometry/solvers/quad.builder'
 import type { SkyCone } from 'nebulosa/src/astrometry/solvers/quad.index'
 import { catalogQuadIndexStars } from 'nebulosa/src/astrometry/solvers/quad.index.ephemeral'
 import { buildQuadIndexTile, decodeQuadIndexHeader, encodeQuadIndexTile, QUAD_INDEX_EXTENSION, type QuadIndexStars, quadIndexTileCone, quadIndexTileFileName, verifyQuadIndexTile } from 'nebulosa/src/astrometry/solvers/quad.index.file'
 import { eraC2s, eraS2c } from 'nebulosa/src/astronomy/coordinates/erfa/erfa'
 import { circleToPixels, coordToPixel } from 'nebulosa/src/astronomy/sky/spatial/healpix'
-import { AstapCatalog, type Astap1476Database } from 'nebulosa/src/catalogs/stars/astap'
 import type { StarCatalog } from 'nebulosa/src/catalogs/stars/catalog'
-import { HnskyCatalog, type Hnsky290Database } from 'nebulosa/src/catalogs/stars/hnsky'
 import { ASEC2RAD, DEG2RAD, MILLIASEC2RAD } from 'nebulosa/src/core/constants'
 
 // Generates the quad index files of the built-in plate solver (not committed): one set of HEALPix tiles per band of
@@ -157,23 +156,14 @@ if (!(magnitudeLimit > 0) || bands.some((band) => !(band > 0)) || (region !== un
 	exit(1)
 }
 
-// Databases the toolkit's readers decode, by catalog kind.
-const SUPPORTED_DATABASES = { astap: ['d05', 'd20', 'd50', 'd80'], hnsky: ['g14', 'g16'] } as const satisfies { readonly astap: readonly Astap1476Database[]; readonly hnsky: readonly Hnsky290Database[] }
-
-// Finds a local ASTAP or HNSKY star database: the files of one supported database in a directory, named
-// <database>_<tile>.<extension>, and a function that opens a fresh reader over them (a reader caches every tile it reads
-// until closed).
-async function localCatalog(kind: 'astap' | 'hnsky', directory: string, requested?: string) {
-	const extension = kind === 'astap' ? '.1476' : '.290'
-	const supported: readonly string[] = SUPPORTED_DATABASES[kind]
-	const names = (await fs.readdir(directory)).filter((name) => name.endsWith(extension) && name.includes('_'))
-	const databases = [...new Set(names.map((name) => name.slice(0, name.indexOf('_')).toLowerCase()))].filter((database) => supported.includes(database))
-	const database = requested?.toLowerCase() ?? (databases.length === 1 ? databases[0] : undefined)
-	if (database === undefined || !databases.includes(database)) throw new Error(`choose a database of ${directory} with --database: ${databases.join(', ') || 'none found'} (supported: ${supported.join(', ')})`)
-
-	const files = new Map(names.filter((name) => name.toLowerCase().startsWith(`${database}_`)).map((name) => [name.toLowerCase(), Bun.file(join(directory, name))] as const))
-	const open = () => (kind === 'astap' ? new AstapCatalog().open(files, database as Astap1476Database) : new HnskyCatalog().open(files, database as Hnsky290Database))
-	return { open, database }
+// Finds a local ASTAP or HNSKY star database: one supported database of a directory, the requested one or else the only
+// one of that kind, whose open makes a fresh reader over its files (a reader caches every tile it reads until closed).
+async function localCatalog(kind: StarDatabaseKind, directory: string, requested?: string) {
+	const supported: readonly string[] = SUPPORTED_STAR_DATABASES[kind]
+	const databases = (await findStarDatabases(directory)).filter((database) => database.kind === kind)
+	const found = requested === undefined ? (databases.length === 1 ? databases[0] : undefined) : databases.find(({ database }) => database === requested.toLowerCase())
+	if (found === undefined) throw new Error(`choose a database of ${directory} with --database: ${databases.map(({ database }) => database).join(', ') || 'none found'} (supported: ${supported.join(', ')})`)
+	return found
 }
 
 let source: StarSource

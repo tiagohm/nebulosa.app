@@ -6,6 +6,7 @@
 		".": "./src/index.ts",
 		"./equipmentcatalog.models": "./src/equipmentcatalog.models.ts",
 		"./framings.surveys": "./src/framings.surveys.ts",
+		"./platesolving.native": "./src/platesolving.native.ts",
 		"./sky/designations": "./src/sky/designations.ts",
 		"./sky/moon.features": "./src/sky/moon.features.ts",
 		"./sky/schema": "./src/sky/schema.ts"

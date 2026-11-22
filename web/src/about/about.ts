@@ -87,6 +87,13 @@ export const CREDIT_GROUPS: readonly CreditGroup[] = [
 				notice: 'This research has made use of the hips2fits, a tool developed at CDS, Strasbourg, France aiming at extracting FITS images from HiPS sky maps with respect to a WCS.',
 			},
 			{ name: 'Nova Astrometry.net', owner: 'Astrometry.net', url: 'https://nova.astrometry.net/', use: 'Optional online plate solving, with your own account.' },
+			{
+				name: 'Gaia DR3',
+				owner: 'ESA/Gaia/DPAC',
+				url: 'https://www.cosmos.esa.int/gaia',
+				use: 'Stars of the quad index files bun make:quads builds for the built-in plate solver, downloaded from the Gaia Archive.',
+				notice: 'This work has made use of data from the European Space Agency (ESA) mission Gaia (https://www.cosmos.esa.int/gaia), processed by the Gaia Data Processing and Analysis Consortium (DPAC, https://www.cosmos.esa.int/web/gaia/dpac/consortium). Funding for the DPAC has been provided by national institutions, in particular the institutions participating in the Gaia Multilateral Agreement. Gaia Collaboration, Vallenari, A. et al., A&A 674, A1 (2023).',
+			},
 		],
 	},
 	{
@@ -197,7 +204,15 @@ export const CREDIT_GROUPS: readonly CreditGroup[] = [
 			{ name: 'Yarkovsky transverse acceleration', owner: 'D. Farnocchia et al.', url: 'https://doi.org/10.1016/j.icarus.2013.02.004', use: 'Yarkovsky drift of asteroids in the integration of MPC orbits.', notice: 'Icarus 224, 1 (2013).' },
 			{ name: 'Moffat profile', owner: 'A. F. J. Moffat', url: 'https://ui.adsabs.harvard.edu/abs/1969A%26A.....3..455M', use: 'Fits of the Star Profile Inspector.', notice: 'A&A 3, 455 (1969).' },
 			{ name: 'PixInsight', owner: 'Pleiades Astrophoto', url: 'https://pixinsight.com/', use: 'Adaptive display function, arcsinh stretch, and multiscale median transform the image tools follow, and the XISF image format.' },
-			{ name: 'ASTAP star extraction and matching', owner: 'Han Kleijn', url: 'https://www.hnsky.org/astap_astrometric_solving.htm', use: 'Built-in star detection, and the star matching that registers the frames of image stacking.' },
+			{ name: 'ASTAP star extraction and matching', owner: 'Han Kleijn', url: 'https://www.hnsky.org/astap_astrometric_solving.htm', use: 'Built-in star detection, the star matching that registers the frames of image stacking, and the spiral order of the built-in plate solver around a known position.' },
+			{
+				name: 'Astrometry.net blind calibration',
+				owner: 'D. Lang, D. W. Hogg, K. Mierle, M. Blanton, and S. Roweis',
+				url: 'https://doi.org/10.1088/0004-6256/139/5/1782',
+				use: 'Quad codes, Bayesian verification, and the Astrometry.net index files of the built-in plate solver.',
+				notice: 'AJ 139, 1782 (2010).',
+			},
+			{ name: 'Watney Astrometry', owner: 'Jusas', url: 'https://github.com/Jusas/WatneyAstrometry', use: 'Search positions and star density steps of the built-in plate solver around a known position.' },
 			{ name: 'INDI', owner: 'INDI Library', url: 'https://indilib.org/', use: 'Protocol of the INDI connections to devices.' },
 			{ name: 'ASCOM Alpaca', owner: 'ASCOM Initiative', url: 'https://ascom-standards.org/', use: 'Protocol of the Alpaca connections to devices.' },
 			{ name: 'LX200 command set', owner: 'Meade Instruments', url: 'https://soundstepper.sourceforge.net/LX200_Compatible_Commands.html', use: 'Protocol Mount Remote Control speaks to planetarium programs.' },
@@ -211,8 +226,9 @@ export const CREDIT_GROUPS: readonly CreditGroup[] = [
 	{
 		title: 'External Programs',
 		credits: [
-			{ name: 'ASTAP', owner: 'Han Kleijn', url: 'https://www.hnsky.org/astap.htm', use: 'Optional plate solving and star detection, installed by you.' },
-			{ name: 'Astrometry.net', url: 'https://astrometry.net/', use: 'Optional local plate solving with solve-field, installed by you.', notice: 'Lang et al., The Astronomical Journal, 2010.' },
+			{ name: 'ASTAP', owner: 'Han Kleijn', url: 'https://www.hnsky.org/astap.htm', use: 'Optional plate solving and star detection, installed by you; the built-in plate solver also reads its star databases.' },
+			{ name: 'HNSKY star databases', owner: 'Han Kleijn', url: 'https://www.hnsky.org/software.htm', use: 'Optional star databases the built-in plate solver reads around a known position, installed by you.' },
+			{ name: 'Astrometry.net', url: 'https://astrometry.net/', use: 'Optional local plate solving with solve-field, installed by you; the built-in plate solver also reads its index files.', notice: 'Lang et al., The Astronomical Journal, 2010.' },
 			{
 				name: 'MediaMTX',
 				owner: 'bluenviron',

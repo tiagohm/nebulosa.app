@@ -12,11 +12,12 @@ import { DisclosureSummary } from '../ui/DisclosureSummary'
 import { Notice } from '../ui/Notice'
 import { NumberInput } from '../ui/NumberInput'
 import { TextInput } from '../ui/TextInput'
-import { CAPABILITY_LABELS, checkMatches, externalToolsState, sameConfig, saveExternalTool, signInExternalTool, signOutExternalTool, testExternalTool } from './externaltools'
+import { CAPABILITY_LABELS, checkMatches, externalToolsState, hasSettings, sameConfig, saveExternalTool, signInExternalTool, signOutExternalTool, testExternalTool } from './externaltools'
 import { savedDisplay, ToolBadge, type ToolDisplay, toolDisplay } from './ExternalToolStatus'
 
 // Settings of one external program or web service: its state and the test that proves it first, then the settings it
-// takes (its executable path on the server, the configuration file passed to it, or the endpoint of the service) and
+// takes (its executable path on the server, the configuration file passed to it, the endpoint of the service, or the
+// folders of the built-in solver) and
 // the time limit of a run, edited as a local draft that only Save sends to the server, then what it is used for and
 // needs. A web service is signed in to with an API key typed here, sent once to the server and never kept in the draft
 // or the browser; only whether the server holds a session is shown. Test checks the draft on the server without saving
@@ -57,8 +58,9 @@ function formatLimit(milliseconds: number) {
 	return seconds % 60 === 0 ? `${seconds / 60} min` : `${Math.floor(seconds / 60)} min ${seconds % 60} s`
 }
 
-// Details of a check, collapsed by default: where the program resolved to, the version it printed, and when it ran.
-function CheckDiagnostics({ check, session }: { readonly check: ExternalToolCheck; readonly session: boolean }) {
+// Details of a check, collapsed by default: where the program resolved to, the version it printed (the folders of the
+// built-in solver instead), and when it ran.
+function CheckDiagnostics({ check, session, folders }: { readonly check: ExternalToolCheck; readonly session: boolean; readonly folders: boolean }) {
 	const timeZone = useActiveTimeZone()
 	return (
 		<details className="-my-2 text-sm leading-5 text-ink-200">
@@ -66,6 +68,11 @@ function CheckDiagnostics({ check, session }: { readonly check: ExternalToolChec
 			<div className="flex flex-col gap-1 pb-2">
 				{session ? (
 					<DataRow label="Endpoint">{check.config.endpoint || 'Default'}</DataRow>
+				) : folders ? (
+					<>
+						<DataRow label="Index folder">{check.config.indexDirectory || MISSING}</DataRow>
+						<DataRow label="Star database folder">{check.config.catalogDirectory || MISSING}</DataRow>
+					</>
 				) : (
 					<>
 						<DataRow label="Resolved path">{check.resolvedPath ?? MISSING}</DataRow>
@@ -164,10 +171,13 @@ export function ExternalToolDetail({ tool, onDirtyChange }: ExternalToolDetailPr
 	const { min, max } = tool.timeoutLimits
 	// Whether the program is a gateway the server keeps running, whose timeout bounds its start, not a run.
 	const gateway = tool.capabilities.includes('video-gateway')
+	// Whether the program is the built-in solver, which takes folders instead of an executable.
+	const folders = tool.fields.includes('indexDirectory')
 	const check = test && checkMatches(test, draft) ? test : tool.lastCheck && checkMatches(tool.lastCheck, draft) ? tool.lastCheck : undefined
 	const staleTest = !testing && !check && test !== undefined
-	// Whether the values in the fields are set up enough to be used: a web service signed in to, a program with an executable.
-	const draftConfigured = tool.session ? tool.signedIn === true : draft.executable.trim() !== ''
+	// Whether the values in the fields are set up enough to be used: a web service signed in to, a program with an
+	// executable, the built-in solver with a folder.
+	const draftConfigured = tool.session ? tool.signedIn === true : hasSettings(draft)
 	// State of the values in the fields, and of the saved settings shown in the header like in the list.
 	const display: ToolDisplay = testing ? 'checking' : toolDisplay(check, tool.session, draftConfigured)
 	const headerDisplay: ToolDisplay = testing && !dirty ? 'checking' : savedDisplay(tool)
@@ -196,7 +206,7 @@ export function ExternalToolDetail({ tool, onDirtyChange }: ExternalToolDetailPr
 			setBase({ revision: result.tool.revision, config: result.tool.config })
 			setDraft(result.tool.config)
 			// Saved settings without a check are tested at once, so every tab sees their state.
-			if (!result.tool.lastCheck && (tool.session || result.tool.config.executable.trim())) await runTest(result.tool.config)
+			if (!result.tool.lastCheck && (tool.session || hasSettings(result.tool.config))) await runTest(result.tool.config)
 		} else if (result.status === 'error') {
 			setError(result.error)
 		}
@@ -217,7 +227,8 @@ export function ExternalToolDetail({ tool, onDirtyChange }: ExternalToolDetailPr
 		if (check) return check.message
 		if (staleTest) return 'The last test checked other values. Test again to check these.'
 		if (draftConfigured) return dirty ? 'These values are not tested yet. Test them before saving.' : 'Not tested since the server started.'
-		return tool.session ? 'Sign in with the API key of your account to use the service.' : `Set the executable of ${tool.name} below, then test it.`
+		if (tool.session) return 'Sign in with the API key of your account to use the service.'
+		return folders ? 'Set the folder of the index files or of a star database below, then test it.' : `Set the executable of ${tool.name} below, then test it.`
 	}
 
 	return (
@@ -245,14 +256,18 @@ export function ExternalToolDetail({ tool, onDirtyChange }: ExternalToolDetailPr
 						</DataRow>
 					)}
 					<p className="m-0 text-sm leading-5 text-pretty text-ink-100">{verdict()}</p>
-					{check && <CheckDiagnostics check={check} session={tool.session} />}
+					{check && <CheckDiagnostics check={check} session={tool.session} folders={folders} />}
 					<Actions>
 						<Button variant="secondary" disabled={testing} title={testing ? 'A test is in progress' : undefined} onClick={() => void runTest()}>
 							{testing ? 'Testing…' : 'Test Settings'}
 						</Button>
 					</Actions>
 					<Notice>
-						{tool.session ? 'Test checks the endpoint and the session of the server without contacting the service.' : `Test starts ${tool.name} once on the server to print its version${tool.id === 'astap' ? ' and looks for its star database' : ''}, without saving; it does not analyze an image.`}
+						{tool.session
+							? 'Test checks the endpoint and the session of the server without contacting the service.'
+							: folders
+								? 'Test looks for the index files and star databases in the folders on the server, without saving; it does not read them nor analyze an image.'
+								: `Test starts ${tool.name} once on the server to print its version${tool.id === 'astap' ? ' and looks for its star database' : ''}, without saving; it does not analyze an image.`}
 					</Notice>
 				</PanelSection>
 				{tool.session && <SignIn tool={tool} disabled={dirty || outdated} />}
@@ -267,6 +282,18 @@ export function ExternalToolDetail({ tool, onDirtyChange }: ExternalToolDetailPr
 						<>
 							<TextInput label="Configuration File" placeholder="Empty for the default configuration of the program" value={draft.config ?? ''} onChange={(e) => edit({ ...draft, config: e.target.value })} />
 							<Notice>Optional backend configuration on the server, which names the folders of the index files. Without one, the program's default configuration is used.</Notice>
+						</>
+					)}
+					{tool.fields.includes('indexDirectory') && (
+						<>
+							<TextInput label="Index Folder" placeholder="Full path of a folder on the server" value={draft.indexDirectory ?? ''} onChange={(e) => edit({ ...draft, indexDirectory: e.target.value })} />
+							<Notice>Folder of Nebulosa (.nqi) and Astrometry.net (index-*.fits) quad index files on the server, searched with its subfolders. They solve images anywhere on the sky at the scales of their bands.</Notice>
+						</>
+					)}
+					{tool.fields.includes('catalogDirectory') && (
+						<>
+							<TextInput label="Star Database Folder" placeholder="Optional, such as the folder of ASTAP" value={draft.catalogDirectory ?? ''} onChange={(e) => edit({ ...draft, catalogDirectory: e.target.value })} />
+							<Notice>Folder of an ASTAP (D05, D20, D50, D80) or HNSKY (G14, G16) star database on the server; the deepest one is used. It solves images around a known position and scale when the index files find nothing.</Notice>
 						</>
 					)}
 					{tool.fields.includes('endpoint') && (

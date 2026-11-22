@@ -15,8 +15,9 @@ import { ASEC2RAD, DEG2RAD, MILLIASEC2RAD } from 'nebulosa/src/core/constants'
 // Generates the quad index files of the built-in plate solver (not committed): one set of HEALPix tiles per band of
 // quad sizes, from 8' up in steps of sqrt(2) by default, and manifest.json describing them, in bin/data/quads/<source>.
 // The stars come from Gaia DR3 by default, or from a local ASTAP (.1476) or HNSKY (.290) star database with --catalog,
-// read through the toolkit's catalog readers, which needs no download (those databases are Gaia extracts with no proper
-// motions, so the positions stay at their epoch). The Gaia stars come from the ESA Gaia archive (gaiadr3.gaia_source, positions at J2016.0 with proper
+// read through the toolkit's catalog readers, which needs no download (those databases have no proper motions, so the
+// positions stay at their epoch; --magnitude then limits the stars read, and the catalog is reopened for every tile so
+// that its cache of tile buffers never holds the whole database). The Gaia stars come from the ESA Gaia archive (gaiadr3.gaia_source, positions at J2016.0 with proper
 // motions), queried by chunks of source_id, which encodes the HEALPix level-12 cell of each source, and cached in
 // bin/data/gaia so that an interrupted run resumes and every band reuses the same download. Each tile is built from the
 // stars of its cone only, keeping per uniformization cell no more stars than the builder can use, so memory stays
@@ -27,7 +28,7 @@ import { ASEC2RAD, DEG2RAD, MILLIASEC2RAD } from 'nebulosa/src/core/constants'
 // written without downloading anything. A full run downloads the whole Gaia catalog to the magnitude limit (hours, and
 // gigabytes of cache) and needs a few gigabytes of memory for the smallest band; --region restricts it to a cone.
 // Usage: bun make:quads [--force] [--empty] [--bands 480,679] [--magnitude 17] [--region ra,dec,radius] [--concurrency 4]
-//        bun make:quads --catalog astap|hnsky --path <directory> [--database d20] [--force] [--bands ...] [--region ...]
+//        bun make:quads --catalog astap|hnsky --path <directory> [--database d20] [--magnitude 15] [--force] [--bands ...] [--region ...]
 // (band minima in arcseconds; region in degrees; --output replaces the output directory)
 
 // Root of the generated files, one directory per star source; not yet read by the application.
@@ -142,7 +143,8 @@ async function writeAtomically(path: string, data: Uint8Array | string) {
 
 const force = process.argv.includes('--force')
 const empty = process.argv.includes('--empty')
-const magnitudeLimit = Number(option('--magnitude') ?? DEFAULT_MAGNITUDE)
+const magnitudeOption = option('--magnitude')
+const magnitudeLimit = Number(magnitudeOption ?? DEFAULT_MAGNITUDE)
 const bands = (option('--bands')?.split(',').map(Number) ?? DEFAULT_BANDS).map((arcsec) => arcsec * ASEC2RAD)
 const concurrency = Math.max(1, Number(option('--concurrency') ?? 4))
 const regionOption = option('--region')?.split(',').map(Number)
@@ -150,22 +152,28 @@ const region = regionOption === undefined ? undefined : { center: eraS2c(regionO
 const catalogKind = option('--catalog')
 const usage = 'Usage: bun make:quads [--catalog astap|hnsky --path <directory> [--database d20]] [--force] [--empty] [--bands 480,679] [--magnitude 17] [--region ra,dec,radius] [--concurrency 4] [--output <directory>]'
 
-if (!(magnitudeLimit > 0) || bands.some((band) => !(band > 0)) || (region !== undefined && !(region.radius > 0)) || (catalogKind !== undefined && catalogKind !== 'astap' && catalogKind !== 'hnsky') || (catalogKind !== undefined && option('--path') === undefined)) {
+if (!(magnitudeLimit > 0) || bands.some((band) => !(band > 0)) || (region !== undefined && !(region.radius > 0)) || (catalogKind !== undefined && catalogKind !== 'astap' && catalogKind !== 'hnsky') || (catalogKind !== undefined && (option('--path') === undefined || option('--concurrency') !== undefined))) {
 	console.error(usage)
 	exit(1)
 }
 
-// Opens a local ASTAP or HNSKY star database: the files of one database in a directory, named <database>_<tile>.<extension>.
-async function openLocalCatalog(kind: 'astap' | 'hnsky', directory: string, requested?: string) {
+// Databases the toolkit's readers decode, by catalog kind.
+const SUPPORTED_DATABASES = { astap: ['d05', 'd20', 'd50', 'd80'], hnsky: ['g14', 'g16'] } as const satisfies { readonly astap: readonly Astap1476Database[]; readonly hnsky: readonly Hnsky290Database[] }
+
+// Finds a local ASTAP or HNSKY star database: the files of one supported database in a directory, named
+// <database>_<tile>.<extension>, and a function that opens a fresh reader over them (a reader caches every tile it reads
+// until closed).
+async function localCatalog(kind: 'astap' | 'hnsky', directory: string, requested?: string) {
 	const extension = kind === 'astap' ? '.1476' : '.290'
+	const supported: readonly string[] = SUPPORTED_DATABASES[kind]
 	const names = (await fs.readdir(directory)).filter((name) => name.endsWith(extension) && name.includes('_'))
-	const databases = [...new Set(names.map((name) => name.slice(0, name.indexOf('_')).toLowerCase()))]
+	const databases = [...new Set(names.map((name) => name.slice(0, name.indexOf('_')).toLowerCase()))].filter((database) => supported.includes(database))
 	const database = requested?.toLowerCase() ?? (databases.length === 1 ? databases[0] : undefined)
-	if (database === undefined || !databases.includes(database)) throw new Error(`choose a database of ${directory} with --database: ${databases.join(', ') || 'none found'}`)
+	if (database === undefined || !databases.includes(database)) throw new Error(`choose a database of ${directory} with --database: ${databases.join(', ') || 'none found'} (supported: ${supported.join(', ')})`)
 
 	const files = new Map(names.filter((name) => name.toLowerCase().startsWith(`${database}_`)).map((name) => [name.toLowerCase(), Bun.file(join(directory, name))] as const))
-	const catalog: StarCatalog = kind === 'astap' ? new AstapCatalog().open(files, database as Astap1476Database) : new HnskyCatalog().open(files, database as Hnsky290Database)
-	return { catalog, database }
+	const open = () => (kind === 'astap' ? new AstapCatalog().open(files, database as Astap1476Database) : new HnskyCatalog().open(files, database as Hnsky290Database))
+	return { open, database }
 }
 
 let source: StarSource
@@ -173,14 +181,24 @@ let source: StarSource
 if (catalogKind === undefined) {
 	source = { catalog: 'Gaia DR3', magnitudeLimit, epoch: GAIA_EPOCH, output: option('--output') ?? join(QUADS, 'gaia-dr3'), coneStars: gaiaConeStars }
 } else {
-	const { catalog, database } = await openLocalCatalog(catalogKind, option('--path')!, option('--database'))
+	const { open, database } = await localCatalog(catalogKind, option('--path')!, option('--database'))
 	const name = `${catalogKind.toUpperCase()} ${database.toUpperCase()}`
+	const magnitudeMax = magnitudeOption === undefined ? undefined : magnitudeLimit
 	source = {
 		catalog: name,
-		magnitudeLimit: Number.NaN,
+		magnitudeLimit: magnitudeMax ?? Number.NaN,
 		epoch: 2000,
 		output: option('--output') ?? join(QUADS, `${catalogKind}-${database}`),
-		coneStars: (cone, nside, perCell) => catalogQuadIndexStars(catalog, cone, { nside, perCell: 2 * perCell }),
+		// A fresh reader per tile, closed afterwards, keeps the tile-buffer cache to the tiles of one cone.
+		coneStars: async (cone, nside, perCell) => {
+			const catalog: StarCatalog & Disposable = open()
+
+			try {
+				return await catalogQuadIndexStars(catalog, cone, { nside, perCell: 2 * perCell, magnitudeMax })
+			} finally {
+				catalog[Symbol.dispose]()
+			}
+		},
 	}
 }
 

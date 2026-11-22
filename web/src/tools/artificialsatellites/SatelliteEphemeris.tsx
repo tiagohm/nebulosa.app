@@ -1,3 +1,4 @@
+import type { SatelliteEphemerisRow } from 'api'
 import { useSnapshot } from 'valtio'
 import { formatDateTime, formatDegrees, formatKilometers, formatSpeed, MISSING } from '../../format'
 import type { GeographicLocation } from '../../location/site'
@@ -9,7 +10,7 @@ import { DataList } from '../../ui/DataRow'
 import { Notice } from '../../ui/Notice'
 import { NumberInput } from '../../ui/NumberInput'
 import { SegmentedControl } from '../../ui/SegmentedControl'
-import { Cell, Row, Table, type TableColumn } from '../../ui/Table'
+import { Cell, Row, type TableColumn, VirtualTable } from '../../ui/Table'
 import { artificialSatellitesState, downloadEphemerisCsv, ephemerisDraftError, ephemerisRowCount, loadSatelliteEphemeris, MAX_EPHEMERIS_HOURS, SHADOW_LABELS } from './artificialsatellites'
 import { QualityRow } from './SatelliteDetailsPanel'
 
@@ -17,7 +18,8 @@ import { QualityRow } from './SatelliteDetailsPanel'
 // computed when the view shows a satellite without them and again on Compute,
 // for the observing site of the active profile or the Earth's center without one, with an export of the rows received
 // as CSV. Times are shown, and exported, in the display zone. Positions are geometric: RA/Dec of date (the Sky's frame)
-// and the altitude without refraction.
+// and the altitude without refraction. The table holds every row computed, thousands at a short step, drawing only the
+// ones in view in a frame that fills the rest of the tab.
 
 // Columns of the table of positions.
 const EPHEMERIS_COLUMNS: readonly TableColumn[] = [
@@ -31,6 +33,11 @@ const EPHEMERIS_COLUMNS: readonly TableColumn[] = [
 	{ key: 'height', label: 'Height', numeric: true },
 	'Illumination',
 ]
+
+// Time of a row, Unix milliseconds, its key in the table.
+function rowTime(row: SatelliteEphemerisRow) {
+	return row.time
+}
 
 // Properties of the Ephemeris tab.
 interface SatelliteEphemerisProps {
@@ -80,7 +87,8 @@ export function SatelliteEphemeris({ observer, zone }: SatelliteEphemerisProps) 
 			{ephemerisError && <EmptyState title="No ephemeris could be computed" description={ephemerisError} action={<Button onClick={() => void loadSatelliteEphemeris(artificialSatellitesState, observer)}>Retry</Button>} />}
 			{ephemerisLoading && <EmptyState title="Computing" />}
 			{ephemeris && !ephemerisLoading && (
-				<div className="flex flex-col gap-2 px-4 py-3">
+				// A height of its own, rather than its rows', bounds the table, which fills it whatever the controls above take.
+				<div className="flex min-h-72 flex-1 flex-col gap-2 px-4 py-3">
 					<div className="text-xs text-ink-300">
 						{name} · {observer ? 'from the observing site' : "from the Earth's center"} · times {describeDisplayZone(zone)} · RA/Dec of date, geometric{ephemeris.truncated ? ' · more rows were left out' : ''}
 					</div>
@@ -89,9 +97,13 @@ export function SatelliteEphemeris({ observer, zone }: SatelliteEphemerisProps) 
 							<QualityRow quality={ephemeris.quality} scope="window" />
 						</DataList>
 					</div>
-					<Table columns={EPHEMERIS_COLUMNS} className="whitespace-nowrap">
-						{rows.map((row) => (
-							<Row key={row.time}>
+					<VirtualTable
+						columns={EPHEMERIS_COLUMNS}
+						rows={rows}
+						rowKey={rowTime}
+						className="min-h-0 flex-1"
+						renderRow={(row) => (
+							<Row>
 								<Cell>{formatDateTime(row.time, timeZone)}</Cell>
 								<Cell>{formatRightAscension(row.rightAscension)}</Cell>
 								<Cell>{formatDeclination(row.declination)}</Cell>
@@ -102,8 +114,8 @@ export function SatelliteEphemeris({ observer, zone }: SatelliteEphemerisProps) 
 								<Cell numeric>{formatKilometers(row.heightKm)}</Cell>
 								<Cell>{SHADOW_LABELS[row.shadow]}</Cell>
 							</Row>
-						))}
-					</Table>
+						)}
+					/>
 				</div>
 			)}
 		</div>

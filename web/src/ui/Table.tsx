@@ -1,12 +1,14 @@
 import { cn } from 'cn'
-import type { KeyboardEvent, ReactNode } from 'react'
+import { Fragment, type KeyboardEvent, type ReactNode, useLayoutEffect, useRef, useState } from 'react'
 import { Icon } from './Icon'
 import { moveIndex } from './navigation'
+import { useRowWindow } from './virtual'
 
 // Compact data tables of the tools: a frame that scrolls itself under a sticky header, header labels that may order the
-// table, rows that may select what they show, rows that head a group of them, and cells of text or numbers. A selectable row is reached with Tab, moves to its selectable siblings with the arrow keys, Home, and
-// End, skipping the group headings, and selects with Enter or Space, like every other list of the app; a key pressed on a control inside a row is left to
-// that control.
+// table, rows that may select what they show, rows that head a group of them, and cells of text or numbers. A selectable
+// row is reached with Tab, moves to its selectable siblings with the arrow keys, Home, and End, skipping the group
+// headings, and selects with Enter or Space, like every other list of the app; a key pressed on a control inside a row is
+// left to that control. A virtual table holds any number of plain one-line rows and draws only the ones in view.
 
 // Column of a table: a plain label, or a label with a stable key that may be a control (such as a sort button) and may hold
 // numbers, aligned to the end.
@@ -51,6 +53,91 @@ export function Table({ columns, className, children }: TableProps) {
 					</tr>
 				</thead>
 				<tbody>{children}</tbody>
+			</table>
+		</div>
+	)
+}
+
+export interface VirtualTableProps<T> {
+	// Columns, in order.
+	readonly columns: readonly TableColumn[]
+	// Rows, in order.
+	readonly rows: readonly T[]
+	// Identity of a row, stable across renders.
+	readonly rowKey: (row: T) => string | number
+	// The Row of an item, with one Cell per column; its cells stay on one line, so every row has the same height.
+	readonly renderRow: (row: T) => ReactNode
+	// Classes of the scrolling frame, which must bound its height, such as `h-96` or `min-h-48 flex-1` in a column.
+	readonly className?: string
+}
+
+// Height of a row before one is measured, in pixels: a 14 px line between 5.25 px paddings and a 1 px border.
+const ESTIMATED_ROW_HEIGHT = 25.5
+
+// Table of any number of rows, in the frame and with the sticky header of Table, that draws only the rows in view between
+// two empty rows standing for the others. The height of a row is measured from a drawn one, and each column keeps the
+// widest width it has had since the rows changed, so the columns do not shift as other rows scroll into view.
+export function VirtualTable<T>({ columns, rows, rowKey, renderRow, className }: VirtualTableProps<T>) {
+	const [pitch, setPitch] = useState(ESTIMATED_ROW_HEIGHT)
+	const [header, setHeader] = useState(0)
+	const headRef = useRef<HTMLTableSectionElement>(null)
+	const bodyRef = useRef<HTMLTableSectionElement>(null)
+	// Widest width of each column since the rows changed, in pixels.
+	const widths = useRef<{ rows: readonly T[]; values: number[] }>({ rows, values: [] })
+	const { first, last, frameRef, onScroll } = useRowWindow(rows.length, pitch, header)
+
+	// Measures the header and a drawn row, and keeps every column at the widest width it has had for these rows.
+	useLayoutEffect(() => {
+		const head = headRef.current
+		const row = bodyRef.current?.querySelector<HTMLTableRowElement>(':scope > tr:not([data-spacer])')
+		if (head && head.offsetHeight !== header) setHeader(head.offsetHeight)
+		if (row) {
+			const height = row.getBoundingClientRect().height
+			if (Math.abs(height - pitch) > 0.01) setPitch(height)
+		}
+
+		if (widths.current.rows !== rows) widths.current = { rows, values: [] }
+		const cells = head?.rows[0]?.cells
+
+		if (cells) {
+			const values = widths.current.values
+
+			for (let i = 0; i < cells.length; i++) {
+				const cell = cells[i]
+				if (values[i] === undefined) cell.style.minWidth = ''
+				const width = cell.getBoundingClientRect().width
+				if (width > (values[i] ?? 0)) {
+					values[i] = width
+					cell.style.minWidth = `${width}px`
+				}
+			}
+		}
+	})
+
+	const drawn: ReactNode[] = []
+	for (let index = first; index < last; index++) drawn.push(<Fragment key={rowKey(rows[index])}>{renderRow(rows[index])}</Fragment>)
+
+	return (
+		<div ref={frameRef} onScroll={onScroll} className={cn('min-h-0 overflow-auto rounded-md border border-line-100', className)}>
+			<table className="w-full border-collapse text-xs text-ink-200 tabular-nums">
+				<thead ref={headRef} className="sticky top-0 z-1 bg-base-100">
+					<tr className="border-b border-line-100">
+						{columns.map((column) =>
+							typeof column === 'string' ? (
+								<HeaderCell key={column}>{column}</HeaderCell>
+							) : (
+								<HeaderCell key={column.key} numeric={column.numeric} className={column.className}>
+									{column.label}
+								</HeaderCell>
+							),
+						)}
+					</tr>
+				</thead>
+				<tbody ref={bodyRef} className="[&_td]:whitespace-nowrap">
+					{first > 0 && <tr data-spacer style={{ height: first * pitch }} />}
+					{drawn}
+					{last < rows.length && <tr data-spacer style={{ height: (rows.length - last) * pitch }} />}
+				</tbody>
 			</table>
 		</div>
 	)

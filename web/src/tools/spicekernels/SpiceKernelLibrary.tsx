@@ -3,7 +3,7 @@ import { cn } from 'cn'
 import { type ChangeEvent, useEffect, useRef, useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { formatByteSize, MISSING } from '../../format'
-import { EmptyState, type WorkspacePanel, WorkspaceLayout } from '../../shell/WorkspaceLayout'
+import { EmptyState, type WorkspacePanel, WorkspaceLayout, useWorkspacePanel } from '../../shell/WorkspaceLayout'
 import { Actions } from '../../ui/Actions'
 import { Button } from '../../ui/Button'
 import { Checkbox } from '../../ui/Checkbox'
@@ -76,6 +76,7 @@ export function SpiceKernelLibrary() {
 	const [selectedBody, setSelectedBody] = useState<number>()
 	const [selectedItem, setSelectedItem] = useState<string>()
 	const input = useRef<HTMLInputElement>(null)
+	const panelState = useWorkspacePanel('tools')
 	const kernels = state.snapshot?.kernels ?? []
 	const names = bodyNames(kernels)
 	const bodies = useSpiceBodies(section === 'bodies' || section === 'calculate', state.revision)
@@ -89,6 +90,12 @@ export function SpiceKernelLibrary() {
 		if (input.current) input.current.value = ''
 		if (!file) return
 		if (await importSpiceKernel(spiceKernelsState, file)) setSection('installed')
+	}
+
+	// Selects a body and opens the panel with its details, even where it was hidden.
+	function selectBody(code: number) {
+		setSelectedBody(code)
+		if (!panelState.open) panelState.setOpen(true)
 	}
 
 	// Shows a kernel of the library in Installed with its panel, as after an acquisition added it.
@@ -120,13 +127,13 @@ export function SpiceKernelLibrary() {
 	else if (section === 'add' && item) panel = { title: 'Curated Kernel', content: <CatalogDetails key={item.id} item={item} onShowKernel={showKernel} /> }
 
 	return (
-		<WorkspaceLayout workspace="tools" title="SPICE Kernel Library" context={context} actions={actions} panel={panel}>
+		<WorkspaceLayout workspace="tools" title="SPICE Kernel Library" context={context} actions={actions} panel={panel} panelState={panelState}>
 			<div className="h-full overflow-y-auto bg-base-100">
 				{/* Installed and Bodies keep the column to the height of the workspace, so their lists scroll in their own frames below the headings. */}
 				<div className={cn('mx-auto flex max-w-7xl flex-col gap-4 p-4', (section === 'installed' || section === 'bodies') && 'h-full')}>
 					{state.errors.import && <Notice error>{state.errors.import}</Notice>}
 					{section === 'installed' && <Installed kernels={kernels} names={names} selected={selected} onSelect={setSelected} />}
-					{section === 'bodies' && <Bodies bodies={bodies} kernels={kernels} names={names} selected={selectedBody} onSelect={setSelectedBody} />}
+					{section === 'bodies' && <Bodies bodies={bodies} kernels={kernels} names={names} selected={selectedBody} onSelect={selectBody} />}
 					{section === 'calculate' && <Calculate bodies={bodies} kernels={kernels} names={names} />}
 					{section === 'add' && <AddKernel catalog={catalog} selected={selectedItem} onSelect={setSelectedItem} onShowKernel={showKernel} />}
 				</div>

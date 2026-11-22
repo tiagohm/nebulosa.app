@@ -1,7 +1,7 @@
-import type { SpiceKernelDetails, SpiceKernelSummary } from 'api'
-import { useEffect, useState } from 'react'
+import type { SpiceKernelDetails, SpiceKernelSegment, SpiceKernelSummary } from 'api'
+import { useCallback, useEffect, useState } from 'react'
 import { useSnapshot } from 'valtio'
-import { formatByteSize, formatZonedDateTime, MISSING } from '../../format'
+import { formatByteSize, formatZonedDateTime } from '../../format'
 import { useActiveTimeZone } from '../../location/useLocation'
 import { CollapsibleSection } from '../../shell/CollapsibleSection'
 import { Actions } from '../../ui/Actions'
@@ -10,7 +10,7 @@ import { ConfirmButton } from '../../ui/ConfirmButton'
 import { DataList, DataRow } from '../../ui/DataRow'
 import { Notice } from '../../ui/Notice'
 import { StatusBadge } from '../../ui/StatusBadge'
-import { Cell, Row, Table } from '../../ui/Table'
+import { VirtualList } from '../../ui/VirtualList'
 import { type BodyNames, epochDate, naifName, READINESS, SOURCE_LABELS, USAGE } from './format'
 import { LibrarySection } from './LibrarySection'
 import { deleteSpiceKernel, fetchSpiceKernelDetails, spiceKernelsState, strandedKernels, updateSpiceKernel, verifySpiceKernel } from './spicekernels'
@@ -164,37 +164,63 @@ export function KernelSegments({ kernel, names }: KernelSegmentsProps) {
 		<LibrarySection
 			title={`Segments of ${kernel.name}`}
 			className="min-h-0"
-			aside={
-				<span className="text-xs text-ink-300">
-					{kernel.segmentCount} {kernel.segmentCount === 1 ? 'segment' : 'segments'}
-					{kernel.unsupportedSegments > 0 ? `, ${kernel.unsupportedSegments} unsupported` : ''}
-				</span>
-			}
+			// The list counts the segments beside its search; the heading only says how many the ephemeris cannot evaluate.
+			aside={kernel.unsupportedSegments > 0 && <span className="text-xs text-ink-300">{kernel.unsupportedSegments} unsupported</span>}
 		>
 			{details ? <Segments details={details} names={names} /> : <Notice>Reading the segments of the kernel.</Notice>}
 		</LibrarySection>
 	)
 }
 
-// Table of the segments of a kernel in file order.
+// Index of a segment, its key in the list.
+function segmentKey(segment: SpiceKernelSegment) {
+	return segment.index
+}
+
+// Name of a segment as written in the file, its tooltip.
+function segmentName(segment: SpiceKernelSegment) {
+	return segment.name || undefined
+}
+
+// Caption of the search: how many segments are shown of all of them.
+function segmentCount(shown: number, total: number) {
+	return shown === total ? `${total} ${total === 1 ? 'segment' : 'segments'}` : `${shown} of ${total} segments`
+}
+
+// Text of a search without matches.
+function noSegmentMatches(query: string) {
+	return `No segment matches “${query}”.`
+}
+
+// Whether the ephemeris can evaluate a segment, or why not.
+function segmentStatus(segment: SpiceKernelSegment) {
+	return segment.supported ? 'supported' : segment.reason === 'frame' ? `frame ${segment.frame}` : 'unsupported type'
+}
+
+// Virtual list of the segments of a kernel in file order, however many it has, searched by index, body, or center.
 function Segments({ details, names }: { readonly details: SpiceKernelDetails; readonly names: BodyNames }) {
+	const searchText = useCallback((segment: SpiceKernelSegment) => `#${segment.index} ${naifName(segment.target, names)} ${naifName(segment.center, names)}`, [names])
+
 	return (
-		<Table columns={[{ key: 'segment', label: 'Segment', numeric: true }, 'Body', { key: 'center', label: 'Center', className: 'max-sm:hidden' }, { key: 'type', label: 'Type', numeric: true, className: 'max-sm:hidden' }, 'Coverage (UTC)', { key: 'status', label: 'Status', className: 'max-md:hidden' }, 'Use']}>
-			{details.segments.map((segment) => (
-				<Row key={segment.index} title={segment.name}>
-					<Cell numeric>{segment.index}</Cell>
-					<Cell>{naifName(segment.target, names)}</Cell>
-					<Cell className="max-sm:hidden">{naifName(segment.center, names)}</Cell>
-					<Cell numeric className="max-sm:hidden">
-						{segment.dataType}
-					</Cell>
-					<Cell>
+		<VirtualList
+			items={details.segments}
+			itemKey={segmentKey}
+			title={(segment) => `#${segment.index} ${naifName(segment.target, names)}`}
+			description={(segment) => `Relative to ${naifName(segment.center, names)} · type ${segment.dataType} · ${segmentStatus(segment)}`}
+			meta={(segment) => (
+				<>
+					<span>
 						{epochDate(segment.start)} – {epochDate(segment.end)}
-					</Cell>
-					<Cell className="max-md:hidden">{segment.supported ? 'Supported' : segment.reason === 'frame' ? `Frame ${segment.frame}` : 'Unsupported type'}</Cell>
-					<Cell>{segment.usage ? <StatusBadge tone={USAGE[segment.usage].tone} label={USAGE[segment.usage].label} /> : MISSING}</Cell>
-				</Row>
-			))}
-		</Table>
+					</span>
+					{segment.usage && <StatusBadge tone={USAGE[segment.usage].tone} label={USAGE[segment.usage].label} />}
+				</>
+			)}
+			tooltip={segmentName}
+			emptyText="This kernel has no segments."
+			search={searchText}
+			searchPlaceholder="Index, body, or center…"
+			count={segmentCount}
+			noMatchText={noSegmentMatches}
+		/>
 	)
 }

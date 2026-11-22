@@ -6,7 +6,7 @@ import { useRowWindow, useSearch } from './virtual'
 
 // Selectable list of any number of items, in a bordered frame that scrolls itself and draws only the rows in view, each of
 // one fixed height: a title, an optional description under it, both on one line cut with an ellipsis, trailing meta, and a
-// chevron when choosing an item opens it. With a search text it leads with a search field that narrows the items to the
+// chevron when choosing an item opens it. Without a selection handler it only shows its items. With a search text it leads with a search field that narrows the items to the
 // ones whose text has every word typed, and a caption counting them. The frame is one Tab stop; the arrow keys, Page Up,
 // Page Down, Home, and End move the focused row, Enter or Space selects it, and typing a letter goes to the search field,
 // from which the down arrow comes back to the rows.
@@ -38,10 +38,13 @@ export interface VirtualListProps<T> {
 	readonly description?: (item: T) => ReactNode
 	// Trailing content of an item, such as a count, dates, or a status badge, at most 21 px tall.
 	readonly meta?: (item: T) => ReactNode
+	// Tooltip of an item, such as a name too long for its row.
+	readonly tooltip?: (item: T) => string | undefined
 	// Key of the selected item, marked in Ember.
 	readonly selected?: VirtualListKey
-	// Selects an item.
-	readonly onSelect: (item: T) => void
+	// Selects an item; without it the list only shows its items, which are neither highlighted nor focused one by one, and
+	// the frame scrolls with the arrow keys as any other.
+	readonly onSelect?: (item: T) => void
 	// Whether choosing an item opens it beside or in place of the list, which draws a chevron.
 	readonly opens?: boolean
 	// Text shown in place of the list when it has no items.
@@ -77,7 +80,7 @@ function positionOf<T>(items: readonly T[], shown: readonly number[] | undefined
 }
 
 // Virtual list of items, or its empty text when it has none.
-export function VirtualList<T>({ items, itemKey, title, description, meta, selected, onSelect, opens = false, emptyText, search, searchPlaceholder, count = defaultCount, noMatchText = defaultNoMatch, className }: VirtualListProps<T>) {
+export function VirtualList<T>({ items, itemKey, title, description, meta, tooltip, selected, onSelect, opens = false, emptyText, search, searchPlaceholder, count = defaultCount, noMatchText = defaultNoMatch, className }: VirtualListProps<T>) {
 	const [query, setQuery] = useState('')
 	const [active, setActive] = useState(-1)
 	const searchRef = useRef<HTMLInputElement>(null)
@@ -116,16 +119,19 @@ export function VirtualList<T>({ items, itemKey, title, description, meta, selec
 	function handleKeyDown(e: KeyboardEvent<HTMLDivElement>) {
 		const { key } = e
 		const page = Math.max(1, Math.floor((e.currentTarget.clientHeight - FRAME_INSET * 2) / pitch))
+		const printable = key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey
 
-		if (key === 'PageDown' || key === 'PageUp') {
+		if (!onSelect) {
+			// Moves the focus before the key is handled, so the letter is typed in the search field.
+			if (search && printable) searchRef.current?.focus()
+		} else if (key === 'PageDown' || key === 'PageUp') {
 			e.preventDefault()
 			if (total > 0) focusRow(Math.min(total - 1, Math.max(0, Math.max(0, current) + (key === 'PageDown' ? page : -page))))
 		} else if (key === 'Enter' || key === ' ') {
 			e.preventDefault()
 			const item = current >= 0 ? itemAt(current) : undefined
 			if (item !== undefined) onSelect(item)
-		} else if (search && key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
-			// Moves the focus before the key is handled, so the letter is typed in the search field.
+		} else if (search && printable) {
 			searchRef.current?.focus()
 		} else {
 			const next = moveIndex(current, total, key)
@@ -138,7 +144,7 @@ export function VirtualList<T>({ items, itemKey, title, description, meta, selec
 	function handleSearchKeyDown(e: KeyboardEvent<HTMLInputElement>) {
 		if (e.key !== 'ArrowDown' || total === 0) return
 		e.preventDefault()
-		focusRow(Math.max(0, current))
+		if (onSelect) focusRow(Math.max(0, current))
 		frame.current?.focus()
 	}
 
@@ -153,15 +159,20 @@ export function VirtualList<T>({ items, itemKey, title, description, meta, selec
 		rows.push(
 			<div
 				key={itemKey(item)}
-				onClick={() => {
-					setActive(position)
-					onSelect(item)
-				}}
+				title={tooltip?.(item)}
+				onClick={
+					onSelect &&
+					(() => {
+						setActive(position)
+						onSelect(item)
+					})
+				}
 				style={{ top: FRAME_INSET + position * pitch, height: pitch - ROW_GAP }}
 				className={cn(
-					'group/row absolute inset-x-1 box-border flex cursor-pointer items-center gap-4 rounded-md px-3 transition-colors duration-150 select-none',
-					isSelected ? 'bg-accent-subtle' : 'hover:bg-base-300',
-					position === current && 'group-focus-visible/list:outline-2 group-focus-visible/list:-outline-offset-2 group-focus-visible/list:outline-accent',
+					'group/row absolute inset-x-1 box-border flex items-center gap-4 rounded-md px-3',
+					onSelect && 'cursor-pointer transition-colors duration-150 select-none',
+					onSelect && (isSelected ? 'bg-accent-subtle' : 'hover:bg-base-300'),
+					onSelect && position === current && 'group-focus-visible/list:outline-2 group-focus-visible/list:-outline-offset-2 group-focus-visible/list:outline-accent',
 				)}
 			>
 				<span className="flex min-w-0 flex-auto flex-col">
@@ -188,8 +199,12 @@ export function VirtualList<T>({ items, itemKey, title, description, meta, selec
 					tabIndex={0}
 					onScroll={onScroll}
 					onKeyDown={handleKeyDown}
-					onFocus={(e) => e.target === e.currentTarget && active < 0 && setActive(Math.max(0, selectedPosition))}
-					className="group/list min-h-0 overflow-y-auto overscroll-contain rounded-md border border-line-100 transition-colors duration-150 focus-visible:border-line-200 focus-visible:outline-none"
+					onFocus={(e) => onSelect && e.target === e.currentTarget && active < 0 && setActive(Math.max(0, selectedPosition))}
+					className={cn(
+						'group/list min-h-0 overflow-y-auto overscroll-contain rounded-md border border-line-100 transition-colors duration-150',
+						// A selectable list rings its focused row; a list that only shows its items rings the frame.
+						onSelect ? 'focus-visible:border-line-200 focus-visible:outline-none' : 'focus-visible:outline-2 focus-visible:-outline-offset-1 focus-visible:outline-accent',
+					)}
 				>
 					<div className="relative" style={{ height: total * pitch - ROW_GAP + FRAME_INSET * 2 }}>
 						{rows}

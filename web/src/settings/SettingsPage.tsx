@@ -26,7 +26,7 @@ export function SettingsPage() {
 		<section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
 			<header className="flex min-h-12 flex-none flex-wrap items-center gap-x-3 gap-y-1 border-b border-line-100 bg-base-100 px-4 py-1.5">
 				<h1 className="m-0 flex-none text-sm font-semibold text-ink-100">Settings</h1>
-				<Select options={SETTINGS_SECTION_IDS} value={section} format={(id) => SECTION_LABELS[id]} onChange={(id) => id !== section && navigate(routeState, { workspace: 'settings', section: id })} className="w-52 max-sm:w-40" />
+				<Select options={SETTINGS_SECTION_IDS} value={section} format={(id) => SECTION_LABELS[id]} onChange={(id) => id !== section && navigate(routeState, { workspace: 'settings', section: id })} className="w-52 max-sm:w-44 max-sm:flex-none" />
 				<div className="ml-auto flex flex-none items-center gap-2">{section === 'external-tools' && <ExternalToolsActions />}</div>
 			</header>
 			{section === 'external-tools' && <ExternalToolsSettings tool={tool} />}

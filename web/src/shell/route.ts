@@ -225,11 +225,32 @@ export function routePath(route: Route): string {
 	return `/${route.workspace}`
 }
 
-// Navigates the tab to a route, adding a history entry when the path changes. Navigation only changes
-// what is shown: it never connects, disconnects, or stops anything.
+// Decides whether navigate may leave the route shown for another path, such as an editor with unsaved changes: true lets
+// it go on at once; false holds it, and the guard calls proceed once the person agrees to leave.
+export type LeaveGuard = (proceed: () => void) => boolean
+
+// Guard of the route shown, set by the editor that holds unsaved changes; absent when nothing would be lost.
+let leaveGuard: LeaveGuard | undefined
+
+// Sets the guard navigate consults before showing another path, replacing any other; returns the function that removes
+// it. The browser's back and forward buttons are not guarded.
+export function setLeaveGuard(guard: LeaveGuard): () => void {
+	leaveGuard = guard
+	return () => {
+		if (leaveGuard === guard) leaveGuard = undefined
+	}
+}
+
+// Navigates the tab to a route, adding a history entry when the path changes, once the leave guard lets it leave the
+// path shown. Navigation only changes what is shown: it never connects, disconnects, or stops anything.
 export function navigate(state: RouteState, route: Route, history: Pick<History, 'pushState'> = window.history) {
-	if (routePath(route) !== routePath(state.route)) history.pushState(null, '', routePath(route))
-	show(state, route)
+	const go = () => {
+		if (routePath(route) !== routePath(state.route)) history.pushState(null, '', routePath(route))
+		show(state, route)
+	}
+
+	if (leaveGuard && routePath(route) !== routePath(state.route) && !leaveGuard(go)) return
+	go()
 }
 
 // Replaces the current route without adding a history entry, for a route that cannot be shown as is.

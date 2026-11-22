@@ -1,9 +1,24 @@
 import { afterAll, describe, expect, test } from 'bun:test'
-import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'fs'
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { AppDatabase } from './database'
-import { createExternalToolsRoutes, DEFAULT_EXTERNAL_TOOL_TIMEOUT, DEFAULT_MEDIAMTX_TIMEOUT, EXTERNAL_TOOLS, type ExternalToolCheck, type ExternalToolEvent, type ExternalToolState, ExternalToolsStore, inspectExecutable } from './externaltools'
+import {
+	createExternalToolsRoutes,
+	DEFAULT_EXTERNAL_TOOL_TIMEOUT,
+	DEFAULT_MEDIAMTX_TIMEOUT,
+	EXTERNAL_TOOLS,
+	type ExternalToolCheck,
+	type ExternalToolEvent,
+	type ExternalToolState,
+	ExternalToolsStore,
+	inspectExecutable,
+	type ProbeOutcome,
+	type ProgramProbe,
+	probeProgram,
+	programVersion,
+	starDatabases,
+} from './externaltools'
 
 const root = mkdtempSync(join(tmpdir(), 'nebulosa-external-tools-'))
 afterAll(() => rmSync(root, { recursive: true, force: true }))
@@ -30,10 +45,20 @@ function executable(name: string) {
 	return path
 }
 
-// Creates a store over a fresh database in memory, recording its events.
-function store(database = AppDatabase.memory()) {
+// Probe that never starts anything: every program answers with output, recording the arguments it was given.
+function fakeProbe(outcome?: ProbeOutcome) {
+	const calls: { executable: string; args: readonly string[] }[] = []
+	const probe: ProgramProbe = (executable, args) => {
+		calls.push({ executable, args })
+		return Promise.resolve(outcome ?? { status: 'answered', output: '' })
+	}
+	return { probe, calls }
+}
+
+// Creates a store over a fresh database in memory, recording its events; programs are started by probe.
+function store(database = AppDatabase.memory(), probe: ProgramProbe = fakeProbe().probe) {
 	const events: ExternalToolEvent[] = []
-	return { store: new ExternalToolsStore(database, (event) => events.push(event)), events, database }
+	return { store: new ExternalToolsStore(database, (event) => events.push(event), probe), events, database }
 }
 
 type Handler = (req: Request) => Promise<Response>
@@ -165,7 +190,7 @@ describe('test configuration', () => {
 		const check = (await response.json()) as ExternalToolCheck
 
 		expect(response.status).toBe(200)
-		expect(check).toMatchObject({ status: 'available', config: { timeout: 5000 }, checkedAt: expect.any(Number), duration: expect.any(Number) })
+		expect(check).toMatchObject({ status: 'available', code: 'noDatabase', config: { timeout: 5000 }, checkedAt: expect.any(Number), duration: expect.any(Number) })
 		expect(check.version).toBeUndefined()
 		expect(rows(database)).toEqual([])
 		expect((await tools.get('astap')).lastCheck).toBeUndefined()
@@ -197,6 +222,98 @@ describe('test configuration', () => {
 		await checking
 
 		expect((await tools.get('astap')).lastCheck).toBeUndefined()
+	})
+})
+
+describe('program start', () => {
+	test('a program that prints its version answers', async () => {
+		const outcome = await probeProgram(process.execPath, ['--version'], 10000)
+		expect(outcome.status).toBe('answered')
+		expect(outcome.status === 'answered' && programVersion(outcome.output)).toBe(Bun.version)
+	})
+
+	test('a program that does not end in time is stopped', async () => {
+		expect(await probeProgram(process.execPath, ['-e', 'setTimeout(() => {}, 10000)'], 300)).toEqual({ status: 'noAnswer' })
+	})
+
+	test('a file that is not a program is not started', async () => {
+		const path = join(root, `not-a-program-${files++}.txt`)
+		writeFileSync(path, 'text')
+		chmodSync(path, 0o755)
+		expect((await probeProgram(path, ['--version'], 10000)).status).toBe('notStarted')
+	})
+
+	test('reads the versions the programs print', () => {
+		expect(programVersion('ASTAP astrometric solver version CLI-2026.06.29\n(C) 2018, 2025 by Han Kleijn.')).toBe('CLI-2026.06.29')
+		expect(programVersion('This program is part of the Astrometry.net suite.\nRevision 0.93, date Mon_Jun_1\n')).toBe('0.93')
+		expect(programVersion('v1.21.3\n')).toBe('1.21.3')
+		expect(programVersion('Usage: tool [options]')).toBeUndefined()
+	})
+
+	test('each program is started with the argument that prints its help or version', async () => {
+		const { probe, calls } = fakeProbe()
+		const { store: tools } = store(undefined, probe)
+		const path = executable(`probed-${files++}`)
+		await tools.check('astap', { executable: path, timeout: 5000 })
+		await tools.check('astrometryLocal', { executable: path, timeout: 5000, config: '' })
+		await tools.check('mediamtx', { executable: path, timeout: 5000 })
+
+		expect(calls).toEqual([
+			{ executable: path, args: ['-h'] },
+			{ executable: path, args: ['--help'] },
+			{ executable: path, args: ['--version'] },
+		])
+	})
+
+	test('a program that cannot start or does not answer fails', async () => {
+		const path = executable(`failing-${files++}`)
+		const notStarted = store(undefined, fakeProbe({ status: 'notStarted', message: 'bad format' }).probe).store
+		const noAnswer = store(undefined, fakeProbe({ status: 'noAnswer' }).probe).store
+
+		expect(await notStarted.check('astrometryLocal', { executable: path, timeout: 5000, config: '' })).toMatchObject({ status: 'failed', code: 'notStarted', resolvedPath: path })
+		expect(await noAnswer.check('astrometryLocal', { executable: path, timeout: 5000, config: '' })).toMatchObject({ status: 'failed', code: 'noAnswer', resolvedPath: path })
+	})
+
+	test('ASTAP is available with a star database beside it', async () => {
+		const folder = join(root, `astap-${files++}`)
+		mkdirSync(folder)
+		const path = join(folder, 'astap')
+		writeFileSync(path, '')
+		chmodSync(path, 0o755)
+		const { store: tools } = store(undefined, fakeProbe({ status: 'answered', output: 'ASTAP astrometric solver version CLI-2026.06.29' }).probe)
+
+		expect(await tools.check('astap', { executable: path, timeout: 5000 })).toMatchObject({ status: 'available', code: 'noDatabase', version: 'CLI-2026.06.29' })
+
+		writeFileSync(join(folder, 'd50_0101.1476'), '')
+		writeFileSync(join(folder, 'D20_0102.1476'), '')
+		expect(await starDatabases(path)).toEqual(['D20', 'D50'])
+		const check = await tools.check('astap', { executable: path, timeout: 5000 })
+		expect(check).toMatchObject({ status: 'available', code: 'ok', version: 'CLI-2026.06.29' })
+		expect(check.message).toContain('D20, D50')
+	})
+
+	test('MediaMTX must be a version the gateway supports', async () => {
+		const path = executable(`mediamtx-${files++}`)
+		const old = store(undefined, fakeProbe({ status: 'answered', output: 'v1.9.0\n' }).probe).store
+		const current = store(undefined, fakeProbe({ status: 'answered', output: 'v1.21.3\n' }).probe).store
+
+		expect(await old.check('mediamtx', { executable: path, timeout: 5000 })).toMatchObject({ status: 'failed', code: 'incompatibleVersion', version: '1.9.0' })
+		expect(await current.check('mediamtx', { executable: path, timeout: 5000 })).toMatchObject({ status: 'available', code: 'ok', version: '1.21.3' })
+	})
+
+	test('the saved programs are checked at startup, the unset ones and the web services are not', async () => {
+		const { probe, calls } = fakeProbe()
+		const { store: tools } = store(undefined, probe)
+		const path = executable(`startup-${files++}`)
+		await tools.save('astap', { executable: path, timeout: 5000 }, 0)
+		await tools.save('nova', { executable: '', timeout: 60000, endpoint: '' }, 0)
+
+		await tools.checkSaved()
+
+		expect(calls).toEqual([{ executable: path, args: ['-h'] }])
+		expect((await tools.get('astap')).lastCheck).toMatchObject({ status: 'available' })
+		expect((await tools.get('astrometryLocal')).lastCheck).toBeUndefined()
+		expect((await tools.get('nova')).lastCheck).toBeUndefined()
 	})
 })
 

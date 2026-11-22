@@ -284,7 +284,7 @@ export class PlateSolvingError extends Error {
 const PROVIDER_TOOLS: Readonly<Record<PlateSolverProvider, ExternalToolId>> = { astap: 'astap', astrometryLocal: 'astrometryLocal', nova: 'nova' }
 
 // Name of each provider, for messages.
-const PROVIDER_NAMES: Readonly<Record<PlateSolverProvider, string>> = { astap: 'ASTAP', astrometryLocal: 'Astrometry.net Local', nova: 'Nova Astrometry.net' }
+const PROVIDER_NAMES: Readonly<Record<PlateSolverProvider, string>> = { astap: 'ASTAP', astrometryLocal: 'Astrometry.net Local', nova: 'Astrometry.net Online' }
 
 // Solves running at once: one ASTAP and one solve-field process, each a full multithreaded program with a FITS copy on
 // disk; two nova solves, which mostly wait for the service.
@@ -531,7 +531,7 @@ export class PlateSolvingService implements Disposable {
 	async #solveNova(entry: JobEntry, image: Uint8Array<ArrayBuffer>): Promise<FitsHeader | undefined> {
 		const { request, tool } = entry.preparation
 		const apiUrl = serviceUrl(tool.endpoint)
-		if (!apiUrl || !tool.session) throw new PlateSolvingError('notConfigured', 'Nova Astrometry.net is not signed in')
+		if (!apiUrl || !tool.session) throw new PlateSolvingError('notConfigured', 'Astrometry.net Online is not signed in')
 
 		try {
 			return await novaSolve({

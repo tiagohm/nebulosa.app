@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { proxy } from 'valtio'
-import { DEFAULT_ROUTE, navigate, openWorkspace, parseRoute, redirect, type RouteState, routePath } from './route'
+import { DEFAULT_ROUTE, navigate, openWorkspace, parseRoute, redirect, type RouteState, routePath, setLeaveGuard } from './route'
 
 function newState(): RouteState {
 	return proxy<RouteState>({ route: DEFAULT_ROUTE })
@@ -148,6 +148,31 @@ describe('navigate', () => {
 		navigate(state, { workspace: 'sky' }, history)
 
 		expect(history.paths).toEqual(['/sky'])
+		expect(state.route).toEqual({ workspace: 'sky' })
+	})
+
+	test('a leave guard holds a change of path until it proceeds', () => {
+		const state = newState()
+		const history = fakeHistory()
+		let held: (() => void) | undefined
+		const remove = setLeaveGuard((proceed) => {
+			held = proceed
+			return false
+		})
+
+		navigate(state, { workspace: 'images' }, history)
+		expect(held).toBeUndefined()
+
+		navigate(state, { workspace: 'settings', section: 'observing-sites' }, history)
+		expect(state.route).toEqual({ workspace: 'images' })
+		expect(history.paths).toEqual([])
+
+		held?.()
+		expect(state.route).toEqual({ workspace: 'settings', section: 'observing-sites' })
+		expect(history.paths).toEqual(['/settings/observing-sites'])
+
+		remove()
+		navigate(state, { workspace: 'sky' }, history)
 		expect(state.route).toEqual({ workspace: 'sky' })
 	})
 

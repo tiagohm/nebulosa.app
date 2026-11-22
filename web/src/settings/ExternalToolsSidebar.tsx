@@ -5,8 +5,8 @@ import { CAPABILITY_LABELS } from './externaltools'
 import { summaryOf } from './ExternalToolStatus'
 
 // List of the external programs the server supports, with the state of each one. Wide screens show it
-// as a sidebar; narrow ones show a select instead. Selecting a program only shows its settings: nothing
-// is run, saved, or changed.
+// as a sidebar; narrow ones show a select instead, whose program's state is the badge of the detail under it.
+// Selecting a program only shows its settings: nothing is run, saved, or changed.
 
 export interface ExternalToolListProps {
 	// Supported programs.
@@ -19,17 +19,25 @@ export interface ExternalToolListProps {
 
 // Capabilities of a program, as text.
 function capabilitiesOf(tool: ExternalToolState) {
-	return tool.capabilities.map((capability) => CAPABILITY_LABELS[capability]).join(' · ')
+	return tool.capabilities.map((capability) => CAPABILITY_LABELS[capability]).join(', ')
 }
 
-// List of the programs, for wide screens.
+// List of the programs, for wide screens: the state leads the line under the name, so the name keeps the full width.
 export function ExternalToolsSidebar({ tools, selected, onSelect }: ExternalToolListProps) {
 	return (
 		<aside className="flex w-80 flex-none flex-col border-r border-line-100 bg-base-000">
 			<List emptyText="No external tools." className="min-h-0 flex-1 overflow-y-auto p-2">
 				{tools.map((tool) => {
 					const summary = summaryOf(tool)
-					return <ListItem opens key={tool.id} title={tool.name} description={capabilitiesOf(tool)} meta={<span className={summary.className}>{summary.label}</span>} selected={tool.id === selected} onClick={() => onSelect(tool.id)} />
+					const description = (
+						<>
+							<span className={summary.className} title={summary.hint}>
+								{summary.label}
+							</span>
+							{` · ${capabilitiesOf(tool)}`}
+						</>
+					)
+					return <ListItem opens key={tool.id} title={tool.name} description={description} selected={tool.id === selected} onClick={() => onSelect(tool.id)} />
 				})}
 			</List>
 		</aside>
@@ -39,13 +47,12 @@ export function ExternalToolsSidebar({ tools, selected, onSelect }: ExternalTool
 // Select of the programs, for narrow screens.
 export function ExternalToolsSelect({ tools, selected, onSelect }: ExternalToolListProps) {
 	function format(id: string) {
-		const tool = tools.find((t) => t.id === id)
-		return tool ? `${tool.name} · ${summaryOf(tool).label}` : id
+		return tools.find((t) => t.id === id)?.name ?? id
 	}
 
 	return (
 		<div className="flex-none border-b border-line-100 p-3">
-			<Select options={tools.map((tool) => tool.id)} value={selected ?? ''} format={format} onChange={onSelect} />
+			<Select options={tools.map((tool) => tool.id)} value={selected ?? ''} format={format} title="External tool shown" onChange={onSelect} />
 		</div>
 	)
 }

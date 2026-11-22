@@ -8,6 +8,7 @@ function astap(patch: Partial<ExternalToolState> = {}): ExternalToolState {
 		id: 'astap',
 		name: 'ASTAP',
 		description: 'Astronomical software',
+		requirements: 'A star database',
 		capabilities: ['plate-solving', 'star-detection'],
 		fields: ['executable'],
 		session: false,
@@ -122,7 +123,7 @@ test('a check describes only the values it checked', () => {
 })
 
 function nova(patch: Partial<ExternalToolState> = {}): ExternalToolState {
-	return { ...astap(), id: 'nova', name: 'Nova Astrometry.net', capabilities: ['plate-solving'], fields: ['endpoint'], session: true, signedIn: false, config: { executable: '', timeout: 300000, endpoint: '' }, ...patch }
+	return { ...astap(), id: 'nova', name: 'Astrometry.net Online', capabilities: ['plate-solving'], fields: ['endpoint'], session: true, signedIn: false, config: { executable: '', timeout: 300000, endpoint: '' }, ...patch }
 }
 
 test('the endpoint and the configuration file are part of a configuration', () => {

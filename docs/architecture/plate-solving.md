@@ -2,7 +2,7 @@
 
 Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
 
-Plate solving finds where an image document points, its scale, and its orientation, as a WCS solution, through ASTAP, Astrometry.net Local, or Nova Astrometry.net.
+Plate solving finds where an image document points, its scale, and its orientation, as a WCS solution, through ASTAP, Astrometry.net Local, or Astrometry.net Online (nova.astrometry.net).
 `PlateSolvingService` (`api/src/platesolving.ts`, hints in `api/src/platesolving.hints.ts`, Nova in `api/src/platesolving.nova.ts`) solves for every consumer.
 Images → Plate Solver (`web/src/images/PlateSolverPanel.tsx`, `web/src/platesolving/`) solves by hand, chooses the solution shown, and offers the astrometric tools built on it: measurements and markers, target offset, the context menu, and Sync Mount.
 

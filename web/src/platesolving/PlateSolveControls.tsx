@@ -64,8 +64,11 @@ function SolverAvailability({ provider }: { readonly provider: PlateSolverProvid
 	return (
 		<div className="flex flex-col gap-1">
 			<Notice>
-				{tool?.name ?? PROVIDER_LABELS[provider]}: <span className={summary?.className}>{tool?.session && tool.status !== 'configured' ? 'Not Signed In' : (summary?.label ?? 'Loading…')}</span>
-				{tool?.lastCheck && tool.lastCheck.status !== 'available' && ` — ${tool.lastCheck.message}`}
+				{tool?.name ?? PROVIDER_LABELS[provider]}:{' '}
+				<span className={summary?.className} title={summary?.hint}>
+					{summary?.label ?? 'Loading…'}
+				</span>
+				{tool?.lastCheck && tool.lastCheck.code !== 'ok' && ` — ${tool.lastCheck.message}`}
 			</Notice>
 			<Button variant="ghost" className="self-start px-1" onClick={() => navigate(routeState, { workspace: 'settings', tool: PROVIDER_TOOLS[provider] })}>
 				Settings → External Tools → {tool?.name ?? PROVIDER_LABELS[provider]}

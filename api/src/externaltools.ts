@@ -1,9 +1,10 @@
 import { constants } from 'fs'
-import { access, stat } from 'fs/promises'
-import { isAbsolute, resolve } from 'path'
+import { access, readdir, realpath, stat } from 'fs/promises'
+import { dirname, isAbsolute, resolve } from 'path'
 import { login, NOVA_ASTROMETRY_NET_URL } from 'nebulosa/src/astrometry/solvers/astrometrynet'
 import type { AppDatabase } from './database'
 import { errorResponse } from './http'
+import { parseVersion, supportedVersion } from './observatorycameras.gateway'
 import { errorCode } from './util'
 
 // Server-side settings of the external programs and services the backend uses: ASTAP, the local solve-field
@@ -11,8 +12,11 @@ import { errorCode } from './util'
 // its adapters provide and the settings it takes; nothing else can be configured, and no route runs an
 // arbitrary command. Settings belong to the server instance (not to a browser, profile, or workspace), are
 // persisted in the operational database, and are applied to the next runs without a restart. A test
-// checks the executable (and the configuration file) on the server's filesystem only: it never starts the
-// program, so it proves neither that the program runs nor that it analyzes images correctly. A web service is
+// checks the executable (and the configuration file) on the server's filesystem, then starts the program once
+// with a fixed argument that only prints its help or version, and reads the version it prints; for ASTAP it also
+// looks for a star database beside the program, and for MediaMTX it checks the version the gateway needs. It never
+// analyzes an image, so it proves that the program runs, not that it solves. The saved settings of every program
+// are checked again when the server starts, since checks are kept in memory only. A web service is
 // signed in to with its API key, which is sent once to the service and never stored: the session the service
 // returns is kept in the memory of the server only, reused by the runs until signing out or a restart; clients only
 // learn whether there is one. Any client that can reach the API can change and test these settings, like every other route.
@@ -44,6 +48,8 @@ export interface ExternalToolDefinition {
 	readonly name: string
 	// What the program is used for.
 	readonly description: string
+	// What the program needs besides itself to do its work, which a test cannot prove, meant for people.
+	readonly requirements: string
 	// Capabilities the program's adapters provide.
 	readonly capabilities: readonly ExternalToolCapability[]
 	// Settings it takes besides the timeout, in display order.
@@ -79,11 +85,12 @@ export interface ResolvedExternalTool extends ExternalToolConfig {
 // State of the saved settings: not configured (no executable, or a web service not signed in to), or configured.
 export type ExternalToolConfigStatus = 'notConfigured' | 'configured'
 
-// Outcome of a check: the executable can be run, is not where the settings point, or cannot be run.
+// Outcome of a check: the program answered when started (or the web service is signed in to), it is not where the
+// settings point, or it cannot be used.
 export type ExternalToolCheckStatus = 'available' | 'unavailable' | 'failed'
 
 // Reason of a check outcome:
-// - ok: the path is a file the server process may execute.
+// - ok: the program answered when started (a web service: it is signed in to).
 // - empty: no path is set.
 // - missing: nothing exists at the path, or the name is not on the server's PATH.
 // - notFile: the path is a directory or another non-regular file.
@@ -93,7 +100,11 @@ export type ExternalToolCheckStatus = 'available' | 'unavailable' | 'failed'
 // - configMissing: the configuration file does not exist or is not a file.
 // - invalidEndpoint: the endpoint of a web service is not an http(s) URL.
 // - signedOut: the server holds no session of the web service.
-export type ExternalToolCheckCode = 'ok' | 'empty' | 'missing' | 'notFile' | 'notExecutable' | 'inaccessible' | 'configMissing' | 'invalidEndpoint' | 'signedOut'
+// - notStarted: the server could not start the program, such as a file that is not a program of this computer.
+// - noAnswer: the program did not end within PROBE_TIMEOUT when started to print its help or version.
+// - noDatabase: ASTAP answered but no star database is in its folder; available, since it may read one from elsewhere.
+// - incompatibleVersion: the program is not MediaMTX 1.21 or a later 1.x, which the gateway needs.
+export type ExternalToolCheckCode = 'ok' | 'empty' | 'missing' | 'notFile' | 'notExecutable' | 'inaccessible' | 'configMissing' | 'invalidEndpoint' | 'signedOut' | 'notStarted' | 'noAnswer' | 'noDatabase' | 'incompatibleVersion'
 
 // Result of checking the executable of a configuration on the server's filesystem.
 export interface ExternalToolCheck {
@@ -105,7 +116,7 @@ export interface ExternalToolCheck {
 	readonly config: ExternalToolConfig
 	// Absolute path the executable resolved to; absent when it was not found.
 	readonly resolvedPath?: string
-	// Version of the program; never detected, since a check does not run the program.
+	// Version the program printed when started; absent when it printed none, when it was not started, and for a web service.
 	readonly version?: string
 	// When the check ended, in milliseconds since the Unix epoch.
 	readonly checkedAt: number
@@ -186,6 +197,7 @@ export const EXTERNAL_TOOLS: readonly ExternalToolDefinition[] = [
 		id: 'astap',
 		name: 'ASTAP',
 		description: 'Astronomical software used by supported plate-solving and star-detection providers.',
+		requirements: 'Solving needs a star database of ASTAP, such as D50 or D20, installed in the folder of the program; choose one that covers the field of view of your images.',
 		capabilities: ['plate-solving', 'star-detection'],
 		fields: ['executable'],
 		session: false,
@@ -196,6 +208,7 @@ export const EXTERNAL_TOOLS: readonly ExternalToolDefinition[] = [
 		id: 'astrometryLocal',
 		name: 'Astrometry.net Local',
 		description: 'The solve-field program of astrometry.net, run on this server with its own index files.',
+		requirements: 'Solving needs index files covering the field of view of your images, in the folders its configuration file names.',
 		capabilities: ['plate-solving'],
 		fields: ['executable', 'config'],
 		session: false,
@@ -204,8 +217,9 @@ export const EXTERNAL_TOOLS: readonly ExternalToolDefinition[] = [
 	},
 	{
 		id: 'nova',
-		name: 'Nova Astrometry.net',
+		name: 'Astrometry.net Online',
 		description: 'The nova.astrometry.net web service; images are uploaded to it.',
+		requirements: 'Solving needs an account of the service and an internet connection while solving; without one, use ASTAP or Astrometry.net Local.',
 		capabilities: ['plate-solving'],
 		fields: ['endpoint'],
 		session: true,
@@ -216,6 +230,7 @@ export const EXTERNAL_TOOLS: readonly ExternalToolDefinition[] = [
 		id: 'mediamtx',
 		name: 'MediaMTX',
 		description: 'Media gateway the server keeps running while observatory cameras are enabled; it reads their RTSP streams and relays them to browsers over WebRTC.',
+		requirements: 'The gateway needs MediaMTX 1.21 or a later 1.x, the RTSP streams of the cameras reachable from the server, and its UDP port open to the browsers.',
 		capabilities: ['video-gateway'],
 		fields: ['executable'],
 		session: false,
@@ -275,7 +290,77 @@ export function serviceUrl(endpoint: string | undefined): string | undefined {
 }
 
 // Outcome of inspecting an executable, before timing is added.
-type Inspection = Pick<ExternalToolCheck, 'status' | 'code' | 'resolvedPath' | 'message'>
+type Inspection = Pick<ExternalToolCheck, 'status' | 'code' | 'resolvedPath' | 'version' | 'message'>
+
+// Outcome of starting a program to print its help or version: what it printed (standard output, then standard error),
+// why it could not be started, or that it was stopped for not ending within the time given.
+export type ProbeOutcome = { readonly status: 'answered'; readonly output: string } | { readonly status: 'notStarted'; readonly message: string } | { readonly status: 'noAnswer' }
+
+// Starts a program with fixed arguments and waits for it to end, at most timeout milliseconds.
+export type ProgramProbe = (executable: string, args: readonly string[], timeout: number) => Promise<ProbeOutcome>
+
+// Longest time a program started by a test may take to print its help or version and end, in milliseconds.
+export const PROBE_TIMEOUT = 10000
+
+// Arguments that make each program print its help or version and end without doing any work; ASTAP prints its
+// version in the first line of its help, and solve-field its revision.
+const PROBE_ARGUMENTS: Readonly<Partial<Record<ExternalToolId, readonly string[]>>> = { astap: ['-h'], astrometryLocal: ['--help'], mediamtx: ['--version'] }
+
+// Name of a file of an ASTAP star database, such as d50_0101.1476: the database (a letter and two digits), then its tile.
+const STAR_DATABASE_FILE = /^([a-z]\d{2})_\d{4}\.\d+$/i
+
+// Starts executable with args, never through a shell, and collects what it prints until it ends. A program still
+// running after timeout milliseconds is killed and reported as not answering.
+export async function probeProgram(executable: string, args: readonly string[], timeout: number): Promise<ProbeOutcome> {
+	let subprocess: Bun.Subprocess<'ignore', 'pipe', 'pipe'>
+
+	try {
+		subprocess = Bun.spawn([executable, ...args], { stdin: 'ignore', stdout: 'pipe', stderr: 'pipe' })
+	} catch (error) {
+		return { status: 'notStarted', message: Error.isError(error) ? error.message : String(error) }
+	}
+
+	let timedOut = false
+	const timer = setTimeout(() => {
+		timedOut = true
+		subprocess.kill('SIGKILL')
+	}, timeout)
+
+	try {
+		const [stdout, stderr] = await Promise.all([new Response(subprocess.stdout).text(), new Response(subprocess.stderr).text(), subprocess.exited])
+		if (timedOut) return { status: 'noAnswer' }
+		if (subprocess.signalCode) return { status: 'notStarted', message: `it ended with ${subprocess.signalCode}` }
+		return { status: 'answered', output: `${stdout}\n${stderr}` }
+	} finally {
+		clearTimeout(timer)
+	}
+}
+
+// Returns the version a program printed: the word after "version" or "revision" (ASTAP's CLI-2026.06.29, solve-field's
+// 0.93), else the first dotted number (MediaMTX's v1.21.3 as 1.21.3); undefined when there is none.
+export function programVersion(output: string): string | undefined {
+	const named = /\b(?:version|revision)\s+v?([0-9a-z][\w.+-]*\d)/i.exec(output)
+	if (named) return named[1]
+	return /\bv?(\d+\.\d+(?:\.\d+)*)\b/.exec(output)?.[1]
+}
+
+// Returns the ASTAP star databases (such as D50) in the folder of an executable, following a link to the program
+// itself, in alphabetical order; empty when there is none or the folder cannot be read.
+export async function starDatabases(executable: string): Promise<string[]> {
+	try {
+		const names = await readdir(dirname(await realpath(executable)))
+		const databases = new Set<string>()
+
+		for (const name of names) {
+			const database = STAR_DATABASE_FILE.exec(name)?.[1]
+			if (database) databases.add(database.toUpperCase())
+		}
+
+		return [...databases].sort()
+	} catch {
+		return []
+	}
+}
 
 // Inspects an executable on the server's filesystem without running it. A bare name (no directory
 // separator) is looked up on the server's PATH; any other relative path is resolved against the
@@ -307,28 +392,57 @@ export async function inspectExecutable(executable: string): Promise<Inspection>
 		return { status: 'failed', code: 'notExecutable', resolvedPath: path, message: 'The file cannot be executed by the server.' }
 	}
 
-	return { status: 'available', code: 'ok', resolvedPath: path, message: 'The executable was found and the server may run it. The program itself was not started.' }
+	return { status: 'available', code: 'ok', resolvedPath: path, message: 'The executable was found and the server may run it.' }
 }
 
-// Inspects the settings of a program without running it: its executable, then its configuration file when one is
-// set (resolved against the server's working directory), or, for a web service, its endpoint and whether the server holds a session.
-async function inspectTool(id: ExternalToolId, config: ExternalToolConfig, signedIn: boolean): Promise<Inspection> {
-	if (definition(id).session) {
+// Inspects the settings of a program: its executable, then its configuration file when one is set (resolved against
+// the server's working directory), then starts it once with probe to print its help or version. For a web service,
+// its endpoint and whether the server holds a session, without contacting the service.
+async function inspectTool(id: ExternalToolId, config: ExternalToolConfig, signedIn: boolean, probe: ProgramProbe): Promise<Inspection> {
+	const { name, session } = definition(id)
+
+	if (session) {
 		if (!serviceUrl(config.endpoint)) return { status: 'failed', code: 'invalidEndpoint', message: 'The endpoint is not an http or https URL.' }
 		if (!signedIn) return { status: 'unavailable', code: 'signedOut', message: 'Not signed in. Sign in with the API key of your account.' }
 		return { status: 'available', code: 'ok', message: 'Signed in. The service was not contacted, so the session may have expired.' }
 	}
 
 	const inspection = await inspectExecutable(config.executable)
-	if (inspection.status !== 'available' || !config.config?.trim()) return inspection
+	if (inspection.status !== 'available' || !inspection.resolvedPath) return inspection
+	const { resolvedPath } = inspection
+	let configured = ''
 
-	try {
-		if ((await stat(resolve(config.config))).isFile()) return { ...inspection, message: `${inspection.message} The configuration file exists.` }
-	} catch {
-		// A missing or unreadable configuration file is reported below.
+	if (config.config?.trim()) {
+		try {
+			if ((await stat(resolve(config.config))).isFile()) configured = ' The configuration file exists.'
+		} catch {
+			// A missing or unreadable configuration file is reported below.
+		}
+
+		if (!configured) return { status: 'unavailable', code: 'configMissing', resolvedPath, message: 'No configuration file exists at this path on the server.' }
 	}
 
-	return { status: 'unavailable', code: 'configMissing', resolvedPath: inspection.resolvedPath, message: 'No configuration file exists at this path on the server.' }
+	const args = PROBE_ARGUMENTS[id] ?? []
+	const outcome = await probe(resolvedPath, args, PROBE_TIMEOUT)
+
+	if (outcome.status === 'notStarted') return { status: 'failed', code: 'notStarted', resolvedPath, message: `The server could not start the program: ${outcome.message}.` }
+	if (outcome.status === 'noAnswer') return { status: 'failed', code: 'noAnswer', resolvedPath, message: `The program did not end within ${PROBE_TIMEOUT / 1000} s when started with ${args.join(' ')}, so it was stopped. Set the command-line program, not a graphical one.` }
+
+	const version = programVersion(outcome.output)
+	const named = version ? `${name} ${version}` : name
+
+	if (id === 'mediamtx') {
+		const parsed = parseVersion(outcome.output)
+		if (!parsed || !supportedVersion(parsed)) return { status: 'failed', code: 'incompatibleVersion', resolvedPath, version, message: `${version ? `Version ${version}` : 'The program'} answered, but the gateway needs MediaMTX 1.21 or a later 1.x.` }
+	}
+
+	if (id === 'astap') {
+		const databases = await starDatabases(resolvedPath)
+		if (databases.length === 0) return { status: 'available', code: 'noDatabase', resolvedPath, version, message: `${named} answered when started, but no star database is in its folder. Install one, such as D50, beside the program, unless ASTAP is set up to read it from elsewhere.` }
+		return { status: 'available', code: 'ok', resolvedPath, version, message: `${named} answered when started. Star database ${databases.join(', ')} found beside it.` }
+	}
+
+	return { status: 'available', code: 'ok', resolvedPath, version, message: `${named} answered when started.${configured}` }
 }
 
 // Settings of the supported external programs, persisted in the operational database. Changes are applied one at a
@@ -344,10 +458,11 @@ export class ExternalToolsStore {
 	// Tail of the changes in progress, which run one at a time.
 	#queue: Promise<unknown> = Promise.resolve()
 
-	// Creates the store of the settings in database, publishing changes to listener.
+	// Creates the store of the settings in database, publishing changes to listener; probe starts the programs a check tests.
 	constructor(
 		readonly database: AppDatabase,
 		readonly listener?: ExternalToolListener,
+		readonly probe: ProgramProbe = probeProgram,
 	) {}
 
 	// Returns the saved settings of a program, the defaults when never saved.
@@ -454,13 +569,13 @@ export class ExternalToolsStore {
 		})
 	}
 
-	// Checks settings of a program on the server's filesystem without saving them (for a web service, its endpoint
-	// and whether it is signed in to). When they are the program's saved settings at the end of the check, the result
-	// becomes its latest check.
+	// Checks settings of a program without saving them: its files on the server, then a start that prints its help or
+	// version (for a web service, its endpoint and whether it is signed in to). When they are the program's saved settings
+	// at the end of the check, the result becomes its latest check.
 	async check(id: ExternalToolId, config: ExternalToolConfig): Promise<ExternalToolCheck> {
 		const start = performance.now()
 		const checked = configOf(id, config)
-		const inspection = await inspectTool(id, checked, this.#sessions.has(id))
+		const inspection = await inspectTool(id, checked, this.#sessions.has(id), this.probe)
 		const check: ExternalToolCheck = { ...inspection, config: checked, checkedAt: Date.now(), duration: performance.now() - start }
 
 		if (sameConfig(this.#tool(id), checked)) {
@@ -469,6 +584,18 @@ export class ExternalToolsStore {
 		}
 
 		return check
+	}
+
+	// Checks the saved settings of every program with an executable set, all at once, so their states are known after a
+	// restart without anyone testing them; each result becomes the program's latest check. Web services are left out,
+	// since a restart signs out of them.
+	async checkSaved(): Promise<void> {
+		await Promise.all(
+			EXTERNAL_TOOLS.filter((tool) => !tool.session).map(async ({ id }) => {
+				const { revision: _, ...config } = this.#tool(id)
+				if (config.executable.trim()) await this.check(id, config)
+			}),
+		)
 	}
 
 	// Returns the settings a run of a program uses, or undefined when the program is not configured (a web service
@@ -521,7 +648,8 @@ export function createExternalToolsRoutes(store: ExternalToolsStore) {
 			},
 		},
 		'/api/settings/external-tools/:id/test': {
-			// Checks settings (ExternalToolTestRequest) on the server's filesystem without saving them; never runs the program.
+			// Checks settings (ExternalToolTestRequest) without saving them, starting the program once to print its help or
+			// version; it never analyzes an image.
 			POST: async (req) => {
 				const { id } = req.params
 				if (!isExternalToolId(id)) return toolNotFound()

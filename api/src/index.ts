@@ -1495,9 +1495,11 @@ export async function startEarthOrientation() {
 }
 
 // Opens the Calibration Library, the projects of Image Stacking, and the saved stacks of Live Stacking in the background,
-// so what a crash left of their products is finished before anyone opens the tools. Called by the app after startDatabase and before it serves; a test
-// that only imports this module opens no file. Never rejects: a request opens them again and reports its failure.
+// so what a crash left of their products is finished before anyone opens the tools, and checks the saved external tools,
+// whose latest checks are kept in memory only. Called by the app after startDatabase and before it serves; a test
+// that only imports this module opens no file and starts no program. Never rejects: a request opens them again and reports its failure.
 export function startStores() {
+	void externalTools.checkSaved().catch((error: unknown) => console.error('The external tools could not be checked', error))
 	void calibrationLibrary.ready().catch((error: unknown) => console.error('The calibration library could not be opened', error))
 	void imageStacking.ready().catch((error: unknown) => console.error('The image stacking projects could not be opened', error))
 	void liveStacking.ready().catch((error: unknown) => console.error('The live stacking products could not be opened', error))

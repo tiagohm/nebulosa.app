@@ -48,8 +48,11 @@ function AstapAvailability() {
 	return (
 		<div className="flex flex-col gap-1">
 			<Notice>
-				ASTAP: <span className={summary?.className}>{summary?.label ?? 'Loading…'}</span>
-				{astap?.lastCheck && astap.lastCheck.status !== 'available' && ` — ${astap.lastCheck.message}`}
+				ASTAP:{' '}
+				<span className={summary?.className} title={summary?.hint}>
+					{summary?.label ?? 'Loading…'}
+				</span>
+				{astap?.lastCheck && astap.lastCheck.code !== 'ok' && ` — ${astap.lastCheck.message}`}
 			</Notice>
 			<Button variant="ghost" className="self-start px-1" onClick={() => navigate(routeState, { workspace: 'settings', tool: 'astap' })}>
 				Settings → External Tools → ASTAP

@@ -2,14 +2,21 @@ import fs from 'fs/promises'
 import { join } from 'path'
 import { exit } from 'process'
 import { DEFAULT_QUAD_STARS_PER_CELL, healpixCellSize, quadCellNside } from 'nebulosa/src/astrometry/solvers/quad.builder'
-import { buildQuadIndexTile, decodeQuadIndexHeader, encodeQuadIndexTile, QUAD_INDEX_EXTENSION, quadIndexTileCone, quadIndexTileFileName, verifyQuadIndexTile } from 'nebulosa/src/astrometry/solvers/quad.index.file'
+import type { SkyCone } from 'nebulosa/src/astrometry/solvers/quad.index'
+import { catalogQuadIndexStars } from 'nebulosa/src/astrometry/solvers/quad.index.ephemeral'
+import { buildQuadIndexTile, decodeQuadIndexHeader, encodeQuadIndexTile, QUAD_INDEX_EXTENSION, type QuadIndexStars, quadIndexTileCone, quadIndexTileFileName, verifyQuadIndexTile } from 'nebulosa/src/astrometry/solvers/quad.index.file'
 import { eraC2s, eraS2c } from 'nebulosa/src/astronomy/coordinates/erfa/erfa'
 import { circleToPixels, coordToPixel } from 'nebulosa/src/astronomy/sky/spatial/healpix'
+import { AstapCatalog, type Astap1476Database } from 'nebulosa/src/catalogs/stars/astap'
+import type { StarCatalog } from 'nebulosa/src/catalogs/stars/catalog'
+import { HnskyCatalog, type Hnsky290Database } from 'nebulosa/src/catalogs/stars/hnsky'
 import { ASEC2RAD, DEG2RAD, MILLIASEC2RAD } from 'nebulosa/src/core/constants'
 
-// Generates the quad index files of the built-in plate solver, bin/data/quads/*.nqi (not committed), from Gaia DR3:
-// one set of HEALPix tiles per band of quad sizes, from 8' up in steps of sqrt(2) by default, and manifest.json
-// describing them. The stars come from the ESA Gaia archive (gaiadr3.gaia_source, positions at J2016.0 with proper
+// Generates the quad index files of the built-in plate solver (not committed): one set of HEALPix tiles per band of
+// quad sizes, from 8' up in steps of sqrt(2) by default, and manifest.json describing them, in bin/data/quads/<source>.
+// The stars come from Gaia DR3 by default, or from a local ASTAP (.1476) or HNSKY (.290) star database with --catalog,
+// read through the toolkit's catalog readers, which needs no download (those databases are Gaia extracts with no proper
+// motions, so the positions stay at their epoch). The Gaia stars come from the ESA Gaia archive (gaiadr3.gaia_source, positions at J2016.0 with proper
 // motions), queried by chunks of source_id, which encodes the HEALPix level-12 cell of each source, and cached in
 // bin/data/gaia so that an interrupted run resumes and every band reuses the same download. Each tile is built from the
 // stars of its cone only, keeping per uniformization cell no more stars than the builder can use, so memory stays
@@ -20,10 +27,11 @@ import { ASEC2RAD, DEG2RAD, MILLIASEC2RAD } from 'nebulosa/src/core/constants'
 // written without downloading anything. A full run downloads the whole Gaia catalog to the magnitude limit (hours, and
 // gigabytes of cache) and needs a few gigabytes of memory for the smallest band; --region restricts it to a cone.
 // Usage: bun make:quads [--force] [--empty] [--bands 480,679] [--magnitude 17] [--region ra,dec,radius] [--concurrency 4]
-// (band minima in arcseconds; region in degrees)
+//        bun make:quads --catalog astap|hnsky --path <directory> [--database d20] [--force] [--bands ...] [--region ...]
+// (band minima in arcseconds; region in degrees; --output replaces the output directory)
 
-// Generated files, not yet read by the application.
-const OUTPUT = join(import.meta.dir, '../data/quads')
+// Root of the generated files, one directory per star source; not yet read by the application.
+const QUADS = join(import.meta.dir, '../data/quads')
 
 // Downloaded Gaia chunks.
 const CACHE = join(import.meta.dir, '../data/gaia')
@@ -95,8 +103,23 @@ interface Manifest {
 	readonly schema: 1
 	readonly catalog: string
 	readonly epoch: number
-	readonly magnitudeLimit: number
+	// Faintest magnitude of the source, when known.
+	readonly magnitudeLimit?: number
 	readonly bands: ManifestBand[]
+}
+
+// Where the stars of the tiles come from.
+interface StarSource {
+	// Catalog name written into the tiles, ASCII, at most 32 characters.
+	readonly catalog: string
+	// Faintest magnitude of the source, NaN when unknown.
+	readonly magnitudeLimit: number
+	// Epoch of the positions when the stars do not state one, Julian year.
+	readonly epoch: number
+	// Output directory.
+	readonly output: string
+	// The stars of a cone, brightest first, at most perCell per cell of nside (twice that, for the builder's dedup).
+	readonly coneStars: (cone: SkyCone, nside: number, perCell: number) => Promise<QuadIndexStars & { readonly epoch?: number }>
 }
 
 // Value of a command-line option, or undefined.
@@ -124,13 +147,45 @@ const bands = (option('--bands')?.split(',').map(Number) ?? DEFAULT_BANDS).map((
 const concurrency = Math.max(1, Number(option('--concurrency') ?? 4))
 const regionOption = option('--region')?.split(',').map(Number)
 const region = regionOption === undefined ? undefined : { center: eraS2c(regionOption[0] * DEG2RAD, regionOption[1] * DEG2RAD), radius: regionOption[2] * DEG2RAD }
-const manifestPath = join(OUTPUT, 'manifest.json')
+const catalogKind = option('--catalog')
+const usage = 'Usage: bun make:quads [--catalog astap|hnsky --path <directory> [--database d20]] [--force] [--empty] [--bands 480,679] [--magnitude 17] [--region ra,dec,radius] [--concurrency 4] [--output <directory>]'
 
-if (!(magnitudeLimit > 0) || bands.some((band) => !(band > 0)) || (region !== undefined && !(region.radius > 0))) {
-	console.error('Usage: bun make:quads [--force] [--empty] [--bands 480,679] [--magnitude 17] [--region ra,dec,radius] [--concurrency 4]')
+if (!(magnitudeLimit > 0) || bands.some((band) => !(band > 0)) || (region !== undefined && !(region.radius > 0)) || (catalogKind !== undefined && catalogKind !== 'astap' && catalogKind !== 'hnsky') || (catalogKind !== undefined && option('--path') === undefined)) {
+	console.error(usage)
 	exit(1)
 }
 
+// Opens a local ASTAP or HNSKY star database: the files of one database in a directory, named <database>_<tile>.<extension>.
+async function openLocalCatalog(kind: 'astap' | 'hnsky', directory: string, requested?: string) {
+	const extension = kind === 'astap' ? '.1476' : '.290'
+	const names = (await fs.readdir(directory)).filter((name) => name.endsWith(extension) && name.includes('_'))
+	const databases = [...new Set(names.map((name) => name.slice(0, name.indexOf('_')).toLowerCase()))]
+	const database = requested?.toLowerCase() ?? (databases.length === 1 ? databases[0] : undefined)
+	if (database === undefined || !databases.includes(database)) throw new Error(`choose a database of ${directory} with --database: ${databases.join(', ') || 'none found'}`)
+
+	const files = new Map(names.filter((name) => name.toLowerCase().startsWith(`${database}_`)).map((name) => [name.toLowerCase(), Bun.file(join(directory, name))] as const))
+	const catalog: StarCatalog = kind === 'astap' ? new AstapCatalog().open(files, database as Astap1476Database) : new HnskyCatalog().open(files, database as Hnsky290Database)
+	return { catalog, database }
+}
+
+let source: StarSource
+
+if (catalogKind === undefined) {
+	source = { catalog: 'Gaia DR3', magnitudeLimit, epoch: GAIA_EPOCH, output: option('--output') ?? join(QUADS, 'gaia-dr3'), coneStars: gaiaConeStars }
+} else {
+	const { catalog, database } = await openLocalCatalog(catalogKind, option('--path')!, option('--database'))
+	const name = `${catalogKind.toUpperCase()} ${database.toUpperCase()}`
+	source = {
+		catalog: name,
+		magnitudeLimit: Number.NaN,
+		epoch: 2000,
+		output: option('--output') ?? join(QUADS, `${catalogKind}-${database}`),
+		coneStars: (cone, nside, perCell) => catalogQuadIndexStars(catalog, cone, { nside, perCell: 2 * perCell }),
+	}
+}
+
+const OUTPUT = source.output
+const manifestPath = join(OUTPUT, 'manifest.json')
 await fs.mkdir(OUTPUT, { recursive: true })
 
 if (empty) {
@@ -139,13 +194,13 @@ if (empty) {
 		exit(0)
 	}
 
-	const manifest: Manifest = { schema: 1, catalog: 'Gaia DR3', epoch: GAIA_EPOCH, magnitudeLimit, bands: [] }
+	const manifest: Manifest = { schema: 1, catalog: source.catalog, epoch: source.epoch, magnitudeLimit: Number.isNaN(source.magnitudeLimit) ? undefined : source.magnitudeLimit, bands: [] }
 	await writeAtomically(manifestPath, JSON.stringify(manifest, null, '\t'))
 	console.info(`written an empty quad index manifest to ${manifestPath}`)
 	exit(0)
 }
 
-await fs.mkdir(CACHE, { recursive: true })
+if (catalogKind === undefined) await fs.mkdir(CACHE, { recursive: true })
 
 // Cache file of a chunk at the magnitude limit.
 function chunkPath(chunk: number) {
@@ -274,9 +329,9 @@ function SelectedStarComparator(a: SelectedStar, b: SelectedStar) {
 	return a.magnitude - b.magnitude || (a.source < b.source ? -1 : a.source > b.source ? 1 : 0)
 }
 
-// The stars of a cone, brightest first, keeping per cell of the band at most what the builder keeps (twice, for its dedup).
-// Only the selected stars are kept, never their chunks, so a whole-sky cone holds no more than the band can use.
-async function coneStars(cone: { readonly center: readonly [number, number, number]; readonly radius: number }, nside: number, perCell: number) {
+// The Gaia stars of a cone, brightest first, keeping per cell of the band at most what the builder keeps (twice, for its
+// dedup). Only the selected stars are kept, never their chunks, so a whole-sky cone holds no more than the band can use.
+async function gaiaConeStars(cone: SkyCone, nside: number, perCell: number) {
 	const [ra, dec] = eraC2s(cone.center[0], cone.center[1], cone.center[2])
 	const chunks = circleToPixels(CHUNK_NSIDE, ra, dec, cone.radius)
 	await downloadChunks(chunks.filter((chunk) => !downloaded.has(chunk)))
@@ -325,14 +380,18 @@ async function coneStars(cone: { readonly center: readonly [number, number, numb
 		sources[k] = star.source
 	}
 
-	return { vectors, magnitudes, properMotions, sources }
+	return { vectors, magnitudes, properMotions, sources, epoch: GAIA_EPOCH }
 }
 
-// Whether a tile file exists and was built at the requested magnitude limit.
+// Whether a tile header belongs to the source of this run: its catalog and, when known, its magnitude limit.
+function fromSource(header: { readonly catalog: string; readonly magnitudeLimit: number }) {
+	return header.catalog === source.catalog && (Number.isNaN(source.magnitudeLimit) || header.magnitudeLimit === source.magnitudeLimit)
+}
+
+// Whether a tile file exists and was built from the source of this run.
 async function tileInPlace(path: string) {
 	try {
-		const header = decodeQuadIndexHeader(await Bun.file(path).slice(0, 512).bytes())
-		return header.magnitudeLimit === magnitudeLimit
+		return fromSource(decodeQuadIndexHeader(await Bun.file(path).slice(0, 512).bytes()))
 	} catch {
 		return false
 	}
@@ -356,8 +415,8 @@ for (const scaleLower of bands) {
 		if (!force && (await tileInPlace(path))) continue
 
 		const cone = partial ? { center: region.center, radius: Math.min(Math.PI, region.radius + scaleUpper) } : quadIndexTileCone(tileNside, tileId, scaleUpper)
-		const stars = await coneStars(cone, nside, perCell)
-		const tile = buildQuadIndexTile(stars, { scaleLower, scaleUpper }, tileNside, tileId, { jitter: JITTER, epoch: GAIA_EPOCH, magnitudeLimit, catalog: 'Gaia DR3' })
+		const stars = await source.coneStars(cone, nside, perCell)
+		const tile = buildQuadIndexTile(stars, { scaleLower, scaleUpper }, tileNside, tileId, { jitter: JITTER, epoch: stars.epoch ?? source.epoch, magnitudeLimit: source.magnitudeLimit, catalog: source.catalog })
 		if (tile === undefined) continue
 
 		const bytes = encodeQuadIndexTile(tile)
@@ -374,10 +433,12 @@ for (const scaleLower of bands) {
 // files of earlier runs. Bands are keyed by their limits and tiling; a region's whole-sky file is a band of its own,
 // marked partial.
 const manifestBands = new Map<string, ManifestBand>()
+let epoch: number | undefined
 
 for (const name of (await fs.readdir(OUTPUT)).filter((file) => file.endsWith(QUAD_INDEX_EXTENSION)).sort()) {
 	const header = decodeQuadIndexHeader(await Bun.file(join(OUTPUT, name)).slice(0, 512).bytes())
-	if (header.magnitudeLimit !== magnitudeLimit) continue
+	if (!fromSource(header)) continue
+	epoch ??= header.epoch
 	const partial = name.endsWith(`${PARTIAL_SUFFIX}${QUAD_INDEX_EXTENSION}`)
 	const key = `${header.scaleLower}:${header.tileNside}:${partial}`
 	const band = manifestBands.get(key)
@@ -385,6 +446,6 @@ for (const name of (await fs.readdir(OUTPUT)).filter((file) => file.endsWith(QUA
 	else band.files.push(name)
 }
 
-const manifest: Manifest = { schema: 1, catalog: 'Gaia DR3', epoch: GAIA_EPOCH, magnitudeLimit, bands: [...manifestBands.values()].sort((a, b) => a.scaleLower - b.scaleLower || Number(a.partial) - Number(b.partial)) }
+const manifest: Manifest = { schema: 1, catalog: source.catalog, epoch: epoch ?? source.epoch, magnitudeLimit: Number.isNaN(source.magnitudeLimit) ? undefined : source.magnitudeLimit, bands: [...manifestBands.values()].sort((a, b) => a.scaleLower - b.scaleLower || Number(a.partial) - Number(b.partial)) }
 await writeAtomically(manifestPath, JSON.stringify(manifest, null, '\t'))
 console.info(`written the quad index manifest to ${manifestPath}`)

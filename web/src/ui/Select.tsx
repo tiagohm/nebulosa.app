@@ -23,7 +23,7 @@ export interface SelectProps<T extends string> {
 
 // Select-only combobox (WAI-ARIA) with a custom listbox, so the open list matches the theme.
 // Largest height of the open list, in pixels (the max-h-88 default).
-const LIST_MAX_HEIGHT = 352
+export const LIST_MAX_HEIGHT = 352
 
 // Returns the vertical range, in viewport pixels, in which content around element is visible: the
 // viewport narrowed by every scrolling ancestor, so a list opened near the edge of a scrolling panel
@@ -45,6 +45,17 @@ function visibleRange(element: HTMLElement): { top: number; bottom: number } {
 	return { top, bottom }
 }
 
+// Side and room of the list a trigger opens: above it when there is less than 280 px below it and more above, and the
+// height available on that side, in pixels, less the 4 px gap and a small margin, never below about three options.
+export function listPlacement(trigger: HTMLElement): { readonly up: boolean; readonly room: number } {
+	const rect = trigger.getBoundingClientRect()
+	const range = visibleRange(trigger)
+	const below = range.bottom - rect.bottom
+	const above = rect.top - range.top
+	const up = below < 280 && above > below
+	return { up, room: Math.max(120, (up ? above : below) - 12) }
+}
+
 export function Select<T extends string>({ label, options, value, onChange, className, format = String, disabledReason, disabled = false, group, title }: SelectProps<T>) {
 	const [open, setOpen] = useState(false)
 	const [active, setActive] = useState(-1)
@@ -61,14 +72,9 @@ export function Select<T extends string>({ label, options, value, onChange, clas
 		const trigger = triggerRef.current
 
 		if (trigger) {
-			const rect = trigger.getBoundingClientRect()
-			const range = visibleRange(trigger)
-			const below = range.bottom - rect.bottom
-			const above = rect.top - range.top
-			const opensUp = below < 280 && above > below
-			setUp(opensUp)
-			// Leaves room for the 4 px gap and a small margin; never shrinks below about three options.
-			setRoom(Math.max(120, (opensUp ? above : below) - 12))
+			const placement = listPlacement(trigger)
+			setUp(placement.up)
+			setRoom(placement.room)
 		}
 
 		setActive(at)

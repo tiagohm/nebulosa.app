@@ -1,6 +1,6 @@
 import type { SpiceBody, SpiceBodySegment, SpiceKernelSummary } from 'api'
 import { cn } from 'cn'
-import { useState } from 'react'
+import { useCallback } from 'react'
 import { useSnapshot } from 'valtio'
 import { MISSING } from '../../format'
 import { CollapsibleSection } from '../../shell/CollapsibleSection'
@@ -8,17 +8,16 @@ import { EmptyState } from '../../shell/WorkspaceLayout'
 import { Notice } from '../../ui/Notice'
 import { Select } from '../../ui/Select'
 import { StatusBadge } from '../../ui/StatusBadge'
-import { Cell, Row, Table } from '../../ui/Table'
-import { TextInput } from '../../ui/TextInput'
+import { VirtualList } from '../../ui/VirtualList'
 import { type BodyNames, epochDate, epochDateTime, epochOf, naifName, USAGE } from './format'
 import { LibrarySection } from './LibrarySection'
 import { setSpiceBodyPreference, spiceKernelsState, timelinePlacement, timelineSpan } from './spicekernels'
 
 // Bodies section of the SPICE Kernel Library tool: how the enabled kernels provide each body. Every body of the current
-// set is listed, filtered by its name or NAIF code, in a frame that scrolls itself and fills the height of the workspace,
-// with the kernels that have it and the one preferred for it; a selected body opens in the panel the control that prefers
-// a kernel for it and its segments in selection order on a timeline, where each is drawn over its coverage and filled
-// where it is the selected one, so a segment hidden by another one is visible as such.
+// set is listed, however many there are, filtered by its name or NAIF code, in a virtual list that scrolls itself and
+// fills the height of the workspace, with the kernels that have it and the one preferred for it; a selected body opens in
+// the panel the control that prefers a kernel for it and its segments in selection order on a timeline, where each is
+// drawn over its coverage and filled where it is the selected one, so a segment hidden by another one is visible as such.
 
 // Value of the preference control that follows the load order alone.
 const LOAD_ORDER = ''
@@ -26,16 +25,6 @@ const LOAD_ORDER = ''
 // Name of a kernel by its id, or the id when the library no longer has it.
 function kernelName(kernels: readonly SpiceKernelSummary[], id: string) {
 	return kernels.find((e) => e.id === id)?.name ?? id
-}
-
-// Bodies whose name or NAIF code contains every word of `query`, case-insensitive, in their order.
-function filterBodies(bodies: readonly SpiceBody[], query: string, names: BodyNames) {
-	const words = query.toLowerCase().split(/\s+/).filter(Boolean)
-	if (words.length === 0) return bodies
-	return bodies.filter((e) => {
-		const text = naifName(e.body, names).toLowerCase()
-		return words.every((word) => text.includes(word))
-	})
 }
 
 interface BodiesProps {
@@ -49,68 +38,66 @@ interface BodiesProps {
 	readonly onSelect: (body: number) => void
 }
 
+// NAIF code of a body, its key in the list.
+function bodyKey(body: SpiceBody) {
+	return body.body
+}
+
+// Caption of the search: how many bodies are shown of all of them.
+function bodyCount(shown: number, total: number) {
+	return shown === total ? `${total} bodies` : `${shown} of ${total} bodies`
+}
+
+// Text of a search without matches.
+function noBodyMatches(query: string) {
+	return `No body matches “${query}”.`
+}
+
 // Bodies section.
 export function Bodies({ bodies, kernels, names, selected, onSelect }: BodiesProps) {
-	const [query, setQuery] = useState('')
+	const searchText = useCallback((body: SpiceBody) => naifName(body.body, names), [names])
 
 	if (!bodies) return <EmptyState title="Loading" description="Reading the bodies of the enabled kernels." />
 	if (bodies.length === 0) return <EmptyState title="No bodies" description="Enable a kernel in Installed, or add one in Add Kernel." />
 
-	const shown = filterBodies(bodies, query, names)
-
 	return (
-		<LibrarySection
-			title="Bodies"
-			className="min-h-0"
-			aside={
-				<div className="flex flex-wrap items-end gap-3">
-					<span className="pb-2 text-xs text-ink-300">{shown.length === bodies.length ? `${bodies.length} bodies` : `${shown.length} of ${bodies.length} bodies`}</span>
-					<TextInput label="Search" className="w-60" value={query} placeholder="Name or NAIF code…" onChange={(e) => setQuery(e.target.value)} />
-				</div>
-			}
-		>
+		<LibrarySection title="Bodies" className="min-h-0">
 			<Notice className="max-w-3xl">At each instant a body takes the segment of its preferred kernel where one covers it, otherwise the covering segment highest in the load order. Each link of a chain, such as Saturn → Saturn barycenter, is selected on its own. Select a body to see its segments.</Notice>
-			{shown.length > 0 ? (
-				<Table columns={['Body', { key: 'kernels', label: 'Kernels', className: 'max-sm:hidden' }, { key: 'coverage', label: 'Coverage', className: 'max-sm:hidden' }, 'Selected from', { key: 'preference', label: 'Preference', className: 'max-md:hidden' }]}>
-					{shown.map((e) => (
-						<BodyRow key={e.body} body={e} kernels={kernels} names={names} selected={e.body === selected} onSelect={() => onSelect(e.body)} />
-					))}
-				</Table>
-			) : (
-				<Notice>No body matches “{query.trim()}”.</Notice>
-			)}
+			<VirtualList
+				items={bodies}
+				itemKey={bodyKey}
+				title={(body) => naifName(body.body, names)}
+				description={(body) => bodySources(body, kernels)}
+				meta={(body) => <BodyMeta body={body} />}
+				selected={selected}
+				onSelect={(body) => onSelect(body.body)}
+				emptyText="No bodies."
+				search={searchText}
+				searchPlaceholder="Name or NAIF code…"
+				count={bodyCount}
+				noMatchText={noBodyMatches}
+			/>
 		</LibrarySection>
 	)
 }
 
-interface BodyRowProps {
-	readonly body: SpiceBody
-	readonly kernels: readonly SpiceKernelSummary[]
-	readonly names: BodyNames
-	readonly selected: boolean
-	readonly onSelect: () => void
+// Where a body comes from: how many kernels have it, the kernels its selection takes, and the kernel preferred for it.
+function bodySources(body: SpiceBody, kernels: readonly SpiceKernelSummary[]) {
+	const used = [...new Set(body.coverage.map((e) => e.kernelId))].map((e) => kernelName(kernels, e))
+	const count = `${body.kernelIds.length} ${body.kernelIds.length === 1 ? 'kernel' : 'kernels'}`
+	const preference = body.preferredKernelId ? ` · prefers ${kernelName(kernels, body.preferredKernelId)}` : ''
+	return `${count} · ${used.join(', ') || MISSING}${preference}`
 }
 
-// One body: how many kernels have it, its coverage, and the kernels its selection takes.
-function BodyRow({ body, kernels, names, selected, onSelect }: BodyRowProps) {
+// Trailing meta of a body: its coverage, hidden on phones, and whether more than one kernel has it.
+function BodyMeta({ body }: { readonly body: SpiceBody }) {
 	const span = timelineSpan(body.segments)
-	const used = [...new Set(body.coverage.map((e) => e.kernelId))].map((e) => kernelName(kernels, e))
 
 	return (
-		<Row selected={selected} onSelect={onSelect}>
-			<Cell className="text-ink-100">{naifName(body.body, names)}</Cell>
-			<Cell className="max-sm:hidden">
-				<span className="flex items-center gap-2">
-					{body.kernelIds.length}
-					{body.kernelIds.length > 1 && <StatusBadge tone="neutral" label="Overlap" />}
-				</span>
-			</Cell>
-			<Cell className="max-sm:hidden">{span ? `${epochDate(span.start)} – ${epochDate(span.end)}` : MISSING}</Cell>
-			<Cell className="max-w-64 truncate" title={used.join(', ')}>
-				{used.join(', ') || MISSING}
-			</Cell>
-			<Cell className="max-w-48 truncate max-md:hidden">{body.preferredKernelId ? kernelName(kernels, body.preferredKernelId) : 'Load order'}</Cell>
-		</Row>
+		<>
+			<span className="max-sm:hidden">{span ? `${epochDate(span.start)} – ${epochDate(span.end)}` : MISSING}</span>
+			{body.kernelIds.length > 1 && <StatusBadge tone="neutral" label="Overlap" />}
+		</>
 	)
 }
 

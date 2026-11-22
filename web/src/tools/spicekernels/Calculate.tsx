@@ -1,7 +1,7 @@
 import type { SpiceBody, SpiceChainLink, SpiceEvaluation, SpiceEvaluationResult, SpiceKernelSummary } from 'api'
 import { AU_KM } from 'nebulosa/src/core/constants'
 import { formatHMS, formatSignedDMS } from 'nebulosa/src/math/units/angle'
-import { useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { formatArcsec, formatDegrees, formatFixed, formatKilometers, formatSpeed, MISSING } from '../../format'
 import { EmptyState } from '../../shell/WorkspaceLayout'
 import { Button } from '../../ui/Button'
@@ -10,6 +10,7 @@ import { Notice } from '../../ui/Notice'
 import { Select } from '../../ui/Select'
 import { Cell, Row, Table } from '../../ui/Table'
 import { TextInput } from '../../ui/TextInput'
+import { VirtualSelect } from '../../ui/VirtualSelect'
 import { type BodyNames, epochDate, naifName, withMinus } from './format'
 import { LibrarySection } from './LibrarySection'
 import { evaluateSpice, evaluationDifference } from './spicekernels'
@@ -58,11 +59,13 @@ export function Calculate({ bodies, kernels, names }: CalculateProps) {
 	const [computed, setComputed] = useState<Computed>()
 	const [error, setError] = useState<string>()
 	const [busy, setBusy] = useState(false)
+	// NAIF codes of the bodies, the Solar System barycenter first, as the options of the target and the center.
+	const codes = useMemo(() => ['0', ...(bodies ?? []).map((e) => String(e.body))], [bodies])
+	const bodyName = useCallback((code: string) => naifName(Number(code), names), [names])
 
 	if (!bodies) return <EmptyState title="Loading" description="Reading the bodies of the enabled kernels." />
 	if (bodies.length === 0) return <EmptyState title="No bodies" description="Enable a kernel in Installed, or add one in Add Kernel." />
 
-	const codes = ['0', ...bodies.map((e) => String(e.body))]
 	const targetCode = target && codes.includes(target) ? target : String(bodies.find((e) => e.body === 699)?.body ?? bodies[0].body)
 	const centerCode = center && codes.includes(center) ? center : codes.includes('399') ? '399' : '0'
 	const targetBody = bodies.find((e) => String(e.body) === targetCode)
@@ -115,8 +118,8 @@ export function Calculate({ bodies, kernels, names }: CalculateProps) {
 					className="flex flex-col gap-3"
 				>
 					<div className="flex flex-wrap items-end gap-2">
-						<Select label="Target" className="w-72 max-sm:w-full" options={codes} value={targetCode} format={(e) => naifName(Number(e), names)} onChange={setTarget} />
-						<Select label="Center" className="w-72 max-sm:w-full" options={codes} value={centerCode} format={(e) => naifName(Number(e), names)} onChange={setCenter} />
+						<VirtualSelect label="Target" className="w-72 max-sm:w-full" options={codes} value={targetCode} format={bodyName} onChange={setTarget} searchable searchPlaceholder="Name or NAIF code…" />
+						<VirtualSelect label="Center" className="w-72 max-sm:w-full" options={codes} value={centerCode} format={bodyName} onChange={setCenter} searchable searchPlaceholder="Name or NAIF code…" />
 						<TextInput label="Instant (UTC)" type="datetime-local" step={1} className="w-56" value={time} onChange={(e) => setTime(e.target.value)} />
 						<Button variant="secondary" title="Sets the instant to the current UTC time" onClick={() => setTime(nowValue())}>
 							Now

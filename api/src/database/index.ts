@@ -18,12 +18,21 @@ export const DEFAULT_DATA_DIRECTORY = process.env.NEBULOSA_HOME || join(homedir(
 // Operational database of the server, in the data directory.
 export const DEFAULT_DATABASE_FILE = join(DEFAULT_DATA_DIRECTORY, 'nebulosa.sqlite')
 
+// Connection open on a file and the database that owns it, the only one that may close it.
+interface OpenConnection {
+	// Connection to the file.
+	readonly db: Database
+	// Database that opened the connection or took it over last.
+	readonly owner: AppDatabase
+}
+
 // Key of the connections kept on the global object across hot reloads of the modules.
-const OPEN_CONNECTIONS_KEY = Symbol.for('nebulosa.database')
+const OPEN_CONNECTIONS_KEY = Symbol.for('nebulosa.database.connections')
 
 // Connections open in the process, by file. A hot reload evaluates this module again while the connection of the
-// previous evaluation still holds the lock of its file, so the new owner takes that connection instead of being refused.
-const OPEN_CONNECTIONS = ((globalThis as unknown as Record<symbol, Map<string, Database> | undefined>)[OPEN_CONNECTIONS_KEY] ??= new Map<string, Database>())
+// previous evaluation still holds the lock of its file, so the new owner takes that connection instead of being refused,
+// and the previous one, stopped later, leaves it open for it.
+const OPEN_CONNECTIONS = ((globalThis as unknown as Record<symbol, Map<string, OpenConnection> | undefined>)[OPEN_CONNECTIONS_KEY] ??= new Map<string, OpenConnection>())
 
 // The operational database: one file and the one connection of the process to it.
 export class AppDatabase {
@@ -62,7 +71,7 @@ export class AppDatabase {
 		this.#closed = false
 
 		const shared = this.file !== MEMORY_DATABASE
-		let db = (shared && OPEN_CONNECTIONS.get(this.file)) || openConnection(this.file, this.exclusive)
+		let db = (shared && OPEN_CONNECTIONS.get(this.file)?.db) || openConnection(this.file, this.exclusive)
 		OPEN_CONNECTIONS.delete(this.file)
 
 		try {
@@ -77,7 +86,7 @@ export class AppDatabase {
 			upgradeSchema(db, this.file)
 		}
 
-		if (shared) OPEN_CONNECTIONS.set(this.file, db)
+		if (shared) OPEN_CONNECTIONS.set(this.file, { db, owner: this })
 		return (this.#db = db)
 	}
 
@@ -88,14 +97,18 @@ export class AppDatabase {
 		return this.db.transaction(fn).immediate()
 	}
 
-	// Closes the connection, which writes the WAL back into the file and releases its lock. Opening again is allowed through
-	// open; a use before that throws.
+	// Closes the connection, which writes the WAL back into the file and releases its lock, unless another database took it
+	// over, such as the next run of a hot reload that used it before this one stopped: it then stays open for that one.
+	// Opening again is allowed through open; a use before that throws.
 	close() {
 		this.#closed = true
-		if (!this.#db) return
-		if (OPEN_CONNECTIONS.get(this.file) === this.#db) OPEN_CONNECTIONS.delete(this.file)
-		this.#db.close()
+		const db = this.#db
+		if (!db) return
 		this.#db = undefined
+		const open = OPEN_CONNECTIONS.get(this.file)
+		if (open?.db === db && open.owner !== this) return
+		if (open?.db === db) OPEN_CONNECTIONS.delete(this.file)
+		db.close()
 	}
 }
 

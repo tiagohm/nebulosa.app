@@ -226,3 +226,22 @@ test('a closed database refuses a use until it is opened again', () => {
 	database.open()
 	expect(database.db.query('SELECT COUNT(*) AS count FROM notes').get()).toEqual({ count: 0 })
 })
+
+test('a run that took over the connection of the previous one keeps it open when the previous one closes', () => {
+	const file = databaseFile()
+	const previous = open(file)
+	previous.db.run('CREATE TABLE notes (text TEXT)')
+
+	// The next run of a hot reload uses the database before the previous run is stopped.
+	const next = new AppDatabase(file)
+	opened.push(next)
+	next.db.run("INSERT INTO notes VALUES ('kept')")
+	previous.close()
+
+	expect(() => previous.db).toThrow('was closed')
+	expect(next.open().query('SELECT text FROM notes').all()).toEqual([{ text: 'kept' }])
+
+	// The new owner closes it, which releases the file.
+	next.close()
+	openConnection(file).close()
+})

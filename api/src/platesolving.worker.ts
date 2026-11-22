@@ -11,14 +11,15 @@ import { fileHandleSource } from 'nebulosa/src/io/file'
 import { readFits } from 'nebulosa/src/io/formats/fits/fits'
 import { bufferSource } from 'nebulosa/src/io/io'
 import { luminanceImage, readImageFrom } from './imagedecode'
-import { findQuadIndexFiles, findStarDatabases, type NativeSolveErrorCode, type NativeSolveParameters, type NativeWorkerRequest, type NativeWorkerResponse, starDatabaseName } from './platesolving.native'
+import { findQuadIndexFiles, findStarDatabases, largestStarDatabase, type NativeSolveErrorCode, type NativeSolveParameters, type NativeWorkerRequest, type NativeWorkerResponse, starDatabaseName } from './platesolving.native'
 
 // Worker thread of the built-in plate solver (see platesolving.native.ts). For each solve it detects the stars of the
 // grayscale copy of an image, or of the FITS of private pixels it decodes, searches the quad index files of the folder
 // of the solve with the toolkit's nativePlateSolve and, when they find nothing and the position and the scale are
-// known, the quads nativeNearbyPlateSolve builds in memory from the deepest star database of its folder. The indexes
+// known, the quads nativeNearbyPlateSolve builds in memory from the largest star database of its folder. The indexes
 // of a folder stay open between solves while its files keep their sizes and times: the .nqi tiles of one band and
-// source become one index, opened at once, while an Astrometry.net file, which is read whole where it cannot be mapped,
+// source become one index, opened at once (of two files of the same tile, the one holding more quads, so the whole-sky
+// file of a full run wins over the -region one of a regional run), while an Astrometry.net file, which is read whole where it cannot be mapped,
 // is opened only once a field its band can serve needs it. A file that cannot be read is skipped with a warning. A
 // solve stops at a cancel message, since the solver yields to the event loop between its slices, and when its time
 // runs out, star detection included. Angles are radians.
@@ -35,8 +36,9 @@ const QUAD_INDEX_HEADER_SIZE = 512
 interface AstrometryNetFile {
 	// Path of the file.
 	readonly path: string
-	// Shortest and longest quad of its band, radians.
+	// Shortest quad of its band, radians.
 	readonly scaleLower: number
+	// Longest quad of its band, radians.
 	readonly scaleUpper: number
 	// The index, once opened; null when it could not be.
 	index?: AstrometryNetQuadIndex | null
@@ -115,6 +117,7 @@ class IndexCache {
 			this.#close()
 			this.#directory = directory
 			this.#signature = signature
+			for (const folder of files.unreadable) this.#skipped.push(`The folder ${folder} was skipped: it cannot be read.`)
 			this.#openNebulosa(files.nebulosa)
 			await this.#listAstrometryNet(files.astrometryNet)
 		}
@@ -142,30 +145,35 @@ class IndexCache {
 		return { indexes, warnings }
 	}
 
-	// Opens the .nqi tiles as one index per band and source; a tile repeated within one is skipped.
+	// Opens the .nqi tiles as one index per band and source. Of two files of the same tile, the one holding more quads
+	// (then more stars) is kept, since the other covers only a region, and the other is skipped.
 	#openNebulosa(paths: readonly string[]) {
-		const groups = new Map<string, { paths: string[]; tiles: Set<number> }>()
+		const groups = new Map<string, Map<number, { readonly path: string; readonly quads: number; readonly stars: number }>>()
 
 		for (const path of paths) {
 			try {
 				const header = readQuadIndexHeader(path)
 				const key = [header.catalog, header.scaleLower, header.scaleUpper, header.nside, header.tileNside].join('|')
-				const group = groups.get(key) ?? { paths: [], tiles: new Set<number>() }
-				groups.set(key, group)
+				const tiles = groups.get(key) ?? new Map()
+				groups.set(key, tiles)
+				const candidate = { path, quads: header.quadCount, stars: header.ownStarCount }
+				const kept = tiles.get(header.tileId)
 
-				if (group.tiles.has(header.tileId)) {
-					this.#skipped.push(`The index file ${path} was skipped: it repeats a tile of another file of its band.`)
-					continue
+				if (kept === undefined) {
+					tiles.set(header.tileId, candidate)
+				} else {
+					const better = candidate.quads > kept.quads || (candidate.quads === kept.quads && candidate.stars > kept.stars)
+					this.#skipped.push(`The index file ${better ? kept.path : path} was skipped: ${better ? path : kept.path} holds more of the same tile.`)
+					if (better) tiles.set(header.tileId, candidate)
 				}
-
-				group.tiles.add(header.tileId)
-				group.paths.push(path)
 			} catch (error) {
 				this.#skipped.push(`The index file ${path} was skipped: ${Error.isError(error) ? error.message : String(error)}.`)
 			}
 		}
 
-		for (const { paths } of groups.values()) {
+		for (const tiles of groups.values()) {
+			const paths = [...tiles.values()].map(({ path }) => path).sort()
+
 			try {
 				this.#nebulosa.push(new NebulosaQuadIndex(paths))
 			} catch (error) {
@@ -263,8 +271,7 @@ async function solve(request: NativeSolveParameters, signal: AbortSignal): Promi
 		return { warnings }
 	}
 
-	// The deepest database of the folder gives the most stars to choose the brightest of each cell from.
-	const database = (await findStarDatabases(request.catalogDirectory)).at(-1)
+	const database = largestStarDatabase(await findStarDatabases(request.catalogDirectory))
 
 	if (!database) {
 		warnings.push('The star database folder holds no supported database.')

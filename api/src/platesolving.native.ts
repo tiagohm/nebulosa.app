@@ -1,4 +1,4 @@
-import { readdir } from 'fs/promises'
+import { readdir, realpath, stat } from 'fs/promises'
 import { extname, join } from 'path'
 import { QUAD_INDEX_EXTENSION } from 'nebulosa/src/astrometry/solvers/quad.index.file'
 import { AstapCatalog, type Astap1476Database } from 'nebulosa/src/catalogs/stars/astap'
@@ -30,6 +30,8 @@ export interface StarDatabase {
 	readonly kind: StarDatabaseKind
 	// Name of the database, lowercase, such as d50.
 	readonly database: Astap1476Database | Hnsky290Database
+	// Total size of its files, bytes: the measure of how many stars it holds, since its databases differ in depth.
+	readonly bytes: number
 	// Opens a new reader over the files; a reader caches every tile it reads until it is disposed.
 	readonly open: () => StarCatalog & Disposable
 }
@@ -40,6 +42,8 @@ export interface QuadIndexFiles {
 	readonly nebulosa: readonly string[]
 	// Astrometry.net index files (index-*.fits or index-*.fit).
 	readonly astrometryNet: readonly string[]
+	// Subfolders that could not be read, left out of the lists.
+	readonly unreadable: readonly string[]
 }
 
 // Whether a file name is that of an Astrometry.net index file, as its build-index and its downloads name them.
@@ -48,23 +52,54 @@ function isAstrometryNetIndex(name: string) {
 	return lower.startsWith('index-') && (lower.endsWith('.fits') || lower.endsWith('.fit'))
 }
 
-// Returns the quad index files of a folder and its subfolders. Throws when the folder cannot be read.
+// Returns the quad index files of a folder and its subfolders, following symbolic links to files and folders (a folder
+// reached twice, such as through a link cycle, is read once). A subfolder that cannot be read, such as a system folder
+// of a drive root, is listed as unreadable instead of failing the search. Throws when the folder itself cannot be read.
 export async function findQuadIndexFiles(directory: string): Promise<QuadIndexFiles> {
 	const nebulosa: string[] = []
 	const astrometryNet: string[] = []
+	const unreadable: string[] = []
+	const visited = new Set<string>()
 
-	for (const entry of await readdir(directory, { recursive: true, withFileTypes: true })) {
-		if (!entry.isFile()) continue
-		const path = join(entry.parentPath, entry.name)
-		if (extname(entry.name).toLowerCase() === QUAD_INDEX_EXTENSION) nebulosa.push(path)
-		else if (isAstrometryNetIndex(entry.name)) astrometryNet.push(path)
+	// Reads one folder and walks its subfolders; throws only for the top folder.
+	async function walk(folder: string, top: boolean) {
+		let entries
+
+		try {
+			const real = await realpath(folder)
+			if (visited.has(real)) return
+			visited.add(real)
+			entries = await readdir(folder, { withFileTypes: true })
+		} catch (error) {
+			if (top) throw error
+			unreadable.push(folder)
+			return
+		}
+
+		for (const entry of entries) {
+			const path = join(folder, entry.name)
+			let file = entry.isFile()
+			let subfolder = entry.isDirectory()
+
+			if (entry.isSymbolicLink()) {
+				// A link is followed to what it points at; a broken one is left out.
+				const target = await stat(path).catch(() => undefined)
+				file = target?.isFile() ?? false
+				subfolder = target?.isDirectory() ?? false
+			}
+
+			if (subfolder) await walk(path, false)
+			else if (file && extname(entry.name).toLowerCase() === QUAD_INDEX_EXTENSION) nebulosa.push(path)
+			else if (file && isAstrometryNetIndex(entry.name)) astrometryNet.push(path)
+		}
 	}
 
-	return { nebulosa: nebulosa.sort(), astrometryNet: astrometryNet.sort() }
+	await walk(directory, true)
+	return { nebulosa: nebulosa.sort(), astrometryNet: astrometryNet.sort(), unreadable: unreadable.sort() }
 }
 
 // Returns the supported star databases whose files are in a folder (not its subfolders), shallowest first within each
-// kind, ASTAP first. Throws when the folder cannot be read.
+// kind, ASTAP first, each with the total size of its files. Throws when the folder cannot be read.
 export async function findStarDatabases(directory: string): Promise<StarDatabase[]> {
 	const names = await readdir(directory)
 	const databases: StarDatabase[] = []
@@ -78,11 +113,27 @@ export async function findStarDatabases(directory: string): Promise<StarDatabase
 			if (members.length === 0) continue
 			const map = new Map(members.map((name) => [name.toLowerCase(), Bun.file(join(directory, name))] as const))
 			const open = kind === 'astap' ? () => new AstapCatalog().open(map, database as Astap1476Database) : () => new HnskyCatalog().open(map, database as Hnsky290Database)
-			databases.push({ kind, database, open })
+			const sizes = await Promise.all(
+				members.map((name) =>
+					stat(join(directory, name)).then(
+						({ size }) => size,
+						() => 0,
+					),
+				),
+			)
+			databases.push({ kind, database, bytes: sizes.reduce((sum, size) => sum + size, 0), open })
 		}
 	}
 
 	return databases
+}
+
+// Returns the star database holding the most data, so the most stars to choose the brightest of each cell from,
+// whatever its kind; undefined for none. A tie keeps the first.
+export function largestStarDatabase<T extends Pick<StarDatabase, 'bytes'>>(databases: readonly T[]): T | undefined {
+	let largest: T | undefined
+	for (const database of databases) if (!largest || database.bytes > largest.bytes) largest = database
+	return largest
 }
 
 // Name of a star database for people, such as ASTAP D50.
@@ -102,8 +153,9 @@ export interface NativeSolveParameters {
 	readonly indexDirectory: string
 	// Folder of the star database of the search around a position; empty for none.
 	readonly catalogDirectory: string
-	// Size of the image, in pixels.
+	// Width of the image, in pixels.
 	readonly width: number
+	// Height of the image, in pixels.
 	readonly height: number
 	// Search cone of the image center, absent for the whole sky: ICRS center and radius, radians.
 	readonly position?: { readonly rightAscension: number; readonly declination: number; readonly radius: number }

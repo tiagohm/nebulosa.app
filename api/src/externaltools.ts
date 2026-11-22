@@ -5,7 +5,7 @@ import { login, NOVA_ASTROMETRY_NET_URL } from 'nebulosa/src/astrometry/solvers/
 import type { AppDatabase } from './database'
 import { errorResponse } from './http'
 import { parseVersion, supportedVersion } from './observatorycameras.gateway'
-import { findQuadIndexFiles, findStarDatabases, starDatabaseName } from './platesolving.native'
+import { findQuadIndexFiles, findStarDatabases, type QuadIndexFiles, type StarDatabase, starDatabaseName } from './platesolving.native'
 import { errorCode } from './util'
 
 // Server-side settings of the external programs, services, and data the backend uses: ASTAP, the local solve-field
@@ -509,8 +509,17 @@ async function inspectSolverFolders({ indexDirectory = '', catalogDirectory = ''
 	if (problem) return problem
 
 	const resolvedPath = (indexPath ?? catalogPath)!
-	const files = indexPath ? await findQuadIndexFiles(indexPath) : { nebulosa: [], astrometryNet: [] }
-	const databases = catalogPath ? await findStarDatabases(catalogPath) : []
+	let files: QuadIndexFiles = { nebulosa: [], astrometryNet: [], unreadable: [] }
+	let databases: StarDatabase[] = []
+
+	// The folders were readable a moment ago; one that stops being so is reported as such.
+	try {
+		if (indexPath) files = await findQuadIndexFiles(indexPath)
+		if (catalogPath) databases = await findStarDatabases(catalogPath)
+	} catch {
+		return { status: 'failed', code: 'inaccessible', resolvedPath, message: 'The folders cannot be read by the server.' }
+	}
+
 	const found: string[] = []
 	if (files.nebulosa.length > 0) found.push(`${files.nebulosa.length} Nebulosa index ${files.nebulosa.length === 1 ? 'file' : 'files'}`)
 	if (files.astrometryNet.length > 0) found.push(`${files.astrometryNet.length} Astrometry.net index ${files.astrometryNet.length === 1 ? 'file' : 'files'}`)
@@ -518,7 +527,8 @@ async function inspectSolverFolders({ indexDirectory = '', catalogDirectory = ''
 
 	if (found.length === 0) return { status: 'unavailable', code: 'noIndexes', resolvedPath, message: 'The folders hold no index file and no supported star database (ASTAP D05, D20, D50, D80, or HNSKY G14, G16).' }
 	const blind = files.nebulosa.length + files.astrometryNet.length > 0 ? '' : ' Without index files, only images with a known position and scale are solved.'
-	return { status: 'available', code: 'ok', resolvedPath, message: `Found ${found.join(', ')}.${blind} The files are read once a solve needs them.` }
+	const unreadable = files.unreadable.length === 0 ? '' : ` ${files.unreadable.length} ${files.unreadable.length === 1 ? 'subfolder' : 'subfolders'} of the index folder cannot be read and ${files.unreadable.length === 1 ? 'is' : 'are'} left out.`
+	return { status: 'available', code: 'ok', resolvedPath, message: `Found ${found.join(', ')}.${blind}${unreadable} The files are read once a solve needs them.` }
 }
 
 // Settings of the supported external programs, persisted in the operational database. Changes are applied one at a

@@ -1,5 +1,5 @@
 import { afterAll, describe, expect, test } from 'bun:test'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'fs'
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { type TanWcs, tanSkyToPixel } from 'nebulosa/src/astrometry/solvers/native.fit'
@@ -13,9 +13,11 @@ import { AppDatabase } from './database'
 import { ExternalToolsStore } from './externaltools'
 import { ImageStore } from './images'
 import { type PlateSolveRequest, type PlateSolvingEvent, PlateSolvingService } from './platesolving'
-import { findQuadIndexFiles, findStarDatabases, NativePlateSolver, NativeSolveError } from './platesolving.native'
+import { findQuadIndexFiles, findStarDatabases, largestStarDatabase, NativePlateSolver, NativeSolveError } from './platesolving.native'
 
 const root = mkdtempSync(join(tmpdir(), 'nebulosa-native-solve-test-'))
+
+const WINDOWS = process.platform === 'win32'
 
 afterAll(() => rmSync(root, { recursive: true, force: true }))
 
@@ -112,12 +114,15 @@ function renderedImage() {
 const IMAGE = renderedImage()
 
 // Writes the quad index of one band of the sky, sized for the field of the image, into a folder as .nqi tiles.
-function writeIndex(directory: string, fraction: number) {
+// With stars, only the brightest that many stars are used, and a whole-sky file (tileNside 0) is written under the name
+// suffix given, as the -region file of a regional run.
+function writeIndex(directory: string, fraction: number, tileNside: number = 16, stars?: number, suffix: string = '') {
 	const shortSide = HEIGHT * SCALE
-	const band = buildQuadBand(SKY.vectors, { scaleLower: fraction * shortSide, scaleUpper: fraction * shortSide * Math.SQRT2 })
+	const vectors = stars === undefined ? SKY.vectors : SKY.vectors.subarray(0, stars * 3)
+	const band = buildQuadBand(vectors, { scaleLower: fraction * shortSide, scaleUpper: fraction * shortSide * Math.SQRT2 })
 
-	for (const tile of quadIndexTilesFromBand(band, { tileNside: 16, jitter: ASEC2RAD, epoch: 2000, magnitudes: SKY.magnitudes, catalog: 'synthetic' })) {
-		writeFileSync(join(directory, quadIndexTileFileName(tile)), encodeQuadIndexTile(tile))
+	for (const tile of quadIndexTilesFromBand(band, { tileNside, jitter: ASEC2RAD, epoch: 2000, magnitudes: SKY.magnitudes, catalog: 'synthetic' })) {
+		writeFileSync(join(directory, quadIndexTileFileName(tile).replace('.nqi', `${suffix}.nqi`)), encodeQuadIndexTile(tile))
 	}
 }
 
@@ -158,6 +163,49 @@ describe('files', () => {
 
 		expect(files.nebulosa).toEqual([join(directory, 'a.nqi'), join(directory, 'sub', 'B.NQI')])
 		expect(files.astrometryNet).toEqual([join(directory, 'index-5203-07.fit'), join(directory, 'sub', 'index-4110.fits')])
+		expect(files.unreadable).toEqual([])
+	})
+
+	test('follows linked folders once, even through a cycle', async () => {
+		const directory = folder()
+		const outside = folder()
+		writeFileSync(join(outside, 'index-4116.fits'), '')
+		// Junctions need no privilege on Windows; elsewhere they are plain directory links.
+		symlinkSync(outside, join(directory, 'linked'), 'junction')
+		symlinkSync(directory, join(directory, 'cycle'), 'junction')
+		const files = await findQuadIndexFiles(directory)
+
+		expect(files.astrometryNet).toEqual([join(directory, 'linked', 'index-4116.fits')])
+	})
+
+	test('follows linked files', async () => {
+		const directory = folder()
+		const target = join(folder(), 'tile.nqi')
+		writeFileSync(target, '')
+
+		try {
+			symlinkSync(target, join(directory, 'tile.nqi'), 'file')
+		} catch {
+			// Windows refuses file links without developer mode; the folder test covers the walk there.
+			return
+		}
+
+		expect((await findQuadIndexFiles(directory)).nebulosa).toEqual([join(directory, 'tile.nqi')])
+	})
+
+	test.skipIf(WINDOWS || process.getuid?.() === 0)('an unreadable subfolder is left out instead of failing the search', async () => {
+		const directory = folder()
+		mkdirSync(join(directory, 'locked'))
+		writeFileSync(join(directory, 'a.nqi'), '')
+		chmodSync(join(directory, 'locked'), 0)
+
+		try {
+			const files = await findQuadIndexFiles(directory)
+			expect(files.nebulosa).toEqual([join(directory, 'a.nqi')])
+			expect(files.unreadable).toEqual([join(directory, 'locked')])
+		} finally {
+			chmodSync(join(directory, 'locked'), 0o755)
+		}
 	})
 
 	test('finds the supported star databases, shallowest first, ASTAP first', async () => {
@@ -165,6 +213,24 @@ describe('files', () => {
 		for (const name of ['D80_0101.1476', 'd20_0101.1476', 'g14_0101.290', 'v50_0101.1476', 'readme.txt']) writeFileSync(join(directory, name), '')
 
 		expect((await findStarDatabases(directory)).map(({ kind, database }) => `${kind}:${database}`)).toEqual(['astap:d20', 'astap:d80', 'hnsky:g14'])
+	})
+
+	test('the largest star database is chosen, whatever its kind', async () => {
+		const directory = folder()
+		writeFileSync(join(directory, 'd80_0101.1476'), Buffer.alloc(300))
+		writeFileSync(join(directory, 'd80_0102.1476'), Buffer.alloc(300))
+		writeFileSync(join(directory, 'g14_0101.290'), Buffer.alloc(100))
+		const databases = await findStarDatabases(directory)
+
+		expect(databases.map(({ database, bytes }) => `${database}:${bytes}`)).toEqual(['d80:600', 'g14:100'])
+		expect(largestStarDatabase(databases)?.database).toBe('d80')
+		expect(
+			largestStarDatabase([
+				{ bytes: 10, database: 'd20' },
+				{ bytes: 50, database: 'g16' },
+			])?.database,
+		).toBe('g16')
+		expect(largestStarDatabase([])).toBeUndefined()
 	})
 })
 
@@ -212,6 +278,19 @@ describe('solve', () => {
 
 		expect(result.outcome).toBe('solved')
 		expect(result.warnings.some((warning) => warning.includes('broken.nqi was skipped'))).toBeTrue()
+		service[Symbol.dispose]()
+	})
+
+	test('of two files of one tile, the one holding more quads is searched', async () => {
+		const directory = folder()
+		// The whole-sky file of a regional run sorts before the complete one, and holds a fraction of its stars.
+		writeIndex(directory, 0.28, 0, 40, '-region')
+		writeIndex(directory, 0.28, 0)
+		const { service, info } = await setup(directory)
+		const result = await service.solve(info.id, BLIND)
+
+		expect(result.outcome).toBe('solved')
+		expect(result.warnings.some((warning) => /-region\.nqi was skipped: .*\d\.nqi holds more of the same tile/.test(warning))).toBeTrue()
 		service[Symbol.dispose]()
 	})
 

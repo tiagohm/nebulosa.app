@@ -293,7 +293,7 @@ export function ExternalToolDetail({ tool, onDirtyChange }: ExternalToolDetailPr
 					{tool.fields.includes('catalogDirectory') && (
 						<>
 							<TextInput label="Star Database Folder" placeholder="Optional, such as the folder of ASTAP" value={draft.catalogDirectory ?? ''} onChange={(e) => edit({ ...draft, catalogDirectory: e.target.value })} />
-							<Notice>Folder of an ASTAP (D05, D20, D50, D80) or HNSKY (G14, G16) star database on the server; the deepest one is used. It solves images around a known position and scale when the index files find nothing.</Notice>
+							<Notice>Folder of an ASTAP (D05, D20, D50, D80) or HNSKY (G14, G16) star database on the server; the largest one is used. It solves images around a known position and scale when the index files find nothing.</Notice>
 						</>
 					)}
 					{tool.fields.includes('endpoint') && (

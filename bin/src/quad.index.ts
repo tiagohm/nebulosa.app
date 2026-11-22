@@ -2,7 +2,7 @@ import fs from 'fs/promises'
 import { join } from 'path'
 import { exit } from 'process'
 import { DEFAULT_QUAD_STARS_PER_CELL, healpixCellSize, quadCellNside } from 'nebulosa/src/astrometry/solvers/quad.builder'
-import { buildQuadIndexTile, encodeQuadIndexTile, quadIndexTileCone, quadIndexTileFileName, verifyQuadIndexTile } from 'nebulosa/src/astrometry/solvers/quad.index.file'
+import { buildQuadIndexTile, decodeQuadIndexHeader, encodeQuadIndexTile, QUAD_INDEX_EXTENSION, quadIndexTileCone, quadIndexTileFileName, verifyQuadIndexTile } from 'nebulosa/src/astrometry/solvers/quad.index.file'
 import { eraC2s, eraS2c } from 'nebulosa/src/astronomy/coordinates/erfa/erfa'
 import { circleToPixels, coordToPixel } from 'nebulosa/src/astronomy/sky/spatial/healpix'
 import { ASEC2RAD, DEG2RAD, MILLIASEC2RAD } from 'nebulosa/src/core/constants'
@@ -14,7 +14,9 @@ import { ASEC2RAD, DEG2RAD, MILLIASEC2RAD } from 'nebulosa/src/core/constants'
 // bin/data/gaia so that an interrupted run resumes and every band reuses the same download. Each tile is built from the
 // stars of its cone only, keeping per uniformization cell no more stars than the builder can use, so memory stays
 // bounded even for the whole-sky files of the widest bands. Tile files are written through temporary files and checked;
-// existing ones are kept unless --force, which also downloads the chunks again. With --empty, an empty manifest is
+// existing ones at the same magnitude limit are kept unless --force, which also downloads the chunks again. A region
+// run writes the whole-sky files of the widest bands under a -region name, so a later full run builds the real ones. The
+// manifest lists every file of the output directory at the magnitude limit. With --empty, an empty manifest is
 // written without downloading anything. A full run downloads the whole Gaia catalog to the magnitude limit (hours, and
 // gigabytes of cache) and needs a few gigabytes of memory for the smallest band; --region restricts it to a cone.
 // Usage: bun make:quads [--force] [--empty] [--bands 480,679] [--magnitude 17] [--region ra,dec,radius] [--concurrency 4]
@@ -65,6 +67,9 @@ const QUERY_ATTEMPTS = 4
 // Decoded chunks kept in memory.
 const MAX_CACHED_CHUNKS = 1024
 
+// File name suffix of the whole-sky file of a region-restricted run, before the extension.
+const PARTIAL_SUFFIX = '-region'
+
 // Stars of one chunk: per star RA and Dec (radians, J2016), G magnitude, proper motion dα/dt and dδ/dt (radians per year), source id.
 interface Chunk {
 	readonly count: number
@@ -80,6 +85,8 @@ interface ManifestBand {
 	readonly scaleUpper: number
 	readonly nside: number
 	readonly tileNside: number
+	// Whether the band is the whole-sky file of a region-restricted run, holding that region only.
+	readonly partial: boolean
 	readonly files: string[]
 }
 
@@ -252,7 +259,23 @@ async function chunkStars(chunk: number) {
 	return stars
 }
 
+// A star selected for a cone, copied out of its chunk so that the chunk can be released.
+interface SelectedStar {
+	readonly magnitude: number
+	readonly ra: number
+	readonly dec: number
+	readonly pmRA: number
+	readonly pmDEC: number
+	readonly source: bigint
+}
+
+// Orders selected stars brightest first, then by source id.
+function SelectedStarComparator(a: SelectedStar, b: SelectedStar) {
+	return a.magnitude - b.magnitude || (a.source < b.source ? -1 : a.source > b.source ? 1 : 0)
+}
+
 // The stars of a cone, brightest first, keeping per cell of the band at most what the builder keeps (twice, for its dedup).
+// Only the selected stars are kept, never their chunks, so a whole-sky cone holds no more than the band can use.
 async function coneStars(cone: { readonly center: readonly [number, number, number]; readonly radius: number }, nside: number, perCell: number) {
 	const [ra, dec] = eraC2s(cone.center[0], cone.center[1], cone.center[2])
 	const chunks = circleToPixels(CHUNK_NSIDE, ra, dec, cone.radius)
@@ -260,7 +283,7 @@ async function coneStars(cone: { readonly center: readonly [number, number, numb
 	for (const chunk of chunks) downloaded.add(chunk)
 
 	const cosRadius = Math.cos(cone.radius)
-	const byCell = new Map<number, { magnitude: number; chunk: Chunk; index: number }[]>()
+	const byCell = new Map<number, SelectedStar[]>()
 
 	for (const chunk of chunks) {
 		const stars = await chunkStars(chunk)
@@ -273,23 +296,19 @@ async function coneStars(cone: { readonly center: readonly [number, number, numb
 			if (dot < cosRadius) continue
 
 			const cell = coordToPixel(nside, alpha, delta)
-			const list = byCell.get(cell)
-			const entry = { magnitude: stars.magnitudes[i], chunk: stars, index: i }
+			let list = byCell.get(cell)
+			if (list === undefined) byCell.set(cell, (list = []))
 
-			if (list === undefined) {
-				byCell.set(cell, [entry])
-			} else {
-				list.push(entry)
-				if (list.length > 4 * perCell) {
-					list.sort((a, b) => a.magnitude - b.magnitude)
-					list.length = 2 * perCell
-				}
+			list.push({ magnitude: stars.magnitudes[i], ra: alpha, dec: delta, pmRA: stars.properMotions[i * 2], pmDEC: stars.properMotions[i * 2 + 1], source: stars.sources[i] })
+			if (list.length > 4 * perCell) {
+				list.sort(SelectedStarComparator)
+				list.length = 2 * perCell
 			}
 		}
 	}
 
-	const selected = [...byCell.values()].flatMap((list) => list.sort((a, b) => a.magnitude - b.magnitude).slice(0, 2 * perCell))
-	selected.sort((a, b) => a.magnitude - b.magnitude || (a.chunk.sources[a.index] < b.chunk.sources[b.index] ? -1 : 1))
+	const selected = [...byCell.values()].flatMap((list) => list.sort(SelectedStarComparator).slice(0, 2 * perCell))
+	selected.sort(SelectedStarComparator)
 
 	const n = selected.length
 	const vectors = new Float64Array(n * 3)
@@ -298,18 +317,26 @@ async function coneStars(cone: { readonly center: readonly [number, number, numb
 	const sources = new BigUint64Array(n)
 
 	for (let k = 0; k < n; k++) {
-		const { chunk, index } = selected[k]
-		vectors.set(eraS2c(chunk.positions[index * 2], chunk.positions[index * 2 + 1]), k * 3)
-		magnitudes[k] = chunk.magnitudes[index]
-		properMotions[k * 2] = chunk.properMotions[index * 2]
-		properMotions[k * 2 + 1] = chunk.properMotions[index * 2 + 1]
-		sources[k] = chunk.sources[index]
+		const star = selected[k]
+		vectors.set(eraS2c(star.ra, star.dec), k * 3)
+		magnitudes[k] = star.magnitude
+		properMotions[k * 2] = star.pmRA
+		properMotions[k * 2 + 1] = star.pmDEC
+		sources[k] = star.source
 	}
 
 	return { vectors, magnitudes, properMotions, sources }
 }
 
-const manifest: Manifest = { schema: 1, catalog: 'Gaia DR3', epoch: GAIA_EPOCH, magnitudeLimit, bands: [] }
+// Whether a tile file exists and was built at the requested magnitude limit.
+async function tileInPlace(path: string) {
+	try {
+		const header = decodeQuadIndexHeader(await Bun.file(path).slice(0, 512).bytes())
+		return header.magnitudeLimit === magnitudeLimit
+	} catch {
+		return false
+	}
+}
 
 for (const scaleLower of bands) {
 	const scaleUpper = scaleLower * Math.SQRT2
@@ -318,20 +345,17 @@ for (const scaleLower of bands) {
 	const perCell = Math.min(255, Math.round(DEFAULT_QUAD_STARS_PER_CELL * (healpixCellSize(nside) / scaleLower) ** 2))
 	const allTiles = tileNside === 0 ? [0] : Array.from({ length: 12 * tileNside * tileNside }, (_, i) => i)
 	const tiles = region === undefined || tileNside === 0 ? allTiles : circleToPixels(tileNside, ...eraC2s(...region.center), region.radius)
-	const files: string[] = []
+	// The whole-sky file of a region-restricted run holds the region only: it gets its own name, which a full run never takes for its own.
+	const partial = tileNside === 0 && region !== undefined
 	const started = performance.now()
+	let written = 0
 
 	for (const [k, tileId] of tiles.entries()) {
-		const name = quadIndexTileFileName({ scaleLower, tileNside, tileId })
+		const name = quadIndexTileFileName({ scaleLower, tileNside, tileId }).replace(QUAD_INDEX_EXTENSION, partial ? `${PARTIAL_SUFFIX}${QUAD_INDEX_EXTENSION}` : QUAD_INDEX_EXTENSION)
 		const path = join(OUTPUT, name)
+		if (!force && (await tileInPlace(path))) continue
 
-		if (!force && (await Bun.file(path).exists())) {
-			files.push(name)
-			continue
-		}
-
-		// The whole-sky file of a region-restricted run is built from the region only.
-		const cone = tileNside === 0 && region !== undefined ? { center: region.center, radius: Math.min(Math.PI, region.radius + scaleUpper) } : quadIndexTileCone(tileNside, tileId, scaleUpper)
+		const cone = partial ? { center: region.center, radius: Math.min(Math.PI, region.radius + scaleUpper) } : quadIndexTileCone(tileNside, tileId, scaleUpper)
 		const stars = await coneStars(cone, nside, perCell)
 		const tile = buildQuadIndexTile(stars, { scaleLower, scaleUpper }, tileNside, tileId, { jitter: JITTER, epoch: GAIA_EPOCH, magnitudeLimit, catalog: 'Gaia DR3' })
 		if (tile === undefined) continue
@@ -339,13 +363,28 @@ for (const scaleLower of bands) {
 		const bytes = encodeQuadIndexTile(tile)
 		if (!verifyQuadIndexTile(bytes)) throw new Error(`the tile ${name} failed its own check`)
 		await writeAtomically(path, bytes)
-		files.push(name)
+		written++
 		console.info(`${name}: ${tile.quadStars.length / 4} quads, ${tile.ownStarCount} stars (${k + 1}/${tiles.length})`)
 	}
 
-	manifest.bands.push({ scaleLower, scaleUpper, nside, tileNside, files })
-	console.info(`band ${Math.round(scaleLower / ASEC2RAD)}": ${files.length} files in ${Math.round((performance.now() - started) / 1000)} s`)
+	console.info(`band ${Math.round(scaleLower / ASEC2RAD)}": ${written} files written in ${Math.round((performance.now() - started) / 1000)} s`)
 }
 
+// The manifest lists every file in the output directory at this magnitude limit, so a restricted run never hides the
+// files of earlier runs. Bands are keyed by their limits and tiling; a region's whole-sky file is a band of its own,
+// marked partial.
+const manifestBands = new Map<string, ManifestBand>()
+
+for (const name of (await fs.readdir(OUTPUT)).filter((file) => file.endsWith(QUAD_INDEX_EXTENSION)).sort()) {
+	const header = decodeQuadIndexHeader(await Bun.file(join(OUTPUT, name)).slice(0, 512).bytes())
+	if (header.magnitudeLimit !== magnitudeLimit) continue
+	const partial = name.endsWith(`${PARTIAL_SUFFIX}${QUAD_INDEX_EXTENSION}`)
+	const key = `${header.scaleLower}:${header.tileNside}:${partial}`
+	const band = manifestBands.get(key)
+	if (band === undefined) manifestBands.set(key, { scaleLower: header.scaleLower, scaleUpper: header.scaleUpper, nside: header.nside, tileNside: header.tileNside, partial, files: [name] })
+	else band.files.push(name)
+}
+
+const manifest: Manifest = { schema: 1, catalog: 'Gaia DR3', epoch: GAIA_EPOCH, magnitudeLimit, bands: [...manifestBands.values()].sort((a, b) => a.scaleLower - b.scaleLower || Number(a.partial) - Number(b.partial)) }
 await writeAtomically(manifestPath, JSON.stringify(manifest, null, '\t'))
 console.info(`written the quad index manifest to ${manifestPath}`)

@@ -6,7 +6,7 @@ These instructions apply to the whole repository except `core/`, which is a git 
 
 Nebulosa is an integrated astronomical imaging application: a Bun server and a React UI shipped together as a single standalone executable.
 
-- Runtime, package manager, bundler, test runner, linter, and formatter: **Bun** (`bun lint` and `bun fmt` are OXC-based built-ins)
+- Runtime, package manager, bundler, test runner, type checker, linter, and formatter: **Bun** (`bun lint` and `bun fmt` are OXC-based built-ins)
 - Modules: **ESM only**, TypeScript everywhere
 - Frontend: React 19, Tailwind CSS 4, `tailwind-variants`, `cn`, and `valtio`
 - Monorepo: Bun workspaces `core`, `api`, `web`, `app`, and `bin`
@@ -81,7 +81,7 @@ Run every command from the repository root.
 - Development server with hot reload and frontend HMR: `bun dev`. A change of `web/` only reloads the page; a change of `api/` or `core/` evaluates the server again, which stops the running operations and in-memory sessions and reopens the connections, so avoid it during a capture
 - Production-mode server without compiling: `bun start`
 - Standalone executable: `bun compile`, written to `.dist/nebulosa.exe` on Windows and `.dist/nebulosa` elsewhere
-- Lint and type-check: `bun lint` (type-aware, runs with `--disable-nested-config` so `core/` is skipped)
+- Lint and type-check: `bun lint` (type-aware, runs with `--disable-nested-config` so `core/` is skipped), never run `bunx tsc`
 - Lint with fixes: `bun lint --fix`
 - Format: `bun fmt`, or `bun fmt <explicit paths>` for touched files
 - Check formatting: `bun fmt --check`

@@ -240,7 +240,7 @@ export function SkyWorkspace() {
 	// every width: both change what the map shows, and the time bar that also says the time is simulated can be hidden.
 	const context = [!observer && 'No observing site', clock.mode !== 'now' && 'Simulated time'].filter(Boolean).join(' · ')
 
-	// Name of the selection when the local sky cannot draw it, its refracted altitude at the instant shown being negative;
+	// Name of the selection when the local sky cannot draw it, its altitude at the instant shown being negative;
 	// undefined otherwise, and always on the equatorial chart, which has no horizon.
 	const selectionAltitude = sky.selection?.position?.altitude
 	const hiddenSelection = coordinateSystem === 'horizontal' && selectionAltitude !== undefined && selectionAltitude < 0 ? sky.selection?.name : undefined

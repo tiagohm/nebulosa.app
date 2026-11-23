@@ -64,8 +64,19 @@ function positionNote(position: SkyPosition, kind: SkySelection['ref']['kind'], 
 	return kind === 'constellation' ? `${place} The position is the constellation label, a fixed J2000 point near its center.` : place
 }
 
-// Horizontal coordinates and events for the observer, or an invitation to set one.
-export function ObserverSection({ position, events, hasObserver, onSetObserver, isSolarSystem, timeZone }: { readonly position: SkyPosition; readonly events?: SkyEvents; readonly hasObserver: boolean; readonly onSetObserver: () => void; readonly isSolarSystem: boolean; readonly timeZone: string }) {
+export interface ObserverSectionProps {
+	readonly position: SkyPosition
+	readonly events?: SkyEvents
+	readonly hasObserver: boolean
+	readonly onSetObserver: () => void
+	readonly isSolarSystem: boolean
+	readonly geometric?: boolean
+	readonly timeZone: string
+}
+
+// Horizontal coordinates and events for the observer, or an invitation to set one. `geometric` marks the Sky point,
+// whose altitudes are geometric and whose rise and set are at the 0° horizon.
+export function ObserverSection({ position, events, hasObserver, onSetObserver, isSolarSystem, geometric = false, timeZone }: ObserverSectionProps) {
 	if (!hasObserver || position.altitude === undefined || position.azimuth === undefined) {
 		return (
 			<CollapsibleSection id="sky.visibility" title="Visibility">
@@ -94,7 +105,10 @@ export function ObserverSection({ position, events, hasObserver, onSetObserver, 
 				</DataRow>
 			)}
 			{events?.set !== undefined && <DataRow label="Set">{formatLocalTime(events.set, timeZone, position.time)}</DataRow>}
-			<Notice>Refracted altitude. Rise and set are at the standard horizon (34′ of refraction), and the transit is on the meridian: the ones nearest the instant, within 12 hours{isSolarSystem ? ', from the local model' : ''}.</Notice>
+			<Notice>
+				{geometric ? 'Geometric altitude, without refraction. Rise and set are at the 0° horizon' : 'Refracted altitude. Rise and set are at the standard horizon (34′ of refraction)'}, and the transit is on the meridian: the ones nearest the instant, within 12 hours
+				{isSolarSystem ? ', from the local model' : ''}.
+			</Notice>
 		</CollapsibleSection>
 	)
 }

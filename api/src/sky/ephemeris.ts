@@ -128,8 +128,9 @@ export type MinorBodyElements = ObserverWithOsculatingElements
 
 // What a position is computed for.
 export type EphemerisTarget =
-	// Star or deep-sky object of the catalog.
-	| { readonly type: 'catalog'; readonly object: CatalogAstrometry }
+	// Star or deep-sky object of the catalog. `geometric` marks a fixed point of the sky rather than an object, whose light
+	// is not refracted: its altitudes are geometric and its rise and set are at the 0° horizon.
+	| { readonly type: 'catalog'; readonly object: CatalogAstrometry; readonly geometric?: boolean }
 	// Sun, Moon, planet, or Pluto.
 	| { readonly type: 'body'; readonly code: SolarSystemBodyCode }
 	// Asteroid or comet by SPK-ID, with its osculating elements when known (the local model needs them).
@@ -168,7 +169,7 @@ export interface SkyPosition {
 	readonly declinationJ2000: number
 	// Azimuth from north through east in radians; absent without an observer.
 	readonly azimuth?: number
-	// Refracted altitude in radians; absent without an observer.
+	// Refracted altitude in radians, geometric for a fixed point of the sky; absent without an observer.
 	readonly altitude?: number
 	// Apparent visual magnitude; absent when unknown.
 	readonly magnitude?: number
@@ -185,9 +186,9 @@ export interface SkyPosition {
 }
 
 // Rise, transit, and set nearest the instant, within ±12 h, for an observer: rise and set with the standard horizon
-// (34′ of refraction, and the upper limb of the Sun and the Moon), and the transit on the meridian, which for the Moon
-// can be minutes from its highest point. Times are Unix milliseconds (UTC); a missing time means the event does not
-// happen in the window.
+// (34′ of refraction, and the upper limb of the Sun and the Moon; the 0° horizon for a fixed point of the sky), and the
+// transit on the meridian, which for the Moon can be minutes from its highest point. Times are Unix milliseconds (UTC); a
+// missing time means the event does not happen in the window.
 export interface SkyEvents {
 	// Whether the object crosses the horizon, stays above it, or stays below it during the window.
 	readonly state: 'normal' | 'circumpolar' | 'belowHorizon'
@@ -195,7 +196,7 @@ export interface SkyEvents {
 	readonly rise?: number
 	// Time of the upper transit, the crossing of the meridian.
 	readonly transit?: number
-	// Refracted altitude at the upper transit in radians.
+	// Refracted altitude at the upper transit in radians, geometric for a fixed point of the sky.
 	readonly transitAltitude?: number
 	// Set time.
 	readonly set?: number
@@ -597,10 +598,10 @@ function catalogPlace(object: CatalogAstrometry, time: Time, source: EphemerisSo
 }
 
 // Local position of a catalog object: J2000 place moved by proper motion, then to the apparent place with the Earth of a
-// source.
-function catalogPosition(object: CatalogAstrometry, time: Time, source: EphemerisSource): Omit<SkyPosition, 'source' | 'fallbackReason' | 'time'> {
-	const { rightAscension, declination, azimuth, altitude } = catalogPlace(object, time, source)
-	const apparent = { rightAscension, declination, azimuth, altitude }
+// source. `geometric` gives the airless altitude of a fixed point of the sky instead of the refracted one.
+function catalogPosition(object: CatalogAstrometry, time: Time, source: EphemerisSource, geometric: boolean): Omit<SkyPosition, 'source' | 'fallbackReason' | 'time'> {
+	const { rightAscension, declination, azimuth, altitude, geometricAltitude } = catalogPlace(object, time, source)
+	const apparent = { rightAscension, declination, azimuth, altitude: geometric ? geometricAltitude : altitude }
 
 	return {
 		center: time.location ? 'topocentric' : 'geocentric',
@@ -843,7 +844,7 @@ export class SkyEphemeris {
 
 		if (target.type === 'catalog') {
 			const { source } = solarSystemSource(this.#kernels.current(), [], [request.time])
-			return { time: request.time, source: 'catalog', ...catalogPosition(target.object, makeTime(request.time, request.observer), source) }
+			return { time: request.time, source: 'catalog', ...catalogPosition(target.object, makeTime(request.time, request.observer), source, !!target.geometric) }
 		}
 
 		const time = makeTime(request.time, request.observer)
@@ -931,9 +932,11 @@ export class SkyEphemeris {
 		return events
 	}
 
-	// Rise, transit, and set nearest time from a horizontal model sampled every 10 minutes over ±12 h.
+	// Rise, transit, and set nearest time from a horizontal model sampled every 10 minutes over ±12 h; a fixed point of the
+	// sky crosses the 0° horizon and keeps its transit altitude geometric.
 	#sampleEvents(target: EphemerisTarget, time: number, horizontalAt: (time: number) => HorizontalSample): SkyEvents {
-		const threshold = target.type === 'body' ? (RISE_SET_ALTITUDE[solarSystemBody(target.code)?.kind ?? 'mercury'] ?? HORIZON_ALTITUDE) : HORIZON_ALTITUDE
+		const geometric = target.type === 'catalog' && !!target.geometric
+		const threshold = target.type === 'body' ? (RISE_SET_ALTITUDE[solarSystemBody(target.code)?.kind ?? 'mercury'] ?? HORIZON_ALTITUDE) : geometric ? 0 : HORIZON_ALTITUDE
 		const center = Math.floor(time / SAMPLE_STEP_MS) * SAMPLE_STEP_MS
 		const times: number[] = []
 		const altitudes: number[] = []
@@ -946,7 +949,7 @@ export class SkyEphemeris {
 			hourAngles.push(hourAngle)
 		}
 
-		return findEvents(times, altitudes, hourAngles, threshold, time)
+		return findEvents(times, altitudes, hourAngles, threshold, time, !geometric)
 	}
 
 	// Horizons table of a command at 10-minute steps over a 25 h window around `time`, shared by
@@ -978,8 +981,9 @@ export class SkyEphemeris {
 // Finds rise, transit, and set nearest `time` from airless altitudes and hour angles (radians, (−π, π]) sampled at
 // increasing times. Crossings of `threshold` are interpolated linearly; the transit is the crossing of the meridian
 // nearest `time`, where the hour angle goes from negative to positive, interpolated linearly, with its altitude from
-// a parabola through the samples around it. The hour angle's own wrap, at ±π, is the lower transit and is skipped.
-export function findEvents(times: readonly number[], altitudes: readonly number[], hourAngles: readonly number[], threshold: number, time: number): SkyEvents {
+// a parabola through the samples around it, refracted when `refracted`. The hour angle's own wrap, at ±π, is the lower
+// transit and is skipped.
+export function findEvents(times: readonly number[], altitudes: readonly number[], hourAngles: readonly number[], threshold: number, time: number, refracted: boolean = true): SkyEvents {
 	let rise: number | undefined
 	let set: number | undefined
 	let transit: number | undefined
@@ -1015,7 +1019,7 @@ export function findEvents(times: readonly number[], altitudes: readonly number[
 		}
 	}
 
-	if (transitAltitude !== undefined) transitAltitude = apparentAltitude(transitAltitude)
+	if (refracted && transitAltitude !== undefined) transitAltitude = apparentAltitude(transitAltitude)
 
 	const state = rise !== undefined || set !== undefined ? 'normal' : altitudes.every((e) => e >= threshold) ? 'circumpolar' : 'belowHorizon'
 	return { state, rise, transit, transitAltitude, set }

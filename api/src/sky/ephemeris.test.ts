@@ -196,6 +196,27 @@ test('catalog positions come from their astrometry', async () => {
 	expect(toDeg(events.transitAltitude!)).toBeCloseTo(83.2, 0)
 })
 
+test('a fixed point of the sky has geometric altitudes and rises and sets at the 0° horizon', async () => {
+	const ephemeris = new SkyEphemeris({ observer: horizons(MARS_ROW).observe })
+	const object = { rightAscension: 1.7677953696021995, declination: -0.291751258517685, pmRA: 0, pmDEC: 0 }
+	const refracted = await ephemeris.position({ type: 'catalog', object }, { time: TIME, observer })
+	const geometric = await ephemeris.position({ type: 'catalog', object, geometric: true }, { time: TIME, observer })
+
+	// Refraction lifts an object by about 1.4′ at 35°; the point stays where it is.
+	const lift = toDeg(refracted.altitude! - geometric.altitude!) * 60
+	expect(lift).toBeGreaterThan(1)
+	expect(lift).toBeLessThan(2)
+	expect(geometric.azimuth).toBeCloseTo(refracted.azimuth!, 12)
+
+	const objectEvents = ephemeris.events({ type: 'catalog', object }, TIME, observer, 'object')!
+	const pointEvents = ephemeris.events({ type: 'catalog', object, geometric: true }, TIME, observer, 'point')!
+	// The 0° horizon is 34′ above the standard one: the point rises later and sets earlier, by about 3 minutes here.
+	expect(pointEvents.rise! - objectEvents.rise!).toBeGreaterThan(60_000)
+	expect(objectEvents.set! - pointEvents.set!).toBeGreaterThan(60_000)
+	expect(pointEvents.transit).toBe(objectEvents.transit)
+	expect(pointEvents.transitAltitude!).toBeLessThan(objectEvents.transitAltitude!)
+})
+
 // Hour angles of an object whose transit is at 12 h, in radians.
 function hourAngles(times: readonly number[]) {
 	return times.map((t) => normalizePI(((t / 3_600_000 - 12) / 24) * 2 * Math.PI))

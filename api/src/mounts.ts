@@ -71,7 +71,7 @@ export interface MountSlewResponse {
 	readonly declination: number
 	// Azimuth of the target from north through east in radians, at time.
 	readonly azimuth: number
-	// Refracted altitude of the target in radians at time; never negative.
+	// Refracted altitude of the target in radians at time, geometric for a fixed point of the sky; never negative.
 	readonly altitude: number
 	// Where the target's position came from: the SPK kernels, Horizons, or the analytical theories of the accurate
 	// ephemeris chain, the astrometry of a catalog object, or SGP4.

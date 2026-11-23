@@ -2,7 +2,7 @@
 // calibration masters and analyze, integrate, and compose Image Stacking projects: each job starts its worker and
 // terminates it when it ends, so nothing a job allocated outlives it, and a worker that stops reporting for the stall
 // time is terminated instead. runPooledWorkerJob runs a job on a worker of a WorkerPool, for the short analyses that
-// keep their workers between jobs (star and streak detection, image processing, star profiles, solar eclipse maps).
+// keep their workers between jobs (star and streak detection, star profiles, solar eclipse maps).
 
 // Settles the job a worker answers.
 export interface WorkerJobSettlement<T> {

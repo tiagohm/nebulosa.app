@@ -1,4 +1,4 @@
-import type { AnnotationBodies, DisplaySettings, ImageFormat, ImageInfo, ImageOpenRequest, ImageProcessingOperation, ImageRect, PlateSolveRequest, RenderRequest, RenderResult, SaveFormat, SaveRequest, SaveResult, StarProfileRequest, StarProfileResult, Stretch } from 'api'
+import type { AnnotationBodies, DisplaySettings, ImageFormat, ImageInfo, ImageOpenRequest, ImageRect, PlateSolveRequest, RenderRequest, RenderResult, SaveFormat, SaveRequest, StarProfileRequest, StarProfileResult, Stretch } from 'api'
 import { nanoid } from 'nanoid'
 import { proxy, ref } from 'valtio'
 import { deviceState } from '../equipment/equipment'
@@ -6,21 +6,18 @@ import { clientId } from '../events'
 import { type ApiFetch, browserFetch, jsonInit, responseError } from '../http'
 import type { AstrometricMarker, AstrometrySelection, AstrometryTarget, Measurement } from '../platesolving/measurement'
 import { DEFAULT_PLATE_SOLVE_REQUEST } from '../platesolving/platesolving'
-import { activeProfile, annotationPreferences, imageDisplaySettings, imageProcessingPipeline, profileCamera, profileState, setImageDisplaySettings } from '../profile/profile'
-import { type AnnotationPreferences, DEFAULT_ANNOTATION_PREFERENCES, type ImageProcessingPresetStep } from '../profile/schema'
+import { activeProfile, annotationPreferences, imageDisplaySettings, profileCamera, profileState, setImageDisplaySettings } from '../profile/profile'
+import { type AnnotationPreferences, DEFAULT_ANNOTATION_PREFERENCES } from '../profile/schema'
 import { centerView, FIT_VIEW, type Point, type ViewerView } from '../viewer/transform'
 import type { CameraTabState } from './cameratabs'
 import { DEFAULT_AUTO_STRETCH_PRESET, ORIGINAL_DISPLAY_SETTINGS } from './display'
-import type { ImageProcessingDraft } from './imageprocessing'
-import { DEFAULT_ADDED_OPERATION } from './imageprocessing.catalog'
 import type { ImageToolId } from './tools'
 
 // Image documents open in the tab's Images workspace. Each open image is split in three objects under the
 // same key: the document (identity, origin, and the server-side image with its metadata), its view state
 // (zoom, pan, display settings, and the current rendering, a JPEG held as an object URL), and its tool
 // context (the contextual tool it shows, the Image Inspector at first). Two documents never share a view
-// or tool, and a future derived image (such as a processing result) can open as a new document with its
-// own view while the original stays as it is.
+// or tool.
 //
 // Display settings change only by applying a patch of them (the display controls of the viewer toolbar): the patch
 // is merged into the settings being applied, or the applied ones, and that snapshot is sent to the server; only a
@@ -38,17 +35,13 @@ import type { ImageToolId } from './tools'
 // document and sent only by Run Detection. Neither zoom, pan, display settings, nor the markers ever run a detection.
 // The Star Profile Inspector keeps the latest star measured here too, so it leaves with the document or its frame.
 //
-// A derived image, computed by an image processing pipeline (imageprocessing.ts), opens as a new document that is
-// unsaved until a save of its pixels (FITS or XISF) to a server file succeeds; the page asks before unloading while
-// one exists, and closing one is confirmed by the workspace. Saving or downloading any document writes a copy and
-// never renames it nor binds it to the new file.
+// Saving or downloading any document writes a copy and never renames it nor binds it to the new file.
 //
 // Camera tabs (cameratabs.ts) are documents too, whose image is the frame they show; this module only removes them
 // and renders their frames, with the primitives it exports for them.
 
-// Where a document's image comes from: a file of the server, another document it was derived from (by its name), or
-// the frames of a camera, for a camera tab.
-export type ImageSource = { readonly kind: 'file'; readonly path: string } | { readonly kind: 'derived'; readonly sourceName: string } | { readonly kind: 'camera'; readonly connectionId: string; readonly deviceId: string }
+// Where a document's image comes from: a file of the server, or the frames of a camera, for a camera tab.
+export type ImageSource = { readonly kind: 'file'; readonly path: string } | { readonly kind: 'camera'; readonly connectionId: string; readonly deviceId: string }
 
 // Outcome of a save: written, refused because the file exists (a retry may overwrite it), or failed with
 // a message, such as a refused target or a write error.
@@ -66,7 +59,7 @@ export interface ImageRendering {
 export interface ImageDocument {
 	// Id of the document in the tab, assigned before the server opens the image.
 	readonly key: string
-	// Display name: the file name, the name of a derived image, or the name of a camera tab's camera.
+	// Display name: the file name, or the name of a camera tab's camera.
 	name: string
 	// Origin of the image.
 	readonly source: ImageSource
@@ -76,10 +69,6 @@ export interface ImageDocument {
 	info?: ImageInfo
 	// Why opening failed.
 	error?: string
-	// Whether the image exists only in memory: a derived image not saved yet, lost when it closes.
-	unsaved: boolean
-	// Absolute path of the server file a derived image was last saved to as FITS or XISF.
-	savedPath?: string
 	// Frames of a camera tab; absent for any other document.
 	camera?: CameraTabState
 }
@@ -242,8 +231,6 @@ export interface ImageViewState {
 	astrometry: ImageAstrometryState
 	// Annotation layers, appearance, and selection.
 	annotation: ImageAnnotationState
-	// Image processing pipeline being edited and the latest job it submitted.
-	processing: ImageProcessingDraft
 	// Area the statistics of the Image Inspector measure.
 	statistics: ImageStatisticsViewState
 	// Whether every overlay of the image is kept off it, whatever each one's own setting; absent draws them.
@@ -292,12 +279,10 @@ export interface ImagesIo {
 export interface ImageToolPreferences {
 	// How Annotation draws and what it searches.
 	readonly annotation: AnnotationPreferences
-	// Image Processing pipeline.
-	readonly processing: readonly ImageProcessingPresetStep[]
 }
 
 // Image Tools of a document whose profile saved nothing for them.
-export const DEFAULT_IMAGE_TOOL_PREFERENCES: ImageToolPreferences = { annotation: DEFAULT_ANNOTATION_PREFERENCES, processing: [] }
+export const DEFAULT_IMAGE_TOOL_PREFERENCES: ImageToolPreferences = { annotation: DEFAULT_ANNOTATION_PREFERENCES }
 
 // Response header with the RenderResult of a rendering (RENDER_HEADER of the API).
 const RENDER_HEADER = 'X-Image-Render'
@@ -326,10 +311,7 @@ export const browserIo: ImagesIo = {
 		const scope = displayScope(source)
 		if (scope !== null) setImageDisplaySettings(profileState, scope, settings)
 	},
-	loadToolPreferences: () => {
-		const { settings } = activeProfile(profileState)
-		return { annotation: annotationPreferences(settings), processing: imageProcessingPipeline(settings) }
-	},
+	loadToolPreferences: () => ({ annotation: annotationPreferences(activeProfile(profileState).settings) }),
 }
 
 // Pending rendering request of each document, by document key.
@@ -373,16 +355,10 @@ export function initialDisplaySettings(info: ImageInfo, saved: DisplaySettings |
 	return copySettings(unresolved ? { ...saved, debayer: { enabled: false } } : saved)
 }
 
-// Returns the server file of a document: the file it was opened from, or the one a derived image was
-// last saved to; undefined for a derived image never saved and for a camera tab, whose server paths are not
-// exposed.
-export function documentPath(document: Pick<ImageDocument, 'source' | 'savedPath'>): string | undefined {
-	return document.source.kind === 'file' ? document.source.path : document.savedPath
-}
-
-// Returns whether any document exists only in memory, so leaving the page would lose it.
-export function hasUnsavedImages(state: { readonly documents: readonly Pick<ImageDocument, 'unsaved'>[] }): boolean {
-	return state.documents.some((d) => d.unsaved)
+// Returns the server file of a document: the file it was opened from; undefined for a camera tab, whose server paths
+// are not exposed.
+export function documentPath(document: Pick<ImageDocument, 'source'>): string | undefined {
+	return document.source.kind === 'file' ? document.source.path : undefined
 }
 
 // Extensions of the files of each save format (lowercase, without the dot), the one a file name gets first.
@@ -467,7 +443,7 @@ export async function openImage(state: ImagesState, path: string, io: ImagesIo =
 	const key = nanoid()
 	const name = path.split(/[\\/]/).at(-1) || path
 	const source: ImageSource = { kind: 'file', path }
-	addDocument(state, { key, name, source, status: 'loading', unsaved: false }, io)
+	addDocument(state, { key, name, source, status: 'loading' }, io)
 
 	try {
 		const response = await io.fetch('/api/images', jsonInit('POST', { path, client } satisfies ImageOpenRequest))
@@ -495,8 +471,8 @@ export async function openImage(state: ImagesState, path: string, io: ImagesIo =
 }
 
 // Returns the view state of a document just opened: fitted to the viewer, with nothing rendered yet, and the Annotation
-// and the Image Processing pipeline its profile saved, as copies of its own that it edits apart from any other document.
-export function newView({ annotation, processing }: ImageToolPreferences = DEFAULT_IMAGE_TOOL_PREFERENCES): ImageViewState {
+// its profile saved, as a copy of its own that it edits apart from any other document.
+export function newView({ annotation }: ImageToolPreferences = DEFAULT_IMAGE_TOOL_PREFERENCES): ImageViewState {
 	return {
 		view: FIT_VIEW,
 		display: { showOriginal: false },
@@ -507,7 +483,6 @@ export function newView({ annotation, processing }: ImageToolPreferences = DEFAU
 		astrometry: { measurements: [], markers: [] },
 		annotation: { ...annotation, layers: { ...annotation.layers }, bodies: { ...annotation.bodies } },
 		statistics: {},
-		processing: { steps: processing.map(({ enabled, operation }) => ({ id: nanoid(), enabled, operation: JSON.parse(JSON.stringify(operation)) as ImageProcessingOperation })), expanded: [], adding: DEFAULT_ADDED_OPERATION },
 	}
 }
 
@@ -519,21 +494,9 @@ function addDocument(state: ImagesState, document: ImageDocument, io: ImagesIo, 
 	if (activate || state.activeKey === undefined) state.activeKey = document.key
 }
 
-// Opens a derived image the server already created from a document named sourceName as a new unsaved document, rendered
-// with the display settings it starts with (initialDisplaySettings, the global ones, like a file). It becomes the
-// active one unless activate is false, so a result arriving while the operator looks at another document does not
-// take the view from it.
-export async function openDerivedImage(state: ImagesState, info: ImageInfo, sourceName: string, activate: boolean, io: ImagesIo = browserIo) {
-	const key = nanoid()
-	const source: ImageSource = { kind: 'derived', sourceName }
-	addDocument(state, { key, name: info.name, source, status: 'ready', info: ref(info), unsaved: true }, io, activate)
-	await renderDisplay(state, key, initialDisplaySettings(info, io.loadDisplay(source)), io)
-}
-
 // Saves a copy of a document to a file of the server in a format: FITS or XISF of its pixels, or JPEG of the rendering
 // its view shows (shownDisplaySettings). An existing file is only replaced with overwrite. The document keeps its name
-// and source; only a derived document whose pixels (FITS or XISF) the server confirms written stops being unsaved and
-// remembers the path. A failure leaves the document as it was, so the save can be retried.
+// and source. A failure leaves the document as it was, so the save can be retried.
 export async function saveImage(state: ImagesState, key: string, path: string, format: SaveFormat, overwrite: boolean, io: ImagesIo = browserIo): Promise<SaveImageOutcome> {
 	const id = documentOf(state, key)?.info?.id
 	if (!id) return { status: 'failed', error: 'The image is not open' }
@@ -551,14 +514,6 @@ export async function saveImage(state: ImagesState, key: string, path: string, f
 		}
 
 		if (!response.ok) return { status: 'failed', error: await responseError(response) }
-		const { path: saved } = (await response.json()) as SaveResult
-		const document = documentOf(state, key)
-
-		if (document?.source.kind === 'derived' && format !== 'jpeg') {
-			document.unsaved = false
-			document.savedPath = saved
-		}
-
 		return { status: 'saved' }
 	} catch (error) {
 		return { status: 'failed', error: message(error) }
@@ -919,15 +874,4 @@ export function applyingSettings(key: string): DisplaySettings | undefined {
 // shown with them.
 export function settleApplying(key: string, settings: DisplaySettings) {
 	if (applies.get(key) === settings) applies.delete(key)
-}
-
-// Asks the browser to confirm leaving the page while an image exists only in memory, since it cannot be recovered
-// after a reload. Browsers show their own generic message. Returns a function that stops asking.
-export function confirmUnsavedOnUnload(state: ImagesState): () => void {
-	const listener = (event: BeforeUnloadEvent) => {
-		if (hasUnsavedImages(state)) event.preventDefault()
-	}
-
-	window.addEventListener('beforeunload', listener)
-	return () => window.removeEventListener('beforeunload', listener)
 }

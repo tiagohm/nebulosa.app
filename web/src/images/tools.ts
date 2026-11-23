@@ -9,7 +9,6 @@ import { DarvTool } from './DarvTool'
 import { FlatWizardTool } from './FlatWizardTool'
 import { GuidingTool } from './GuidingTool'
 import { ImageInspector } from './ImageInspector'
-import { ImageProcessingPanel } from './ImageProcessingPanel'
 import type { ImageDocument, ImageViewState } from './images'
 import { IPolarTool } from './IPolarTool'
 import { LiveStackingTool } from './LiveStackingTool'
@@ -26,7 +25,7 @@ import { TppaTool } from './TppaTool'
 // document shown, and camera operations, which command the camera of a camera tab and the equipment associated with
 // it. A tool replaces the contextual panel of one document, and each document remembers the tool it shows, so two
 // documents can show different tools. The Image Inspector is the default. Camera operations are listed only on
-// camera tabs, never on a file or derived document. A tool without a panel is listed but cannot be selected. Selecting
+// camera tabs, never on a file document. A tool without a panel is listed but cannot be selected. Selecting
 // a tool never starts or stops an operation. This registry is the only place Images tools are declared.
 
 // Contextual tools of the Images workspace, in tool bar order: the image tools, then the camera operations.
@@ -37,7 +36,6 @@ export const IMAGE_TOOLS = [
 	'star-profile',
 	'streak-detection',
 	'annotation',
-	'image-processing',
 	'camera-acquisition',
 	'live-stacking',
 	'auto-focus',
@@ -73,11 +71,10 @@ export interface ImageToolPanelProps {
 	readonly onOpen: () => void
 }
 
-// What running an image tool's operation produces: a new rendering of the document (display), a new temporary
-// document (derived), or data and overlays about the document that leave its pixels untouched
-// (analysis). The output also names the tool's main action: Apply to View, Run Pipeline, or
-// Run Analysis.
-export type ImageOperationOutput = 'display' | 'derived' | 'analysis'
+// What running an image tool's operation produces: a new rendering of the document (display), or data and overlays
+// about the document that leave its pixels untouched (analysis). The output also names the tool's main action: Apply
+// to View, or Run Analysis.
+export type ImageOperationOutput = 'display' | 'analysis'
 
 // Properties common to every Images contextual tool.
 interface ImageToolBase {
@@ -120,7 +117,6 @@ export const IMAGE_TOOL_DEFINITIONS: Readonly<Record<ImageToolId, ImageToolDefin
 	'star-profile': { id: 'star-profile', label: 'Star Profile Inspector', panelTitle: 'Star Profile Inspector', icon: 'starProfile', category: 'image', outputs: ['analysis'], panel: StarProfileInspectorPanel },
 	'streak-detection': { id: 'streak-detection', label: 'Streak Detection', panelTitle: 'Streak Detection', icon: 'streakDetection', category: 'image', outputs: ['analysis'], panel: StreakDetectionPanel },
 	annotation: { id: 'annotation', label: 'Annotation', panelTitle: 'Annotation', icon: 'annotation', category: 'image', outputs: ['analysis'], panel: AnnotationPanel },
-	'image-processing': { id: 'image-processing', label: 'Image Processing', panelTitle: 'Image Processing', icon: 'wand', category: 'image', outputs: ['derived'], panel: ImageProcessingPanel },
 	'camera-acquisition': { id: 'camera-acquisition', label: 'Acquisition', panelTitle: 'Acquisition', icon: 'shutter', category: 'camera', panel: CameraAcquisitionTool },
 	'live-stacking': { id: 'live-stacking', label: 'Live Stacking', panelTitle: 'Live Stacking', icon: 'liveStack', category: 'camera', panel: LiveStackingTool },
 	'auto-focus': { id: 'auto-focus', label: 'Auto Focus', panelTitle: 'Auto Focus', icon: 'focusCurve', category: 'camera', panel: AutoFocusTool },
@@ -141,7 +137,7 @@ export function imageToolGroup(id: ImageToolId): string {
 }
 
 // Returns the tools of the tool bar of a document, in tool bar order: every image tool, plus the camera
-// operations only on a camera tab, so a file, a derived document, or no document never lists them.
+// operations only on a camera tab, so a file or no document never lists them.
 export function imageToolsFor(document?: Pick<ImageDocument, 'source'>): readonly ImageToolId[] {
 	return document?.source.kind === 'camera' ? IMAGE_TOOLS : IMAGE_TOOLS.filter((id) => IMAGE_TOOL_DEFINITIONS[id].category === 'image')
 }

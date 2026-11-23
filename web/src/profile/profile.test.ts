@@ -2,7 +2,6 @@ import { describe, expect, test } from 'bun:test'
 import type { DisplaySettings } from 'api'
 import { proxy, snapshot } from 'valtio'
 import { ORIGINAL_DISPLAY_SETTINGS } from '../images/display'
-import { createOperation } from '../images/imageprocessing.catalog'
 import { DEFAULT_IMAGE_ASTROMETRY } from '../platesolving/preferences'
 import { DEFAULT_STAR_PROFILE_SETTINGS } from '../stars/starprofile.settings'
 import { DEFAULT_STAR_REQUEST } from '../stars/stars'
@@ -74,10 +73,8 @@ import {
 	annotationPreferences,
 	cameraPlateSolving,
 	imagePlateSolving,
-	imageProcessingPipeline,
 	setAnnotationPreferences,
 	setImagePlateSolving,
-	setImageProcessingPipeline,
 	setPanelOpen,
 	setSkyLayerVisible,
 	setSkyTimeBarVisible,
@@ -333,19 +330,6 @@ describe('settings', () => {
 		const { settings } = state.profiles[0]
 		expect(imagePlateSolving(settings)).toEqual({ provider: 'nova', strategy: 'blind', downsample: 2 })
 		expect(cameraPlateSolving(settings, { connectionId: 'c', deviceId: 'd' })).toEqual(DEFAULT_CAMERA_PLATE_SOLVING)
-	})
-
-	test('the Image Processing pipeline survives a reload, in order, disabled steps included', () => {
-		const state = load()
-		expect(imageProcessingPipeline(activeProfile(state).settings)).toEqual([])
-
-		const steps = [
-			{ enabled: true, operation: { ...createOperation('backgroundNeutralization') } },
-			{ enabled: false, operation: createOperation('debayer') },
-		]
-		setImageProcessingPipeline(state, steps)
-
-		expect(imageProcessingPipeline(state.profiles[0].settings)).toEqual(steps)
 	})
 })
 

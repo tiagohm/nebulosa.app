@@ -20,8 +20,8 @@ import { cfaPattern, DisplayError, type DisplaySettings, type ImageCapture, type
 // Worker thread that owns the decoded pixels of every open image document and does all the heavy
 // work on them: decoding FITS and XISF files and camera frames, the display pipeline, JPEG encoding, encoding
 // documents as FITS, XISF, or JPEG files, preparing the grayscale
-// copies star detections measure on their own worker (stars.worker.ts), whole or of one small region, and the full copies image processing
-// pipelines work on (imageprocessing.worker.ts), whose results come back to be adopted as documents, and the statistics
+// copies star detections measure on their own worker (stars.worker.ts), whole or of one small region, and the full copies streak detections
+// work on (streaks.worker.ts), the live stack snapshots adopted as documents, and the statistics
 // of the original samples, scanned in place in short slices between which renderings and other requests proceed, and copies
 // of the native samples of the small tiles a pixel readout reads. Keeping the
 // pixels here means they are never copied between threads, and the server event loop stays free while
@@ -201,13 +201,9 @@ const STALE_DERIVED_KEYWORDS = ['BZERO', 'BSCALE', 'DATAMIN', 'DATAMAX', 'CSTRET
 // CFA keywords that no longer apply once an image is debayered.
 const CFA_KEYWORDS = ['BAYERPAT', 'XBAYROFF', 'YBAYROFF'] as const
 
-// Returns the HISTORY lines of a derived image: its source and time, then each processing step applied, in order,
-// as its operation in JSON; for a live stack snapshot, the frames it integrates.
+// Returns the HISTORY lines of a derived image: for a live stack snapshot, the frames it integrates and when.
 function provenanceHistory(provenance: ImageProvenance): string[] {
-	if (provenance.kind === 'liveStacking') return [`Live stack snapshot by Nebulosa of ${provenance.frames} accepted frames at ${provenance.createdAt}`]
-	const derived = `Derived by Nebulosa from ${provenance.sourceName} at ${provenance.createdAt}`
-	const count = provenance.steps.length
-	return [derived, ...provenance.steps.map(({ operation }, i) => `Processing ${i + 1}/${count}: ${JSON.stringify(operation)}`)]
+	return [`Live stack snapshot by Nebulosa of ${provenance.frames} accepted frames at ${provenance.createdAt}`]
 }
 
 // Returns the header of a derived image: the source keywords with the geometry and floating-point
@@ -223,10 +219,9 @@ function derivedHeader(image: Image, provenance: ImageProvenance): FitsHeader {
 	return header
 }
 
-// Returns the name of a derived image: the source name without its extension, marked as processed, or as a live stack.
+// Returns the name of a derived image: what the live stack snapshot shows, marked as a live stack.
 function derivedName(provenance: ImageProvenance): string {
-	if (provenance.kind === 'liveStacking') return `${provenance.sourceName} — Live Stack`
-	return `${provenance.sourceName.replace(/\.[^.]+$/, '')} — Processed`
+	return `${provenance.sourceName} — Live Stack`
 }
 
 // Keeps an image computed from another document as a new derived document and returns its info: the
@@ -243,17 +238,16 @@ function addDerivedDocument(image: Image, provenance: ImageProvenance, cfa: CfaP
 	return info
 }
 
-// Adopts the result of an image processing pipeline as a new derived document. Its metadata names the CFA
-// pattern at the image origin of a mosaic still mono, which processingImage made trusted and the steps kept
-// in phase (flips); a debayered or grayscale result names none.
+// Adopts a live stack snapshot as a new derived document. Its metadata names the CFA pattern at the image origin of a
+// mosaic still mono; a color result names none.
 function adoptDocument(image: Image, provenance: ImageProvenance): ImageInfo {
 	return addDerivedDocument(image, provenance, image.metadata.channels === 1 ? image.metadata.bayer : undefined)
 }
 
-// Returns the full copy of a document an image processing pipeline works on (see ImageStore.processingImage):
+// Returns the full copy of a document a streak detection works on (see ImageStore.fullCopy):
 // a clone of its image, which owns a buffer of its own that can be transferred, naming its trusted CFA pattern,
 // if any, at the image origin both in its metadata and in BAYERPAT without offsets.
-function processingImage({ image, cfa }: DocumentEntry): Image {
+function fullCopy({ image, cfa }: DocumentEntry): Image {
 	const copy = clone(image)
 	const header: FitsHeader = { ...copy.header }
 
@@ -482,7 +476,7 @@ async function handle(request: ImageWorkerRequest): Promise<void> {
 		return
 	}
 
-	if (request.type === 'encode' || request.type === 'detectionImage' || request.type === 'detectionRegion' || request.type === 'processingImage' || request.type === 'samples') {
+	if (request.type === 'encode' || request.type === 'detectionImage' || request.type === 'detectionRegion' || request.type === 'fullCopy' || request.type === 'samples') {
 		const entry = documents.get(request.document)
 
 		if (!entry) {
@@ -500,9 +494,9 @@ async function handle(request: ImageWorkerRequest): Promise<void> {
 			} else if (request.type === 'samples') {
 				const { raw, metadata } = cropImage(entry.image, request.rect)
 				reply({ id: request.id, status: 'samples', rect: request.rect, channels: metadata.channels, samples: raw as Float32Array<ArrayBuffer> | Float64Array<ArrayBuffer>, conversion: sampleConversion(entry.image), ...(entry.cfa && { cfa: entry.cfa }) }, [raw.buffer])
-			} else if (request.type === 'processingImage') {
-				const image = processingImage(entry)
-				reply({ id: request.id, status: 'processingImage', image }, [image.raw.buffer])
+			} else if (request.type === 'fullCopy') {
+				const image = fullCopy(entry)
+				reply({ id: request.id, status: 'fullCopy', image }, [image.raw.buffer])
 			} else {
 				const bytes = await encodeDocument(entry, request.format, request.settings, request.omit)
 				reply({ id: request.id, status: 'encoded', bytes }, [bytes.buffer])

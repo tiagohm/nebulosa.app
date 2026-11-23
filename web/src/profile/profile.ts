@@ -22,7 +22,6 @@ import {
 	type AnnotationPreferences,
 	DEFAULT_ANNOTATION_PREFERENCES,
 	DEFAULT_ASTRONOMICAL_CLOCK_PREFERENCES,
-	type ImageProcessingPresetStep,
 	DEFAULT_STATUS_CHIPS,
 	STATUS_CHIP_FIELDS,
 	type StatusChipField,
@@ -289,17 +288,6 @@ export function imagePlateSolving(settings: Pick<ProfileSettings, 'imagePlateSol
 export function setImagePlateSolving(state: ProfileState, plateSolving: Readonly<CameraPlateSolvingSettings>) {
 	const profile = activeProfile(state)
 	profile.settings.imagePlateSolving = plateSolving
-}
-
-// Returns the Image Processing pipeline of a profile, which every document opened next starts with.
-export function imageProcessingPipeline(settings: Pick<ProfileSettings, 'imageProcessing'>): readonly ImageProcessingPresetStep[] {
-	return settings.imageProcessing ?? []
-}
-
-// Keeps in the active profile the Image Processing pipeline edited last.
-export function setImageProcessingPipeline(state: ProfileState, steps: readonly ImageProcessingPresetStep[]) {
-	const profile = activeProfile(state)
-	profile.settings.imageProcessing = steps
 }
 
 // Remembers in the active profile the server directory an image was saved to.

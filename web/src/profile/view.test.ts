@@ -6,7 +6,7 @@ import type { ConnectionState } from '../connection/connection'
 import type { ImagesState } from '../images/images'
 import type { SiteState } from '../location/site'
 import type { CollapsibleSections } from '../shell/collapsible'
-import { deleteProfile, type ProfileState, selectProfile, setCameraFramesShown, setImageProcessingPipeline, setLastImageDirectory, setPanelOpen, setSkyTimeBarVisible } from './profile'
+import { deleteProfile, type ProfileState, selectProfile, setCameraFramesShown, setLastImageDirectory, setPanelOpen, setSkyTimeBarVisible } from './profile'
 import { PROFILE_SETTINGS_VERSION } from './schema'
 import { WorkspaceSync, type WorkspaceSyncState } from './sync'
 import { activeCameraTabEntry, cameraToolsEntry, centeringTargetsEntry, keepViewEntries, pixelInspectionEntry, sectionsEntry, ViewPersistence, type ViewStorages } from './view'
@@ -86,7 +86,6 @@ describe('view state', () => {
 		selectProfile(before.profiles, 'p2')
 		setPanelOpen(before.profiles, 'images', false)
 		setLastImageDirectory(before.profiles, '/data/frames')
-		setImageProcessingPipeline(before.profiles, [{ enabled: true, operation: { type: 'invert' } } as never])
 		setSkyTimeBarVisible(before.profiles, true)
 		setCameraFramesShown(before.profiles, false)
 		await settle(before.sync)
@@ -95,7 +94,7 @@ describe('view state', () => {
 		// A reload of the same tab keeps its session.
 		const reloaded = await tab(first)
 		expect(reloaded.profiles.activeId).toBe('p2')
-		expect(snapshot(reloaded.profiles).profiles[1].settings).toMatchObject({ panels: { images: false }, lastImageDirectory: '/data/frames', framesHidden: true, imageProcessing: [{ enabled: true, operation: { type: 'invert' } }], sky: { timeBar: true } })
+		expect(snapshot(reloaded.profiles).profiles[1].settings).toMatchObject({ panels: { images: false }, lastImageDirectory: '/data/frames', framesHidden: true, sky: { timeBar: true } })
 		expect(reloaded.profiles.profiles[0].settings.panels).toEqual({})
 
 		// A new tab of the same browser keeps what is local, and starts on the profile used last.

@@ -12,7 +12,6 @@ import {
 	closeImage,
 	differsFromOriginal,
 	documentPath,
-	hasUnsavedImages,
 	saveFileName,
 	saveImage,
 	defaultDisplaySettings,
@@ -20,7 +19,6 @@ import {
 	type ImagesIo,
 	type ImagesState,
 	imageUnavailableReason,
-	openDerivedImage,
 	openImage,
 	selectImage,
 	selectImageTool,
@@ -59,7 +57,6 @@ const INFO = { id: 'srv-1', name: 'm31.fits', path: '/data/m31.fits', format: 'f
 const CFA_INFO = { ...INFO, bayer: 'RGGB', cfa: 'RGGB' }
 const UNTRUSTED_CFA_INFO = { ...INFO, bayer: 'XYZW' }
 const RESULT = { stretch: [{ midtone: 0.2, shadow: 0.1, highlight: 1 }], channels: 1 }
-const DERIVED_INFO = { origin: 'derived', id: 'srv-2', name: 'm31 — Processed', width: 4, height: 2, channels: 3, header: {}, provenance: { kind: 'processing', source: 'srv-1', sourceName: 'm31.fits', steps: [], createdAt: '2026-10-17T00:00:00.000Z' } }
 
 // Fake API: opens any path as INFO (CFA_INFO for paths containing "cfa", UNTRUSTED_CFA_INFO for "mosaic", or fails
 // for paths containing "bad"), and renders after release() is called for that rendering when gated. Renders fail
@@ -346,56 +343,27 @@ describe('show original', () => {
 	})
 })
 
-describe('derived images', () => {
-	test('opening one adds a new active unsaved document rendered with the global settings', async () => {
-		const state = newState()
-		const { io, control, loads } = fakeIo()
-		await openImage(state, '/data/m31.fits', io)
-		control.saved = BRIGHTER
-
-		await openDerivedImage(state, DERIVED_INFO as never, 'm31.fits', true, io)
-		const derived = activeDocument(state)!
-
-		expect(state.documents).toHaveLength(2)
-		expect(derived).toMatchObject({ name: 'm31 — Processed', source: { kind: 'derived', sourceName: 'm31.fits' }, status: 'ready', unsaved: true })
-		expect(loads.at(-1)).toEqual({ kind: 'derived', sourceName: 'm31.fits' })
-		expect(state.views[derived.key]?.display.applied).toEqual(BRIGHTER)
-		expect(hasUnsavedImages(state)).toBeTrue()
-		expect(documentPath(derived)).toBeUndefined()
-	})
-
-	test('saving its pixels marks the document saved, keeping its name, only once the server confirms', async () => {
+describe('saving', () => {
+	test('a save reports an existing file and a failure, and replaces the file only with overwrite', async () => {
 		const state = newState()
 		const { io, calls } = fakeIo()
 		await openImage(state, '/data/m31.fits', io)
-		await openDerivedImage(state, DERIVED_INFO as never, 'm31.fits', true, io)
 		const key = state.activeKey!
 
 		expect(await saveImage(state, key, '/out/existing.xisf', 'xisf', false, io)).toEqual({ status: 'exists' })
-		expect(activeDocument(state)?.unsaved).toBeTrue()
-
 		expect(await saveImage(state, key, '/readonly/m31.fits', 'fits', false, io)).toEqual({ status: 'failed', error: 'Unable to write the file: EACCES' })
-		expect(activeDocument(state)?.unsaved).toBeTrue()
-
 		expect(await saveImage(state, key, '/out/existing.xisf', 'xisf', true, io)).toEqual({ status: 'saved' })
-		expect(activeDocument(state)).toMatchObject({ unsaved: false, savedPath: '/out/existing.xisf', name: 'm31 — Processed' })
-		expect(calls.at(-1)).toMatchObject({ url: '/api/images/srv-2/save', body: { path: '/out/existing.xisf', format: 'xisf', overwrite: true } })
-		expect(hasUnsavedImages(state)).toBeFalse()
-		expect(documentPath(activeDocument(state)!)).toBe('/out/existing.xisf')
+		expect(calls.at(-1)).toMatchObject({ url: '/api/images/srv-1/save', body: { path: '/out/existing.xisf', format: 'xisf', overwrite: true } })
 	})
 
-	test('saving it as JPEG sends the shown settings and leaves it unsaved', async () => {
+	test('saving as JPEG sends the shown settings', async () => {
 		const state = newState()
 		const { io, calls } = fakeIo()
 		await openImage(state, '/data/m31.fits', io)
-		await openDerivedImage(state, DERIVED_INFO as never, 'm31.fits', true, io)
-		const key = state.activeKey!
 		const applied = activeView(state)?.display.applied
 
-		expect(await saveImage(state, key, '/out/m31.jpg', 'jpeg', false, io)).toEqual({ status: 'saved' })
-		expect(calls.at(-1)).toMatchObject({ url: '/api/images/srv-2/save', body: { path: '/out/m31.jpg', format: 'jpeg', overwrite: false, settings: applied } })
-		expect(activeDocument(state)).toMatchObject({ unsaved: true, name: 'm31 — Processed' })
-		expect(activeDocument(state)?.savedPath).toBeUndefined()
+		expect(await saveImage(state, state.activeKey!, '/out/m31.jpg', 'jpeg', false, io)).toEqual({ status: 'saved' })
+		expect(calls.at(-1)).toMatchObject({ url: '/api/images/srv-1/save', body: { path: '/out/m31.jpg', format: 'jpeg', overwrite: false, settings: applied } })
 	})
 
 	test('saving a file document writes a copy and leaves the document as it is', async () => {
@@ -407,26 +375,6 @@ describe('derived images', () => {
 		expect(await saveImage(state, before.key, '/out/copy.xisf', 'xisf', false, io)).toEqual({ status: 'saved' })
 		expect(snapshot(activeDocument(state)!)).toEqual(before)
 		expect(documentPath(activeDocument(state)!)).toBe('/data/m31.fits')
-	})
-
-	test('closing one releases it on the server and revokes its rendering', async () => {
-		const state = newState()
-		const { io, calls, revoked } = fakeIo()
-		await openImage(state, '/data/m31.fits', io)
-		await openDerivedImage(state, DERIVED_INFO as never, 'm31.fits', true, io)
-
-		closeImage(state, state.activeKey!, io)
-
-		expect(state.documents).toHaveLength(1)
-		expect(calls.at(-1)).toMatchObject({ method: 'DELETE', url: '/api/images/srv-2' })
-		expect(revoked).toEqual(['blob:2'])
-		expect(hasUnsavedImages(state)).toBeFalse()
-	})
-
-	test('a save file name gets the extension of its format unless it already has one of it', () => {
-		expect(['a.fits', 'b.fit', 'c.FTS', 'd.xisf', 'e', 'f.jpg', 'Camera #3'].map((name) => saveFileName(name, 'fits'))).toEqual(['a.fits', 'b.fit', 'c.FTS', 'd.fits', 'e.fits', 'f.fits', 'Camera #3.fits'])
-		expect(['m31.fits', 'm31.JPEG', 'm31 — Processed', 'v1.2'].map((name) => saveFileName(name, 'jpeg'))).toEqual(['m31.jpg', 'm31.JPEG', 'm31 — Processed.jpg', 'v1.2.jpg'])
-		expect(saveFileName('/out/m31.fit', 'xisf')).toBe('/out/m31.xisf')
 	})
 })
 

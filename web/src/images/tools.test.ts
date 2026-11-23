@@ -3,7 +3,6 @@ import { fitImageToolBar, IMAGE_TOOL_DEFINITIONS, IMAGE_TOOLS, imageToolBarWidth
 
 const CAMERA_TAB = { source: { kind: 'camera', connectionId: 'conn', deviceId: 'cam' } } as const
 const FILE = { source: { kind: 'file', path: '/images/m42.fits' } } as const
-const DERIVED = { source: { kind: 'derived', sourceName: 'M42' } } as const
 
 describe('tool registry', () => {
 	test('lists the image tools before the camera operations, each under its category heading', () => {
@@ -18,7 +17,6 @@ describe('tool registry', () => {
 		expect(IMAGE_TOOLS[IMAGE_TOOLS.indexOf('star-detection') + 1]).toBe('star-profile')
 		expect(IMAGE_TOOL_DEFINITIONS['star-profile']).toMatchObject({ label: 'Star Profile Inspector', category: 'image', outputs: ['analysis'] })
 		expect(imageToolsFor(FILE)).toContain('star-profile')
-		expect(imageToolsFor(DERIVED)).toContain('star-profile')
 	})
 
 	test('every tool with a panel can be selected', () => {
@@ -30,7 +28,7 @@ describe('tool registry', () => {
 	})
 
 	test('camera operations are listed only on camera tabs', () => {
-		for (const document of [FILE, DERIVED, undefined]) {
+		for (const document of [FILE, undefined]) {
 			const tools = imageToolsFor(document)
 			expect(tools).toContain('inspector')
 			expect(tools).toContain('streak-detection')

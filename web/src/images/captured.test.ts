@@ -4,7 +4,6 @@ import { proxy, ref } from 'valtio'
 import { cameraTabKey, connectionCameraTab, followLiveStacks, handleCapturedFrame, holdCameraFrame, reconcileCameraTabs, reconcileCapturedFrames, releaseCameraFrame, selectCameraFrame } from './cameratabs'
 import { type CaptureFramesState, frameUnavailableReason, handleCaptureFramesEvent, loadOlderFrames, loadRecentFrames, refreshCaptureFrames } from './captureframes'
 import { ORIGINAL_DISPLAY_SETTINGS } from './display'
-import { addStep } from './imageprocessing'
 import { addMeasurement, applyDisplay, DEFAULT_IMAGE_TOOL_PREFERENCES, setAstrometryTarget, closeImage, type ImageSource, type ImagesIo, type ImagesState, isClosable, setImageView } from './images'
 
 interface Call {
@@ -138,7 +137,7 @@ describe('camera tabs', () => {
 	test('one permanent tab per connected camera, before the other documents, ordered by name', () => {
 		const state = newState()
 		const { io } = fakeIo()
-		state.documents.push({ key: 'file', name: 'm42.fits', source: { kind: 'file', path: '/m42.fits' }, status: 'ready', unsaved: false })
+		state.documents.push({ key: 'file', name: 'm42.fits', source: { kind: 'file', path: '/m42.fits' }, status: 'ready' })
 
 		reconcileCameraTabs(
 			state,
@@ -216,7 +215,7 @@ describe('camera tabs', () => {
 		const { io, calls } = fakeIo()
 		const state = await cameraTab(io, 's:1')
 		setImageView(state, KEY, { kind: 'manual', scale: 2, center: { x: 1, y: 1 } })
-		addStep(state.views[KEY].processing, 'cosmeticCorrection')
+		state.views[KEY].overlaysHidden = true
 
 		reconcileCameraTabs(state, [], framesOf('s:1'), io, 'page')
 		expect(state.documents).toEqual([])
@@ -225,7 +224,7 @@ describe('camera tabs', () => {
 		reconcileCameraTabs(state, [CAMERA], framesOf('s:1'), io, 'page')
 		await Bun.sleep(10)
 		expect(state.views[KEY].view).toEqual({ kind: 'manual', scale: 2, center: { x: 1, y: 1 } })
-		expect(state.views[KEY].processing.steps.map((step) => step.operation.type)).toEqual(['cosmeticCorrection'])
+		expect(state.views[KEY].overlaysHidden).toBeTrue()
 		expect(tab(state).camera?.shown?.frame.frameId).toBe('s:1')
 	})
 })

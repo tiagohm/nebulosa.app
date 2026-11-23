@@ -17,13 +17,12 @@ import { DataRow } from '../ui/DataRow'
 import { Notice } from '../ui/Notice'
 import type { CameraFrameSelection } from './cameratabs'
 import { connectionLabel, frameUnavailableReason } from './captureframes'
-import { operationLabel, operationSummary } from './imageprocessing.catalog'
 import { documentPath, type ImageDocument } from './images'
 import { ImageStatisticsSection } from './ImageStatisticsSection'
 import type { ImageToolPanelProps } from './tools'
 
-// Image Inspector, the default contextual tool of the Images workspace: properties, the provenance and save state of a
-// derived image (saved from the viewer toolbar), the camera, origin, session, and storage of the frame a camera tab
+// Image Inspector, the default contextual tool of the Images workspace: properties, the provenance of a
+// live stack snapshot, the camera, origin, session, and storage of the frame a camera tab
 // shows (with the focuser position of an Auto Focus frame when its session recorded it), the quality the measurements already made
 // on the image give (never measured here), acquisition data, the parameters of the current rendering, the histogram and
 // statistics of its original samples (ImageStatisticsSection, measured only while expanded), and the header of the active
@@ -70,15 +69,11 @@ export function ImageInspector({ document, view, onOpen }: ImageToolPanelProps) 
 		<>
 			<CollapsibleSection id="images.inspector.properties" title="Properties">
 				<DataRow label="Name">{document.name}</DataRow>
-				{!document.camera && (
+				{path && (
 					<DataRow label="Folder">
-						{path ? (
-							<span title={path} className="block truncate">
-								{directoryOf(path)}
-							</span>
-						) : (
-							<span className="text-accent">Not saved</span>
-						)}
+						<span title={path} className="block truncate">
+							{directoryOf(path)}
+						</span>
 					</DataRow>
 				)}
 				{info ? (
@@ -95,7 +90,7 @@ export function ImageInspector({ document, view, onOpen }: ImageToolPanelProps) 
 			</CollapsibleSection>
 			{document.camera?.shown && !document.camera.live && <CapturedFrame frame={document.camera.shown.frame} selection={document.camera.selection.kind} />}
 			{info && <Quality imageId={info.id} />}
-			{info?.origin === 'derived' && <Derivation document={document} provenance={info.provenance} />}
+			{info?.origin === 'derived' && <Derivation provenance={info.provenance} />}
 			{info && <Acquisition info={info} />}
 			{view?.rendering && <AppliedDisplay result={view.rendering.result} />}
 			<ImageStatisticsSection document={document} view={view} />
@@ -298,42 +293,22 @@ function Acquisition({ info }: InfoProps) {
 }
 
 interface DerivationProps {
-	// Derived document.
-	readonly document: ImageDocument
 	// Where the image was derived from.
 	readonly provenance: ImageProvenance
 }
 
-// Provenance and persistence of a derived image: its source, when it was derived, the processing steps of the pipeline
-// that derived it, or the frames and stacks of the live stack it is a snapshot of, and whether it is saved (from the Save
-// control of the viewer toolbar).
-function Derivation({ document, provenance }: DerivationProps) {
+// Provenance of a derived image: what it shows, when it was derived, and the frames and stacks of the live stack it is a
+// snapshot of.
+function Derivation({ provenance }: DerivationProps) {
 	const timeZone = useActiveTimeZone()
 	return (
 		<CollapsibleSection id="images.inspector.derived-image" title="Derived Image">
 			<DataRow label="Source">{provenance.sourceName}</DataRow>
 			<DataRow label="Created">{formatZonedDateTime(Date.parse(provenance.createdAt), timeZone)}</DataRow>
-			{provenance.kind === 'liveStacking' ? (
-				<>
-					<DataRow label="Live stack">{provenance.frames} accepted frames</DataRow>
-					{provenance.stacks.map((stack) => (
-						<LiveStack key={`${stack.field}:${stack.filter}:${liveAcquisitionLabel(stack)}:${liveCalibrationLabel(stack)}`} stack={stack} />
-					))}
-				</>
-			) : (
-				<ol className="m-0 flex list-none flex-col gap-0.5 p-0 text-xs">
-					{provenance.steps.map(({ id, operation }, i) => (
-						<li key={id} className="flex min-w-0 gap-2">
-							<span className="flex-none text-ink-300 tabular-nums">{i + 1}.</span>
-							<span className="min-w-0 truncate text-ink-100" title={operationSummary(operation)}>
-								{operationLabel(operation.type)}
-								<span className="text-ink-300"> · {operationSummary(operation)}</span>
-							</span>
-						</li>
-					))}
-				</ol>
-			)}
-			<DataRow label="State">{document.unsaved ? <span className="text-accent">Unsaved</span> : 'Saved'}</DataRow>
+			<DataRow label="Live stack">{provenance.frames} accepted frames</DataRow>
+			{provenance.stacks.map((stack) => (
+				<LiveStack key={`${stack.field}:${stack.filter}:${liveAcquisitionLabel(stack)}:${liveCalibrationLabel(stack)}`} stack={stack} />
+			))}
 		</CollapsibleSection>
 	)
 }

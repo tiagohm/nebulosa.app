@@ -205,7 +205,7 @@ export const CREDIT_GROUPS: readonly CreditGroup[] = [
 			{ name: 'Cometary non-gravitational forces', owner: 'B. G. Marsden, Z. Sekanina, and D. K. Yeomans', url: 'https://doi.org/10.1086/111402', use: 'Outgassing of comets in the integration of MPC orbits.', notice: 'AJ 78, 211 (1973).' },
 			{ name: 'Yarkovsky transverse acceleration', owner: 'D. Farnocchia et al.', url: 'https://doi.org/10.1016/j.icarus.2013.02.004', use: 'Yarkovsky drift of asteroids in the integration of MPC orbits.', notice: 'Icarus 224, 1 (2013).' },
 			{ name: 'Moffat profile', owner: 'A. F. J. Moffat', url: 'https://ui.adsabs.harvard.edu/abs/1969A%26A.....3..455M', use: 'Fits of the Star Profile Inspector.', notice: 'A&A 3, 455 (1969).' },
-			{ name: 'PixInsight', owner: 'Pleiades Astrophoto', url: 'https://pixinsight.com/', use: 'Adaptive display function, arcsinh stretch, and multiscale median transform the image tools follow, and the XISF image format.' },
+			{ name: 'PixInsight', owner: 'Pleiades Astrophoto', url: 'https://pixinsight.com/', use: 'Adaptive display function the image display follows, and the XISF image format.' },
 			{ name: 'ASTAP star extraction and matching', owner: 'Han Kleijn', url: 'https://www.hnsky.org/astap_astrometric_solving.htm', use: 'Built-in star detection, the star matching that registers the frames of image stacking, and the spiral order of the built-in plate solver around a known position.' },
 			{
 				name: 'Astrometry.net blind calibration',

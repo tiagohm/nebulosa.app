@@ -57,7 +57,7 @@ Images and camera operations:
 - **Streak detection**: Implemented ([Streak Detection](streak-detection.md)).
 - **Image annotation**: Implemented ([Annotation](annotation.md)).
 - **Plate solving and WCS**: Implemented ([Plate Solving](plate-solving.md)).
-- **Image processing**: Implemented ([Image Processing](image-processing.md)).
+- **Image processing**: Integration Required, the toolkit's single-image operations are not exposed; planned as a tool of Tools.
 - **Auto focus**: Implemented ([Auto Focus](auto-focus.md)).
 - **TPPA**: Implemented ([TPPA](tppa.md)).
 - **iPolar**: Implemented ([iPolar](ipolar.md)).

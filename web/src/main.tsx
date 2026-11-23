@@ -29,8 +29,7 @@ import { framingsState, handleFramingEvent, refreshFramings } from './framing/fr
 import { cameraBottomViews, cameraBottomViewsEntry } from './images/bottomview'
 import { type CameraTabSource, followLiveStacks, handleCapturedFrame, reconcileCameraTabs, reconcileCapturedFrames, releaseLeasesOnHide } from './images/cameratabs'
 import { captureFramesState, handleCaptureFramesEvent, refreshCaptureFrames } from './images/captureframes'
-import { handleImageProcessingEvent, imageProcessingState, refreshImageProcessing } from './images/imageprocessing'
-import { confirmUnsavedOnUnload, imagesState } from './images/images'
+import { imagesState } from './images/images'
 import { pixelInspection } from './images/pixeltiles'
 import { handleStatisticsEvent, refreshStatistics, statisticsState } from './images/statistics'
 import { siteState, watchActiveSiteZone } from './location/site'
@@ -148,7 +147,6 @@ const SERVER_STORES: readonly ServerStore[] = [
 	{ handle: (event) => handleStatisticsEvent(statisticsState, event), refresh: () => refreshStatistics(statisticsState) },
 	{ handle: (event) => handlePlateSolvingEvent(plateSolvingState, event), refresh: () => refreshPlateSolving(plateSolvingState) },
 	{ handle: (event) => handleAnnotationsEvent(annotationsState, event), refresh: () => refreshAnnotations(annotationsState) },
-	{ handle: (event) => handleImageProcessingEvent(imageProcessingState, imagesState, event), refresh: () => refreshImageProcessing(imageProcessingState, imagesState) },
 	{ handle: (event) => handleCaptureFramesEvent(captureFramesState, event), refresh: () => refreshCaptureFrames(captureFramesState).then(() => reconcileCapturedFrames(imagesState, captureFramesState)) },
 	{ handle: (event) => handleCapturedFrame(imagesState, event) },
 	{ handle: (event) => followLiveStacks(imagesState, event, captureFramesState) },
@@ -176,7 +174,6 @@ const stops = [
 	watchHistory(routeState),
 	watchPlayers(),
 	watchPictureInPicture(),
-	confirmUnsavedOnUnload(imagesState),
 	releaseLeasesOnHide(imagesState),
 	subscribe((event) => {
 		for (const store of SERVER_STORES) store.handle(event)

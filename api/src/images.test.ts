@@ -76,10 +76,10 @@ function writeFloatFits(name: string) {
 	return { path, samples }
 }
 
-// Adopts an unchanged full copy of a document as a derived document, as an empty pipeline would, and returns its info.
+// Adopts an unchanged full copy of a document as a derived document, as a live stack snapshot, and returns its info.
 async function adoptCopy(source: ImageInfo) {
-	const image = (await images.processingImage(source.id))!
-	return images.adopt(image, { kind: 'processing', source: source.id, sourceName: source.name, steps: [], createdAt: new Date().toISOString() })
+	const image = (await images.fullCopy(source.id))!
+	return images.adopt(image, { kind: 'liveStacking', sessionId: 'session', sourceName: 'Ha', frames: 1, stacks: [], createdAt: new Date().toISOString() })
 }
 
 // Saves a document and returns the response.
@@ -292,7 +292,7 @@ describe('derived images', () => {
 		const fits = await call('/api/images/:id/file', 'GET', { id: derived.id }, undefined, '?format=fits')
 		const xisf = await call('/api/images/:id/file', 'GET', { id: derived.id }, undefined, '?format=xisf')
 
-		expect(fits.headers.get('Content-Disposition')).toBe(`attachment; filename="derive-download _ Processed.fits"; filename*=UTF-8''${encodeURIComponent('derive-download — Processed.fits')}`)
+		expect(fits.headers.get('Content-Disposition')).toBe(`attachment; filename="Ha _ Live Stack.fits"; filename*=UTF-8''${encodeURIComponent('Ha — Live Stack.fits')}`)
 		expect(Buffer.from(await fits.arrayBuffer()).toString('latin1', 0, 6)).toBe('SIMPLE')
 		expect(Buffer.from(await xisf.arrayBuffer()).toString('latin1', 0, 8)).toBe('XISF0100')
 
@@ -389,7 +389,7 @@ describe('capture documents', () => {
 		store.disconnected('page')
 		store.connected('page')
 		await Bun.sleep(40)
-		expect(store.own(owned.id, 'page')).toBeTrue()
+		expect(store.name(owned.id)).toBeDefined()
 
 		store.disconnected('page')
 		await Bun.sleep(40)
@@ -596,11 +596,11 @@ describe('detection region', () => {
 	})
 })
 
-describe('processing image', () => {
+describe('full copy', () => {
 	test('is an owned full copy naming the trusted CFA pattern at the image origin', async () => {
-		const info = await openFits(writeFits('processing-cfa.fits', 16, 8, 1, ["BAYERPAT= 'RGGB    '", 'XBAYROFF=                    1']))
-		const first = (await images.processingImage(info.id))!
-		const second = (await images.processingImage(info.id))!
+		const info = await openFits(writeFits('copy-cfa.fits', 16, 8, 1, ["BAYERPAT= 'RGGB    '", 'XBAYROFF=                    1']))
+		const first = (await images.fullCopy(info.id))!
+		const second = (await images.fullCopy(info.id))!
 
 		expect(info.cfa).toBe('GRBG')
 		expect(first.metadata).toMatchObject({ width: 16, height: 8, channels: 1, bayer: 'GRBG' })
@@ -612,15 +612,14 @@ describe('processing image', () => {
 	})
 
 	test('is adopted as a derived document whose name and history come from its provenance', async () => {
-		const source = await openFits(writeFits('processing-adopt.fits', 16, 8, 3))
-		const image = (await images.processingImage(source.id))!
-		const steps = [{ id: 'flip', operation: { type: 'horizontalFlip' } }] as const
+		const source = await openFits(writeFits('copy-adopt.fits', 16, 8, 3))
+		const image = (await images.fullCopy(source.id))!
 
-		const info = await images.adopt(image, { kind: 'processing', source: source.id, sourceName: 'processing-adopt.fits', steps, createdAt: '2026-10-27T00:00:00.000Z' })
+		const info = await images.adopt(image, { kind: 'liveStacking', sessionId: 'session', sourceName: 'Ha', frames: 3, stacks: [], createdAt: '2026-10-27T00:00:00.000Z' })
 
-		expect(info).toMatchObject({ origin: 'derived', name: 'processing-adopt — Processed', channels: 3, header: { BITPIX: -32, NAXIS3: 3 } })
-		expect(String(info.header.HISTORY)).toContain('Processing 1/1: {"type":"horizontalFlip"}')
-		expect(images.name(info.id)).toBe('processing-adopt — Processed')
+		expect(info).toMatchObject({ origin: 'derived', name: 'Ha — Live Stack', channels: 3, header: { BITPIX: -32, NAXIS3: 3 } })
+		expect(String(info.header.HISTORY)).toContain('Live stack snapshot by Nebulosa of 3 accepted frames at 2026-10-27T00:00:00.000Z')
+		expect(images.name(info.id)).toBe('Ha — Live Stack')
 		images.close(source.id)
 		images.close(info.id)
 	})

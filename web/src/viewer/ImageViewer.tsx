@@ -5,8 +5,8 @@ import { type GestureEvent, type GestureState, IDLE_GESTURE, isPanning, routeGes
 import { centered, FIT_VIEW, manualView, type OverlayView, panBy, type Point, pixelAt, type Size, toImage, type ViewerView, type ViewTransform, viewTransform, visibleRegion, ZOOM_STEP, zoomAt } from './transform'
 
 // Reusable image viewer: a toolbar, a viewport with zoom, pan, overlays, and clicks on the image, and a status line. It
-// renders a bitmap it is given and knows nothing about where the image came from (a capture, an opened
-// document, or a processing result); whoever creates the bitmap's URL owns and releases it. The view
+// renders a bitmap it is given and knows nothing about where the image came from (a capture or an opened
+// document); whoever creates the bitmap's URL owns and releases it. The view
 // (zoom and pan) is owned by the caller, which keeps one per subject (an image document, a camera view),
 // so it survives switching between subjects and unmounting the viewer. A tool may take presses through an
 // interaction (interaction.ts routes each gesture to the pan, a pinch, or the tool), read the cursor in its overlays

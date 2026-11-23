@@ -8,8 +8,8 @@ import type { ProfileSettings, SkyFramingSettings } from './schema'
 import { type WorkspaceSyncState, workspaceSyncState } from './sync'
 
 // View state of the tab: the fields of a profile the server never keeps (panels, last directories, the time bar, which
-// framings the Sky draws and the one the Observing Planner judges against, the bottom area of the camera tabs, the Image
-// Processing pipeline, the preferences of Close Approaches and Astro Weather), which profile is active, and the view
+// framings the Sky draws and the one the Observing Planner judges against, the bottom area of the camera tabs, the
+// preferences of Close Approaches and Astro Weather), which profile is active, and the view
 // entries kept outside the profiles (which panel sections are expanded, the tool and the bottom area of each camera tab, the
 // camera tab selected last, the target being typed for each camera in Target Centering, the preview of the Framing tool, the section of the
 // Meridian Flip tool, whether the video of the observatory cameras is dimmed, whether a deletion in the Calibration Library also
@@ -53,7 +53,7 @@ interface ViewField {
 }
 
 // Field of the view kept as an optional field of ProfileSettings.
-function setting(key: 'lastImageDirectory' | 'lastSaveDirectory' | 'lastStackingDirectory' | 'lastCalibrationDirectory' | 'framesHidden' | 'imageProcessing' | 'closeApproaches' | 'astroWeather' | 'guidingGraph' | 'plannerFramingId'): ViewField {
+function setting(key: 'lastImageDirectory' | 'lastSaveDirectory' | 'lastStackingDirectory' | 'lastCalibrationDirectory' | 'framesHidden' | 'closeApproaches' | 'astroWeather' | 'guidingGraph' | 'plannerFramingId'): ViewField {
 	return {
 		get: (settings) => settings[key],
 		set: (settings, value) => Object.assign(settings, { [key]: value }),
@@ -71,7 +71,6 @@ const VIEW_FIELDS = {
 	lastStackingDirectory: setting('lastStackingDirectory'),
 	lastCalibrationDirectory: setting('lastCalibrationDirectory'),
 	framesHidden: setting('framesHidden'),
-	imageProcessing: setting('imageProcessing'),
 	closeApproaches: setting('closeApproaches'),
 	astroWeather: setting('astroWeather'),
 	guidingGraph: setting('guidingGraph'),
@@ -109,7 +108,6 @@ export const VIEW_STORAGE: Readonly<Record<ViewFieldKey | ViewEntryName | 'activ
 	lastStackingDirectory: ['local'],
 	lastCalibrationDirectory: ['local'],
 	framesHidden: ['local'],
-	imageProcessing: ['local'],
 	closeApproaches: ['local'],
 	astroWeather: ['local'],
 	guidingGraph: ['local'],

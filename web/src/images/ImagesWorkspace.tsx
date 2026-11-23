@@ -39,7 +39,6 @@ import { useStreakResult } from '../streaks/useStreakResult'
 import { Button } from '../ui/Button'
 import { Icon } from '../ui/Icon'
 import { IconButton } from '../ui/IconButton'
-import { Modal, ModalActions } from '../ui/Modal'
 import { moveIndex } from '../ui/navigation'
 import { Select } from '../ui/Select'
 import { ImageViewer } from '../viewer/ImageViewer'
@@ -108,8 +107,7 @@ import { IMAGE_TOOL_DEFINITIONS, type ImageToolId, imageToolsFor } from './tools
 // (SaveImagePopover), which downloads a copy of any document or writes one to a server file chosen in the file
 // explorer (SaveImageModal). The star
 // markers of the latest detection of the document's image are drawn over it while shown, and a click
-// selects a star while the Star Detection tool is open. Closing
-// an unsaved derived image asks first (cancel, discard, or Save As FITS and then close).
+// selects a star while the Star Detection tool is open.
 // With a solution of the image shown, its grid, centre, passive aids (crosshair, orientation, scale bar), and the
 // coordinates under the pointer are drawn from that solution, and the measure mode of the toolbar draws measurements
 // (astrometryTool.ts). With the Image Inspector shown, Select Area of its statistics takes the presses over the image to
@@ -143,10 +141,8 @@ export function ImagesWorkspace() {
 	// View of the bottom area of each camera tab, by document key; the frames carousel when absent.
 	// Camera tabs whose viewer draws the central reticle, by document key; a presentation choice of the tab only.
 	const [reticles, setReticles] = useState<Readonly<Record<string, boolean>>>({})
-	// Unsaved document whose closing waits for a confirmation.
-	const [closing, setClosing] = useState<string>()
-	// Document being saved, whether it closes once saved, and the format of its file.
-	const [saving, setSaving] = useState<{ readonly key: string; readonly closeAfter: boolean; readonly format: SaveFormat }>()
+	// Document being saved and the format of its file.
+	const [saving, setSaving] = useState<{ readonly key: string; readonly format: SaveFormat }>()
 	// Context menu of the image shown: the document, the image point, and the client point it opened at.
 	const [menu, setMenu] = useState<{ readonly key: string; readonly point: Point; readonly client: Point }>()
 	// Why the latest action of the context menu failed.
@@ -240,13 +236,6 @@ export function ImagesWorkspace() {
 		if (document) selectImageTool(imagesState, document.key, id)
 	}
 
-	// Closes a document, asking first when it is unsaved.
-	function requestClose(key: string) {
-		if (state.documents.find((d) => d.key === key)?.unsaved) setClosing(key)
-		else closeImage(imagesState, key)
-	}
-
-	const closingDocument = state.documents.find((d) => d.key === closing)
 	const savingDocument = state.documents.find((d) => d.key === saving?.key)
 
 	return (
@@ -260,7 +249,7 @@ export function ImagesWorkspace() {
 			panel={{ title: definition.panelTitle, content: <Panel key={document?.key} document={document} view={view} camera={camera} onOpen={() => setChoosing(true)} />, sheet: definition.sheet }}
 		>
 			<div ref={viewerRef} className="flex h-full flex-col bg-base-000">
-				{state.documents.length > 0 && <DocumentTabs documents={state.documents} activeKey={state.activeKey} onClose={requestClose} />}
+				{state.documents.length > 0 && <DocumentTabs documents={state.documents} activeKey={state.activeKey} onClose={(key) => closeImage(imagesState, key)} />}
 				<div className="min-h-0 flex-1">
 					<ImageViewer
 						view={view?.view ?? FIT_VIEW}
@@ -278,7 +267,7 @@ export function ImagesWorkspace() {
 									<span className="mx-1 h-5 w-px bg-line-100" />
 									<DisplayToolbar key={document.key} documentKey={document.key} info={document.info} view={view} />
 									<span className="mx-1 h-5 w-px bg-line-100" />
-									<SaveImagePopover document={document} view={view} onSaveToServer={(format) => setSaving({ key: document.key, closeAfter: false, format })} />
+									<SaveImagePopover document={document} view={view} onSaveToServer={(format) => setSaving({ key: document.key, format })} />
 									<span className="mx-1 h-5 w-px bg-line-100" />
 									{solution && <Select options={ASTROMETRY_MODES} value={mode} format={(option) => MODE_LABELS[option]} disabled={!!picking || overlaysHidden} onChange={(next) => setModes((current) => ({ ...current, [document.key]: next }))} className="w-36 flex-none max-sm:w-28" />}
 									{document.camera && <CameraControls document={document} framesShown={framesShown} onToggleFrames={() => setCameraFramesShown(profileState, !framesShown)} reticle={reticle} onToggleReticle={() => setReticles({ ...reticles, [document.key]: !reticle })} />}
@@ -400,41 +389,7 @@ export function ImagesWorkspace() {
 					void openImage(imagesState, path)
 				}}
 			/>
-			<SaveImageModal
-				document={savingDocument}
-				format={saving?.format ?? 'fits'}
-				onClose={() => setSaving(undefined)}
-				onSaved={() => {
-					if (saving?.closeAfter) closeImage(imagesState, saving.key)
-					setSaving(undefined)
-				}}
-			/>
-			<Modal open={!!closingDocument} onClose={() => setClosing(undefined)} title="Close unsaved image?" className="max-w-md">
-				<p className="m-0 text-sm">{closingDocument?.name} exists only in memory. Closing it discards it.</p>
-				<ModalActions>
-					<Button variant="secondary" onClick={() => setClosing(undefined)}>
-						Cancel
-					</Button>
-					<Button
-						variant="secondary"
-						onClick={() => {
-							if (closing) closeImage(imagesState, closing)
-							setClosing(undefined)
-						}}
-					>
-						Discard
-					</Button>
-					<Button
-						data-autofocus
-						onClick={() => {
-							if (closing) setSaving({ key: closing, closeAfter: true, format: 'fits' })
-							setClosing(undefined)
-						}}
-					>
-						Save As…
-					</Button>
-				</ModalActions>
-			</Modal>
+			<SaveImageModal document={savingDocument} format={saving?.format ?? 'fits'} onClose={() => setSaving(undefined)} />
 		</WorkspaceLayout>
 	)
 }
@@ -630,17 +585,13 @@ interface DocumentTabsProps {
 	readonly onClose: (key: string) => void
 }
 
-// Returns the tooltip of a document tab: where its file is, where it was derived from, or which camera and frame it
-// shows.
+// Returns the tooltip of a document tab: where its file is, or which camera and frame it shows.
 function documentTooltip(document: ImageDocument): string {
 	if (document.camera) return `Frames of ${document.name}${document.camera.shown ? `, showing frame #${document.camera.shown.frame.generation}` : ''}`
-	const path = documentPath(document)
-	if (path) return path
-	return document.source.kind === 'derived' ? `Derived from ${document.source.sourceName}, not saved` : document.name
+	return documentPath(document) ?? document.name
 }
 
-// Tab strip of the open documents. Arrow keys move between tabs, Delete closes the focused one; an
-// unsaved document is marked with an accent dot. A camera tab has a camera icon and no way to close it.
+// Tab strip of the open documents. Arrow keys move between tabs, Delete closes the focused one. A camera tab has a camera icon and no way to close it.
 function DocumentTabs({ documents, activeKey, onClose }: DocumentTabsProps) {
 	const stripRef = useRef<HTMLDivElement>(null)
 
@@ -677,7 +628,6 @@ function DocumentTabs({ documents, activeKey, onClose }: DocumentTabsProps) {
 						>
 							{document.camera && <Icon name="camera" className="size-3.5 flex-none" />}
 							{document.status === 'error' && <span className="size-1.5 flex-none rounded-full bg-danger" />}
-							{document.unsaved && <span title="Not saved" className="size-1.5 flex-none rounded-full bg-accent" />}
 							<span className="truncate">{document.name}</span>
 						</button>
 						{closable && (

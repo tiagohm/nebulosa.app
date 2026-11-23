@@ -19,7 +19,7 @@ Where each feature lives in the UI, and the registry that declares it.
 ## Images
 
 - Responsibility: image documents, image work, and the camera operations of the camera tabs.
-- Image tools: Image Inspector ([Image Statistics](image-statistics.md)), [Plate Solving](plate-solving.md), [Star Detection](star-detection.md), [Star Profile Inspector](star-profile-inspector.md), [Streak Detection](streak-detection.md), [Annotation](annotation.md), [Image Processing](image-processing.md).
+- Image tools: Image Inspector ([Image Statistics](image-statistics.md)), [Plate Solving](plate-solving.md), [Star Detection](star-detection.md), [Star Profile Inspector](star-profile-inspector.md), [Streak Detection](streak-detection.md), [Annotation](annotation.md).
 - Camera operations: Camera Acquisition ([Capture Frames](capture-frames.md)), [Live Stacking](live-stacking.md), [Auto Focus](auto-focus.md), Mount Nudge, [Guiding](guiding.md), [DARV](darv.md), [TPPA](tppa.md), [iPolar](ipolar.md), Pointing Model Builder ([Mount Pointing Model](mount-pointing-model.md)), [Target Centering](target-centering.md), [Flat Wizard](flat-wizard.md), [Dark Library Wizard](dark-library-wizard.md).
 - Registry: `IMAGE_TOOL_DEFINITIONS` (`web/src/images/tools.ts`), whose `category` tells an image tool from a camera operation.
 

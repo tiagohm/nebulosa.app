@@ -29,10 +29,8 @@ export interface SaveImageModalProps {
 	readonly document?: ImageDocument
 	// Format of the file written.
 	readonly format: SaveFormat
-	// Hides the modal without saving.
+	// Hides the modal, once the document is saved or without saving.
 	readonly onClose: () => void
-	// Called once the document is saved.
-	readonly onSaved: () => void
 }
 
 // Existing file waiting for the confirmation to replace it.
@@ -44,7 +42,7 @@ interface ReplacedFile {
 }
 
 // Save dialog of a document.
-export function SaveImageModal({ document, format, onClose, onSaved }: SaveImageModalProps) {
+export function SaveImageModal({ document, format, onClose }: SaveImageModalProps) {
 	const profiles = useSnapshot(profileState)
 	const [busy, setBusy] = useState(false)
 	const [message, setMessage] = useState<string>()
@@ -64,7 +62,7 @@ export function SaveImageModal({ document, format, onClose, onSaved }: SaveImage
 		else if (outcome.status === 'failed') setMessage(outcome.error)
 		else {
 			setLastSaveDirectory(profileState, directory)
-			onSaved()
+			close()
 		}
 	}
 

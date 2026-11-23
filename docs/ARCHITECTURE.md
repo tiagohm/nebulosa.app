@@ -104,7 +104,6 @@ Reading order for a new contributor: the [Glossary](#glossary), the [Architectur
 - [Image Statistics](architecture/image-statistics.md)
 - [Annotation](architecture/annotation.md)
 - [Plate Solving](architecture/plate-solving.md)
-- [Image Processing](architecture/image-processing.md)
 
 ### Camera Operations
 

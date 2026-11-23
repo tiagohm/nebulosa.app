@@ -7,7 +7,6 @@ import type { AutoStfPreset } from 'nebulosa/src/imaging/processing/stf.presets'
 import type { FitsHeader, FitsHeaderKey } from 'nebulosa/src/io/formats/fits/fits'
 import { cfaPatternKeyword, exposureTimeKeyword, numericKeyword, observationDateKeyword, textKeyword } from 'nebulosa/src/io/formats/fits/util'
 import { errorResponse } from './http'
-import type { ImageProcessingStep } from './imageprocessing'
 import { encodeSampleTile } from './imagesamples'
 import type { LiveCohortAcquisition } from './livestacking'
 import type { LiveFilterCalibration } from './livestacking.groups'
@@ -15,8 +14,8 @@ import { errorCode } from './util'
 import { type ClientListener, ClientPresence } from './websocket'
 
 // Image documents opened by clients: FITS and XISF files read from the server's filesystem, or camera
-// frames handed over by the capture service, kept decoded in memory under an id until they are closed, so later renderings (and future
-// processing) work on the same pixels. Each rendering applies a complete set of display settings
+// frames handed over by the capture service, kept decoded in memory under an id until they are closed, so later renderings and analyses
+// work on the same pixels. Each rendering applies a complete set of display settings
 // (debayer, stretch, tone, and color) to a copy of the decoded image, never to the image itself, and is
 // sent as JPEG; the parameters actually applied are returned alongside it. Decoding and rendering run on
 // a worker thread (images.worker.ts) that also holds the pixels, so a large image never blocks the
@@ -27,9 +26,8 @@ import { type ClientListener, ClientPresence } from './websocket'
 // hides it from every route at once, but its pixels are released only when the last analysis lets it go. An analysis
 // of one spot of the image asks for a grayscale copy of that region alone, so it never copies the whole image.
 //
-// A document can also be adopted from the result of an image processing pipeline (imageprocessing.ts) computed on a
-// copy of another document: the result is a new, independent document that lives only in memory until it is saved to a file of the
-// server or downloaded.
+// A document can also be adopted from a live stack snapshot (livestacking.ts): the result is a new, independent document
+// that lives only in memory until it is saved to a file of the server or downloaded.
 //
 // Any document, whatever its origin, can be saved to a file of the server or downloaded as a copy: FITS or XISF in the
 // scale of its source, or JPEG of its rendering with given display settings. The document itself never changes.
@@ -41,23 +39,6 @@ export type ImageFormat = 'fits' | 'xisf'
 
 // Formats an image document can be saved or downloaded as: those it can be read from, or JPEG of a rendering.
 export type SaveFormat = ImageFormat | 'jpeg'
-
-// Source document and time of a derived image, whatever derived it.
-interface ProvenanceSource {
-	// Id of the source document.
-	readonly source: string
-	// Name of the source document.
-	readonly sourceName: string
-	// When the image was derived, as an ISO 8601 UTC date-time.
-	readonly createdAt: string
-}
-
-// A derived image computed by an image processing pipeline.
-export interface ProcessingProvenance extends ProvenanceSource {
-	readonly kind: 'processing'
-	// Steps applied to the source image, in order: the enabled steps of the run.
-	readonly steps: readonly ImageProcessingStep[]
-}
 
 // A stack of a live stack snapshot, as it was when the snapshot was taken.
 export interface LiveStackingProvenanceStack {
@@ -91,8 +72,8 @@ export interface LiveStackingProvenance {
 	readonly createdAt: string
 }
 
-// Where a derived image comes from: the document and what was applied to it, or the live stack it is a snapshot of.
-export type ImageProvenance = ProcessingProvenance | LiveStackingProvenance
+// Where a derived image comes from: the live stack it is a snapshot of.
+export type ImageProvenance = LiveStackingProvenance
 
 // Camera frame an image document was decoded from, as the capture service received it.
 export interface ImageCapture {
@@ -387,8 +368,8 @@ export interface SampleTile {
 // ended (cancelled).
 export type StatisticsOutcome = ({ readonly status: 'completed' } & DocumentStatistics) | { readonly status: 'missing' } | { readonly status: 'cancelled' }
 
-// Message sent to the image worker. Open, open capture, render, encode, detection image, detection region, processing
-// image, statistics, samples, and adopt carry an id that their response echoes; open capture and adopt transfer their bytes to
+// Message sent to the image worker. Open, open capture, render, encode, detection image, detection region, full
+// copy, statistics, samples, and adopt carry an id that their response echoes; open capture and adopt transfer their bytes to
 // the worker; a close has no response, and a cancel drops the render with that id if it has not started yet, or stops
 // the statistics scan with that id at its next slice (both then answer superseded).
 export type ImageWorkerRequest =
@@ -398,7 +379,7 @@ export type ImageWorkerRequest =
 	| { readonly type: 'encode'; readonly id: number; readonly document: string; readonly format: SaveFormat; readonly settings?: DisplaySettings; readonly omit?: readonly string[] }
 	| { readonly type: 'detectionImage'; readonly id: number; readonly document: string }
 	| { readonly type: 'detectionRegion'; readonly id: number; readonly document: string; readonly rect: ImageRect }
-	| { readonly type: 'processingImage'; readonly id: number; readonly document: string }
+	| { readonly type: 'fullCopy'; readonly id: number; readonly document: string }
 	| { readonly type: 'statistics'; readonly id: number; readonly document: string; readonly area?: ImageRect }
 	| { readonly type: 'samples'; readonly id: number; readonly document: string; readonly rect: ImageRect }
 	| { readonly type: 'adopt'; readonly id: number; readonly image: Image; readonly provenance: ImageProvenance }
@@ -408,7 +389,7 @@ export type ImageWorkerRequest =
 // Message the image worker answers a request with, by request id: the opened document, the
 // rendering, the encoded file, the grayscale copy a star detection measures (see ImageStore.detectionImage), that of
 // a region (see ImageStore.detectionRegion), the
-// full copy an image processing pipeline works on (see ImageStore.processingImage), the statistics of its samples (see
+// full copy a streak detection works on (see ImageStore.fullCopy), the statistics of its samples (see
 // ImageStore.statistics), the native samples of a small rectangle (see ImageStore.samples), the adopted document, a
 // document that is not open (missing), a render dropped before it
 // started (superseded), settings that cannot be applied to the image (invalid), a file that cannot be
@@ -418,7 +399,7 @@ export type ImageWorkerResponse =
 	| { readonly id: number; readonly status: 'encoded'; readonly bytes: Uint8Array<ArrayBuffer> }
 	| { readonly id: number; readonly status: 'detectionImage'; readonly image: Image }
 	| ({ readonly id: number; readonly status: 'detectionRegion' } & ImageRegion)
-	| { readonly id: number; readonly status: 'processingImage'; readonly image: Image }
+	| { readonly id: number; readonly status: 'fullCopy'; readonly image: Image }
 	| ({ readonly id: number; readonly status: 'statistics' } & DocumentStatistics)
 	| ({ readonly id: number; readonly status: 'samples' } & SampleTile)
 	| { readonly id: number; readonly status: 'adopted'; readonly info: ImageInfo }
@@ -495,8 +476,7 @@ interface DocumentRecord {
 	readonly acquisition: ImageAcquisition
 }
 
-// Metadata of an open or retained document, for an analysis that derives hints from it or a pipeline that checks
-// what it can apply to it.
+// Metadata of an open or retained document, for an analysis that derives hints from it.
 export interface DocumentMetadata extends DocumentSize {
 	// Number of channels: 1 for grayscale or a raw CFA mosaic, 3 for RGB.
 	readonly channels: number
@@ -560,10 +540,10 @@ async function publishNew(temporary: string, target: string): Promise<boolean> {
 
 // Open image documents of every client. The pixels live in the image worker; this side tracks the
 // open ids, so unknown ones are answered without a round trip, and relays requests to the worker.
-// A document a client opened from a file or claimed from a processing job is owned by it, and closed once the client is
+// A document a client opened from a file is owned by it, and closed once the client is
 // gone for DOCUMENT_GRACE, so a tab that reloaded or closed leaves no document behind; the services close their own.
 export class ImageStore implements Disposable, ClientListener {
-	// Client owning each document a client opened or claimed, by document id.
+	// Client owning each document a client opened, by document id.
 	readonly #owners = new Map<string, string>()
 	// Presence of the clients, closing the documents of one gone for the grace.
 	readonly #presence: ClientPresence
@@ -593,14 +573,6 @@ export class ImageStore implements Disposable, ClientListener {
 		this.#documents.set(response.info.id, { ...documentRecord(response.info), path: resolve(path) })
 		if (client !== undefined) this.#owners.set(response.info.id, client)
 		return response.info
-	}
-
-	// Makes client the owner of an open document, which closes with the client gone for the grace. Returns false for a
-	// document that is not open.
-	own(id: string, client: string): boolean {
-		if (!this.#documents.has(id)) return false
-		this.#owners.set(id, client)
-		return true
 	}
 
 	// Counts a socket of a client that opened, keeping its documents.
@@ -693,16 +665,16 @@ export class ImageStore implements Disposable, ClientListener {
 		throw responseError(response)
 	}
 
-	// Returns a new full copy of an open or retained document for an image processing pipeline, owned by the caller,
+	// Returns a new full copy of an open or retained document, such as the one a streak detection works on, owned by the caller,
 	// whose buffer may be transferred: the samples, precision, and min-max rescale of the read of the document,
 	// unchanged. A mono CFA mosaic with a trusted pattern names it at the image origin, in its metadata and in
-	// BAYERPAT without offsets, so the operations that follow the pattern (flips, cosmetic correction, debayer) use
+	// BAYERPAT without offsets, so the operations that follow the pattern use
 	// that one; any other image names none in its metadata. Resolves to undefined when the document is neither open
 	// nor retained.
-	async processingImage(id: string): Promise<Image | undefined> {
+	async fullCopy(id: string): Promise<Image | undefined> {
 		if (!this.#documents.has(id) && !this.#retained.has(id)) return undefined
-		const response = await this.#request({ type: 'processingImage', id: this.#id++, document: id })
-		if (response.status === 'processingImage') return response.image
+		const response = await this.#request({ type: 'fullCopy', id: this.#id++, document: id })
+		if (response.status === 'fullCopy') return response.image
 		if (response.status === 'missing') return undefined
 		throw responseError(response)
 	}
@@ -742,7 +714,7 @@ export class ImageStore implements Disposable, ClientListener {
 		throw responseError(response)
 	}
 
-	// Adopts the result of an image processing pipeline, or a live stack snapshot, as a new derived document, with the
+	// Adopts a live stack snapshot as a new derived document, with the
 	// floating-point header and the history of its provenance. The buffer of the image is transferred to the worker, so
 	// the caller must not use it afterwards.
 	async adopt(image: Image, provenance: ImageProvenance): Promise<ImageInfo> {

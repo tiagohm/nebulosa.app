@@ -374,7 +374,7 @@ export class StreakDetectionService implements Disposable {
 
 	// Runs a job on a worker and builds its result.
 	async #execute(entry: JobEntry): Promise<AnalysisCompletion<StreakDetectionJob, StreakDetectionResult>> {
-		const image = await this.images.processingImage(entry.job.imageId)
+		const image = await this.images.fullCopy(entry.job.imageId)
 		if (!image) throw new StreakDetectionError('expired', 'The image was released before it could be measured')
 		if (entry.controller.signal.aborted) throw new StreakDetectionError('cancelled', 'The streak detection was cancelled')
 		return this.#complete(entry, await this.#detect(entry, image))

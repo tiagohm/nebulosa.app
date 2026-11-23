@@ -35,7 +35,6 @@ import { createGuideOutputRoutes, GuideOutputCommands } from './guideoutputs'
 import { createGuidingRoutes, GuidingSessions } from './guiding'
 import { GuidingCalibrationStore } from './guidingcalibration.store'
 import { errorResponse } from './http'
-import { createImageProcessingRoutes, ImageProcessingService } from './imageprocessing'
 import { createImageRoutes, images } from './images'
 import { createImageStackingRoutes, ImageStacking } from './imagestacking'
 import { DEFAULT_IMAGE_STACKING_DIRECTORY, ImageStackingStore } from './imagestacking.store'
@@ -723,7 +722,6 @@ export type {
 	ImageRect,
 	LiveStackingProvenance,
 	LiveStackingProvenanceStack,
-	ProcessingProvenance,
 	RenderRequest,
 	RenderResult,
 	SampleConversion,
@@ -732,26 +730,6 @@ export type {
 	SaveResult,
 	Stretch,
 } from './images'
-export type {
-	ArcsinhStretchOperation,
-	BackgroundExtractionOperation,
-	BackgroundNeutralizationOperation,
-	CosmeticCorrectionOperation,
-	DebayerOperation,
-	GaussianBlurOperation,
-	GrayscaleOperation,
-	ImageProcessingClaimRequest,
-	ImageProcessingErrorCode,
-	ImageProcessingEvent,
-	ImageProcessingJob,
-	ImageProcessingOperation,
-	ImageProcessingOperationType,
-	ImageProcessingRequest,
-	ImageProcessingSnapshot,
-	ImageProcessingStep,
-	MultiscaleOperation,
-	PlainOperation,
-} from './imageprocessing'
 export type {
 	CohortTarget,
 	ImageStackingErrorCode,
@@ -1197,9 +1175,6 @@ const imageStatistics = new ImageStatisticsService(images, broadcast)
 // Annotation of the image documents with the sky catalog and SkyBoT, through the WCS of each image.
 const annotations = new AnnotationService(images, plateSolving, annotationSky, broadcast)
 
-// Image processing pipelines of the image documents, each adopting its result as a new derived document.
-const imageProcessing = new ImageProcessingService(images, broadcast)
-
 // Index of the captured frames of every camera, holding their documents for the Images workspace; the leases of a tab
 // follow its event sockets, and cameras are republished when their connection state changes.
 const captureFrames = new CaptureFrameRegistry(images, broadcast, {
@@ -1461,7 +1436,6 @@ const RESOURCES: readonly Disposable[] = [
 	stars,
 	streaks,
 	imageStatistics,
-	imageProcessing,
 	images,
 	operations,
 	connections,
@@ -1607,7 +1581,6 @@ export const routes = {
 	...createTargetCenteringRoutes(targetCentering),
 	...createFileRoutes(),
 	...createImageRoutes(images),
-	...createImageProcessingRoutes(imageProcessing),
 	...createExternalToolsRoutes(externalTools),
 	...createQuadIndexDownloadRoutes(quadIndexes),
 	...createObservatoryCameraRoutes(observatoryCameras),

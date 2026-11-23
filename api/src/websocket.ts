@@ -14,7 +14,6 @@ import type { FlatWizardEvent } from './flatwizard'
 import type { FocuserBacklashEvent } from './focusers'
 import type { FramingEvent } from './framings'
 import type { GuidingServerEvent } from './guiding'
-import type { ImageProcessingEvent } from './imageprocessing'
 import type { ImageStackingEvent } from './imagestacking'
 import type { ImageStatisticsEvent } from './imagestatistics'
 import type { IndiClientMessage, IndiServerEvent } from './indi'
@@ -55,7 +54,7 @@ import type { WorkspaceEvent } from './workspace'
 // Any event pushed to the browser tabs: connection and device events of the connection registry, the operation events
 // of the operation registry, the events of the capture, Auto Focus, TPPA, iPolar, mount pointing, mount nudge, mount remote control, meridian flip monitor, and dome manual rotation services,
 // the captured frames of the frame registry, the guiding sessions, the changes of the external program settings, of the observatory cameras, and of the focuser backlash
-// compensations, the star detection, streak detection, plate solving, annotation, and image processing jobs, the created notifications, the changes and acquisition jobs of the SPICE Kernel Library, the saves of the Jupiter Great Red Spot model, the refreshed meteor shower catalog, the INDI device directory
+// compensations, the star detection, streak detection, plate solving, and annotation jobs, the created notifications, the changes and acquisition jobs of the SPICE Kernel Library, the saves of the Jupiter Great Red Spot model, the refreshed meteor shower catalog, the INDI device directory
 // and property streams, and the INDI message streams and global messages.
 export type ServerEvent =
 	| ConnectionRegistryEvent
@@ -90,7 +89,6 @@ export type ServerEvent =
 	| ImageStatisticsEvent
 	| PlateSolvingEvent
 	| AnnotationEvent
-	| ImageProcessingEvent
 	| FocuserBacklashEvent
 	| GuidingServerEvent
 	| NotificationEvent

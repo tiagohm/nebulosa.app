@@ -105,8 +105,6 @@ export const ICONS = {
 	streakDetection: 'M3 7V3h4M17 3h4v4M21 17v4h-4M7 21H3v-4M7.5 16.5l9-9M7 8h.01M17 16.5h.01M12.5 17h.01',
 	// An object ringed and labeled by a leader line.
 	annotation: 'M5 16a3 3 0 1 0 6 0a3 3 0 1 0-6 0M10.2 13.8L15 9h6M15 5.5h6',
-	// A wand with sparkles: transforms that produce a new image.
-	wand: 'M4 20l10-10M14 10l2-2M17 2.5v3M15.5 4h3M20.5 8v2M19.5 9h2M10.5 3.5v2M9.5 4.5h2',
 	// The blades of a camera aperture: an exposure.
 	shutter: 'M12 2a10 10 0 1 0 0 20a10 10 0 1 0 0-20M14.31 8l5.74 9.94M9.69 8h11.48M7.38 12l5.74-9.94M9.69 16L3.95 6.06M14.31 16H2.83M16.62 12l-5.74 9.94',
 	// Stacked frames with a play mark: frames integrated as they arrive.

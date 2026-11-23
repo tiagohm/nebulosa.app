@@ -1,6 +1,5 @@
 import type {
 	AnnotationBodies,
-	ImageProcessingOperation,
 	AutoFocusRequest,
 	CaptureDither,
 	CaptureRequest,
@@ -83,10 +82,7 @@ export interface ProfileSettings {
 	// Whether the camera tabs of Images hide their bottom area (the frames carousel or the Focus Curve); absent shows it.
 	// View state.
 	framesHidden?: boolean
-	// Image Processing pipeline edited last, which every document opened next starts with; absent until edited. Tab
-	// memory; jobs and their outputs are never stored.
-	imageProcessing?: readonly ImageProcessingPresetStep[]
-	// Display settings applied last in Images to a file or derived image, which every image opened next starts with;
+	// Display settings applied last in Images to a file, which every image opened next starts with;
 	// absent until the first one is applied. Camera frames use those of their camera (CameraSettings display).
 	imageDisplay?: DisplaySettings
 	// Preferences of the Sky workspace.
@@ -170,14 +166,6 @@ export const DEFAULT_ANNOTATION_PREFERENCES: AnnotationPreferences = {
 	magnitudeLimit: 12,
 	bodies: { solarSystem: true, satellite: true, minorBody: true },
 	centerSelected: true,
-}
-
-// Step of the Image Processing pipeline a profile keeps.
-export interface ImageProcessingPresetStep {
-	// Whether Run applies it.
-	readonly enabled: boolean
-	// Operation and its parameters.
-	readonly operation: ImageProcessingOperation
 }
 
 // Observing modes of the Astro Weather tool, in the order offered.

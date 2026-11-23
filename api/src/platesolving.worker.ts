@@ -28,7 +28,8 @@ import { errorCode } from './util'
 declare const self: Worker
 
 // Stars detected in an image for a solve, brightest first; the solver uses the brightest of them.
-const DETECTED_STARS = 500
+// TODO(Tiago): Reduzir o número de estrelas acelerou o plate solver, mas não sei qual o seu impacto em resolver diversos campos de visão.
+const DETECTED_STARS = 100
 
 // Size of the header of a .nqi file, bytes.
 const QUAD_INDEX_HEADER_SIZE = 512

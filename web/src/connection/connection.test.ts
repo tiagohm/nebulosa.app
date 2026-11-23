@@ -203,10 +203,6 @@ describe('alpaca discovery', () => {
 		expect(fillFromDiscovered({ name: '', host: '', port: 7624, type: 'ALPACA' }, { ...server, name: undefined }).name).toBe('192.168.0.20:11111')
 	})
 
-	test('keeps a name the operator typed', () => {
-		expect(fillFromDiscovered({ name: 'Rig', host: 'old', port: 1, type: 'ALPACA' }, server)).toEqual({ name: 'Rig', host: '192.168.0.20', port: 11111, type: 'ALPACA' })
-	})
-
 	test('describes the devices by count and kind', () => {
 		expect(discoveredDevices([])).toBe('No devices listed')
 		expect(

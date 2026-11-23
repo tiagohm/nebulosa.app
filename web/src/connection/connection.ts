@@ -138,10 +138,9 @@ export function discoveredDevices(devices: readonly DiscoveredAlpacaDevice[]): s
 	return `${devices.length} ${devices.length === 1 ? 'device' : 'devices'}: ${kinds.join(', ')}`
 }
 
-// Returns the form filled with a discovered Alpaca server: its host and port, and its name (else its endpoint) only when
-// the form has no name yet, so a name the operator typed is never replaced.
+// Returns the form filled with a discovered Alpaca server: its host and port, and its name (else its endpoint).
 export function fillFromDiscovered(form: ConnectionInput, server: DiscoveredAlpacaServer): ConnectionInput {
-	return { ...form, type: 'ALPACA', host: server.host, port: server.port, name: form.name.trim() ? form.name : (server.name ?? discoveredEndpoint(server)) }
+	return { ...form, type: 'ALPACA', host: server.host, port: server.port, name: server.name ?? discoveredEndpoint(server) }
 }
 
 // Refreshes of the open server connections, ordered against the events and answers that open or close one meanwhile.

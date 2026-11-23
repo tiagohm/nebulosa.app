@@ -258,7 +258,7 @@ function ConnectionForm({ connection, onDone }: ConnectionFormProps) {
 			<Select label="Type" className="flex-none" options={CONNECTION_TYPES} format={typeLabel} value={form.type} onChange={(type) => setForm({ ...form, type })} />
 			{form.type === 'ALPACA' && <AlpacaDiscovery form={form} onPick={(server) => setForm(fillFromDiscovered(form, server))} />}
 			<div className="grid grid-cols-[minmax(0,1fr)_11rem] gap-4">
-				<TextInput type="url" disabled={form.type === 'SIMULATOR'} title={form.type === 'SIMULATOR' ? 'The simulator runs inside the Nebulosa server' : undefined} label="Host" placeholder="192.168.0.10" value={form.host} onChange={(e) => setForm({ ...form, host: e.target.value })} />
+				<TextInput inputMode="url" disabled={form.type === 'SIMULATOR'} title={form.type === 'SIMULATOR' ? 'The simulator runs inside the Nebulosa server' : undefined} label="Host" placeholder="192.168.0.10" value={form.host} onChange={(e) => setForm({ ...form, host: e.target.value })} />
 				<NumberInput disabled={form.type === 'SIMULATOR'} label="Port" min={1} max={65535} value={form.port} onChange={(port) => setForm({ ...form, port })} />
 			</div>
 			<div className="mt-1 flex flex-wrap items-center gap-2">
@@ -329,7 +329,7 @@ function AlpacaDiscovery({ form, onPick }: AlpacaDiscoveryProps) {
 			</div>
 			{view.kind === 'found' && (
 				<div className="max-h-56 overflow-y-auto">
-					<List emptyText="No Alpaca server answered. The search reaches only the network of the Nebulosa server, and only servers with discovery turned on and UDP port 32227 open in their firewall.">
+					<List className="pe-1" emptyText="No Alpaca server answered. The search reaches only the network of the Nebulosa server, and only servers with discovery turned on and UDP port 32227 open in their firewall.">
 						{view.servers.map((server) => {
 							const endpoint = discoveredEndpoint(server)
 							const saved = connections.find((c) => sameEndpoint({ type: 'ALPACA', host: server.host, port: server.port }, c))

@@ -124,6 +124,21 @@ function zoneOffset(time: number, timeZone: string) {
 	return Date.UTC(wall.year, wall.month - 1, wall.day, wall.hour, wall.minute, wall.second) - whole
 }
 
+// Half a year, in milliseconds: the second instant zoneSolarDifference reads a zone's offset at, so one of the two falls
+// outside daylight saving time.
+const HALF_YEAR_MS = 182 * DAY_MS
+
+// Returns how far a time zone's clock runs ahead of the mean solar time at a longitude (degrees, east positive), in hours,
+// negative when it runs behind: the zone's offset minus longitude / 15. Of the offsets at an instant (Unix milliseconds)
+// and half a year later, the one nearer the solar time is used, so daylight saving time alone never widens it. Civil
+// zones keep within about 3 h of it, so a larger difference points to a zone chosen for another place; it never chooses
+// one.
+export function zoneSolarDifference(timeZone: string, longitude: number, time: number): number {
+	const solar = longitude / 15
+	const [a, b] = [zoneOffset(time, timeZone), zoneOffset(time + HALF_YEAR_MS, timeZone)].map((offset) => offset / 3_600_000 - solar)
+	return Math.abs(a) <= Math.abs(b) ? a : b
+}
+
 // Instant a wall-clock reading names in a time zone: one instant, two when the clocks went back and read it twice (the
 // earlier and the later, in time order), or none when the clocks went forward over it.
 export type WallTimeInstant = { readonly kind: 'exact'; readonly time: number } | { readonly kind: 'ambiguous'; readonly earlier: number; readonly later: number } | { readonly kind: 'nonexistent' }

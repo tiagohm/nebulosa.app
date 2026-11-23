@@ -35,12 +35,18 @@ export function revealOffset(index: number, top: number, height: number, pitch: 
 	return undefined
 }
 
-// Returns the lowercase words of a search query, split at white space; empty for a blank query.
-export function searchWords(query: string): string[] {
-	return query.toLowerCase().split(/\s+/).filter(Boolean)
+// Returns text as the search compares it: lowercase, with the minus sign (U+2212) of typeset offsets and signed values
+// read as the hyphen-minus a keyboard types, so "-03" finds "UTC−03:00".
+export function searchText(text: string): string {
+	return text.toLowerCase().replaceAll('−', '-')
 }
 
-// Returns the indices, in order, of the lowercase texts that contain every word, or undefined when there are no words,
+// Returns the words of a search query as searchText compares them, split at white space; empty for a blank query.
+export function searchWords(query: string): string[] {
+	return searchText(query).split(/\s+/).filter(Boolean)
+}
+
+// Returns the indices, in order, of the texts, as searchText gives them, that contain every word, or undefined when there are no words,
 // which keeps every item without allocating an index per item.
 export function matchingIndices(texts: readonly string[], words: readonly string[]): readonly number[] | undefined {
 	if (words.length === 0) return undefined
@@ -54,7 +60,7 @@ export function matchingIndices(texts: readonly string[], words: readonly string
 	return indices
 }
 
-// Returns the indices, in order, of the items whose text (lowercased once per item, and only while the query has words)
+// Returns the indices, in order, of the items whose text (passed through searchText once per item, and only while the query has words)
 // contains every word of `query`, or undefined while the query is blank or `text` is absent, which keeps every item. The
 // search runs on every change of the query, never deferred, so what is shown always matches the field and a key pressed
 // right after typing acts on it; pass a stable `text` (memoized on what it reads) so the texts are not rebuilt on every
@@ -62,7 +68,7 @@ export function matchingIndices(texts: readonly string[], words: readonly string
 export function useSearch<T>(items: readonly T[], text: ((item: T) => string) | undefined, query: string): readonly number[] | undefined {
 	const words = useMemo(() => searchWords(query), [query])
 	const searching = text !== undefined && words.length > 0
-	const texts = useMemo(() => (searching ? items.map((item) => text(item).toLowerCase()) : undefined), [items, text, searching])
+	const texts = useMemo(() => (searching ? items.map((item) => searchText(text(item))) : undefined), [items, text, searching])
 	return useMemo(() => texts && matchingIndices(texts, words), [texts, words])
 }
 

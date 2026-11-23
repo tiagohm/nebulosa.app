@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { describeDisplayZone, type DisplayZoneOverride, resolveDisplayZone, wallTimeToInstant, zonedWallTime } from './zone'
+import { describeDisplayZone, type DisplayZoneOverride, resolveDisplayZone, wallTimeToInstant, zonedWallTime, zoneSolarDifference } from './zone'
 
 const HOME = { timeZone: 'America/Sao_Paulo' }
 const BROWSER = 'Europe/Berlin'
@@ -58,4 +58,13 @@ test('wall times the clocks repeat or skip are named, never moved', () => {
 	expect(wallTimeToInstant({ year: 2025, month: 11, day: 2, hour: 1, minute: 30, second: 0 }, 'America/New_York')).toEqual({ kind: 'ambiguous', earlier: Date.UTC(2025, 10, 2, 5, 30), later: Date.UTC(2025, 10, 2, 6, 30) })
 	// São Paulo had daylight saving time until 2019: midnight of 2018-11-04 was skipped.
 	expect(wallTimeToInstant({ year: 2018, month: 11, day: 4, hour: 0, minute: 30, second: 0 }, 'America/Sao_Paulo')).toEqual({ kind: 'nonexistent' })
+})
+
+test('the solar difference of a zone is its offset less the longitude in hours, outside daylight saving time', () => {
+	const july = Date.UTC(2026, 6, 1)
+	expect(zoneSolarDifference('America/Sao_Paulo', -45, july)).toBeCloseTo(0, 9)
+	expect(zoneSolarDifference('UTC', -46.6, july)).toBeCloseTo(46.6 / 15, 9)
+	expect(zoneSolarDifference('Asia/Tokyo', -46.6, july)).toBeCloseTo(9 + 46.6 / 15, 9)
+	expect(zoneSolarDifference('Europe/Madrid', -8, july)).toBeCloseTo(1 + 8 / 15, 9)
+	expect(zoneSolarDifference('Europe/Madrid', -8, Date.UTC(2026, 0, 1))).toBeCloseTo(1 + 8 / 15, 9)
 })

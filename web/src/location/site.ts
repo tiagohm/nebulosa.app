@@ -19,6 +19,9 @@ export const MIN_SITE_ELEVATION = -500
 // Highest elevation accepted for a site, in meters (above Everest, 8849 m).
 export const MAX_SITE_ELEVATION = 9000
 
+// Decimals the coordinates of a site are shown with, in degrees: 1e-5° is about 1 m on the Earth.
+export const SITE_DECIMALS = 5
+
 // Editable fields of an observing site.
 export type ObservingSiteInput = Omit<SavedObservingSite, 'id' | 'revision'>
 

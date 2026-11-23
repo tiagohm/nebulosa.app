@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { matchingIndices, revealOffset, rowRange, searchWords, selectRows } from './virtual'
+import { matchingIndices, revealOffset, rowRange, searchText, searchWords, selectRows } from './virtual'
 
 describe('rowRange', () => {
 	test('draws the rows in view and the overscan around them', () => {
@@ -39,6 +39,13 @@ describe('search', () => {
 	test('splits a query into lowercase words', () => {
 		expect(searchWords('  Saturn  BARY ')).toEqual(['saturn', 'bary'])
 		expect(searchWords('   ')).toEqual([])
+	})
+
+	test('reads the minus sign as the hyphen-minus a keyboard types', () => {
+		const texts = ['America/Sao_Paulo (UTC−03:00)', 'Asia/Tokyo (UTC+09:00)'].map(searchText)
+		expect(matchingIndices(texts, searchWords('-03'))).toEqual([0])
+		expect(matchingIndices(texts, searchWords('−03'))).toEqual([0])
+		expect(matchingIndices(texts, searchWords('+09'))).toEqual([1])
 	})
 
 	test('keeps every item for a blank query', () => {

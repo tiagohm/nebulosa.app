@@ -28,7 +28,7 @@ It is the hub of planning: from it the operator points the mount and hands targe
 - The projection is fixed: centering on a coordinate only pans the view, and a point the map cannot project, or a selection below the horizon, is said so rather than ignored.
 - Positions handed to or from the map are J2000; the map converts them to the frame of its data, so they line up with the stars drawn.
 - An empty click selects at most one Sky Point, a fixed coordinate that can be slewed to, framed, or planned, but never a favorite.
-- An object's altitude is refracted; the Sky Point's, like the mount's, is geometric, since a coordinate sends no light to bend, and it rises and sets at the 0° horizon.
+- An object's altitude is refracted; the Sky Point's and a constellation label's, like the mount's, are geometric, since a coordinate sends no light to bend, and they rise and set at the 0° horizon.
 - A meteor radiant is a direction, not an object: it is never slewed to, framed, or added to a plan.
 - Handoffs to and from the map never move the Sky clock, the mount, the profile, or its site, except the Show in Sky of the planetary planners, which sets the Sky clock.
 - Every request of the process to JPL (Horizons, SBDB, CAD) goes through one shared queue (`api/src/ssd.ts`), one at a time as its fair-use policy asks; a refusal pauses the queue instead of being retried, so an accurate position may wait.

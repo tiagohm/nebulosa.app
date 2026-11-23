@@ -74,8 +74,8 @@ export interface ObserverSectionProps {
 	readonly timeZone: string
 }
 
-// Horizontal coordinates and events for the observer, or an invitation to set one. `geometric` marks the Sky point,
-// whose altitudes are geometric and whose rise and set are at the 0° horizon.
+// Horizontal coordinates and events for the observer, or an invitation to set one. `geometric` marks a fixed point, the
+// Sky point or a constellation's label, whose altitudes are geometric and whose rise and set are at the 0° horizon.
 export function ObserverSection({ position, events, hasObserver, onSetObserver, isSolarSystem, geometric = false, timeZone }: ObserverSectionProps) {
 	if (!hasObserver || position.altitude === undefined || position.azimuth === undefined) {
 		return (

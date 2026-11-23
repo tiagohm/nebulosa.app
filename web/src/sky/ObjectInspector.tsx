@@ -73,7 +73,17 @@ export function ObjectInspector({ observer, onSetObserver, timeZone, onOpenFrami
 				<ObjectActions target={selection.ref} targetName={selection.name} observer={observer} onOpenFraming={onOpenFraming} />
 			</CollapsibleSection>
 			<PositionSection selection={selection} timeZone={timeZone} />
-			{position && <ObserverSection position={position} events={events} hasObserver={hasObserver} onSetObserver={onSetObserver} isSolarSystem={selection.ref.kind === 'body' || selection.ref.kind === 'minorBody'} geometric={selection.ref.kind === 'coordinates'} timeZone={timeZone} />}
+			{position && (
+				<ObserverSection
+					position={position}
+					events={events}
+					hasObserver={hasObserver}
+					onSetObserver={onSetObserver}
+					isSolarSystem={selection.ref.kind === 'body' || selection.ref.kind === 'minorBody'}
+					geometric={selection.ref.kind === 'coordinates' || selection.ref.kind === 'constellation'}
+					timeZone={timeZone}
+				/>
+			)}
 			{catalog && <CatalogSection catalog={catalog} />}
 			{minorBody && <MinorBodySection body={minorBody} />}
 		</>

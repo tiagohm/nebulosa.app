@@ -82,7 +82,7 @@ function refKey(ref: SkyObjectRef) {
 export type SkyLocator = (ref: SkyObjectRef, request: PositionRequest) => Promise<SkyPosition | undefined>
 
 // Resolves an object identity to an ephemeris target; undefined for an unknown catalog id or
-// constellation. Fixed coordinates are a geometric J2000 point without proper motion. A minor body whose elements cannot be read from SBDB is still resolved, for Horizons or the SPK kernels
+// constellation. Fixed coordinates and a constellation's label are geometric J2000 points without proper motion. A minor body whose elements cannot be read from SBDB is still resolved, for Horizons or the SPK kernels
 // alone; while the ephemeris sources are offline, its elements come only from what SBDB already answered. A
 // satellite and a meteor shower radiant have no ephemeris target.
 async function resolveTarget({ catalog, constellations, ephemeris, minorBodies }: SkyServices, ref: SkyObjectRef, signal?: AbortSignal): Promise<EphemerisTarget | undefined> {
@@ -97,7 +97,7 @@ async function resolveTarget({ catalog, constellations, ephemeris, minorBodies }
 
 	if (ref.kind === 'constellation') {
 		const constellation = constellationDetails(constellations, ref.code)
-		return constellation && { type: 'catalog', object: { rightAscension: constellation.rightAscension, declination: constellation.declination, pmRA: 0, pmDEC: 0 } }
+		return constellation && { type: 'catalog', object: { rightAscension: constellation.rightAscension, declination: constellation.declination, pmRA: 0, pmDEC: 0 }, geometric: true }
 	}
 
 	if (!ephemeris.remoteAllowed) return { type: 'minorBody', spkId: ref.spkId, elements: minorBodies.cached(ref.spkId)?.elements }

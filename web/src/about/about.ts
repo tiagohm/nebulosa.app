@@ -88,13 +88,14 @@ export const CREDIT_GROUPS: readonly CreditGroup[] = [
 			},
 			{ name: 'Nova Astrometry.net', owner: 'Astrometry.net', url: 'https://nova.astrometry.net/', use: 'Optional online plate solving, with your own account.' },
 			{ name: 'Google Drive', owner: 'Google', url: 'https://drive.google.com/', use: 'Hosting of the quad index bands the built-in plate solver downloads on request.' },
-			{
+			// Not used yet
+			/* {
 				name: 'Gaia DR3',
 				owner: 'ESA/Gaia/DPAC',
 				url: 'https://www.cosmos.esa.int/gaia',
 				use: 'Stars of the quad index files bun make:quads builds for the built-in plate solver, downloaded from the Gaia Archive.',
 				notice: 'This work has made use of data from the European Space Agency (ESA) mission Gaia (https://www.cosmos.esa.int/gaia), processed by the Gaia Data Processing and Analysis Consortium (DPAC, https://www.cosmos.esa.int/web/gaia/dpac/consortium). Funding for the DPAC has been provided by national institutions, in particular the institutions participating in the Gaia Multilateral Agreement. Gaia Collaboration, Vallenari, A. et al., A&A 674, A1 (2023).',
-			},
+			}, */
 		],
 	},
 	{

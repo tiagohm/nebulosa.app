@@ -84,7 +84,7 @@ describe('location and zone', () => {
 
 	test('the night is named in the zone of the location even when the times are shown in UTC', () => {
 		const state = newState()
-		expect(resolveDisplayZone('utc', undefined, SITE).zone).toBe('UTC')
+		expect(resolveDisplayZone({ displayTimeZone: 'utc' }, undefined, SITE).zone).toBe('UTC')
 
 		const { io, calls } = deferred()
 		followSite(state, { ...SITE, name: 'Home' }, io)

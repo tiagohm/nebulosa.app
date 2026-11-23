@@ -210,9 +210,9 @@ export interface CloseApproachPreferences {
 // Preferences of a profile that has not edited them: lunar distances and the Earth within 10 LD.
 export const DEFAULT_CLOSE_APPROACH_PREFERENCES: CloseApproachPreferences = { distanceDisplay: 'LD', body: 'Earth', distanceMax: 10, distanceUnit: 'LD' }
 
-// Zones civil times can be shown in by default: the observing site's (the browser's when there is none), UTC, or the
-// browser's.
-export const DISPLAY_TIME_ZONE_MODES = ['site', 'utc', 'browser'] as const
+// Zones civil times can be shown in by default: the observing site's (the browser's when there is none), UTC, the
+// browser's, which each device reads for itself, or one IANA zone, the same on every device.
+export const DISPLAY_TIME_ZONE_MODES = ['site', 'utc', 'browser', 'zone'] as const
 
 // Zone civil times are shown in by default.
 export type DisplayTimeZoneMode = (typeof DISPLAY_TIME_ZONE_MODES)[number]
@@ -221,6 +221,9 @@ export type DisplayTimeZoneMode = (typeof DISPLAY_TIME_ZONE_MODES)[number]
 export interface DateTimePreferences {
 	// Zone of the civil times every screen shows unless a tool overrides it.
 	readonly displayTimeZone: DisplayTimeZoneMode
+	// IANA zone of the zone mode; absent until one is chosen, and then UTC holds. Kept while another mode is chosen, so
+	// choosing the zone mode again brings it back.
+	readonly timeZone?: string
 }
 
 // Preferences of a profile that has not edited them: times in the observing site's zone.

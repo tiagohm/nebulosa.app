@@ -116,13 +116,13 @@ describe('request', () => {
 	test('the site zone is the zone of the location the tool uses, typed coordinates included', () => {
 		const state = initialAstronomicalTimeState()
 		const active = resolveToolLocation(state.location, SITE.id, [SITE])
-		expect(resolveDisplayZone('site', state.zone, active, 'Europe/Paris')).toEqual({ zone: 'America/Sao_Paulo', source: 'site' })
+		expect(resolveDisplayZone({ displayTimeZone: 'site' }, state.zone, active, 'Europe/Paris')).toEqual({ zone: 'America/Sao_Paulo', source: 'site' })
 		setConverterLocation(state, { mode: 'manual', latitude: 35, longitude: 139, elevation: 40, timeZone: 'Asia/Tokyo' })
 		const typed = resolveToolLocation(state.location, SITE.id, [SITE])
-		expect(resolveDisplayZone('site', state.zone, typed, 'Europe/Paris')).toEqual({ zone: 'Asia/Tokyo', source: 'site' })
-		expect(resolveDisplayZone('site', state.zone, undefined, 'Europe/Paris')).toEqual({ zone: 'Europe/Paris', source: 'browserFallback' })
+		expect(resolveDisplayZone({ displayTimeZone: 'site' }, state.zone, typed, 'Europe/Paris')).toEqual({ zone: 'Asia/Tokyo', source: 'site' })
+		expect(resolveDisplayZone({ displayTimeZone: 'site' }, state.zone, undefined, 'Europe/Paris')).toEqual({ zone: 'Europe/Paris', source: 'browserFallback' })
 		setConverterZone(state, { mode: 'zone', zone: 'Asia/Kolkata' })
-		expect(resolveDisplayZone('site', state.zone, typed, 'Europe/Paris').zone).toBe('Asia/Kolkata')
+		expect(resolveDisplayZone({ displayTimeZone: 'site' }, state.zone, typed, 'Europe/Paris').zone).toBe('Asia/Kolkata')
 	})
 
 	test('asks for the current time at the location, with its elevation, in the zone resolved', () => {

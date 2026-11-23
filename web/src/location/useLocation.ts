@@ -25,7 +25,7 @@ export function useToolLocation(location: ToolLocation): ResolvedLocation | unde
 // screen has no place of its own), under the override of the screen, if any.
 export function useDisplayZone(site: { readonly timeZone: string } | undefined, override?: DisplayZoneOverride): DisplayZone {
 	const profiles = useSnapshot(profileState)
-	return resolveDisplayZone(dateTimePreferences(activeProfile(profiles).settings).displayTimeZone, override, site)
+	return resolveDisplayZone(dateTimePreferences(activeProfile(profiles).settings), override, site)
 }
 
 // Returns the active profile's site as the place a tool observes from; undefined when the profile has none.

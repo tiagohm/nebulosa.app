@@ -254,7 +254,7 @@ export function ObservingSiteEditor({ site, onDirtyChange, onSaved, onClosed }: 
 							</div>
 							{draft.timeZone !== BROWSER_TIME_ZONE && (
 								<Button variant="secondary" className="justify-start self-start text-left" onClick={() => edit({ timeZone: BROWSER_TIME_ZONE })}>
-									Use the Browser Time Zone ({BROWSER_TIME_ZONE})
+									Use This Device's Time Zone ({BROWSER_TIME_ZONE})
 								</Button>
 							)}
 							<Actions>

@@ -1,14 +1,22 @@
 import { expect, test } from 'bun:test'
-import { describeDisplayZone, type DisplayZoneOverride, resolveDisplayZone, wallTimeToInstant, zonedWallTime, zoneSolarDifference } from './zone'
+import { describeDisplayZone, type DisplayZoneOverride, nextOffsetChange, resolveDisplayZone, wallTimeToInstant, zonedWallTime, zoneSolarDifference } from './zone'
 
 const HOME = { timeZone: 'America/Sao_Paulo' }
 const BROWSER = 'Europe/Berlin'
 
 test('the profile default shows the site, UTC, or the browser zone, and the browser zone stands in for no site', () => {
-	expect(resolveDisplayZone('site', undefined, HOME, BROWSER)).toEqual({ zone: 'America/Sao_Paulo', source: 'site' })
-	expect(resolveDisplayZone('utc', undefined, HOME, BROWSER)).toEqual({ zone: 'UTC', source: 'utc' })
-	expect(resolveDisplayZone('browser', undefined, HOME, BROWSER)).toEqual({ zone: BROWSER, source: 'browser' })
-	expect(resolveDisplayZone('site', undefined, undefined, BROWSER)).toEqual({ zone: BROWSER, source: 'browserFallback' })
+	expect(resolveDisplayZone({ displayTimeZone: 'site' }, undefined, HOME, BROWSER)).toEqual({ zone: 'America/Sao_Paulo', source: 'site' })
+	expect(resolveDisplayZone({ displayTimeZone: 'utc' }, undefined, HOME, BROWSER)).toEqual({ zone: 'UTC', source: 'utc' })
+	expect(resolveDisplayZone({ displayTimeZone: 'browser' }, undefined, HOME, BROWSER)).toEqual({ zone: BROWSER, source: 'browser' })
+	expect(resolveDisplayZone({ displayTimeZone: 'site' }, undefined, undefined, BROWSER)).toEqual({ zone: BROWSER, source: 'browserFallback' })
+})
+
+test('the zone mode of the profile shows its own zone, UTC until one is chosen, with or without a site', () => {
+	expect(resolveDisplayZone({ displayTimeZone: 'zone', timeZone: 'Asia/Tokyo' }, undefined, HOME, BROWSER)).toEqual({ zone: 'Asia/Tokyo', source: 'zone' })
+	expect(resolveDisplayZone({ displayTimeZone: 'zone', timeZone: 'Asia/Tokyo' }, undefined, undefined, BROWSER)).toEqual({ zone: 'Asia/Tokyo', source: 'zone' })
+	expect(resolveDisplayZone({ displayTimeZone: 'zone' }, undefined, HOME, BROWSER)).toEqual({ zone: 'UTC', source: 'zone' })
+	expect(resolveDisplayZone({ displayTimeZone: 'zone', timeZone: 'Asia/Tokyo' }, { mode: 'site' }, HOME, BROWSER).zone).toBe('America/Sao_Paulo')
+	expect(resolveDisplayZone({ displayTimeZone: 'site', timeZone: 'Asia/Tokyo' }, undefined, HOME, BROWSER).zone).toBe('America/Sao_Paulo')
 })
 
 test('a tool override wins over the default, and default follows it', () => {
@@ -20,19 +28,31 @@ test('a tool override wins over the default, and default follows it', () => {
 		[{ mode: 'zone', zone: 'Asia/Kathmandu' }, 'Asia/Kathmandu'],
 	]
 
-	for (const [override, zone] of overrides) expect(resolveDisplayZone('utc', override, HOME, BROWSER).zone).toBe(zone)
+	for (const [override, zone] of overrides) expect(resolveDisplayZone({ displayTimeZone: 'utc' }, override, HOME, BROWSER).zone).toBe(zone)
 })
 
 test('the site mode takes the site of the tool, not the active one', () => {
 	const other = { timeZone: 'Pacific/Kiritimati' }
-	expect(resolveDisplayZone('site', { mode: 'default' }, other, BROWSER)).toEqual({ zone: 'Pacific/Kiritimati', source: 'site' })
-	expect(resolveDisplayZone('utc', { mode: 'site' }, other, BROWSER).zone).toBe('Pacific/Kiritimati')
+	expect(resolveDisplayZone({ displayTimeZone: 'site' }, { mode: 'default' }, other, BROWSER)).toEqual({ zone: 'Pacific/Kiritimati', source: 'site' })
+	expect(resolveDisplayZone({ displayTimeZone: 'utc' }, { mode: 'site' }, other, BROWSER).zone).toBe('Pacific/Kiritimati')
 })
 
 test('a resolved zone is named with why it shows the times', () => {
 	expect(describeDisplayZone({ zone: 'UTC', source: 'utc' })).toBe('UTC')
 	expect(describeDisplayZone({ zone: 'America/Sao_Paulo', source: 'site' })).toBe('America/Sao_Paulo (site)')
-	expect(describeDisplayZone({ zone: BROWSER, source: 'browserFallback' })).toBe('Europe/Berlin (browser, no site)')
+	expect(describeDisplayZone({ zone: BROWSER, source: 'browser' })).toBe('Europe/Berlin (this device)')
+	expect(describeDisplayZone({ zone: BROWSER, source: 'browserFallback' })).toBe('Europe/Berlin (this device, no site)')
+	expect(describeDisplayZone({ zone: 'Asia/Tokyo', source: 'zone' })).toBe('Asia/Tokyo')
+})
+
+test('the next offset change of a zone is found to the second, and none for a zone without one', () => {
+	const time = Date.UTC(2026, 10, 23, 12)
+	expect(nextOffsetChange('Europe/Berlin', time)).toEqual({ time: Date.UTC(2027, 2, 28, 1), before: 3_600_000, after: 7_200_000 })
+	expect(nextOffsetChange('America/New_York', time)).toEqual({ time: Date.UTC(2027, 2, 14, 7), before: -18_000_000, after: -14_400_000 })
+	expect(nextOffsetChange('Australia/Lord_Howe', Date.UTC(2026, 9, 1))).toEqual({ time: Date.UTC(2026, 9, 3, 15, 30), before: 37_800_000, after: 39_600_000 })
+	expect(nextOffsetChange('America/Sao_Paulo', time)).toBeUndefined()
+	expect(nextOffsetChange('UTC', time)).toBeUndefined()
+	expect(nextOffsetChange('Europe/Berlin', time, 86_400_000)).toBeUndefined()
 })
 
 test('wall times of a time zone, across midnight and unusual offsets', () => {

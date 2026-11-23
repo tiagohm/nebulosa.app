@@ -25,11 +25,11 @@ test('a click on the map keeps the zone of the coordinates entered before, or UT
 
 test('the site zone of the times is the zone of the location clicked, never the active site', () => {
 	const sites = [{ id: 'home', name: 'Home', latitude: -23.5, longitude: -46.6, elevation: 760, timeZone: 'America/Sao_Paulo' }]
-	expect(resolveDisplayZone('site', DEFAULT_ZONE_OVERRIDE, resolveToolLocation(ACTIVE_TOOL_LOCATION, 'home', sites))).toEqual({ zone: 'America/Sao_Paulo', source: 'site' })
+	expect(resolveDisplayZone({ displayTimeZone: 'site' }, DEFAULT_ZONE_OVERRIDE, resolveToolLocation(ACTIVE_TOOL_LOCATION, 'home', sites))).toEqual({ zone: 'America/Sao_Paulo', source: 'site' })
 
 	const clicked = mapLocation({ mode: 'manual', latitude: 0, longitude: 0, elevation: 0, timeZone: 'Asia/Tokyo' }, { longitude: 10, latitude: 20 })
-	expect(resolveDisplayZone('site', DEFAULT_ZONE_OVERRIDE, resolveToolLocation(clicked, 'home', sites))).toEqual({ zone: 'Asia/Tokyo', source: 'site' })
-	expect(resolveDisplayZone('site', DEFAULT_ZONE_OVERRIDE, resolveToolLocation(ACTIVE_TOOL_LOCATION, undefined, sites), 'Europe/Berlin')).toEqual({ zone: 'Europe/Berlin', source: 'browserFallback' })
+	expect(resolveDisplayZone({ displayTimeZone: 'site' }, DEFAULT_ZONE_OVERRIDE, resolveToolLocation(clicked, 'home', sites))).toEqual({ zone: 'Asia/Tokyo', source: 'site' })
+	expect(resolveDisplayZone({ displayTimeZone: 'site' }, DEFAULT_ZONE_OVERRIDE, resolveToolLocation(ACTIVE_TOOL_LOCATION, undefined, sites), 'Europe/Berlin')).toEqual({ zone: 'Europe/Berlin', source: 'browserFallback' })
 })
 
 test('places are the same for the same longitude and latitude', () => {

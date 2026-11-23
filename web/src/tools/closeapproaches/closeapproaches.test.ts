@@ -498,9 +498,9 @@ describe('formats', () => {
 
 	test("the times follow the profile's display zone against the active site, and say when no site stands behind them", () => {
 		const site = { timeZone: 'America/Sao_Paulo' }
-		expect(resolveDisplayZone('site', undefined, site, 'Europe/Paris')).toEqual({ zone: 'America/Sao_Paulo', source: 'site' })
-		expect(resolveDisplayZone('utc', undefined, site, 'Europe/Paris')).toEqual({ zone: 'UTC', source: 'utc' })
-		expect(resolveDisplayZone('site', undefined, undefined, 'Europe/Paris')).toEqual({ zone: 'Europe/Paris', source: 'browserFallback' })
+		expect(resolveDisplayZone({ displayTimeZone: 'site' }, undefined, site, 'Europe/Paris')).toEqual({ zone: 'America/Sao_Paulo', source: 'site' })
+		expect(resolveDisplayZone({ displayTimeZone: 'utc' }, undefined, site, 'Europe/Paris')).toEqual({ zone: 'UTC', source: 'utc' })
+		expect(resolveDisplayZone({ displayTimeZone: 'site' }, undefined, undefined, 'Europe/Paris')).toEqual({ zone: 'Europe/Paris', source: 'browserFallback' })
 	})
 
 	test('a distance states its unit, the LD being 384400 km', () => {

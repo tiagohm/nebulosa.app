@@ -1,5 +1,5 @@
 import { dateTimeFormat } from '../format'
-import type { DisplayTimeZoneMode } from '../profile/schema'
+import type { DateTimePreferences, DisplayTimeZoneMode } from '../profile/schema'
 
 // Civil time zones of the application, and the one rule that says which zone a civil time is shown in. A zone is always
 // named by its IANA identifier, never by an offset or an empty sentinel. Instants stay Unix milliseconds (UTC): the zone
@@ -7,7 +7,8 @@ import type { DisplayTimeZoneMode } from '../profile/schema'
 //
 // Which zone shows a time (resolveDisplayZone): a tool's own choice when it made one (an IANA zone, UTC, the browser's,
 // or the site of the tool); otherwise the profile's default (Settings → Date & Time): the observing site's zone, UTC,
-// or the browser's. The site is the location the tool uses, which may be another saved site than the profile's or
+// the browser's, or one IANA zone. The browser's is read by each device for itself, so two devices of one profile may
+// show the same instant at different clock times; every other choice reads the same everywhere. The site is the location the tool uses, which may be another saved site than the profile's or
 // coordinates typed in; without one the browser's zone stands in and says so. Which zone names a local day or night is
 // never this rule: it is always the zone of the place observed.
 
@@ -28,13 +29,13 @@ export const BROWSER_TIME_ZONE = new Intl.DateTimeFormat().resolvedOptions().tim
 
 // Zone a tool shows its civil times in: the profile's default, one of the default's choices for this tool only, or an
 // IANA zone.
-export type DisplayZoneOverride = { readonly mode: 'default' | DisplayTimeZoneMode } | { readonly mode: 'zone'; readonly zone: string }
+export type DisplayZoneOverride = { readonly mode: 'default' | Exclude<DisplayTimeZoneMode, 'zone'> } | { readonly mode: 'zone'; readonly zone: string }
 
 // The choice of a tool that follows the profile's default.
 export const DEFAULT_ZONE_OVERRIDE: DisplayZoneOverride = { mode: 'default' }
 
-// Why a zone shows the times: the site of the tool, UTC, the browser's, an IANA zone a tool chose, or the browser's
-// standing in for a site there is none of.
+// Why a zone shows the times: the site of the tool, UTC, the browser's, an IANA zone a tool or the profile chose, or the
+// browser's standing in for a site there is none of.
 export type DisplayZoneSource = 'site' | 'utc' | 'browser' | 'zone' | 'browserFallback'
 
 // Zone civil times are shown in, and why.
@@ -46,26 +47,28 @@ export interface DisplayZone {
 }
 
 // Returns the zone civil times are shown in: the override of the tool unless it is absent or default, then the
-// profile's preference. site is the location the tool uses, whose zone the site mode takes; without one the browser's
-// zone stands in (browserFallback). browserZone is the browser's zone.
-export function resolveDisplayZone(preference: DisplayTimeZoneMode, override: DisplayZoneOverride | undefined, site: { readonly timeZone: string } | undefined, browserZone: string = BROWSER_TIME_ZONE): DisplayZone {
+// profile's preferences, whose zone mode takes their zone (UTC until one is chosen). site is the location the tool uses,
+// whose zone the site mode takes; without one the browser's zone stands in (browserFallback). browserZone is the
+// browser's zone.
+export function resolveDisplayZone(preferences: DateTimePreferences, override: DisplayZoneOverride | undefined, site: { readonly timeZone: string } | undefined, browserZone: string = BROWSER_TIME_ZONE): DisplayZone {
 	if (override?.mode === 'zone') return { zone: override.zone, source: 'zone' }
-	const mode = override === undefined || override.mode === 'default' ? preference : override.mode
+	const mode = override === undefined || override.mode === 'default' ? preferences.displayTimeZone : override.mode
+	if (mode === 'zone') return { zone: preferences.timeZone ?? 'UTC', source: 'zone' }
 	if (mode === 'utc') return { zone: 'UTC', source: 'utc' }
 	if (mode === 'browser') return { zone: browserZone, source: 'browser' }
 	return site ? { zone: site.timeZone, source: 'site' } : { zone: browserZone, source: 'browserFallback' }
 }
 
-// Returns how a resolved zone is named to people: "America/Sao_Paulo (site)", "UTC", "Europe/Berlin (browser)",
-// "Europe/Berlin (browser, no site)".
+// Returns how a resolved zone is named to people: "America/Sao_Paulo (site)", "UTC", "Europe/Berlin (this device)",
+// "Europe/Berlin (this device, no site)".
 export function describeDisplayZone({ zone, source }: DisplayZone): string {
 	switch (source) {
 		case 'site':
 			return `${zone} (site)`
 		case 'browser':
-			return `${zone} (browser)`
+			return `${zone} (this device)`
 		case 'browserFallback':
-			return `${zone} (browser, no site)`
+			return `${zone} (this device, no site)`
 		default:
 			return zone
 	}
@@ -122,6 +125,47 @@ function zoneOffset(time: number, timeZone: string) {
 	const whole = Math.floor(time / 1000) * 1000
 	const wall = zonedWallTime(whole, timeZone)
 	return Date.UTC(wall.year, wall.month - 1, wall.day, wall.hour, wall.minute, wall.second) - whole
+}
+
+// How far ahead nextOffsetChange looks by default, in milliseconds: a year and two days, so a change made once a year is
+// always found.
+const OFFSET_CHANGE_HORIZON_MS = 367 * DAY_MS
+
+// Change of the offset of a time zone from UTC, such as the start or the end of daylight saving time.
+export interface OffsetChange {
+	// First instant of the new offset, Unix milliseconds, on a whole second.
+	readonly time: number
+	// Offset before the change, in milliseconds, east positive.
+	readonly before: number
+	// Offset from the change on, in milliseconds, east positive.
+	readonly after: number
+}
+
+// Returns the first change of the offset of a time zone from UTC after an instant (Unix milliseconds) and within horizon
+// (milliseconds, positive; a year and two days by default), or undefined when the offset holds all along, as in UTC or
+// a zone without daylight saving time. The offset is read once a day and the change found to the second between two
+// readings, so two changes within one day that cancel each other are not seen; no zone makes them.
+export function nextOffsetChange(timeZone: string, time: number, horizon: number = OFFSET_CHANGE_HORIZON_MS): OffsetChange | undefined {
+	const before = zoneOffset(time, timeZone)
+	const end = time + horizon
+
+	for (let start = time; start < end; start += DAY_MS) {
+		const next = Math.min(start + DAY_MS, end)
+		if (zoneOffset(next, timeZone) === before) continue
+		// Whole seconds: the offset of low is the one before the change, the offset of high is not.
+		let low = Math.floor(start / 1000)
+		let high = Math.ceil(next / 1000)
+
+		while (high - low > 1) {
+			const middle = Math.floor((low + high) / 2)
+			if (zoneOffset(middle * 1000, timeZone) === before) low = middle
+			else high = middle
+		}
+
+		return { time: high * 1000, before, after: zoneOffset(high * 1000, timeZone) }
+	}
+
+	return undefined
 }
 
 // Half a year, in milliseconds: the second instant zoneSolarDifference reads a zone's offset at, so one of the two falls

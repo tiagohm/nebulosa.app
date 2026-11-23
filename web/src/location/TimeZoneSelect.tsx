@@ -5,8 +5,9 @@ import { VirtualSelect } from '../ui/VirtualSelect'
 import { BROWSER_TIME_ZONE, describeDisplayZone, type DisplayZoneOverride, resolveDisplayZone, TIME_ZONES } from './zone'
 
 // Selector of the zone a tool shows its civil times in: the profile's default (named with the zone it gives now), the
-// site of the tool, UTC, the browser's, or any IANA zone. It changes how times read only: never an instant, a request,
-// the profile's default, or a site. The hundreds of zones are drawn only as they scroll into view and searched by name.
+// site of the tool, UTC, this device's (the browser's), or any IANA zone. It changes how times read only: never an
+// instant, a request, the profile's default, or a site. The hundreds of zones are drawn only as they scroll into view and
+// searched by name.
 
 export interface TimeZoneSelectProps {
 	// Label above the selector.
@@ -50,26 +51,26 @@ function valueOf(option: ZoneOption): DisplayZoneOverride {
 // Selector of the zone of a tool's civil times.
 export function TimeZoneSelect({ label = 'Time Zone', value, onChange, site, selectedSite = false, className }: TimeZoneSelectProps) {
 	const profiles = useSnapshot(profileState)
-	const preference = dateTimePreferences(activeProfile(profiles).settings).displayTimeZone
+	const preferences = dateTimePreferences(activeProfile(profiles).settings)
 	const siteName = selectedSite ? 'Selected Site' : 'Observing Site'
 
-	// Text of an option, kept stable while the preference and the site stay, so the search texts are not rebuilt.
+	// Text of an option, kept stable while the preferences and the site stay, so the search texts are not rebuilt.
 	const format = useCallback(
 		(option: ZoneOption) => {
 			switch (option) {
 				case 'default':
-					return `Default: ${describeDisplayZone(resolveDisplayZone(preference, undefined, site))}`
+					return `Default: ${describeDisplayZone(resolveDisplayZone(preferences, undefined, site))}`
 				case 'site':
-					return site ? `${siteName}: ${site.timeZone}` : `${siteName}: none, browser ${BROWSER_TIME_ZONE}`
+					return site ? `${siteName}: ${site.timeZone}` : `${siteName}: none, this device's ${BROWSER_TIME_ZONE}`
 				case 'utc':
 					return 'UTC'
 				case 'browser':
-					return `Browser: ${BROWSER_TIME_ZONE}`
+					return `This Device: ${BROWSER_TIME_ZONE}`
 				default:
 					return option.slice(5)
 			}
 		},
-		[preference, site, siteName],
+		[preferences, site, siteName],
 	)
 
 	return <VirtualSelect label={label} options={OPTIONS} value={optionOf(value)} format={format} group={groupOf} onChange={(option) => onChange(valueOf(option))} className={className} searchable searchPlaceholder="Zone, such as Sao_Paulo…" />

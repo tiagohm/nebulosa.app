@@ -27,4 +27,5 @@ This mechanism gives them one source and one rule, so every screen of a profile 
 - A zone is always an IANA identifier chosen by a person; the map sets coordinates, never the zone.
 - A tool's own place and zone are never written to the profile or a site.
 - Instants are UTC; a zone only formats them, and a local day or night is always named in the zone of the place observed.
+- The profile's display zone is the site's, UTC, the device's own, or one IANA zone; the device's own is read by each browser, so two devices of one profile may write the same instant differently, while every other choice reads the same everywhere.
 - A wall time typed in a zone may name two instants or none, and the Sky time bar and the Astronomical Time Converter say which they took or refuse a skipped one.

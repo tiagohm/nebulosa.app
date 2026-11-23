@@ -270,7 +270,7 @@ export type StatusChipField = (typeof STATUS_CHIP_FIELDS)[StatusChipRole][number
 
 // What the status bar shows for the device of a role.
 export interface StatusChipPreferences {
-	// Whether the device has a chip at all.
+	// Whether the device has a chip while it is connected; one that is not connected always has one.
 	readonly visible: boolean
 	// Readings shown after the icon; none shows the icon alone.
 	readonly fields: readonly StatusChipField[]

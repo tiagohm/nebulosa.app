@@ -19,14 +19,16 @@ import type { IconName } from '../ui/Icon'
 import { astronomicalClockRuntime, effectiveReadings, watchAstronomicalClock } from './statusbar/astronomicalclock'
 import { AstronomicalClockChip } from './statusbar/AstronomicalClockChip'
 import {
-	absentChip,
 	activeCapture,
 	activeGuiding,
 	type BarOperation,
 	barOperations,
+	CHIP_ICONS,
 	CHIP_ROLES,
 	type ChipRole,
 	type ChipValue,
+	chipShown,
+	deviceChip,
 	fitClocks,
 	fitItems,
 	fitOperations,
@@ -35,7 +37,6 @@ import {
 	mountChip,
 	mountMotionRunning,
 	mountMoving,
-	roleChip,
 	type ScopedDevice,
 	scopedDeviceErrors,
 	scopedRunningOperations,
@@ -50,8 +51,8 @@ import { EphemerisOfflineItem, LiveStackingItem, MeridianFlipItem, MountRemoteIt
 // Live Stacking sessions of the profile's connection, which hold no device,
 // the offline switch of the ephemeris sources while it is on, its device failures, and the details button that lists
 // all of it. While the profile's server connection is open, every device the Equipment Setup assigns has a chip: a
-// connected one with what the profile asks of it, any other with its status in words, kept in view first, since the
-// setup says it is in use. A narrower bar shows fewer chips, by priority, and fewer operations, and counts the others
+// connected one with what the profile asks of it, or none while the profile hides it, any other with its status in
+// words, even when hidden, kept in view first, since the setup says it is in use. A narrower bar shows fewer chips, by priority, and fewer operations, and counts the others
 // on the details button; the server link, the monitor, the listeners, the live stacking sessions, the offline switch, the failures, and the first
 // operation are never left out. Every operation has its own Abort, through the same command as the page that started
 // it, and it interrupts that operation alone; a motion of the mount of the profile that no operation holds has one too.
@@ -67,19 +68,6 @@ const BAR_PADDING = 32
 
 // Width of the separator and padding that open the right group, in CSS pixels (border-l and pl-3).
 const GROUP_INSET = 13
-
-// Icon of each role's chip.
-const CHIP_ICONS: Readonly<Record<ChipRole, IconName>> = {
-	MAIN_CAMERA: 'camera',
-	FILTER_WHEEL: 'wheel',
-	FOCUSER: 'focuser',
-	ROTATOR: 'rotator',
-	MOUNT: 'mount',
-	GUIDE_CAMERA: 'reticle',
-	DOME: 'dome',
-	COVER: 'cover',
-	FLAT_PANEL: 'flatPanel',
-}
 
 // Returns whether two sets hold the same ids.
 function sameIds(a: ReadonlySet<string>, b: ReadonlySet<string>) {
@@ -163,12 +151,11 @@ export function StatusBar() {
 	for (const role of serverId !== undefined && !devices.loading ? CHIP_ROLES : []) {
 		const preferences = statusChipPreferences(profile.settings, role)
 		const status = roleStatus(setup, role, devices)
-		if (!preferences.visible || status === 'notSelected') continue
+		if (status === 'notSelected' || !chipShown(preferences.visible, status)) continue
 		const device = roleDevice(setup, role, devices)
-		const reading = status === 'connected' ? roleChip(role, device, control, { capture: role === 'MAIN_CAMERA' ? capture : undefined, guiding: role === 'GUIDE_CAMERA' ? session : undefined }, preferences.fields) : undefined
-		const value = reading ?? absentChip(status === 'connected' ? 'disconnected' : status)
+		const value = deviceChip(role, status, device, control, { capture: role === 'MAIN_CAMERA' ? capture : undefined, guiding: role === 'GUIDE_CAMERA' ? session : undefined }, preferences.fields)
 		// A mount moved by an operation the driver does not report yet is moving too.
-		const moving = role === 'MOUNT' && reading && device ? value.moving || mountMoving(mountState, running, device) : value.moving
+		const moving = role === 'MOUNT' && status === 'connected' && device ? value.moving || mountMoving(mountState, running, device) : value.moving
 		chips.push({ id: role, icon: CHIP_ICONS[role], label: roleDefinition(role).label, name: device?.name ?? setup[role]?.name ?? '', value: { ...value, moving }, active: (role === 'GUIDE_CAMERA' && !!session) || (role === 'MAIN_CAMERA' && !!capture), device })
 	}
 

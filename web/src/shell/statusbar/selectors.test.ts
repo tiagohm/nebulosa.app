@@ -9,11 +9,13 @@ import {
 	cameraChip,
 	capturePercent,
 	captureValue,
+	chipShown,
 	fitClocks,
 	fitItems,
 	fitOperations,
 	connectionLabel,
 	coverChip,
+	deviceChip,
 	domeChip,
 	flatPanelChip,
 	focuserChip,
@@ -262,6 +264,23 @@ describe('device chips', () => {
 		expect(absentChip('unavailable')).toMatchObject({ text: 'Unavailable', tone: 'error' })
 		expect(absentChip('error')).toMatchObject({ text: 'Error', tone: 'error' })
 		expect(absentChip('connecting')).toEqual({ text: 'Connecting', tone: 'active', moving: true, title: 'Connecting' })
+	})
+
+	test('a hidden device leaves the bar only while it is connected', () => {
+		expect(chipShown(true, 'connected')).toBe(true)
+		expect(chipShown(false, 'connected')).toBe(false)
+		expect(chipShown(false, 'disconnected')).toBe(true)
+		expect(chipShown(false, 'unavailable')).toBe(true)
+		expect(chipShown(false, 'connecting')).toBe(true)
+		expect(chipShown(false, 'error')).toBe(true)
+	})
+
+	test('the chip of an assigned device reads it while connected and says its status otherwise', () => {
+		const wheel = control('wheel', { position: 0, names: ['L'] })
+		expect(deviceChip('FILTER_WHEEL', 'connected', device, wheel, {}, ['filter']).text).toBe('L')
+		expect(deviceChip('FILTER_WHEEL', 'connected', { ...device, connected: false }, wheel, {}, ['filter'])).toMatchObject({ text: 'Disconnected', tone: 'error' })
+		expect(deviceChip('FILTER_WHEEL', 'disconnected', { ...device, connected: false }, wheel, {}, ['filter'])).toMatchObject({ text: 'Disconnected', tone: 'error' })
+		expect(deviceChip('FILTER_WHEEL', 'unavailable', undefined, wheel, {}, ['filter'])).toMatchObject({ text: 'Unavailable', tone: 'error' })
 	})
 
 	test('a chip never reads the state of another connection', () => {

@@ -56,10 +56,10 @@ import { AbortButton, HIT_CLASS, TONE_CLASSES, useOperationAbortable } from './S
 // role with its device and what it reports, the running capture and guiding sessions with the enabled Meridian Flip
 // Monitor and the running Mount Remote Control listeners of the mount, every other running operation with its devices,
 // elapsed time, and reported progress, each with its Abort, the device failures, and the real-time clock, even when the
-// bar has no room for it. The panel is placed in the viewport (fixed), so the clipping bar never cuts it, follows the
+// bar has no room for it, then the way to the Status Bar settings of the profile. The panel is placed in the viewport (fixed), so the clipping bar never cuts it, follows the
 // buttons when the window resizes, takes the focus when it opens so the keyboard goes on inside it, and closes when a
 // button is pressed again, on a press outside, on Escape (returning the focus to the details button), and after it
-// opened a device, a camera tab, or a tool. Closing it, or anything it opens, never stops a session or an operation;
+// opened a device, a camera tab, a tool, or the settings. Closing it, or anything it opens, never stops a session or an operation;
 // only an Abort does.
 
 // Width of the panel, in CSS pixels, when the viewport has room for it.
@@ -299,6 +299,15 @@ function StatusDetailsPanel({ ref, placement: { bottom, right, width }, onClose 
 				</Section>
 			)}
 			<AstronomicalTimeSection onNavigate={onClose} />
+			<LinkButton
+				className="self-start"
+				onClick={() => {
+					navigate(routeState, { workspace: 'settings', section: 'status-bar' })
+					onClose()
+				}}
+			>
+				Status Bar Settings
+			</LinkButton>
 		</div>
 	)
 }

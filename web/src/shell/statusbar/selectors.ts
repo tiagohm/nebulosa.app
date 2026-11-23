@@ -427,6 +427,37 @@ export function roleChip(role: ChipRole, device: Pick<DeviceSummary, 'id' | 'con
 	}
 }
 
+// Status of a role whose device the Equipment Setup assigns.
+export type AssignedStatus = Exclude<RoleStatus, 'notSelected'>
+
+// Returns whether the bar gives the device of a role a chip, from whether the profile shows it (visible) and the status
+// of the role: a hidden device leaves the bar only while it is connected, since one of the setup that is not connected
+// always says so.
+export function chipShown(visible: boolean, status: AssignedStatus): boolean {
+	return visible || status !== 'connected'
+}
+
+// Returns the chip of the device a role is assigned, as the bar shows it: the readings the profile chose (fields) while it
+// is connected, from the control state of the watched connection and the sessions that read through it, and otherwise
+// its status in words (absentChip).
+export function deviceChip(role: ChipRole, status: AssignedStatus, device: Pick<DeviceSummary, 'id' | 'connectionId' | 'connected'> | undefined, control: Pick<ControlRuntime, 'watched' | 'states'>, sessions: ChipSessions, fields: readonly StatusChipField[]): ChipValue {
+	const reading = status === 'connected' ? roleChip(role, device, control, sessions, fields) : undefined
+	return reading ?? absentChip(status === 'connected' ? 'disconnected' : status)
+}
+
+// Icon of each role's chip.
+export const CHIP_ICONS: Readonly<Record<ChipRole, IconName>> = {
+	MAIN_CAMERA: 'camera',
+	FILTER_WHEEL: 'wheel',
+	FOCUSER: 'focuser',
+	ROTATOR: 'rotator',
+	MOUNT: 'mount',
+	GUIDE_CAMERA: 'reticle',
+	DOME: 'dome',
+	COVER: 'cover',
+	FLAT_PANEL: 'flatPanel',
+}
+
 // Chip of the status bar as the fitting sees it.
 export interface BarItem {
 	// Id of the chip: a role.

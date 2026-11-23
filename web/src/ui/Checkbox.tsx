@@ -24,7 +24,7 @@ export interface CheckboxProps {
 export function Checkbox({ label, checked, onChange, disabled, className, title, hideLabel = false }: CheckboxProps) {
 	return (
 		<label title={title} className={cn('-my-1 flex cursor-pointer items-center gap-2 py-1 text-sm text-ink-200 select-none has-disabled:cursor-not-allowed has-disabled:text-ink-300', className)}>
-			<input type="checkbox" checked={checked} disabled={disabled} onChange={(e) => onChange(e.target.checked)} className="m-0 size-3.5 cursor-pointer accent-accent disabled:cursor-not-allowed" />
+			<input type="checkbox" checked={checked} disabled={disabled} onChange={(e) => onChange(e.target.checked)} className="m-0 size-3.5 cursor-pointer accent-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:cursor-not-allowed" />
 			{!hideLabel && label}
 		</label>
 	)

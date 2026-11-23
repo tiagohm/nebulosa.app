@@ -30,6 +30,7 @@ import { cameraBottomViews, cameraBottomViewsEntry } from './images/bottomview'
 import { type CameraTabSource, followLiveStacks, handleCapturedFrame, reconcileCameraTabs, reconcileCapturedFrames, releaseLeasesOnHide } from './images/cameratabs'
 import { captureFramesState, handleCaptureFramesEvent, refreshCaptureFrames } from './images/captureframes'
 import { imagesState } from './images/images'
+import { openImagesEntry } from './images/openimages'
 import { pixelInspection } from './images/pixeltiles'
 import { handleStatisticsEvent, refreshStatistics, statisticsState } from './images/statistics'
 import { siteState, watchActiveSiteZone } from './location/site'
@@ -39,7 +40,7 @@ import { handleOperationEvent, operationsState, refreshOperations } from './oper
 import { handlePlateSolvingEvent, plateSolvingState, refreshPlateSolving } from './platesolving/platesolving'
 import { activeProfile, activeSetup, profileState } from './profile/profile'
 import { WorkspaceSync, workspaceSyncState } from './profile/sync'
-import { activeCameraTabEntry, cameraToolsEntry, centeringTargetsEntry, keepViewEntries, pixelInspectionEntry, sectionsEntry, ViewPersistence } from './profile/view'
+import { activeImageEntry, cameraToolsEntry, centeringTargetsEntry, keepViewEntries, pixelInspectionEntry, sectionsEntry, ViewPersistence } from './profile/view'
 import { WorkspaceGate } from './profile/WorkspaceGate'
 import { handleSatelliteEvent, refreshSatelliteCatalog, satelliteCatalogState } from './satellites/satellites'
 import { externalToolsState, handleExternalToolEvent, refreshExternalTools } from './settings/externaltools'
@@ -163,7 +164,8 @@ const stops = [
 		sectionsEntry(collapsibleSections),
 		cameraToolsEntry(imagesState),
 		cameraBottomViewsEntry(cameraBottomViews),
-		activeCameraTabEntry(imagesState),
+		openImagesEntry(imagesState),
+		activeImageEntry(imagesState),
 		centeringTargetsEntry(targetCenteringRuntime),
 		pixelInspectionEntry(pixelInspection),
 		framingPreviewEntry(framingPreviewState),

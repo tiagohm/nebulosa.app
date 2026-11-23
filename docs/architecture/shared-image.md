@@ -29,5 +29,5 @@ One store addressed by one document id lets every tool and operation share the s
 - A derived document never changes its source and records its provenance and history.
 - Images has no tool that changes pixels: single-image processing is not part of it.
 - Analysis results live in memory only, are dropped with their image, and never survive a restart; an equivalent request is answered with a kept result instead of running again.
-- A document a page opened belongs to that client and closes once the client stays disconnected past a grace period; a document a service opened is closed by that service.
+- A document a page opened is held by that client and by every client that claimed it since (see [Open Images](open-images.md)), and closes once all of them released it or stayed disconnected past a grace period; a document a service opened is closed by that service.
 - Analyses and readouts read the native decoded samples, never the rendered image.

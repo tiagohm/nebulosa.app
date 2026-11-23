@@ -190,12 +190,12 @@ describe('open', () => {
 	test('a document closed while opening is released on the server', async () => {
 		const state = newState()
 		const { io, calls } = fakeIo()
-		const opening = openImage(state, '/data/m31.fits', io)
+		const opening = openImage(state, '/data/m31.fits', io, 'page')
 		closeImage(state, state.documents[0].key, io)
 		await opening
 
 		expect(state.documents).toEqual([])
-		expect(calls.at(-1)).toMatchObject({ method: 'DELETE', url: '/api/images/srv-1' })
+		expect(calls.at(-1)).toMatchObject({ method: 'DELETE', url: '/api/images/srv-1?client=page' })
 	})
 })
 

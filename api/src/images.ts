@@ -538,13 +538,22 @@ async function publishNew(temporary: string, target: string): Promise<boolean> {
 	return true
 }
 
+// A document a client opened from a file, and the clients that hold it.
+interface OwnedDocument {
+	// Description of the document, given to a client that claims it.
+	readonly info: ImageInfo
+	// Clients (pages) holding it: the one that opened it and those that claimed it since.
+	readonly clients: Set<string>
+}
+
 // Open image documents of every client. The pixels live in the image worker; this side tracks the
 // open ids, so unknown ones are answered without a round trip, and relays requests to the worker.
-// A document a client opened from a file is owned by it, and closed once the client is
-// gone for DOCUMENT_GRACE, so a tab that reloaded or closed leaves no document behind; the services close their own.
+// A document a client opened from a file is held by it, and by every client that claimed it since (a page reloaded that
+// shows it again, or a copy of that page); it closes once every one of them released it or is gone for DOCUMENT_GRACE,
+// so a tab that reloaded or closed leaves no document behind. The services close their own.
 export class ImageStore implements Disposable, ClientListener {
-	// Client owning each document a client opened, by document id.
-	readonly #owners = new Map<string, string>()
+	// Each document a client opened, with the clients holding it, by document id.
+	readonly #owners = new Map<string, OwnedDocument>()
 	// Presence of the clients, closing the documents of one gone for the grace.
 	readonly #presence: ClientPresence
 
@@ -566,13 +575,32 @@ export class ImageStore implements Disposable, ClientListener {
 	// Worker started on first use and kept for the lifetime of the process.
 	#worker?: ImageWorker
 
-	// Opens the FITS or XISF file at path as a new document, owned by client when given. Throws ImageOpenError.
+	// Opens the FITS or XISF file at path as a new document, held by client when given. Throws ImageOpenError.
 	async open(path: string, client?: string): Promise<ImageInfo> {
 		const response = await this.#request({ type: 'open', id: this.#id++, path })
 		if (response.status !== 'opened') throw responseError(response)
 		this.#documents.set(response.info.id, { ...documentRecord(response.info), path: resolve(path) })
-		if (client !== undefined) this.#owners.set(response.info.id, client)
+		if (client !== undefined) this.#owners.set(response.info.id, { info: response.info, clients: new Set([client]) })
 		return response.info
+	}
+
+	// Makes client one of the clients holding a document a client opened, such as a page reloaded that shows it again, and
+	// returns its description, so its pixels and the results of its analyses are used as they are. Returns undefined for
+	// a document no client holds: closed, never opened by a client, or a camera frame.
+	claim(id: string, client: string): ImageInfo | undefined {
+		const owned = this.#owners.get(id)
+		owned?.clients.add(client)
+		return owned?.info
+	}
+
+	// Stops client holding a document, which closes once no client holds it; a document no client holds closes at once.
+	// Returns false for an unknown id.
+	relinquish(id: string, client: string): boolean {
+		if (!this.#documents.has(id)) return false
+		const owned = this.#owners.get(id)
+		owned?.clients.delete(client)
+		if (!owned?.clients.size) this.close(id)
+		return true
 	}
 
 	// Counts a socket of a client that opened, keeping its documents.
@@ -865,9 +893,9 @@ export class ImageStore implements Disposable, ClientListener {
 		this.#drop('the image store was stopped')
 	}
 
-	// Closes the documents a client that is gone for good owned.
+	// Stops a client that is gone for good holding its documents, closing those no other client holds.
 	#expire(client: string) {
-		for (const [id, owner] of this.#owners) if (owner === client) this.close(id)
+		for (const [id, { clients }] of this.#owners) if (clients.delete(client) && clients.size === 0) this.close(id)
 	}
 
 	// Discards the worker after it failed. The next request starts a fresh worker.
@@ -913,8 +941,14 @@ export function downloadName(name: string, format: ImageFormat): string {
 export interface ImageOpenRequest {
 	// Path of the FITS or XISF file on the server.
 	readonly path: string
-	// Id of the client (the page) that owns the document, which closes once that client is gone for DOCUMENT_GRACE.
+	// Id of the client (the page) that holds the document, which closes once that client is gone for DOCUMENT_GRACE.
 	readonly client?: string
+}
+
+// Body of a claim of an image document by a client (POST /api/images/:id/claim).
+export interface ImageClaimRequest {
+	// Id of the client (the page) that holds the document from now on.
+	readonly client: string
 }
 
 // Routes of the image documents.
@@ -935,8 +969,22 @@ export function createImageRoutes(images: ImageStore) {
 			},
 		},
 		'/api/images/:id': {
-			// Closes an image document; 404 when it is not open.
-			DELETE: (req) => (images.close(req.params.id) ? new Response(null, { status: 204 }) : errorResponse('Image not found', 404, 'notFound')),
+			// Closes an image document, or with ?client= stops that client holding it, closing it once no client holds it;
+			// 404 when it is not open.
+			DELETE: (req) => {
+				const client = new URL(req.url).searchParams.get('client')
+				const closed = client === null ? images.close(req.params.id) : images.relinquish(req.params.id, client)
+				return closed ? new Response(null, { status: 204 }) : errorResponse('Image not found', 404, 'notFound')
+			},
+		},
+		'/api/images/:id/claim': {
+			// Makes a client ({ client }) one of the clients holding a document a client opened: responds with its ImageInfo,
+			// 404 when no client holds it (closed, or opened by a service).
+			POST: async (req) => {
+				const { client } = (await req.json()) as ImageClaimRequest
+				const info = images.claim(req.params.id, client)
+				return info ? Response.json(info) : errorResponse('Image not found', 404, 'notFound')
+			},
 		},
 		'/api/images/:id/render': {
 			// Renders an image document with a RenderRequest: responds with the JPEG and its RenderResult in RENDER_HEADER,

@@ -715,6 +715,7 @@ export type {
 	ImageCapture,
 	ImageFormat,
 	ImageInfo,
+	ImageClaimRequest,
 	ImageOpenRequest,
 	ImageOrigin,
 	ImageProperties,

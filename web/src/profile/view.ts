@@ -11,7 +11,7 @@ import { type WorkspaceSyncState, workspaceSyncState } from './sync'
 // framings the Sky draws and the one the Observing Planner judges against, the bottom area of the camera tabs, the
 // preferences of Close Approaches and Astro Weather), which profile is active, and the view
 // entries kept outside the profiles (which panel sections are expanded, the tool and the bottom area of each camera tab, the
-// camera tab selected last, the target being typed for each camera in Target Centering, the preview of the Framing tool, the section of the
+// files open in Images with their view state, the document selected last in Images, the target being typed for each camera in Target Centering, the preview of the Framing tool, the section of the
 // Meridian Flip tool, whether the video of the observatory cameras is dimmed, whether a deletion in the Calibration Library also
 // deletes the files).
 // VIEW_STORAGE says, for each one, the browser storage areas it is kept in: sessionStorage keeps it for this tab across
@@ -95,7 +95,7 @@ export type ViewFieldKey = keyof typeof VIEW_FIELDS
 const VIEW_FIELD_KEYS = Object.keys(VIEW_FIELDS) as ViewFieldKey[]
 
 // View state kept outside the profiles, each under one key of browser storage (ViewEntry).
-export type ViewEntryName = 'sections' | 'cameraTools' | 'activeCameraTab' | 'centeringTargets' | 'pixelInspection' | 'framingPreview' | 'meridianFlipSection' | 'observatoryCamerasView' | 'calibrationLibraryView' | 'cameraBottomViews'
+export type ViewEntryName = 'sections' | 'cameraTools' | 'openImages' | 'activeImage' | 'centeringTargets' | 'pixelInspection' | 'framingPreview' | 'meridianFlipSection' | 'observatoryCamerasView' | 'calibrationLibraryView' | 'cameraBottomViews'
 
 // Storage areas of each field of the view, of the active profile, and of each view entry, in the order they are read;
 // every one listed is written. An empty list keeps it in the memory of the page only.
@@ -121,9 +121,10 @@ export const VIEW_STORAGE: Readonly<Record<ViewFieldKey | ViewEntryName | 'activ
 	pixelInspection: ['local'],
 	// Center, background, and survey of the preview of the Framing tool, wherever it is opened.
 	framingPreview: ['local'],
-	// What this tab was doing with each camera, and which camera it was showing.
+	// What this tab was doing with each camera, the files it had open, and which document it was showing.
 	cameraTools: ['session'],
-	activeCameraTab: ['session'],
+	openImages: ['session'],
+	activeImage: ['session'],
 	// The bottom area of each camera tab and the Auto Focus session it last followed.
 	cameraBottomViews: ['session'],
 	centeringTargets: ['session'],
@@ -438,19 +439,19 @@ export function cameraToolsEntry(images: ImagesState): ViewEntry {
 	}
 }
 
-// Keeps the camera tab selected last, by camera tab key, and selects it again once its camera has a tab after a reload,
-// since the tabs come back in the order of their names and the first one is shown. Until then a camera tab the workspace
-// showed by itself never replaces it, but one the operator selects does, and so does any later selection; a file
-// document selected meanwhile leaves it as it is.
-export function activeCameraTabEntry(images: ImagesState): ViewEntry {
+// Keeps the document of Images selected last, by key, and selects it again once it is back after a reload: a file
+// document shown again (openImages) or the tab of its camera, since the tabs come back in their own order and the first
+// one is shown. Until then a document the workspace showed by itself never replaces it, but one the operator selects
+// does, and so does any later selection.
+export function activeImageEntry(images: ImagesState): ViewEntry {
 	let remembered: string | undefined
-	// Whether the remembered tab is still to be selected again.
+	// Whether the remembered document is still to be selected again.
 	let restoring = false
-	// Tab the workspace showed by itself while the remembered one had not appeared yet.
+	// Document the workspace showed by itself while the remembered one had not appeared yet.
 	let automatic: string | undefined
 
 	return {
-		name: 'activeCameraTab',
+		name: 'activeImage',
 		store: images,
 		restore: (value) => {
 			if (typeof value !== 'string') return
@@ -460,7 +461,7 @@ export function activeCameraTabEntry(images: ImagesState): ViewEntry {
 		apply: () => {
 			if (!restoring) return
 
-			if (images.documents.some(({ key, camera }) => camera && key === remembered)) {
+			if (images.documents.some(({ key }) => key === remembered)) {
 				images.activeKey = remembered
 				restoring = false
 			} else if (images.activeKey !== undefined) {
@@ -469,8 +470,7 @@ export function activeCameraTabEntry(images: ImagesState): ViewEntry {
 			}
 		},
 		value: () => {
-			const active = images.documents.find(({ key }) => key === images.activeKey)
-			if (!restoring && active?.camera) remembered = active.key
+			if (!restoring && images.activeKey !== undefined) remembered = images.activeKey
 			return remembered
 		},
 	}

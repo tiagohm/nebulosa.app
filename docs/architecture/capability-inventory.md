@@ -51,6 +51,7 @@ Images and camera operations:
 - **Overlays**: Partial, no region of interest overlay ([Overlays](overlay.md)).
 - **Camera capture and frames**: Implemented ([Capture Frames](capture-frames.md)).
 - **Camera tabs in Images**: Implemented ([Capture Frames](capture-frames.md)).
+- **Open files restored after a reload**: Implemented ([Open Images](open-images.md)).
 - **Histogram and statistics**: Implemented ([Image Statistics](image-statistics.md)).
 - **Star detection**: Implemented ([Star Detection](star-detection.md)).
 - **Star Profile Inspector**: Implemented ([Star Profile Inspector](star-profile-inspector.md)).

@@ -229,6 +229,24 @@ describe('image documents', () => {
 	})
 })
 
+describe('claims', () => {
+	test('a claim answers the description of a document a client opened, and a release closes it once no client holds it', async () => {
+		const opened = (await (await call('/api/images', 'POST', {}, { path: writeFits('route-claim.fits', 16, 8), client: 'before' })).json()) as ImageInfo
+
+		const claimed = await call('/api/images/:id/claim', 'POST', { id: opened.id }, { client: 'after' })
+		expect(claimed.status).toBe(200)
+		expect(await claimed.json()).toEqual(opened)
+
+		expect((await call('/api/images/:id', 'DELETE', { id: opened.id }, undefined, '?client=before')).status).toBe(204)
+		expect(images.name(opened.id)).toBe('route-claim.fits')
+		expect((await call('/api/images/:id', 'DELETE', { id: opened.id }, undefined, '?client=after')).status).toBe(204)
+		expect(images.name(opened.id)).toBeUndefined()
+
+		expect((await call('/api/images/:id/claim', 'POST', { id: opened.id }, { client: 'after' })).status).toBe(404)
+		expect((await call('/api/images/:id', 'DELETE', { id: opened.id }, undefined, '?client=after')).status).toBe(404)
+	})
+})
+
 describe('derived images', () => {
 	for (const format of ['fits', 'xisf'] as const) {
 		test(`saving as ${format.toUpperCase()} restores the scale of the source`, async () => {
@@ -395,6 +413,38 @@ describe('capture documents', () => {
 		await Bun.sleep(40)
 		expect(store.close(owned.id)).toBeFalse()
 		expect(store.close(shared.id)).toBeTrue()
+		store[Symbol.dispose]()
+	})
+
+	test('a document claimed by another client stays open until every client holding it released it or is gone', async () => {
+		const store = new ImageStore(20)
+		const info = await store.open(writeFits('claimed.fits', 16, 8), 'before')
+
+		expect(store.claim(info.id, 'after')).toEqual(info)
+		store.connected('before')
+		store.disconnected('before')
+		await Bun.sleep(40)
+		expect(store.name(info.id)).toBe('claimed.fits')
+
+		expect(store.claim(info.id, 'copy')).toEqual(info)
+		expect(store.relinquish(info.id, 'after')).toBeTrue()
+		expect(store.name(info.id)).toBe('claimed.fits')
+		expect(store.relinquish(info.id, 'copy')).toBeTrue()
+		expect(store.name(info.id)).toBeUndefined()
+		expect(store.claim(info.id, 'late')).toBeUndefined()
+		expect(store.relinquish(info.id, 'late')).toBeFalse()
+		store[Symbol.dispose]()
+	})
+
+	test('a camera frame and a document a service opened cannot be claimed', async () => {
+		const store = new ImageStore()
+		const frame = await store.openCapture(new Uint8Array(readFileSync(writeFits('unclaimed-frame.fits', 16, 8))), 'Camera #1', capture)
+		const service = await store.open(writeFits('unclaimed-service.fits', 16, 8))
+
+		expect(store.claim(frame.id, 'page')).toBeUndefined()
+		expect(store.claim(service.id, 'page')).toBeUndefined()
+		expect(store.relinquish(service.id, 'page')).toBeTrue()
+		expect(store.name(service.id)).toBeUndefined()
 		store[Symbol.dispose]()
 	})
 

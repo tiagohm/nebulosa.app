@@ -98,6 +98,7 @@ Reading order for a new contributor: the [Glossary](#glossary), the [Architectur
 - [Shared Image](architecture/shared-image.md)
 - [Overlay](architecture/overlay.md)
 - [Capture Frames](architecture/capture-frames.md)
+- [Open Images](architecture/open-images.md)
 - [Star Detection](architecture/star-detection.md)
 - [Star Profile Inspector](architecture/star-profile-inspector.md)
 - [Streak Detection](architecture/streak-detection.md)

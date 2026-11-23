@@ -430,9 +430,45 @@ export function message(error: unknown): string {
 	return error instanceof Error ? error.message : 'Unable to reach the server'
 }
 
-// Asks the server to release an image, ignoring failures: the document is already gone from the tab.
-function release(id: string, io: ImagesIo) {
-	void io.fetch(`/api/images/${encodeURIComponent(id)}`, { method: 'DELETE' }).catch(() => undefined)
+// Asks the server to stop client (this page) holding an image, which closes once no page holds it, ignoring failures:
+// the document is already gone from the tab.
+export function release(id: string, io: ImagesIo, client: string = clientId) {
+	void io.fetch(`/api/images/${encodeURIComponent(id)}?client=${encodeURIComponent(client)}`, { method: 'DELETE' }).catch(() => undefined)
+}
+
+// Asks the server to open a file of the server for client (this page); resolves to the description of the document, or
+// rejects with why it could not be opened.
+export async function openImageFile(path: string, io: ImagesIo, client: string): Promise<ImageInfo> {
+	const response = await io.fetch('/api/images', jsonInit('POST', { path, client } satisfies ImageOpenRequest))
+	if (!response.ok) throw new Error(await responseError(response))
+	return (await response.json()) as ImageInfo
+}
+
+// Gives a loading document the image the server opened for it and renders it once with saved, fitted to the image
+// (initialDisplaySettings), or with the display settings the profile saved for its source when absent; those become its
+// applied settings. A document closed before the server answered releases the image instead.
+export async function showOpenedImage(state: ImagesState, key: string, info: ImageInfo, saved: DisplaySettings | undefined, io: ImagesIo, client: string = clientId) {
+	const document = documentOf(state, key)
+
+	if (!document) {
+		release(info.id, io, client)
+		return
+	}
+
+	document.info = ref(info)
+	document.status = 'ready'
+	await renderDisplay(state, key, initialDisplaySettings(info, saved ?? io.loadDisplay(document.source)), io)
+}
+
+// Marks a document that could not be opened as failed, with why.
+export function failImage(state: ImagesState, key: string, error: unknown) {
+	const document = documentOf(state, key)
+	if (document) Object.assign(document, { status: 'error', error: message(error) })
+}
+
+// Returns the name of a document opened from a server file: the last part of its path.
+export function fileName(path: string): string {
+	return path.split(/[\\/]/).at(-1) || path
 }
 
 // Opens a server file as a new active document, fitted to the viewer and shown with the Image
@@ -441,32 +477,14 @@ function release(id: string, io: ImagesIo) {
 // to client (this page), so the server closes it once the page is gone.
 export async function openImage(state: ImagesState, path: string, io: ImagesIo = browserIo, client: string = clientId) {
 	const key = nanoid()
-	const name = path.split(/[\\/]/).at(-1) || path
+	const name = fileName(path)
 	const source: ImageSource = { kind: 'file', path }
 	addDocument(state, { key, name, source, status: 'loading' }, io)
 
 	try {
-		const response = await io.fetch('/api/images', jsonInit('POST', { path, client } satisfies ImageOpenRequest))
-		const document = documentOf(state, key)
-
-		if (!response.ok) {
-			if (document) Object.assign(document, { status: 'error', error: await responseError(response) })
-			return
-		}
-
-		const info = (await response.json()) as ImageInfo
-
-		if (!document) {
-			release(info.id, io)
-			return
-		}
-
-		document.info = ref(info)
-		document.status = 'ready'
-		await renderDisplay(state, key, initialDisplaySettings(info, io.loadDisplay(source)), io)
+		await showOpenedImage(state, key, await openImageFile(path, io, client), undefined, io, client)
 	} catch (error) {
-		const document = documentOf(state, key)
-		if (document) Object.assign(document, { status: 'error', error: message(error) })
+		failImage(state, key, error)
 	}
 }
 
@@ -487,7 +505,7 @@ export function newView({ annotation }: ImageToolPreferences = DEFAULT_IMAGE_TOO
 }
 
 // Adds a document, fitted to the viewer and shown with the Image Inspector. It becomes the active one unless activate is false and another one is shown.
-function addDocument(state: ImagesState, document: ImageDocument, io: ImagesIo, activate = true) {
+export function addDocument(state: ImagesState, document: ImageDocument, io: ImagesIo, activate = true) {
 	state.documents.push(document)
 	state.views[document.key] = newView(io.loadToolPreferences())
 	state.tools[document.key] = { tool: 'inspector' }

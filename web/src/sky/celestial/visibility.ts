@@ -4,19 +4,26 @@ import type { DeepSkyObject, MovingBody, RenderState } from './types'
 
 // Zoom-dependent magnitude limits of the star map: bright objects and labels show at base zoom and fainter
 // ones appear progressively while zooming in, shared by the layers and picking so both agree on what is
-// visible. Magnitudes are visual magnitudes; a zoom octave doubles the zoom factor. Deep-sky objects and the names of
-// stars, deep-sky objects, and constellations follow the density zoom; asteroids and comets, which a library of
-// kernels may hold by the thousand, follow limits of their own that reach much fainter bodies when zoomed in. The density zoom which also counts the size of the projection disk: a small disk
-// (a phone) holds the whole sky in fewer pixels, so it shows what a proportionally lower zoom would.
+// visible. Magnitudes are visual magnitudes; a zoom octave doubles the zoom factor. Every limit but those of the Sun,
+// the Moon, and the planets also counts the size of the projection disk: a small disk (a phone) holds the whole sky in
+// fewer pixels while its symbols and names keep their size, so it draws fewer of them. Deep-sky objects, asteroids and
+// comets, and the names of stars, deep-sky objects, and constellations follow the density zoom, which shows on a small
+// disk what a proportionally lower zoom would; star symbols, whose count grows steeply with magnitude, are thinned by
+// the magnitudes that keep their density on the screen. Asteroids and comets, which a library of kernels may hold by the
+// thousand, follow limits of their own that reach much fainter bodies when zoomed in.
 
 // Radius in pixels of the base projection disk at which the limits read as designed (a desktop map); larger disks
 // read the same.
 const DENSITY_REFERENCE_RADIUS = 360
-// Smallest share of the zoom a small disk counts, 0 to 1; keeps a tiny map from emptying.
+// Smallest share of the reference radius a small disk counts, 0 to 1; keeps a tiny map from emptying.
 const DENSITY_MIN_SHARE = 0.35
 
 // Star magnitude shown at base zoom; higher shows more faint stars initially.
 const STAR_SYMBOL_BASE_MAGNITUDE = 6
+// Star magnitudes taken off per halving of the disk radius below DENSITY_REFERENCE_RADIUS: a disk of a quarter of the
+// area keeps the density of stars on the screen with a quarter of them, about 1.2 magnitudes brighter, the number of
+// stars growing about 3.2 times per magnitude near the naked-eye limit.
+const STAR_SYMBOL_MAGNITUDE_PER_RADIUS_OCTAVE = 1.2
 // Extra star magnitude unlocked per zoom octave; higher reveals faint stars faster while zooming.
 const STAR_SYMBOL_MAGNITUDE_PER_ZOOM = 1.9
 // Lower bound of the star magnitude limit when zoomed out; higher hides fewer stars at low zoom.
@@ -69,10 +76,16 @@ function zoomMagnitudeLimit(k: number, baseMagnitude: number, magnitudePerZoom: 
 	return Math.min(limit, maxMagnitude)
 }
 
+// Returns the share of the reference radius a base projection disk of `radius` pixels counts: 1 from
+// DENSITY_REFERENCE_RADIUS up, and proportionally less below it, down to DENSITY_MIN_SHARE.
+function densityShare(radius: number) {
+	return clamp(radius / DENSITY_REFERENCE_RADIUS, DENSITY_MIN_SHARE, 1)
+}
+
 // Returns the zoom factor `zoom` as counted by the density limits on a base projection disk of `radius` pixels: the
 // zoom itself from DENSITY_REFERENCE_RADIUS up, and proportionally less below it, down to DENSITY_MIN_SHARE of it.
 export function densityZoom(zoom: number, radius: number) {
-	return zoom * clamp(radius / DENSITY_REFERENCE_RADIUS, DENSITY_MIN_SHARE, 1)
+	return zoom * densityShare(radius)
 }
 
 // Returns the density zoom of a render state.
@@ -80,14 +93,16 @@ export function stateDensityZoom(state: RenderState) {
 	return densityZoom(state.transform.k, state.projectionRadius)
 }
 
-// Returns the faintest star magnitude drawn at a zoom factor, capped by the configured limit.
-export function starSymbolMagnitudeLimitAtZoom(zoom: number, maxMagnitude: number) {
-	return zoomMagnitudeLimit(zoom, STAR_SYMBOL_BASE_MAGNITUDE, STAR_SYMBOL_MAGNITUDE_PER_ZOOM, STAR_SYMBOL_MIN_MAGNITUDE, maxMagnitude)
+// Returns the faintest star magnitude drawn at a zoom factor on a base projection disk of `radius` pixels, brighter on
+// a disk smaller than DENSITY_REFERENCE_RADIUS, capped by the configured limit.
+export function starSymbolMagnitudeLimitAtZoom(zoom: number, radius: number, maxMagnitude: number) {
+	const baseMagnitude = STAR_SYMBOL_BASE_MAGNITUDE + Math.log2(densityShare(radius)) * STAR_SYMBOL_MAGNITUDE_PER_RADIUS_OCTAVE
+	return zoomMagnitudeLimit(zoom, baseMagnitude, STAR_SYMBOL_MAGNITUDE_PER_ZOOM, STAR_SYMBOL_MIN_MAGNITUDE, maxMagnitude)
 }
 
 // Returns the faintest star magnitude drawn in a render state.
 export function starSymbolMagnitudeLimit(state: RenderState) {
-	return starSymbolMagnitudeLimitAtZoom(state.transform.k, state.stars.maxMagnitude)
+	return starSymbolMagnitudeLimitAtZoom(state.transform.k, state.projectionRadius, state.stars.maxMagnitude)
 }
 
 // Returns the faintest star magnitude labeled in a render state.
@@ -95,9 +110,9 @@ export function starLabelMagnitudeLimit(state: RenderState) {
 	return zoomMagnitudeLimit(stateDensityZoom(state), STAR_LABEL_BASE_MAGNITUDE, STAR_LABEL_MAGNITUDE_PER_ZOOM, STAR_LABEL_MIN_MAGNITUDE, state.stars.maxMagnitude)
 }
 
-// Returns whether a star of the given magnitude is drawn at a zoom factor.
-export function isStarVisibleAtZoom(magnitude: number, zoom: number, maxMagnitude: number) {
-	return magnitude <= starSymbolMagnitudeLimitAtZoom(zoom, maxMagnitude)
+// Returns whether a star of the given magnitude is drawn at a zoom factor on a base projection disk of `radius` pixels.
+export function isStarVisibleAtZoom(magnitude: number, zoom: number, radius: number, maxMagnitude: number) {
+	return magnitude <= starSymbolMagnitudeLimitAtZoom(zoom, radius, maxMagnitude)
 }
 
 // Returns a deep-sky object's magnitude, or the default magnitude when it has none.
@@ -150,12 +165,12 @@ export function movingBodyMagnitude(object: MovingBody) {
 	return isFiniteNumber(object.magnitude) ? object.magnitude : 0
 }
 
-// Returns whether a moving body is drawn at a zoom factor: an asteroid or comet within smallBodyMagnitudeLimit, or at
-// any magnitude when `allSmallBodies`, any other within the deep-sky limit; bodies without magnitude, or always visible,
-// always are.
-export function isMovingBodyVisibleAtZoom(object: MovingBody, zoom: number, allSmallBodies: boolean = false) {
+// Returns whether a moving body is drawn at a zoom factor on a base projection disk of `radius` pixels: an asteroid or
+// comet within smallBodyMagnitudeLimit of the density zoom, or at any magnitude when `allSmallBodies`, any other within
+// the deep-sky limit of the zoom itself; bodies without magnitude, or always visible, always are.
+export function isMovingBodyVisibleAtZoom(object: MovingBody, zoom: number, radius: number, allSmallBodies: boolean = false) {
 	if (object.alwaysVisible === true || !isFiniteNumber(object.magnitude) || (allSmallBodies && isSmallBody(object))) return true
-	return object.magnitude <= (isSmallBody(object) ? smallBodyMagnitudeLimit(zoom) : deepSkyObjectMagnitudeLimit(zoom))
+	return object.magnitude <= (isSmallBody(object) ? smallBodyMagnitudeLimit(densityZoom(zoom, radius)) : deepSkyObjectMagnitudeLimit(zoom))
 }
 
 // Returns whether the name of a visible moving body may be left out: that of an asteroid or comet not always visible
@@ -168,10 +183,10 @@ export function isMovingLabelOptional(object: MovingBody) {
 // Returns whether an optional moving-body name is bright enough to be drawn in a render state; one without magnitude
 // always is.
 export function isOptionalMovingLabelVisible(object: MovingBody, state: RenderState) {
-	return !isFiniteNumber(object.magnitude) || object.magnitude <= smallBodyLabelMagnitudeLimit(state.transform.k)
+	return !isFiniteNumber(object.magnitude) || object.magnitude <= smallBodyLabelMagnitudeLimit(stateDensityZoom(state))
 }
 
 // Returns whether a moving body is drawn in a render state.
 export function isMovingBodyVisible(object: MovingBody, state: RenderState) {
-	return object.visible !== false && isMovingBodyVisibleAtZoom(object, state.transform.k, state.allSmallBodies)
+	return object.visible !== false && isMovingBodyVisibleAtZoom(object, state.transform.k, state.projectionRadius, state.allSmallBodies)
 }

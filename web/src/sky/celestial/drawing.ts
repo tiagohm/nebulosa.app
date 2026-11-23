@@ -469,7 +469,7 @@ function projectObjectToScreen(object: CelestialObject, state: RenderState, out:
 		case 'star': {
 			const catalog = state.starCatalog
 			if (!catalog || !catalog.visible[object.index]) return false
-			if (!anyZoom && !isStarVisibleAtZoom(catalog.mag[object.index], state.transform.k, state.stars.maxMagnitude)) return false
+			if (!anyZoom && !isStarVisibleAtZoom(catalog.mag[object.index], state.transform.k, state.projectionRadius, state.stars.maxMagnitude)) return false
 			applyViewTransform(catalog.screenX[object.index], catalog.screenY[object.index], state.width, state.height, state.transform, out)
 			return true
 		}

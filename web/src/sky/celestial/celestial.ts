@@ -1372,10 +1372,12 @@ export class Celestial {
 		this.#picking.reset(this.#options.width, this.#options.height, Math.max(16, radius * 3))
 		this.#pickedShapes.length = 0
 		const catalog = this.#starCatalog
+		// Radius of the base projection disk, which the density limits read, so only drawn objects are picked.
+		const projectionRadius = projectionScale(this.#options.width, this.#options.height, this.#options.projection)
 
 		if (catalog && this.isLayerVisible('stars')) {
 			const indices = catalog.getBucketedVisibleIndices()
-			const maxMagnitude = starSymbolMagnitudeLimitAtZoom(this.#transform.k, this.#options.stars.maxMagnitude)
+			const maxMagnitude = starSymbolMagnitudeLimitAtZoom(this.#transform.k, projectionRadius, this.#options.stars.maxMagnitude)
 
 			for (let i = 0; i < catalog.visibleCount; i++) {
 				const index = indices[i]
@@ -1391,8 +1393,7 @@ export class Celestial {
 
 		if (this.isLayerVisible('deepSky')) {
 			const deepSkyCatalog = this.#deepSkyCatalog
-			// The density zoom the deep-sky layer draws with, so only drawn objects are picked.
-			const deepSkyZoom = densityZoom(this.#transform.k, projectionScale(this.#options.width, this.#options.height, this.#options.projection))
+			const deepSkyZoom = densityZoom(this.#transform.k, projectionRadius)
 
 			if (deepSkyCatalog) {
 				for (let i = 0; i < deepSkyCatalog.visibleCount; i++) {
@@ -1415,7 +1416,7 @@ export class Celestial {
 		for (let i = 0; i < this.#movingBodyList.length; i++) {
 			const object = this.#movingBodyList[i]
 
-			if (object.visible === false || object.selectable === false || !this.isLayerVisible(movingBodyLayerId(object.type)) || !isMovingBodyVisibleAtZoom(object, this.#transform.k, this.#allSmallBodies)) {
+			if (object.visible === false || object.selectable === false || !this.isLayerVisible(movingBodyLayerId(object.type)) || !isMovingBodyVisibleAtZoom(object, this.#transform.k, projectionRadius, this.#allSmallBodies)) {
 				continue
 			}
 
@@ -1426,7 +1427,7 @@ export class Celestial {
 
 		const labels = this.#constellations.labels ?? []
 
-		if (this.isLayerVisible('constellationLabels') && densityZoom(this.#transform.k, projectionScale(this.#options.width, this.#options.height, this.#options.projection)) >= CONSTELLATION_LABEL_MIN_ZOOM) {
+		if (this.isLayerVisible('constellationLabels') && densityZoom(this.#transform.k, projectionRadius) >= CONSTELLATION_LABEL_MIN_ZOOM) {
 			for (let i = 0; i < labels.length; i++) {
 				const label = labels[i]
 

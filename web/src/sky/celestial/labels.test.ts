@@ -7,14 +7,15 @@ function body(id: string, type: MovingBody['type'], x: number, y: number, extra:
 	return { id, type, name: id, position: { rightAscension: x, declination: y }, ...extra }
 }
 
-// Render state of a gnomonic 800 x 600 view at zoom 1 projecting a body at its right ascension and declination in
-// pixels, and a context measuring 7 px per character.
+// Render state of a gnomonic 800 x 600 view of a desktop-sized disk at zoom 1 projecting a body at its right ascension
+// and declination in pixels, and a context measuring 7 px per character.
 function frame(movingBodies: readonly MovingBody[], frameNumber = 1, allSmallBodies = false) {
 	const state = {
 		frame: frameNumber,
 		width: 800,
 		height: 600,
 		projection: 'gnomonic',
+		projectionRadius: 360,
 		transform: { k: 1, x: 0, y: 0 },
 		theme: { fontFamily: 'sans-serif' },
 		stars: { labels: false },

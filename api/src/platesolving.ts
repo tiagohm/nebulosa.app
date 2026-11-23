@@ -316,13 +316,15 @@ const MANUAL_ORIGIN: PlateSolveOrigin = { kind: 'manual' }
 
 // Returns the key of an equivalent solve: the same image, provider, strategy, effective hints, tolerance,
 // downsampling (none for the built-in solver, which ignores it), provider settings, and pixels (the fingerprint of
-// private pixels, empty for the image itself). The timeout and the session are left out, since they do not change a
-// result; so are the contents of the folders of the built-in solver, so a solve after their index files changed
-// answers with the kept result of the same request.
-export function plateSolveCacheKey(imageId: string, { provider, strategy, scaleTolerance, downsample }: PlateSolveRequest, hints: ResolvedPlateSolveHints, tool: ExternalToolConfig, fingerprint: string = ''): string {
+// private pixels, empty for the image itself), and for the built-in solver the generation of its downloaded index
+// bands, which advances when one is installed or removed. The timeout and the session are left out, since they do not
+// change a result; so are the other changes of the contents of the folders of the built-in solver, so a solve after
+// their index files changed by hand answers with the kept result of the same request.
+export function plateSolveCacheKey(imageId: string, { provider, strategy, scaleTolerance, downsample }: PlateSolveRequest, hints: ResolvedPlateSolveHints, tool: ExternalToolConfig, fingerprint: string = '', indexGeneration: number = 0): string {
 	const values = [hints.rightAscension?.value, hints.declination?.value, hints.radius?.value, hints.scale?.value]
 	const effectiveDownsample = provider === 'nebulosa' ? DEFAULT_DOWNSAMPLE.nebulosa : downsample || DEFAULT_DOWNSAMPLE[provider]
-	return JSON.stringify([imageId, provider, strategy, values, scaleTolerance ?? DEFAULT_SCALE_TOLERANCE, effectiveDownsample, tool.executable, tool.config ?? '', tool.endpoint ?? '', tool.indexDirectory ?? '', tool.catalogDirectory ?? '', fingerprint])
+	const generation = provider === 'nebulosa' ? indexGeneration : 0
+	return JSON.stringify([imageId, provider, strategy, values, scaleTolerance ?? DEFAULT_SCALE_TOLERANCE, effectiveDownsample, tool.executable, tool.config ?? '', tool.endpoint ?? '', tool.indexDirectory ?? '', tool.catalogDirectory ?? '', fingerprint, generation])
 }
 
 // Returns the solution of a WCS header for an image of width × height pixels, or undefined when plateSolutionFrom
@@ -350,6 +352,8 @@ export class PlateSolvingService implements Disposable {
 	readonly #pollInterval: number
 	// Client of the worker of the built-in solver.
 	readonly #native = new NativePlateSolver()
+	// Generation of the downloaded index bands of the built-in solver, part of the key of its solves.
+	#indexGeneration = 0
 
 	// Creates the service over the image store and the External Tools settings, publishing every job change to
 	// listener. The results of an image are dropped when the store releases it.
@@ -480,7 +484,14 @@ export class PlateSolvingService implements Disposable {
 	#job(imageId: string, preparation: PlateSolvePreparation, origin: PlateSolveOrigin, fingerprint?: string) {
 		const hints = this.hints(imageId, preparation.request.strategy, preparation.request.hints)
 		if (!hints) return undefined
-		return { key: plateSolveCacheKey(imageId, preparation.request, hints, preparation.tool, fingerprint), fields: { origin, request: preparation.request, hints } }
+		return { key: plateSolveCacheKey(imageId, preparation.request, hints, preparation.tool, fingerprint, this.#indexGeneration), fields: { origin, request: preparation.request, hints } }
+	}
+
+	// Tells the service that a downloaded index band of the built-in solver was installed or removed, so a new solve with
+	// it searches again instead of answering with a result kept from before, such as a search without a solution made
+	// before the band was there. The kept results stay listed with their images.
+	indexesChanged() {
+		this.#indexGeneration++
 	}
 
 	// Runs a job with its provider and validates the WCS it found.

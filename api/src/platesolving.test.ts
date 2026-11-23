@@ -270,6 +270,9 @@ describe('solution', () => {
 		expect(plateSolveCacheKey('i', ASSISTED, hints, { executable: 'astap', timeout: 1 })).toBe(plateSolveCacheKey('i', ASSISTED, hints, { executable: 'astap', timeout: 2 }))
 		expect(plateSolveCacheKey('i', ASSISTED, hints, { executable: 'astap', timeout: 1 })).not.toBe(plateSolveCacheKey('i', { ...ASSISTED, strategy: 'blind' }, hints, { executable: 'astap', timeout: 1 }))
 		expect(plateSolveCacheKey('i', ASSISTED, hints, { executable: 'astap', timeout: 1 })).not.toBe(plateSolveCacheKey('i', ASSISTED, hints, { executable: 'astap', timeout: 1 }, 'dark:7:digest'))
+		// Only the built-in solver searches the downloaded index bands.
+		expect(plateSolveCacheKey('i', ASSISTED, hints, { executable: 'astap', timeout: 1 }, '', 0)).toBe(plateSolveCacheKey('i', ASSISTED, hints, { executable: 'astap', timeout: 1 }, '', 1))
+		expect(plateSolveCacheKey('i', { ...ASSISTED, provider: 'nebulosa' }, hints, { executable: '', timeout: 1 }, '', 0)).not.toBe(plateSolveCacheKey('i', { ...ASSISTED, provider: 'nebulosa' }, hints, { executable: '', timeout: 1 }, '', 1))
 	})
 })
 

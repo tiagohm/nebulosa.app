@@ -36,7 +36,8 @@ async function archive(files: Record<string, string> = TILES) {
 function setup(band: QuadIndexBand, fetch: (url: string, init: RequestInit) => Promise<Response>, indexDirectory?: string) {
 	const directory = join(root, `indexes-${folders++}`)
 	const events: QuadIndexDownloadsSnapshot[] = []
-	const downloads = new QuadIndexDownloads(directory, { indexDirectory: () => Promise.resolve(indexDirectory) }, (event: QuadIndexDownloadsEvent) => events.push(event.snapshot), { fetch, bands: [band], sources: [SOURCE] })
+	const changes = { count: 0 }
+	const downloads = new QuadIndexDownloads(directory, { indexDirectory: () => Promise.resolve(indexDirectory) }, (event: QuadIndexDownloadsEvent) => events.push(event.snapshot), { fetch, bands: [band], sources: [SOURCE], onIndexesChanged: () => changes.count++ })
 
 	// Resolves once a published snapshot satisfies done.
 	async function until(done: (snapshot: QuadIndexDownloadsSnapshot) => boolean) {
@@ -48,7 +49,7 @@ function setup(band: QuadIndexBand, fetch: (url: string, init: RequestInit) => P
 		throw new Error('timed out')
 	}
 
-	return { directory, downloads, events, until }
+	return { directory, downloads, events, until, changes }
 }
 
 // Answers the archive as Google Drive does.
@@ -63,7 +64,7 @@ describe('download', () => {
 	test('installs the files of a band from Google Drive into its source folder', async () => {
 		const { bytes, band } = await archive()
 		const urls: string[] = []
-		const { directory, downloads, until } = setup(band, drive(bytes, urls))
+		const { directory, downloads, until, changes } = setup(band, drive(bytes, urls))
 		await downloads.start()
 
 		expect((await downloads.snapshot()).bands[0]).toMatchObject({ installed: 'missing', published: true })
@@ -75,11 +76,12 @@ describe('download', () => {
 		expect(snapshot.bands[0].job).toBeUndefined()
 		expect(readFileSync(join(directory, 'astap-d20', 'nqi-480-8-0001.nqi'), 'utf-8')).toBe('second tile of the band')
 		expect(readdirSync(join(directory, '.staging'))).toEqual([])
+		expect(changes.count).toBe(1)
 	})
 
 	test('a damaged archive fails and keeps the installed files', async () => {
 		const { bytes, band } = await archive()
-		const { directory, downloads, until } = setup({ ...band, sha256: '0'.repeat(64) }, drive(bytes))
+		const { directory, downloads, until, changes } = setup({ ...band, sha256: '0'.repeat(64) }, drive(bytes))
 		mkdirSync(join(directory, 'astap-d20'), { recursive: true })
 		writeFileSync(join(directory, 'astap-d20', 'nqi-480-8-0000.nqi'), 'old')
 
@@ -89,6 +91,7 @@ describe('download', () => {
 		expect(snapshot.bands[0].job?.error).toContain('damaged')
 		expect(snapshot.bands[0]).toMatchObject({ installed: 'partial', installedFiles: 1 })
 		expect(readFileSync(join(directory, 'astap-d20', 'nqi-480-8-0000.nqi'), 'utf-8')).toBe('old')
+		expect(changes.count).toBe(0)
 	})
 
 	test('a page instead of the file fails, as when its download quota is reached', async () => {
@@ -131,7 +134,7 @@ describe('download', () => {
 
 	test('removes the installed files of a band, leaving the other files of its folder', async () => {
 		const { band } = await archive()
-		const { directory, downloads } = setup(band, drive(new Uint8Array(new ArrayBuffer(0))))
+		const { directory, downloads, changes } = setup(band, drive(new Uint8Array(new ArrayBuffer(0))))
 		mkdirSync(join(directory, 'astap-d20'), { recursive: true })
 		writeFileSync(join(directory, 'astap-d20', 'nqi-480-8-0000.nqi'), 'tile')
 		writeFileSync(join(directory, 'astap-d20', 'nqi-679-8-0000.nqi'), 'other band')
@@ -140,6 +143,7 @@ describe('download', () => {
 
 		expect(snapshot.bands[0]).toMatchObject({ installed: 'missing', installedFiles: 0 })
 		expect(readdirSync(join(directory, 'astap-d20'))).toEqual(['nqi-679-8-0000.nqi'])
+		expect(changes.count).toBe(1)
 	})
 })
 

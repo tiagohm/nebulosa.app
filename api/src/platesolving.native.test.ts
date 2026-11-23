@@ -277,12 +277,12 @@ describe('solve', () => {
 		expect(result.outcome).toBe('noSolution')
 		expect(result.warnings).toContain(`The index folder ${missing} does not exist: download index bands in the settings of the Nebulosa solver, or set another folder.`)
 
+		// Bands downloaded afterwards are searched by the next solve of the same image, without a restart.
 		mkdirSync(missing)
 		writeIndex(missing, 0.28)
-		const { service: other, info: image } = await setup('', '', missing)
-		expect((await other.solve(image.id, BLIND)).outcome).toBe('solved')
+		service.indexesChanged()
+		expect((await service.solve(info.id, BLIND)).outcome).toBe('solved')
 		service[Symbol.dispose]()
-		other[Symbol.dispose]()
 	})
 
 	test('a damaged index file is skipped with a warning', async () => {

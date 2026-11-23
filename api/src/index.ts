@@ -1155,7 +1155,17 @@ const externalTools = new ExternalToolsStore(database, (event) => {
 })
 
 // Downloadable quad index bands of the built-in solver, installed into its default index folder.
-const quadIndexes = new QuadIndexDownloads(DEFAULT_QUAD_INDEX_DIRECTORY, { indexDirectory: async () => (await externalTools.get('nebulosa')).config.indexDirectory }, broadcast)
+// A band installed or removed makes the next solves of the built-in solver search again, and checks its saved settings
+// again so its state no longer reports the index files found before.
+const quadIndexes = new QuadIndexDownloads(DEFAULT_QUAD_INDEX_DIRECTORY, { indexDirectory: async () => (await externalTools.get('nebulosa')).config.indexDirectory }, broadcast, {
+	onIndexesChanged: () => {
+		plateSolving.indexesChanged()
+		void externalTools
+			.get('nebulosa')
+			.then(({ config }) => externalTools.check('nebulosa', config))
+			.catch((error: unknown) => console.error('The built-in solver could not be checked', error))
+	},
+})
 
 // IP cameras watching the observatory, relayed to the browsers by the MediaMTX gateway set in External Tools; their
 // addresses are encrypted with the key of NEBULOSA_CAMERA_SECRET_KEY, else of the operating system's credential storage.

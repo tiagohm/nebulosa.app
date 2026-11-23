@@ -441,8 +441,10 @@ export interface QuadIndexSettings {
 	readonly indexDirectory: () => Promise<string | undefined>
 }
 
-// Options of the downloads, for tests.
+// Options of the downloads.
 export interface QuadIndexDownloadsOptions {
+	// Called once a band was installed or removed, so the solves kept from before are not reused.
+	readonly onIndexesChanged?: () => void
 	// Downloads a URL.
 	readonly fetch?: (url: string, init: RequestInit) => Promise<Response>
 	// Downloadable bands and their sources.
@@ -464,6 +466,7 @@ export class QuadIndexDownloads implements Disposable {
 	readonly #bands: readonly QuadIndexBand[]
 	readonly #sources: readonly QuadIndexSource[]
 	readonly #stallMs: number
+	readonly #onIndexesChanged?: () => void
 	readonly #jobs = new Map<string, JobEntry>()
 	readonly #queue: string[] = []
 	// Installed tile files of each band, read from the folders after every change.
@@ -484,6 +487,7 @@ export class QuadIndexDownloads implements Disposable {
 		this.#bands = options.bands ?? QUAD_INDEX_BANDS
 		this.#sources = options.sources ?? QUAD_INDEX_SOURCES
 		this.#stallMs = options.stallMs ?? DOWNLOAD_STALL_MS
+		this.#onIndexesChanged = options.onIndexesChanged
 	}
 
 	// Clears what downloads of a previous run left in staging and reads which bands are installed. Never rejects.
@@ -548,6 +552,7 @@ export class QuadIndexDownloads implements Disposable {
 
 		await this.#removeTiles(band)
 		this.#jobs.delete(id)
+		this.#onIndexesChanged?.()
 		await this.#scan()
 		return this.#changedNow()
 	}
@@ -658,6 +663,7 @@ export class QuadIndexDownloads implements Disposable {
 			signal.throwIfAborted()
 			await this.#install(band, staging, names)
 			this.#jobs.delete(band.id)
+			this.#onIndexesChanged?.()
 		} catch (error) {
 			if (signal.aborted) this.#jobs.delete(band.id)
 			else entry.job = { ...entry.job, state: 'failed', error: Error.isError(error) ? error.message : String(error) }

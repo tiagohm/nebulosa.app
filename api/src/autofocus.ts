@@ -337,7 +337,7 @@ export class AutoFocusSessions {
 
 		// The provider settings are resolved first, so nothing can take the devices between the checks below and the start.
 		const preparation = await this.stars.prepare(request.detection)
-		if (!preparation) return refusal('ASTAP is not configured; set it up in Settings → External Tools or measure with the built-in detector', 422, 'unsupported')
+		if (!preparation) return refusal('ASTAP is not configured; set it up in Settings → External Tools or measure with the Nebulosa detector', 422, 'unsupported')
 
 		// The same request, sent twice, may have started its session while this one was prepared.
 		const raced = this.#sessions.repeated(request.token)

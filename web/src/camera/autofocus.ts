@@ -215,7 +215,7 @@ export function autoFocusRequest(
 		capture: fitExposure({ ...exposure, exposureTime: settings.exposureTime }, capabilities),
 		snoop: { mount: snoop.mount, wheel: snoop.wheel, rotator: snoop.rotator },
 		// The built-in detector always measures with a grown aperture, the profile's or the default one.
-		detection: { acceptance: { ...acceptance }, detector: detector.provider === 'builtin' ? { ...detector, maximumRadius: detector.maximumRadius ?? DEFAULT_APERTURE_RADIUS } : { ...detector } },
+		detection: { acceptance: { ...acceptance }, detector: detector.provider === 'nebulosa' ? { ...detector, maximumRadius: detector.maximumRadius ?? DEFAULT_APERTURE_RADIUS } : { ...detector } },
 		fittingMode: settings.fittingMode,
 		initialOffsetSteps: settings.initialOffsetSteps,
 		stepSize,

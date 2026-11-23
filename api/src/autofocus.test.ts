@@ -16,7 +16,7 @@ import { FocuserBacklashStore } from './focuserbacklash'
 import { FocuserCommands } from './focusers'
 import { ImageStore } from './images'
 import { type OperationEvent, OperationRegistry } from './operations'
-import { DEFAULT_BUILTIN_SETTINGS, DEFAULT_STAR_ACCEPTANCE, StarDetectionService } from './stars'
+import { DEFAULT_NEBULOSA_SETTINGS, DEFAULT_STAR_ACCEPTANCE, StarDetectionService } from './stars'
 
 const SKIP = process.env.RUN_ALL_TESTS !== 'true'
 
@@ -53,7 +53,7 @@ function request(focuser: { connectionId: string; deviceId: string }, patch: Par
 		token: `token-${tokens++}`,
 		focuser,
 		capture: { exposureTime: 0.2, gain: 0, offset: 0, binX: 1, binY: 1, subframe: true, x: 0, y: 0, width: 512, height: 512, frameFormat: '' },
-		detection: { detector: { ...DEFAULT_BUILTIN_SETTINGS, maxStars: 20, maximumRadius: 32 }, acceptance: DEFAULT_STAR_ACCEPTANCE },
+		detection: { detector: { ...DEFAULT_NEBULOSA_SETTINGS, maxStars: 20, maximumRadius: 32 }, acceptance: DEFAULT_STAR_ACCEPTANCE },
 		fittingMode: 'HYPERBOLIC',
 		initialOffsetSteps: 4,
 		stepSize: 3000,
@@ -163,7 +163,7 @@ describe('fitting modes', () => {
 		await waitUntil(ended, 120000)
 
 		const final = summary()!
-		expect(final).toMatchObject({ sessionId, operationId, state: 'completed', initialPosition: START, verification: 'measured', provider: 'builtin' })
+		expect(final).toMatchObject({ sessionId, operationId, state: 'completed', initialPosition: START, verification: 'measured', provider: 'nebulosa' })
 		// Within one and a half steps: the trend lines intersect less precisely than the curves place their vertex.
 		expect(Math.abs(final.estimatedPosition! - BEST_FOCUS)).toBeLessThanOrEqual(4500)
 		expect(final.finalPosition).toBe(final.estimatedPosition)

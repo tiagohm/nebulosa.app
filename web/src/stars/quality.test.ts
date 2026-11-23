@@ -22,7 +22,7 @@ describe('image quality', () => {
 	})
 
 	test('a waiting or running detection is pending, without values', () => {
-		expect(imageQuality(holding(job()), 'image-1')).toMatchObject({ status: 'pending', measurementId: 'job-1', provider: 'builtin' })
+		expect(imageQuality(holding(job()), 'image-1')).toMatchObject({ status: 'pending', measurementId: 'job-1', provider: 'nebulosa' })
 		expect(imageQuality(holding(job({ state: 'running' })), 'image-1').hfdPx).toBeUndefined()
 	})
 

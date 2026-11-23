@@ -7,7 +7,7 @@ import { Button } from '../ui/Button'
 import { Notice } from '../ui/Notice'
 import { NumberInput } from '../ui/NumberInput'
 import { SegmentedControl } from '../ui/SegmentedControl'
-import { BUILTIN_STAR_LIMIT, DEFAULT_APERTURE_RADIUS, PROVIDER_LABELS, PROVIDERS, withAcceptance, withDetectorSettings, withProvider } from './stars'
+import { NEBULOSA_STAR_LIMIT, DEFAULT_APERTURE_RADIUS, PROVIDER_LABELS, PROVIDERS, withAcceptance, withDetectorSettings, withProvider } from './stars'
 
 // Controls of the star detection request of the profile, edited in the Star Detection tool of the Images workspace
 // and used by Auto Focus too: the detector with the availability of ASTAP, the settings the selected detector really
@@ -66,9 +66,9 @@ export function DetectorSettingsControls({ request, onChange, disabled }: StarRe
 	const { detector } = request
 	const edit = (patch: Parameters<typeof withDetectorSettings>[1]) => onChange(withDetectorSettings(request, patch))
 
-	return detector.provider === 'builtin' ? (
+	return detector.provider === 'nebulosa' ? (
 		<>
-			<NumberInput label="Max stars" value={detector.maxStars} min={1} max={BUILTIN_STAR_LIMIT} disabled={disabled} onChange={(maxStars) => edit({ maxStars })} />
+			<NumberInput label="Max stars" value={detector.maxStars} min={1} max={NEBULOSA_STAR_LIMIT} disabled={disabled} onChange={(maxStars) => edit({ maxStars })} />
 			<NumberInput label="Min SNR" value={detector.minSNR} min={0} step={0.5} disabled={disabled} onChange={(minSNR) => edit({ minSNR })} />
 			<NumberInput label="Search region" value={detector.searchRegion} min={0} max={500} suffix="px" disabled={disabled} onChange={(searchRegion) => edit({ searchRegion })} />
 			<Notice>Search region removes pairs of similar stars closer than it; 0 keeps every star.</Notice>

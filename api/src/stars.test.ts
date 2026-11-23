@@ -13,7 +13,7 @@ import {
 	cacheKey,
 	createStarDetectionRoutes,
 	DEFAULT_ASTAP_SETTINGS,
-	DEFAULT_BUILTIN_SETTINGS,
+	DEFAULT_NEBULOSA_SETTINGS,
 	DEFAULT_STAR_ACCEPTANCE,
 	isAcceptedStar,
 	MAX_QUEUED,
@@ -105,7 +105,7 @@ async function configureAstap(tools: ExternalToolsStore, executable: string, tim
 	await tools.save('astap', { executable, timeout }, revision)
 }
 
-const BUILTIN: StarDetectionRequest = { detector: DEFAULT_BUILTIN_SETTINGS, acceptance: DEFAULT_STAR_ACCEPTANCE }
+const NEBULOSA: StarDetectionRequest = { detector: DEFAULT_NEBULOSA_SETTINGS, acceptance: DEFAULT_STAR_ACCEPTANCE }
 const ASTAP: StarDetectionRequest = { detector: DEFAULT_ASTAP_SETTINGS, acceptance: DEFAULT_STAR_ACCEPTANCE }
 
 // Waits until a job ended and returns its last event.
@@ -122,7 +122,7 @@ async function ended(events: readonly StarDetectionEvent[], jobId: string, timeo
 }
 
 // Submits a manual detection that must be accepted and returns its job.
-async function submit(service: StarDetectionService, imageId: string, request: StarDetectionRequest = BUILTIN): Promise<StarDetectionJob> {
+async function submit(service: StarDetectionService, imageId: string, request: StarDetectionRequest = NEBULOSA): Promise<StarDetectionJob> {
 	const outcome = await service.submit(imageId, request)
 	if (outcome.status !== 'accepted') throw new Error(`not accepted: ${outcome.status}`)
 	return outcome.job
@@ -198,10 +198,10 @@ describe('aggregate HFD', () => {
 
 describe('cache key', () => {
 	test('changes with the settings and the ASTAP executable but not its timeout', () => {
-		expect(cacheKey('a', BUILTIN)).toBe(cacheKey('a', { ...BUILTIN }))
-		expect(cacheKey('a', BUILTIN)).not.toBe(cacheKey('b', BUILTIN))
-		expect(cacheKey('a', BUILTIN)).not.toBe(cacheKey('a', { ...BUILTIN, detector: { ...DEFAULT_BUILTIN_SETTINGS, minSNR: 5 } }))
-		expect(cacheKey('a', BUILTIN)).not.toBe(cacheKey('a', { ...BUILTIN, acceptance: { ...DEFAULT_STAR_ACCEPTANCE, edgeMargin: 1 } }))
+		expect(cacheKey('a', NEBULOSA)).toBe(cacheKey('a', { ...NEBULOSA }))
+		expect(cacheKey('a', NEBULOSA)).not.toBe(cacheKey('b', NEBULOSA))
+		expect(cacheKey('a', NEBULOSA)).not.toBe(cacheKey('a', { ...NEBULOSA, detector: { ...DEFAULT_NEBULOSA_SETTINGS, minSNR: 5 } }))
+		expect(cacheKey('a', NEBULOSA)).not.toBe(cacheKey('a', { ...NEBULOSA, acceptance: { ...DEFAULT_STAR_ACCEPTANCE, edgeMargin: 1 } }))
 		expect(cacheKey('a', ASTAP, { executable: 'x', timeout: 1000 })).toBe(cacheKey('a', ASTAP, { executable: 'x', timeout: 2000 }))
 		expect(cacheKey('a', ASTAP, { executable: 'x', timeout: 1000 })).not.toBe(cacheKey('a', ASTAP, { executable: 'y', timeout: 1000 }))
 	})
@@ -241,11 +241,11 @@ describe('built-in detection', () => {
 		const first = await submit(service, info.id)
 		await ended(events, first.jobId)
 
-		const again = await service.submit(info.id, BUILTIN)
+		const again = await service.submit(info.id, NEBULOSA)
 		expect(again.status).toBe('cached')
 		if (again.status === 'cached') expect(again.job.jobId).toBe(first.jobId)
 
-		const other = await service.submit(info.id, { ...BUILTIN, acceptance: { ...DEFAULT_STAR_ACCEPTANCE, minSNR: 1 } })
+		const other = await service.submit(info.id, { ...NEBULOSA, acceptance: { ...DEFAULT_STAR_ACCEPTANCE, minSNR: 1 } })
 		expect(other.status).toBe('accepted')
 	})
 
@@ -268,7 +268,7 @@ describe('built-in detection', () => {
 	test('runs one detection at a time and keeps the others waiting', async () => {
 		const { images, service, events } = setup()
 		const info = await images.open(writeStarField())
-		const jobs = await Promise.all([1, 2, 3].map((minSNR) => submit(service, info.id, { ...BUILTIN, detector: { ...DEFAULT_BUILTIN_SETTINGS, minSNR } })))
+		const jobs = await Promise.all([1, 2, 3].map((minSNR) => submit(service, info.id, { ...NEBULOSA, detector: { ...DEFAULT_NEBULOSA_SETTINGS, minSNR } })))
 		for (const job of jobs) expect((await ended(events, job.jobId)).state).toBe('completed')
 
 		let running = 0
@@ -286,7 +286,7 @@ describe('built-in detection', () => {
 		const { images, service, events } = setup()
 		const info = await images.open(writeStarField())
 		const running = await submit(service, info.id)
-		const waiting = await submit(service, info.id, { ...BUILTIN, detector: { ...DEFAULT_BUILTIN_SETTINGS, minSNR: 1 } })
+		const waiting = await submit(service, info.id, { ...NEBULOSA, detector: { ...DEFAULT_NEBULOSA_SETTINGS, minSNR: 1 } })
 
 		expect(service.cancel(waiting.jobId)).toBeTrue()
 		expect(service.cancel(running.jobId)).toBeTrue()
@@ -294,14 +294,14 @@ describe('built-in detection', () => {
 		expect(await ended(events, running.jobId)).toMatchObject({ state: 'cancelled', code: 'cancelled' })
 		expect(service.cancel(running.jobId)).toBeFalse()
 
-		const next = await submit(service, info.id, { ...BUILTIN, detector: { ...DEFAULT_BUILTIN_SETTINGS, minSNR: 2 } })
+		const next = await submit(service, info.id, { ...NEBULOSA, detector: { ...DEFAULT_NEBULOSA_SETTINGS, minSNR: 2 } })
 		expect((await ended(events, next.jobId)).state).toBe('completed')
 	})
 
 	test('refuses jobs beyond the queue limit', async () => {
 		const { images, service, events } = setup()
 		const info = await images.open(writeStarField())
-		const outcomes = await Promise.all(Array.from({ length: MAX_QUEUED + 4 }, (_, i) => service.submit(info.id, { ...BUILTIN, detector: { ...DEFAULT_BUILTIN_SETTINGS, minSNR: i } })))
+		const outcomes = await Promise.all(Array.from({ length: MAX_QUEUED + 4 }, (_, i) => service.submit(info.id, { ...NEBULOSA, detector: { ...DEFAULT_NEBULOSA_SETTINGS, minSNR: i } })))
 
 		expect(outcomes.filter((outcome) => outcome.status === 'queueFull').length).toBeGreaterThan(0)
 		for (const outcome of outcomes) if (outcome.status === 'accepted') service.cancel(outcome.job.jobId)
@@ -312,10 +312,10 @@ describe('built-in detection', () => {
 		const { images, service, events } = setup()
 		const info = await images.open(writeStarField())
 		const first = await submit(service, info.id)
-		const second = await submit(service, info.id, { ...BUILTIN, detector: { ...DEFAULT_BUILTIN_SETTINGS, minSNR: 1 } })
+		const second = await submit(service, info.id, { ...NEBULOSA, detector: { ...DEFAULT_NEBULOSA_SETTINGS, minSNR: 1 } })
 
 		expect(images.close(info.id)).toBeTrue()
-		expect(await service.submit(info.id, BUILTIN)).toEqual({ status: 'missing' })
+		expect(await service.submit(info.id, NEBULOSA)).toEqual({ status: 'missing' })
 		expect((await ended(events, first.jobId)).state).toBe('completed')
 		expect((await ended(events, second.jobId)).state).toBe('completed')
 
@@ -328,13 +328,13 @@ describe('built-in detection', () => {
 	test('measure resolves to the result and rejects once cancelled', async () => {
 		const { images, service } = setup()
 		const info = await images.open(writeStarField())
-		const result = await service.measure(info.id, BUILTIN)
+		const result = await service.measure(info.id, NEBULOSA)
 
 		expect(result.measurement).toBe('ok')
 		expect(result.aggregateHfd).toBeGreaterThan(1)
 
 		const controller = new AbortController()
-		const measuring = service.measure(info.id, { ...BUILTIN, detector: { ...DEFAULT_BUILTIN_SETTINGS, minSNR: 1 } }, controller.signal)
+		const measuring = service.measure(info.id, { ...NEBULOSA, detector: { ...DEFAULT_NEBULOSA_SETTINGS, minSNR: 1 } }, controller.signal)
 		controller.abort()
 		const error = await measuring.catch((error: unknown) => error)
 
@@ -345,8 +345,8 @@ describe('built-in detection', () => {
 	test('a larger maximum radius measures the HFD of defocused stars the fixed aperture cannot', async () => {
 		const { images, service } = setup()
 		const info = await images.open(writeStarField(4))
-		const fixed = await service.measure(info.id, BUILTIN)
-		const grown = await service.measure(info.id, { ...BUILTIN, detector: { ...DEFAULT_BUILTIN_SETTINGS, maximumRadius: 32 } })
+		const fixed = await service.measure(info.id, NEBULOSA)
+		const grown = await service.measure(info.id, { ...NEBULOSA, detector: { ...DEFAULT_NEBULOSA_SETTINGS, maximumRadius: 32 } })
 
 		// A Gaussian of sigma 4 px has an HFD of about 2.355 × 4 = 9.4 px.
 		expect(grown.aggregateHfd).toBeGreaterThan(8.5)
@@ -358,7 +358,7 @@ describe('built-in detection', () => {
 		const { images, service, events } = setup()
 		const info = await images.open(writeStarField())
 		const origin = { kind: 'autofocus', sessionId: 's', connectionId: 'c', deviceId: 'd', frameId: 'op:1', capture: 1 } as const
-		await service.measure(info.id, BUILTIN, undefined, origin)
+		await service.measure(info.id, NEBULOSA, undefined, origin)
 
 		expect(events.at(-1)!.job.origin).toEqual(origin)
 	})
@@ -425,17 +425,17 @@ describe('routes', () => {
 		const routes = createStarDetectionRoutes(service)
 		const info = await images.open(writeStarField())
 
-		const accepted = await call(routes, '/api/images/:id/stars', 'POST', { id: info.id }, BUILTIN)
+		const accepted = await call(routes, '/api/images/:id/stars', 'POST', { id: info.id }, NEBULOSA)
 		expect(accepted.status).toBe(202)
 		const job = (await accepted.json()) as StarDetectionJob
 		await ended(events, job.jobId)
 
-		expect((await call(routes, '/api/images/:id/stars', 'POST', { id: info.id }, BUILTIN)).status).toBe(200)
+		expect((await call(routes, '/api/images/:id/stars', 'POST', { id: info.id }, NEBULOSA)).status).toBe(200)
 		expect((await call(routes, '/api/stars/:jobId', 'GET', { jobId: job.jobId })).status).toBe(200)
 		expect(((await (await call(routes, '/api/stars/:jobId/result', 'GET', { jobId: job.jobId })).json()) as StarDetectionResult).stars.length).toBeGreaterThan(0)
 		expect(((await (await call(routes, '/api/images/:id/stars', 'GET', { id: info.id })).json()) as StarDetectionJob[]).map((job) => job.jobId)).toEqual([job.jobId])
 		expect(((await (await call(routes, '/api/stars', 'GET', {})).json()) as { jobs: StarDetectionJob[] }).jobs.map((job) => job.jobId)).toContain(job.jobId)
-		expect((await call(routes, '/api/images/:id/stars', 'POST', { id: 'unknown' }, BUILTIN)).status).toBe(404)
+		expect((await call(routes, '/api/images/:id/stars', 'POST', { id: 'unknown' }, NEBULOSA)).status).toBe(404)
 		expect((await call(routes, '/api/stars/:jobId/result', 'GET', { jobId: 'unknown' })).status).toBe(404)
 		const cancelled = await call(routes, '/api/stars/:jobId/cancel', 'POST', { jobId: job.jobId })
 		expect(cancelled.status).toBe(404)

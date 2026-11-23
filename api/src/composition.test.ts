@@ -22,7 +22,7 @@ import { type MeridianFlipExecution, MeridianFlipExecutor } from './meridianflip
 import { DEFAULT_MERIDIAN_FLIP_EXECUTOR_POLICY } from './meridianflipexecutor.policy'
 import { MountCommands } from './mounts'
 import { OperationRegistry, type ToolInvocation } from './operations'
-import { DEFAULT_BUILTIN_SETTINGS, DEFAULT_STAR_ACCEPTANCE, StarDetectionService } from './stars'
+import { DEFAULT_NEBULOSA_SETTINGS, DEFAULT_STAR_ACCEPTANCE, StarDetectionService } from './stars'
 import { WheelCommands } from './wheels'
 
 // Tools composed by direct calls of their services under one reservation, as a caller inside the process (a future
@@ -188,7 +188,7 @@ test.skipIf(SKIP)('capture, Auto Focus, filter change, and capture compose under
 		token: `token-${tokens++}`,
 		focuser: { connectionId: id, deviceId: focuserId },
 		capture: { exposureTime: 0.2, gain: 0, offset: 0, binX: 1, binY: 1, subframe: true, x: 0, y: 0, width: 512, height: 512, frameFormat: '' },
-		detection: { detector: { ...DEFAULT_BUILTIN_SETTINGS, maxStars: 20, maximumRadius: 32 }, acceptance: DEFAULT_STAR_ACCEPTANCE },
+		detection: { detector: { ...DEFAULT_NEBULOSA_SETTINGS, maxStars: 20, maximumRadius: 32 }, acceptance: DEFAULT_STAR_ACCEPTANCE },
 		fittingMode: 'HYPERBOLIC',
 		initialOffsetSteps: 4,
 		stepSize: 3000,

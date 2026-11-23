@@ -3,7 +3,7 @@
 Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
 
 Star detection finds the stars of an image document and measures their position, HFD, SNR, and flux, with an aggregate HFD of the image.
-`StarDetectionService` (`api/src/stars.ts`, on its own worker `api/src/stars.worker.ts`) runs either the toolkit's port of ASTAP's star extraction or the external ASTAP program.
+`StarDetectionService` (`api/src/stars.ts`, on its own worker `api/src/stars.worker.ts`) runs either the built-in Nebulosa detector (the toolkit's port of ASTAP's star extraction) or the external ASTAP program.
 Images → Star Detection (`web/src/images/StarDetectionPanel.tsx`, store and markers in `web/src/stars/`) runs it by hand, and the Image Inspector derives an image quality summary from it (`web/src/stars/quality.ts`).
 
 ## Purpose

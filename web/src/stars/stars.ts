@@ -1,4 +1,4 @@
-import type { AstapStarDetectionSettings, BuiltinStarDetectionSettings, ServerEvent, StarAcceptance, StarDetectionJob, StarDetectionRequest, StarDetectionResult, StarDetectionSettings, StarDetectionSnapshot, StarDetectorProvider } from 'api'
+import type { AstapStarDetectionSettings, NebulosaStarDetectionSettings, ServerEvent, StarAcceptance, StarDetectionJob, StarDetectionRequest, StarDetectionResult, StarDetectionSettings, StarDetectionSnapshot, StarDetectorProvider } from 'api'
 import { proxy, ref } from 'valtio'
 import { latestOf, trackJob } from '../analysis'
 import { type ApiFetch, browserFetch, jsonInit, responseError } from '../http'
@@ -27,10 +27,10 @@ export interface StarsState {
 }
 
 // Display names of the detectors.
-export const PROVIDER_LABELS: Readonly<Record<StarDetectorProvider, string>> = { builtin: 'Built-in', astap: 'ASTAP' }
+export const PROVIDER_LABELS: Readonly<Record<StarDetectorProvider, string>> = { nebulosa: 'Nebulosa', astap: 'ASTAP' }
 
 // Detectors, in selector order.
-export const PROVIDERS: readonly StarDetectorProvider[] = ['builtin', 'astap']
+export const PROVIDERS: readonly StarDetectorProvider[] = ['nebulosa', 'astap']
 
 // Largest signal-aperture radius of the built-in detector, in pixels: large enough to measure the defocused stars at
 // the ends of an Auto Focus curve, which the fixed 4 px aperture saturates. The aperture grows only while a star
@@ -39,7 +39,7 @@ export const DEFAULT_APERTURE_RADIUS = 32
 
 // Defaults of the built-in detector: the 500 brightest stars, any SNR, no uniqueness filter, and an aperture grown up
 // to DEFAULT_APERTURE_RADIUS.
-export const DEFAULT_BUILTIN_SETTINGS: BuiltinStarDetectionSettings = { provider: 'builtin', maxStars: 500, minSNR: 0, searchRegion: 0, maximumRadius: DEFAULT_APERTURE_RADIUS }
+export const DEFAULT_NEBULOSA_SETTINGS: NebulosaStarDetectionSettings = { provider: 'nebulosa', maxStars: 500, minSNR: 0, searchRegion: 0, maximumRadius: DEFAULT_APERTURE_RADIUS }
 
 // Defaults of ASTAP, as the server's: every star of SNR 10 or more.
 export const DEFAULT_ASTAP_SETTINGS: AstapStarDetectionSettings = { provider: 'astap', maxStars: 0, minSNR: 10 }
@@ -48,10 +48,10 @@ export const DEFAULT_ASTAP_SETTINGS: AstapStarDetectionSettings = { provider: 'a
 export const DEFAULT_STAR_ACCEPTANCE: StarAcceptance = { minSNR: 0, minHfd: 0, maxHfd: 0, edgeMargin: 0 }
 
 // Request of a first run: the built-in detector with its defaults.
-export const DEFAULT_STAR_REQUEST: StarDetectionRequest = { detector: DEFAULT_BUILTIN_SETTINGS, acceptance: DEFAULT_STAR_ACCEPTANCE }
+export const DEFAULT_STAR_REQUEST: StarDetectionRequest = { detector: DEFAULT_NEBULOSA_SETTINGS, acceptance: DEFAULT_STAR_ACCEPTANCE }
 
-// Most stars the built-in detector returns (BUILTIN_STAR_LIMIT of the API).
-export const BUILTIN_STAR_LIMIT = 2000
+// Most stars the built-in detector returns (NEBULOSA_STAR_LIMIT of the API).
+export const NEBULOSA_STAR_LIMIT = 2000
 
 // Mirror of the server's star detection jobs, shared by every component of the tab.
 export const starsState = proxy<StarsState>({ jobs: {}, latest: {}, results: {}, resultErrors: {}, submitErrors: {} })
@@ -61,7 +61,7 @@ const fetching = new Set<string>()
 
 // Returns the default settings of a detector.
 export function defaultSettings(provider: StarDetectorProvider): StarDetectionSettings {
-	return provider === 'builtin' ? DEFAULT_BUILTIN_SETTINGS : DEFAULT_ASTAP_SETTINGS
+	return provider === 'nebulosa' ? DEFAULT_NEBULOSA_SETTINGS : DEFAULT_ASTAP_SETTINGS
 }
 
 // Returns a request switched to a detector with its default settings; the request itself when it uses it.
@@ -85,7 +85,7 @@ export interface StarDetectorPatch {
 export function withDetectorSettings(request: StarDetectionRequest, { maxStars, minSNR, searchRegion, maximumRadius }: StarDetectorPatch): StarDetectionRequest {
 	const { detector } = request
 	const common = { maxStars: maxStars ?? detector.maxStars, minSNR: minSNR ?? detector.minSNR }
-	if (detector.provider !== 'builtin') return { ...request, detector: { ...detector, ...common } }
+	if (detector.provider !== 'nebulosa') return { ...request, detector: { ...detector, ...common } }
 	const radius = maximumRadius ?? detector.maximumRadius
 	return { ...request, detector: { ...detector, ...common, searchRegion: searchRegion ?? detector.searchRegion, ...(radius !== undefined && { maximumRadius: radius }) } }
 }

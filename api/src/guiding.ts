@@ -38,7 +38,7 @@ import { errorResponse } from './http'
 import type { ImageStore } from './images'
 import { frameTarget } from './livestacking.groups'
 import type { OperationDevice, OperationRegistry, ToolInvocation } from './operations'
-import type { BuiltinStarDetectionSettings, StarDetectionSettings } from './stars'
+import type { NebulosaStarDetectionSettings, StarDetectionSettings } from './stars'
 
 // Guiding service: one native guiding session per guide camera, from its first looped exposure to its stop, built on the
 // toolkit's InteractiveGuidingSession over a GuiderClient of its own. The session's root operation holds the guide
@@ -621,7 +621,7 @@ export interface GuidingWorkerRequest {
 	readonly bytes: Uint8Array<ArrayBuffer>
 	readonly encoding: BlobEncoding
 	// Settings of the built-in detector the worker detects the stars with; absent decodes only, for ASTAP.
-	readonly detection?: Partial<Omit<BuiltinStarDetectionSettings, 'provider'>>
+	readonly detection?: Partial<Omit<NebulosaStarDetectionSettings, 'provider'>>
 	// Regions the built-in detector is limited to; absent detects the whole frame.
 	readonly regions?: GuideRegions
 	// Master dark subtracted from the frame before its stars are detected; absent subtracts none.

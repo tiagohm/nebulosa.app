@@ -197,7 +197,7 @@ describe('start', () => {
 
 	test('detects the stars with the built-in settings of the request', async () => {
 		const context = await setup()
-		const { sessionId } = await start(context, { detection: { provider: 'builtin', maxStars: 3, minSNR: 0, searchRegion: 0 } })
+		const { sessionId } = await start(context, { detection: { provider: 'nebulosa', maxStars: 3, minSNR: 0, searchRegion: 0 } })
 		await waitUntil(() => context.events.some((event) => event.type === 'guiding:frame'))
 		const frame = context.events.find((event): event is Extract<GuidingServerEvent, { type: 'guiding:frame' }> => event.type === 'guiding:frame')!
 		expect(frame.overlay.stars.length).toBeLessThanOrEqual(3)

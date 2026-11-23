@@ -30,12 +30,12 @@ import { runPooledWorkerJob, WorkerPool } from './workerjob'
 // device is held: a detection only reads pixels.
 
 // Star detector of a job.
-export type StarDetectorProvider = 'builtin' | 'astap'
+export type StarDetectorProvider = 'nebulosa' | 'astap'
 
 // Settings of the built-in detector (the toolkit's detectStars).
-export interface BuiltinStarDetectionSettings {
-	readonly provider: 'builtin'
-	// Maximum number of stars kept, brightest first; the detector returns at most BUILTIN_STAR_LIMIT.
+export interface NebulosaStarDetectionSettings {
+	readonly provider: 'nebulosa'
+	// Maximum number of stars kept, brightest first; the detector returns at most NEBULOSA_STAR_LIMIT.
 	readonly maxStars: number
 	// SNR a detection must exceed to be kept; above 7 it also raises the detection level to that many sky deviations.
 	readonly minSNR: number
@@ -58,7 +58,7 @@ export interface AstapStarDetectionSettings {
 }
 
 // Settings of the detector of a job, by provider.
-export type StarDetectionSettings = BuiltinStarDetectionSettings | AstapStarDetectionSettings
+export type StarDetectionSettings = NebulosaStarDetectionSettings | AstapStarDetectionSettings
 
 // Criteria a detected star must meet to enter the aggregate HFD. Saturation is not checked: a DetectedStar
 // carries nothing that tells a saturated star apart.
@@ -107,7 +107,7 @@ export type StarDetectionJobState = AnalysisJobState
 // - astapUnavailable: ASTAP is not configured, or its executable could not be started.
 // - astapTimeout: ASTAP ran longer than its timeout and was killed.
 // - astapFailed: ASTAP ended without a readable star list.
-// - timeout: the built-in detection ran longer than BUILTIN_TIMEOUT.
+// - timeout: the built-in detection ran longer than NEBULOSA_TIMEOUT.
 // - invalidImage: the image could not be prepared for the detector.
 // - cancelled: the job was cancelled.
 // - expired: the image was released before the job could read it, or the result is no longer kept.
@@ -235,7 +235,7 @@ export class StarDetectionError extends Error {
 }
 
 // Defaults of the built-in detector: the 500 brightest stars, any SNR, no uniqueness filter.
-export const DEFAULT_BUILTIN_SETTINGS: BuiltinStarDetectionSettings = { provider: 'builtin', maxStars: 500, minSNR: 0, searchRegion: 0 }
+export const DEFAULT_NEBULOSA_SETTINGS: NebulosaStarDetectionSettings = { provider: 'nebulosa', maxStars: 500, minSNR: 0, searchRegion: 0 }
 
 // Defaults of ASTAP: every star of SNR 10 or more, ASTAP's own default extraction threshold.
 export const DEFAULT_ASTAP_SETTINGS: AstapStarDetectionSettings = { provider: 'astap', maxStars: 0, minSNR: 10 }
@@ -250,20 +250,20 @@ export { MAX_QUEUED } from './analysis'
 
 // Most stars the built-in detector returns, whatever maxStars asks for: STAR_DETECTION_LIMIT of the toolkit detector,
 // copied so this module imports only its types.
-export const BUILTIN_STAR_LIMIT = 2000
+export const NEBULOSA_STAR_LIMIT = 2000
 
 // Fewest accepted stars an aggregate HFD is computed from: below three, a median is one or two stars.
 export const MIN_AGGREGATE_STARS = 3
 
 // Built-in detections running at once, one worker each: a detection holds two copies of the image plus
 // integral images of 16 bytes per pixel, so a large frame costs hundreds of megabytes while it runs.
-const BUILTIN_CONCURRENCY = 1
+const NEBULOSA_CONCURRENCY = 1
 
 // ASTAP processes running at once; each one is a full multithreaded process with a FITS copy on disk.
 const ASTAP_CONCURRENCY = 1
 
 // Time a built-in detection may run, in milliseconds, before its worker is terminated.
-const BUILTIN_TIMEOUT = 120000
+const NEBULOSA_TIMEOUT = 120000
 
 // Whether a star meets the acceptance criteria inside an image of width × height pixels: finite
 // coordinates within the pixel area of the image less the edge margin ([-0.5, width - 0.5) since pixel
@@ -296,7 +296,7 @@ export function aggregateHfd(stars: readonly DetectedStar[], accepted: readonly 
 // Returns the key of an equivalent detection: the same image, detector settings, acceptance criteria, and
 // ASTAP executable. The timeout is left out, since it does not change a result.
 export function cacheKey(imageId: string, { detector, acceptance }: StarDetectionRequest, tool?: Readonly<ExternalToolConfig>): string {
-	const settings = detector.provider === 'builtin' ? [detector.provider, detector.maxStars, detector.minSNR, detector.searchRegion, detector.maximumRadius] : [detector.provider, detector.maxStars, detector.minSNR, tool?.executable]
+	const settings = detector.provider === 'nebulosa' ? [detector.provider, detector.maxStars, detector.minSNR, detector.searchRegion, detector.maximumRadius] : [detector.provider, detector.maxStars, detector.minSNR, tool?.executable]
 	return JSON.stringify([imageId, settings, acceptance.minSNR, acceptance.minHfd, acceptance.maxHfd, acceptance.edgeMargin])
 }
 
@@ -321,7 +321,7 @@ export class StarDetectionService implements Disposable {
 		readonly listener: StarDetectionListener,
 	) {
 		this.#scheduler = new AnalysisScheduler<StarDetectionJob, StarDetectionResult, StarDetectionPreparation, StarDetectorProvider>(images, {
-			limits: { builtin: BUILTIN_CONCURRENCY, astap: ASTAP_CONCURRENCY },
+			limits: { nebulosa: NEBULOSA_CONCURRENCY, astap: ASTAP_CONCURRENCY },
 			provider: (preparation) => preparation.request.detector.provider,
 			execute: (entry) => this.#execute(entry),
 			failed: (entry, error) => {
@@ -337,7 +337,7 @@ export class StarDetectionService implements Disposable {
 	// Resolves the provider settings of a request: ASTAP's executable and timeout are read once, here. Resolves
 	// to undefined when the request uses ASTAP and it is not configured.
 	async prepare(request: StarDetectionRequest): Promise<StarDetectionPreparation | undefined> {
-		if (request.detector.provider === 'builtin') return { request }
+		if (request.detector.provider === 'nebulosa') return { request }
 		const tool = await this.tools.resolve('astap')
 		return tool && { request, tool }
 	}
@@ -421,13 +421,13 @@ export class StarDetectionService implements Disposable {
 
 	// Runs a job with its provider and measures the stars it found.
 	async #execute(entry: JobEntry): Promise<AnalysisCompletion<StarDetectionJob, StarDetectionResult>> {
-		const stars = entry.preparation.request.detector.provider === 'builtin' ? await this.#detectBuiltin(entry) : await this.#detectAstap(entry)
+		const stars = entry.preparation.request.detector.provider === 'nebulosa' ? await this.#detectNebulosa(entry) : await this.#detectAstap(entry)
 		return this.#complete(entry, stars)
 	}
 
 	// Detects the stars of a job with the built-in detector on a worker. Throws StarDetectionError.
-	async #detectBuiltin(entry: JobEntry): Promise<DetectedStar[]> {
-		const detector = entry.preparation.request.detector as BuiltinStarDetectionSettings
+	async #detectNebulosa(entry: JobEntry): Promise<DetectedStar[]> {
+		const detector = entry.preparation.request.detector as NebulosaStarDetectionSettings
 		const image = await this.images.detectionImage(entry.job.imageId)
 		if (!image) throw new StarDetectionError('expired', 'The image was released before it could be measured')
 		if (entry.controller.signal.aborted) throw new StarDetectionError('cancelled', 'The star detection was cancelled')
@@ -440,15 +440,15 @@ export class StarDetectionService implements Disposable {
 			request: { jobId, image, options } satisfies StarWorkerRequest,
 			transfer: [image.raw.buffer],
 			signal: entry.controller.signal,
-			timeout: BUILTIN_TIMEOUT,
-			timedOut: () => new StarDetectionError('timeout', `The built-in detection did not finish within ${BUILTIN_TIMEOUT / 1000} s`),
-			crashed: (event) => new StarDetectionError('workerFailed', `The built-in detector worker died: ${event.message}`),
+			timeout: NEBULOSA_TIMEOUT,
+			timedOut: () => new StarDetectionError('timeout', `The Nebulosa detection did not finish within ${NEBULOSA_TIMEOUT / 1000} s`),
+			crashed: (event) => new StarDetectionError('workerFailed', `The Nebulosa detector worker died: ${event.message}`),
 			cancelled: () => new StarDetectionError('cancelled', 'The star detection was cancelled'),
 			receive: (response, settle) => {
 				if (response.jobId !== jobId) return
 				// A detection that threw leaves the worker usable; only a crash, a timeout, or a cancel does not.
 				if (response.status === 'detected') settle.resolve(response.stars)
-				else settle.reject(new StarDetectionError('workerFailed', `The built-in detector failed: ${response.error}`))
+				else settle.reject(new StarDetectionError('workerFailed', `The Nebulosa detector failed: ${response.error}`))
 			},
 		})
 	}
@@ -508,8 +508,8 @@ export class StarDetectionService implements Disposable {
 		const queueTime = entry.job.startedAt! - entry.job.queuedAt
 		const warnings: string[] = []
 
-		if (request.detector.provider === 'builtin' && request.detector.maxStars > BUILTIN_STAR_LIMIT) warnings.push(`The built-in detector returns at most ${BUILTIN_STAR_LIMIT} stars.`)
-		const limit = request.detector.provider === 'builtin' ? Math.min(request.detector.maxStars, BUILTIN_STAR_LIMIT) : request.detector.maxStars
+		if (request.detector.provider === 'nebulosa' && request.detector.maxStars > NEBULOSA_STAR_LIMIT) warnings.push(`The Nebulosa detector returns at most ${NEBULOSA_STAR_LIMIT} stars.`)
+		const limit = request.detector.provider === 'nebulosa' ? Math.min(request.detector.maxStars, NEBULOSA_STAR_LIMIT) : request.detector.maxStars
 		if (limit > 0 && stars.length >= limit) warnings.push('The star limit was reached: fainter stars were not measured.')
 		if (measurement === 'unavailable') warnings.push(`Fewer than ${MIN_AGGREGATE_STARS} stars were accepted: no aggregate HFD.`)
 

@@ -595,7 +595,7 @@ describe('camera forms', () => {
 		const state = load()
 		expect(starDetectionSettings(activeProfile(state).settings)).toEqual(DEFAULT_STAR_REQUEST)
 
-		const request = { detector: { provider: 'builtin', maxStars: 50, minSNR: 2, searchRegion: 0, maximumRadius: 24 }, acceptance: { minSNR: 0, minHfd: 1, maxHfd: 0, edgeMargin: 10 } } as const
+		const request = { detector: { provider: 'nebulosa', maxStars: 50, minSNR: 2, searchRegion: 0, maximumRadius: 24 }, acceptance: { minSNR: 0, minHfd: 1, maxHfd: 0, edgeMargin: 10 } } as const
 		setStarDetectionSettings(state, request)
 		expect(starDetectionSettings(state.profiles[0].settings)).toEqual(request)
 	})

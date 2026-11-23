@@ -618,7 +618,7 @@ export type { SaturnEvent, SaturnEventContacts, SaturnEventKind, SaturnEventsReq
 export type { WheelMoveRequest, WheelNamesRequest } from './wheels'
 export type {
 	AstapStarDetectionSettings,
-	BuiltinStarDetectionSettings,
+	NebulosaStarDetectionSettings,
 	StarAcceptance,
 	StarDetectionErrorCode,
 	StarDetectionEvent,

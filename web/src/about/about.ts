@@ -87,6 +87,7 @@ export const CREDIT_GROUPS: readonly CreditGroup[] = [
 				notice: 'This research has made use of the hips2fits, a tool developed at CDS, Strasbourg, France aiming at extracting FITS images from HiPS sky maps with respect to a WCS.',
 			},
 			{ name: 'Nova Astrometry.net', owner: 'Astrometry.net', url: 'https://nova.astrometry.net/', use: 'Optional online plate solving, with your own account.' },
+			{ name: 'Google Drive', owner: 'Google', url: 'https://drive.google.com/', use: 'Hosting of the quad index bands the built-in plate solver downloads on request.' },
 			{
 				name: 'Gaia DR3',
 				owner: 'ESA/Gaia/DPAC',
@@ -226,7 +227,7 @@ export const CREDIT_GROUPS: readonly CreditGroup[] = [
 	{
 		title: 'External Programs',
 		credits: [
-			{ name: 'ASTAP', owner: 'Han Kleijn', url: 'https://www.hnsky.org/astap.htm', use: 'Optional plate solving and star detection, installed by you; the built-in plate solver also reads its star databases.' },
+			{ name: 'ASTAP', owner: 'Han Kleijn', url: 'https://www.hnsky.org/astap.htm', use: 'Optional plate solving and star detection, installed by you; the built-in plate solver also reads its star databases, and its downloadable index bands are built from the D20 one.' },
 			{ name: 'HNSKY star databases', owner: 'Han Kleijn', url: 'https://www.hnsky.org/software.htm', use: 'Optional star databases the built-in plate solver reads around a known position, installed by you.' },
 			{ name: 'Astrometry.net', url: 'https://astrometry.net/', use: 'Optional local plate solving with solve-field, installed by you; the built-in plate solver also reads its index files.', notice: 'Lang et al., The Astronomical Journal, 2010.' },
 			{

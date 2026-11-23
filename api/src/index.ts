@@ -71,6 +71,7 @@ import { createOperationRoutes, OperationRegistry } from './operations'
 import { createOrbitalMechanicsRoutes, OrbitalMechanicsService } from './orbitalmechanics'
 import { createPlanetaryEventsRoutes, PlanetaryEventsService } from './planetaryevents'
 import { createPlateSolvingRoutes, PlateSolvingService } from './platesolving'
+import { createQuadIndexDownloadRoutes, DEFAULT_QUAD_INDEX_DIRECTORY, QuadIndexDownloads } from './platesolving.downloads'
 import { createRotatorRoutes, RotatorCommands } from './rotators'
 import { createSatelliteRoutes, SatelliteService, satelliteSkyAdapter } from './satellites'
 import { SatelliteAutoDownload } from './satellites.auto'
@@ -660,6 +661,7 @@ export type {
 export type { SampleTileHeader } from './imagesamples'
 export type { ImageStatisticsErrorCode, ImageStatisticsEvent, ImageStatisticsJob, ImageStatisticsJobState, ImageStatisticsReport, ImageStatisticsRequest, ImageStatisticsSnapshot, ImageStatisticsSummary, PlaneStatistics, StatisticsBackground, StatisticsHistogram, StatisticsNumericLimits } from './imagestatistics'
 export type { StreakContextSources, StreakDetectionErrorCode, StreakDetectionEvent, StreakDetectionJob, StreakDetectionJobState, StreakDetectionRequest, StreakDetectionResult, StreakDetectionSnapshot, StreakDetectionSummary, StreakDetectorSettings } from './streaks'
+export type { QuadIndexBand, QuadIndexBandItem, QuadIndexDownloadsEvent, QuadIndexDownloadsSnapshot, QuadIndexErrorCode, QuadIndexInstallState, QuadIndexJob, QuadIndexJobState, QuadIndexSource, QuadIndexSourceId } from './platesolving.downloads'
 export type { PlateSolutions, PlateSolveErrorCode, PlateSolveJob, PlateSolveJobState, PlateSolveOrigin, PlateSolveOutcome, PlateSolveRemote, PlateSolveRequest, PlateSolveResult, PlateSolverProvider, PlateSolverSettings, PlateSolveSnapshot, PlateSolveStage, PlateSolveSummary, PlateSolvingEvent } from './platesolving'
 export type { PlateSolveHint, PlateSolveHints, PlateSolveHintSource, PlateSolveStrategy, ResolvedPlateSolveHints } from './platesolving.hints'
 export type { EphemerisAttempt, EphemerisHorizonsReason, EphemerisKernelReason, EphemerisKernelsUsed, EphemerisMode, EphemerisProvenance, EphemerisSkipReason, EphemerisSourceKind, EphemerisUnavailableCode } from './ephemeris.chain'
@@ -1144,11 +1146,16 @@ listenSockets(indiMessages)
 connections.listen((event) => indiMessages.connectionChanged(event))
 
 // Settings of the external programs, such as ASTAP, read by the services that run them; a change of MediaMTX restarts the
-// gateway of the observatory cameras.
+// gateway of the observatory cameras, and one of the built-in solver tells the index downloads whether their folder is
+// searched.
 const externalTools = new ExternalToolsStore(database, (event) => {
 	broadcast(event)
 	observatoryCameras.externalToolChanged(event)
+	if (event.tool.id === 'nebulosa') void quadIndexes.changed().catch((error: unknown) => console.error('The quad index downloads could not be published', error))
 })
+
+// Downloadable quad index bands of the built-in solver, installed into its default index folder.
+const quadIndexes = new QuadIndexDownloads(DEFAULT_QUAD_INDEX_DIRECTORY, { indexDirectory: async () => (await externalTools.get('nebulosa')).config.indexDirectory }, broadcast)
 
 // IP cameras watching the observatory, relayed to the browsers by the MediaMTX gateway set in External Tools; their
 // addresses are encrypted with the key of NEBULOSA_CAMERA_SECRET_KEY, else of the operating system's credential storage.
@@ -1436,6 +1443,7 @@ const RESOURCES: readonly Disposable[] = [
 	spiceKernelLibrary,
 	spiceKernels,
 	annotations,
+	quadIndexes,
 	plateSolving,
 	starProfiles,
 	stars,
@@ -1495,11 +1503,13 @@ export async function startEarthOrientation() {
 }
 
 // Opens the Calibration Library, the projects of Image Stacking, and the saved stacks of Live Stacking in the background,
-// so what a crash left of their products is finished before anyone opens the tools, and checks the saved external tools,
-// whose latest checks are kept in memory only. Called by the app after startDatabase and before it serves; a test
-// that only imports this module opens no file and starts no program. Never rejects: a request opens them again and reports its failure.
+// so what a crash left of their products is finished before anyone opens the tools, checks the saved external tools,
+// whose latest checks are kept in memory only, and clears what quad index downloads left in staging. Called by the app
+// after startDatabase and before it serves; a test that only imports this module opens no file and starts no program.
+// Never rejects: a request opens them again and reports its failure.
 export function startStores() {
 	void externalTools.checkSaved().catch((error: unknown) => console.error('The external tools could not be checked', error))
+	void quadIndexes.start()
 	void calibrationLibrary.ready().catch((error: unknown) => console.error('The calibration library could not be opened', error))
 	void imageStacking.ready().catch((error: unknown) => console.error('The image stacking projects could not be opened', error))
 	void liveStacking.ready().catch((error: unknown) => console.error('The live stacking products could not be opened', error))
@@ -1586,6 +1596,7 @@ export const routes = {
 	...createImageRoutes(images),
 	...createImageProcessingRoutes(imageProcessing),
 	...createExternalToolsRoutes(externalTools),
+	...createQuadIndexDownloadRoutes(quadIndexes),
 	...createObservatoryCameraRoutes(observatoryCameras),
 	...createWorkspaceRoutes(workspace),
 	...createEquipmentCatalogRoutes(equipmentCatalog),

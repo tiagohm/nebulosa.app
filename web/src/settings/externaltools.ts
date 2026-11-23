@@ -49,10 +49,10 @@ export function sameConfig(a: ExternalToolConfig, b: ExternalToolConfig) {
 	return a.executable === b.executable && a.timeout === b.timeout && (a.config ?? '') === (b.config ?? '') && (a.endpoint ?? '') === (b.endpoint ?? '') && (a.indexDirectory ?? '') === (b.indexDirectory ?? '') && (a.catalogDirectory ?? '') === (b.catalogDirectory ?? '')
 }
 
-// Whether the settings of a program that is not a web service are set up enough to be used: an executable, or for the
-// built-in solver a folder of index files or of a star database.
-export function hasSettings({ executable, indexDirectory, catalogDirectory }: ExternalToolConfig) {
-	return executable.trim() !== '' || (indexDirectory?.trim() ?? '') !== '' || (catalogDirectory?.trim() ?? '') !== ''
+// Whether the settings of a program that is not a web service are set up enough to be used: an executable. The
+// built-in solver always is, since an empty Index Folder stands for its default index folder.
+export function hasSettings(tool: Pick<ExternalToolState, 'fields'>, { executable }: ExternalToolConfig) {
+	return tool.fields.includes('indexDirectory') || executable.trim() !== ''
 }
 
 // Whether a check was made with the given configuration, so it still describes it.

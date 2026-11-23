@@ -14,10 +14,11 @@ import { NumberInput } from '../ui/NumberInput'
 import { TextInput } from '../ui/TextInput'
 import { CAPABILITY_LABELS, checkMatches, externalToolsState, hasSettings, sameConfig, saveExternalTool, signInExternalTool, signOutExternalTool, testExternalTool } from './externaltools'
 import { savedDisplay, ToolBadge, type ToolDisplay, toolDisplay } from './ExternalToolStatus'
+import { QuadIndexDownloads } from './QuadIndexDownloads'
 
 // Settings of one external program or web service: its state and the test that proves it first, then the settings it
 // takes (its executable path on the server, the configuration file passed to it, the endpoint of the service, or the
-// folders of the built-in solver) and
+// folders of the built-in solver, with its downloadable index bands after them) and
 // the time limit of a run, edited as a local draft that only Save sends to the server, then what it is used for and
 // needs. A web service is signed in to with an API key typed here, sent once to the server and never kept in the draft
 // or the browser; only whether the server holds a session is shown. Test checks the draft on the server without saving
@@ -70,7 +71,7 @@ function CheckDiagnostics({ check, session, folders }: { readonly check: Externa
 					<DataRow label="Endpoint">{check.config.endpoint || 'Default'}</DataRow>
 				) : folders ? (
 					<>
-						<DataRow label="Index folder">{check.config.indexDirectory || MISSING}</DataRow>
+						<DataRow label="Index folder">{check.config.indexDirectory || `Default, ${check.resolvedPath ?? MISSING}`}</DataRow>
 						<DataRow label="Star database folder">{check.config.catalogDirectory || MISSING}</DataRow>
 					</>
 				) : (
@@ -176,8 +177,8 @@ export function ExternalToolDetail({ tool, onDirtyChange }: ExternalToolDetailPr
 	const check = test && checkMatches(test, draft) ? test : tool.lastCheck && checkMatches(tool.lastCheck, draft) ? tool.lastCheck : undefined
 	const staleTest = !testing && !check && test !== undefined
 	// Whether the values in the fields are set up enough to be used: a web service signed in to, a program with an
-	// executable, the built-in solver with a folder.
-	const draftConfigured = tool.session ? tool.signedIn === true : hasSettings(draft)
+	// executable, the built-in solver always.
+	const draftConfigured = tool.session ? tool.signedIn === true : hasSettings(tool, draft)
 	// State of the values in the fields, and of the saved settings shown in the header like in the list.
 	const display: ToolDisplay = testing ? 'checking' : toolDisplay(check, tool.session, draftConfigured)
 	const headerDisplay: ToolDisplay = testing && !dirty ? 'checking' : savedDisplay(tool)
@@ -206,7 +207,7 @@ export function ExternalToolDetail({ tool, onDirtyChange }: ExternalToolDetailPr
 			setBase({ revision: result.tool.revision, config: result.tool.config })
 			setDraft(result.tool.config)
 			// Saved settings without a check are tested at once, so every tab sees their state.
-			if (!result.tool.lastCheck && (tool.session || hasSettings(result.tool.config))) await runTest(result.tool.config)
+			if (!result.tool.lastCheck && (tool.session || hasSettings(tool, result.tool.config))) await runTest(result.tool.config)
 		} else if (result.status === 'error') {
 			setError(result.error)
 		}
@@ -228,7 +229,7 @@ export function ExternalToolDetail({ tool, onDirtyChange }: ExternalToolDetailPr
 		if (staleTest) return 'The last test checked other values. Test again to check these.'
 		if (draftConfigured) return dirty ? 'These values are not tested yet. Test them before saving.' : 'Not tested since the server started.'
 		if (tool.session) return 'Sign in with the API key of your account to use the service.'
-		return folders ? 'Set the folder of the index files or of a star database below, then test it.' : `Set the executable of ${tool.name} below, then test it.`
+		return `Set the executable of ${tool.name} below, then test it.`
 	}
 
 	return (
@@ -286,8 +287,10 @@ export function ExternalToolDetail({ tool, onDirtyChange }: ExternalToolDetailPr
 					)}
 					{tool.fields.includes('indexDirectory') && (
 						<>
-							<TextInput label="Index Folder" placeholder="Full path of a folder on the server" value={draft.indexDirectory ?? ''} onChange={(e) => edit({ ...draft, indexDirectory: e.target.value })} />
-							<Notice>Folder of Nebulosa (.nqi) and Astrometry.net (index-*.fits) quad index files on the server, searched with its subfolders. They solve images anywhere on the sky at the scales of their bands.</Notice>
+							<TextInput label="Index Folder" placeholder="Empty for the default index folder" value={draft.indexDirectory ?? ''} onChange={(e) => edit({ ...draft, indexDirectory: e.target.value })} />
+							<Notice>
+								Folder of Nebulosa (.nqi) and Astrometry.net (index-*.fits) quad index files on the server, searched with its subfolders. They solve images anywhere on the sky at the scales of their bands. Empty, the default index folder is searched, where the downloaded index bands are installed.
+							</Notice>
 						</>
 					)}
 					{tool.fields.includes('catalogDirectory') && (
@@ -322,6 +325,7 @@ export function ExternalToolDetail({ tool, onDirtyChange }: ExternalToolDetailPr
 					{dirty && (display === 'notFound' || display === 'failed') && <Notice warning>The test found a problem with these values: once saved, what uses {tool.name} fails until they are fixed.</Notice>}
 					{error && <Notice error>{error}</Notice>}
 				</PanelSection>
+				{folders && <QuadIndexDownloads indexDirectory={draft.indexDirectory ?? ''} onUseDefault={() => edit({ ...draft, indexDirectory: '' })} />}
 				<PanelSection title="Usage">
 					<DataRow label="Used for">{tool.capabilities.map((capability) => CAPABILITY_LABELS[capability]).join(', ')}</DataRow>
 					{gateway && <GatewayRow />}

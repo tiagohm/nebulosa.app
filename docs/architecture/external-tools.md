@@ -13,7 +13,7 @@ The operator configures and checks them once per server, and every service finds
 ## Relations
 
 - ASTAP serves [Plate Solving](plate-solving.md) and [Star Detection](star-detection.md) through the toolkit's adapter (`core/src/astrometry/solvers/astap.ts`); Astrometry.net Local, Astrometry.net Online, and the built-in solver serve [Plate Solving](plate-solving.md).
-- The built-in solver takes a folder of quad index files and a folder of a star database instead of an executable; the folder of ASTAP's own star database may be given.
+- The built-in solver takes a folder of quad index files and a folder of a star database instead of an executable; the folder of ASTAP's own star database may be given. An empty index folder stands for its default index folder in the data directory, where its settings download index bands (see [Plate Solving](plate-solving.md)).
 - MediaMTX is the media gateway of [Observatory Cameras](observatory-cameras.md), the only program the server keeps running instead of running it per operation.
 - Astrometry.net Online is a web service signed in to with the API key of an account.
 - The state of each program is shown with the same words wherever it appears: in Settings → External Tools and in the plate solving and star detection controls that use it.
@@ -21,7 +21,7 @@ The operator configures and checks them once per server, and every service finds
 
 ## Rules and Limitations
 
-- A program that is not configured resolves to nothing, so its services refuse to run it; no platform default path is assumed.
+- A program that is not configured resolves to nothing, so its services refuse to run it; no platform default path is assumed. The built-in solver is always configured, since its default index folder is part of the data directory.
 - A service resolves the settings once when an operation starts, so a save applies to the next operations without a restart.
 - No route runs an arbitrary command.
 - A test checks the file on the server's filesystem, then starts the program once with a fixed argument that only prints its help or version; for ASTAP it also looks for a star database beside the program, and for MediaMTX it checks the version the gateway needs. For the built-in solver it only looks for the index files and supported star databases in its folders, without reading them. It never analyzes an image, so it proves that the program runs, not that it solves.

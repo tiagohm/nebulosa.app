@@ -35,6 +35,7 @@ import type { ObservatoryCameraEvent } from './observatorycameras'
 import type { ObservingPlanEvent } from './observingplanner'
 import type { OperationEvent } from './operations'
 import type { PlateSolvingEvent } from './platesolving'
+import type { QuadIndexDownloadsEvent } from './platesolving.downloads'
 import type { SatellitesChangedEvent } from './satellites'
 import type { SpiceKernelEvent } from './spicekernels'
 import type { StarDetectionEvent } from './stars'
@@ -80,6 +81,7 @@ export type ServerEvent =
 	| MeridianFlipExecutorEvent
 	| DomeMotionEvent
 	| ExternalToolEvent
+	| QuadIndexDownloadsEvent
 	| ObservatoryCameraEvent
 	| WorkspaceEvent
 	| CameraBindingEvent

@@ -55,10 +55,13 @@ function fakeProbe(outcome?: ProbeOutcome) {
 	return { probe, calls }
 }
 
+// Default index folder of the built-in solver in the tests, missing until a test creates it.
+const defaultIndexes = join(root, 'default-indexes')
+
 // Creates a store over a fresh database in memory, recording its events; programs are started by probe.
 function store(database = AppDatabase.memory(), probe: ProgramProbe = fakeProbe().probe) {
 	const events: ExternalToolEvent[] = []
-	return { store: new ExternalToolsStore(database, (event) => events.push(event), probe), events, database }
+	return { store: new ExternalToolsStore(database, (event) => events.push(event), probe, defaultIndexes), events, database }
 }
 
 type Handler = (req: Request) => Promise<Response>
@@ -83,7 +86,7 @@ describe('catalog', () => {
 		expect(tools[0].signedIn).toBeUndefined()
 		expect(tools[1]).toMatchObject({ capabilities: ['plate-solving'], fields: ['executable', 'config'], status: 'notConfigured', config: { executable: '', config: '' } })
 		expect(tools[2]).toMatchObject({ capabilities: ['plate-solving'], fields: ['endpoint'], session: true, status: 'notConfigured', signedIn: false, config: { executable: '', endpoint: '' } })
-		expect(tools[3]).toMatchObject({ name: 'Nebulosa', capabilities: ['plate-solving'], fields: ['indexDirectory', 'catalogDirectory'], session: false, status: 'notConfigured', config: { executable: '', indexDirectory: '', catalogDirectory: '' } })
+		expect(tools[3]).toMatchObject({ name: 'Nebulosa', capabilities: ['plate-solving'], fields: ['indexDirectory', 'catalogDirectory'], session: false, status: 'configured', config: { executable: '', indexDirectory: '', catalogDirectory: '' } })
 		expect(tools[4]).toMatchObject({ name: 'MediaMTX', capabilities: ['video-gateway'], fields: ['executable'], session: false, status: 'notConfigured', timeoutLimits: { min: 1000, max: 60000 }, config: { executable: '', timeout: DEFAULT_MEDIAMTX_TIMEOUT } })
 	})
 
@@ -369,12 +372,12 @@ describe('built-in solver', () => {
 		return path
 	}
 
-	test('is configured by a folder and never starts anything', async () => {
+	test('is always configured, searching the default index folder for an empty Index Folder, and never starts anything', async () => {
 		const { probe, calls } = fakeProbe()
 		const { store: tools } = store(undefined, probe)
 		const indexes = folder('nqi-480-4-0001.nqi')
 
-		expect(await tools.resolve('nebulosa')).toBeUndefined()
+		expect(await tools.resolve('nebulosa')).toEqual({ executable: '', timeout: DEFAULT_EXTERNAL_TOOL_TIMEOUT, indexDirectory: defaultIndexes, catalogDirectory: '' })
 		expect(await tools.save('nebulosa', { executable: '/bin/sh', timeout: 60000, indexDirectory: indexes }, 0)).toMatchObject({ status: 'saved', tool: { status: 'configured' } })
 		expect(await tools.resolve('nebulosa')).toEqual({ executable: '', timeout: 60000, indexDirectory: indexes, catalogDirectory: '' })
 
@@ -401,10 +404,22 @@ describe('built-in solver', () => {
 		const file = join(root, `solver-file-${files++}`)
 		writeFileSync(file, '')
 
-		expect(await tools.check('nebulosa', { executable: '', timeout: 60000, indexDirectory: ' ', catalogDirectory: '' })).toMatchObject({ status: 'failed', code: 'empty' })
+		expect(await tools.check('nebulosa', { executable: '', timeout: 60000, indexDirectory: ' ', catalogDirectory: '' })).toMatchObject({ status: 'unavailable', code: 'noIndexes', resolvedPath: defaultIndexes, message: expect.stringContaining('Download the index bands') })
 		expect(await tools.check('nebulosa', { executable: '', timeout: 60000, indexDirectory: join(root, 'nowhere') })).toMatchObject({ status: 'unavailable', code: 'missing' })
 		expect(await tools.check('nebulosa', { executable: '', timeout: 60000, catalogDirectory: file })).toMatchObject({ status: 'failed', code: 'notDirectory' })
 		expect(await tools.check('nebulosa', { executable: '', timeout: 60000, indexDirectory: folder('readme.txt'), catalogDirectory: folder('v50_0101.1476') })).toMatchObject({ status: 'unavailable', code: 'noIndexes' })
+	})
+
+	test('an empty Index Folder checks the default index folder once a band is installed there', async () => {
+		const { store: tools } = store()
+		mkdirSync(join(defaultIndexes, 'astap-d20'), { recursive: true })
+		writeFileSync(join(defaultIndexes, 'astap-d20', 'nqi-480-8-0000.nqi'), '')
+
+		try {
+			expect(await tools.check('nebulosa', { executable: '', timeout: 60000 })).toMatchObject({ status: 'available', code: 'ok', resolvedPath: defaultIndexes, message: expect.stringContaining('Found 1 Nebulosa index file') })
+		} finally {
+			rmSync(defaultIndexes, { recursive: true, force: true })
+		}
 	})
 
 	test('keeps its folders across a restart', async () => {

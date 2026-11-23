@@ -44,6 +44,7 @@ import { activeCameraTabEntry, cameraToolsEntry, centeringTargetsEntry, keepView
 import { WorkspaceGate } from './profile/WorkspaceGate'
 import { handleSatelliteEvent, refreshSatelliteCatalog, satelliteCatalogState } from './satellites/satellites'
 import { externalToolsState, handleExternalToolEvent, refreshExternalTools } from './settings/externaltools'
+import { handleQuadIndexEvent, quadIndexesState, refreshQuadIndexes } from './settings/quadindexes'
 import { collapsibleSections } from './shell/collapsible'
 import { routeState, watchHistory } from './shell/route'
 import { handleStarsEvent, refreshStars, starsState } from './stars/stars'
@@ -141,6 +142,7 @@ const SERVER_STORES: readonly ServerStore[] = [
 	{ handle: (event) => handleLiveStackingEvent(liveStackingRuntime, event), refresh: () => refreshLiveStacking(liveStackingRuntime) },
 	{ handle: (event) => handleGuidingEvent(guidingRuntime, event), refresh: () => refreshGuiding(guidingRuntime) },
 	{ handle: (event) => handleExternalToolEvent(externalToolsState, event), refresh: () => refreshExternalTools(externalToolsState) },
+	{ handle: (event) => handleQuadIndexEvent(quadIndexesState, event), refresh: () => refreshQuadIndexes(quadIndexesState) },
 	{ handle: (event) => handleStarsEvent(starsState, event), refresh: () => refreshStars(starsState) },
 	{ handle: (event) => handleStreaksEvent(streaksState, event), refresh: () => refreshStreaks(streaksState) },
 	{ handle: (event) => handleStatisticsEvent(statisticsState, event), refresh: () => refreshStatistics(statisticsState) },

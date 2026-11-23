@@ -5,6 +5,7 @@ import { login, NOVA_ASTROMETRY_NET_URL } from 'nebulosa/src/astrometry/solvers/
 import type { AppDatabase } from './database'
 import { errorResponse } from './http'
 import { parseVersion, supportedVersion } from './observatorycameras.gateway'
+import { DEFAULT_QUAD_INDEX_DIRECTORY } from './platesolving.downloads'
 import { findQuadIndexFiles, findStarDatabases, type QuadIndexFiles, type StarDatabase, starDatabaseName } from './platesolving.native'
 import { errorCode } from './util'
 
@@ -17,7 +18,9 @@ import { errorCode } from './util'
 // checks the executable (and the configuration file) on the server's filesystem, then starts the program once
 // with a fixed argument that only prints its help or version, and reads the version it prints; for ASTAP it also
 // looks for a star database beside the program, and for MediaMTX it checks the version the gateway needs. The folders
-// of the built-in solver are checked for the index files and star databases they hold, and nothing is started. It never
+// of the built-in solver are checked for the index files and star databases they hold, and nothing is started; an empty
+// Index Folder stands for the default index folder of the data directory, where its downloaded bands are installed, so
+// the built-in solver is always configured. It never
 // analyzes an image, so it proves that the program runs, not that it solves. The saved settings of every program
 // are checked again when the server starts, since checks are kept in memory only. A web service is
 // signed in to with its API key, which is sent once to the service and never stored: the session the service
@@ -308,10 +311,10 @@ function configOf(id: ExternalToolId, { executable, timeout, config, endpoint, i
 	}
 }
 
-// Whether the settings of a program that is not a web service are set up enough to run: an executable, or for the
-// built-in solver a folder of index files or of a star database.
-function hasSettings({ executable, indexDirectory, catalogDirectory }: ExternalToolConfig) {
-	return executable.trim() !== '' || (indexDirectory?.trim() ?? '') !== '' || (catalogDirectory?.trim() ?? '') !== ''
+// Whether the settings of a program that is not a web service are set up enough to run: an executable. The built-in
+// solver always is, since an empty Index Folder stands for the default index folder.
+function hasSettings(id: ExternalToolId, { executable }: ExternalToolConfig) {
+	return definition(id).fields.includes('indexDirectory') || executable.trim() !== ''
 }
 
 // Returns the base URL of a web service: the endpoint without a trailing slash, or the public nova endpoint when
@@ -436,7 +439,7 @@ export async function inspectExecutable(executable: string): Promise<Inspection>
 // Inspects the settings of a program: its executable, then its configuration file when one is set (resolved against
 // the server's working directory), then starts it once with probe to print its help or version. For a web service,
 // its endpoint and whether the server holds a session, without contacting the service.
-async function inspectTool(id: ExternalToolId, config: ExternalToolConfig, signedIn: boolean, probe: ProgramProbe): Promise<Inspection> {
+async function inspectTool(id: ExternalToolId, config: ExternalToolConfig, signedIn: boolean, probe: ProgramProbe, defaultIndexDirectory: string): Promise<Inspection> {
 	const { name, session } = definition(id)
 
 	if (session) {
@@ -445,7 +448,7 @@ async function inspectTool(id: ExternalToolId, config: ExternalToolConfig, signe
 		return { status: 'available', code: 'ok', message: 'Signed in. The service was not contacted, so the session may have expired.' }
 	}
 
-	if (id === 'nebulosa') return await inspectSolverFolders(config)
+	if (id === 'nebulosa') return await inspectSolverFolders(config, defaultIndexDirectory)
 
 	const inspection = await inspectExecutable(config.executable)
 	if (inspection.status !== 'available' || !inspection.resolvedPath) return inspection
@@ -499,22 +502,28 @@ async function inspectFolder(path: string, label: string): Promise<Inspection | 
 }
 
 // Inspects the folders of the built-in solver (resolved against the server's working directory): each one set must be
-// a folder the server reads, and together they must hold an index file or a supported star database. Nothing is started.
-async function inspectSolverFolders({ indexDirectory = '', catalogDirectory = '' }: ExternalToolConfig): Promise<Inspection> {
-	if (!indexDirectory.trim() && !catalogDirectory.trim()) return { status: 'failed', code: 'empty', message: 'No index folder or star database folder is set.' }
-
-	const indexPath = indexDirectory.trim() ? resolve(indexDirectory) : undefined
+// a folder the server reads, and together they must hold an index file or a supported star database. An empty Index
+// Folder stands for defaultIndexDirectory, which holds no index file until a band is downloaded. Nothing is started.
+async function inspectSolverFolders({ indexDirectory = '', catalogDirectory = '' }: ExternalToolConfig, defaultIndexDirectory: string): Promise<Inspection> {
+	const indexPath = indexDirectory.trim() ? resolve(indexDirectory) : defaultIndexDirectory
 	const catalogPath = catalogDirectory.trim() ? resolve(catalogDirectory) : undefined
-	const problem = (indexPath && (await inspectFolder(indexPath, 'index folder'))) || (catalogPath && (await inspectFolder(catalogPath, 'star database folder')))
+	// The default index folder is created by the first download, so it may not exist yet.
+	const defaultMissing =
+		!indexDirectory.trim() &&
+		!(await stat(indexPath).then(
+			(e) => e.isDirectory(),
+			() => false,
+		))
+	const problem = (!defaultMissing && (await inspectFolder(indexPath, 'index folder'))) || (catalogPath && (await inspectFolder(catalogPath, 'star database folder')))
 	if (problem) return problem
 
-	const resolvedPath = (indexPath ?? catalogPath)!
+	const resolvedPath = indexPath
 	let files: QuadIndexFiles = { nebulosa: [], astrometryNet: [], unreadable: [] }
 	let databases: StarDatabase[] = []
 
 	// The folders were readable a moment ago; one that stops being so is reported as such.
 	try {
-		if (indexPath) files = await findQuadIndexFiles(indexPath)
+		if (!defaultMissing) files = await findQuadIndexFiles(indexPath)
 		if (catalogPath) databases = await findStarDatabases(catalogPath)
 	} catch {
 		return { status: 'failed', code: 'inaccessible', resolvedPath, message: 'The folders cannot be read by the server.' }
@@ -525,7 +534,7 @@ async function inspectSolverFolders({ indexDirectory = '', catalogDirectory = ''
 	if (files.astrometryNet.length > 0) found.push(`${files.astrometryNet.length} Astrometry.net index ${files.astrometryNet.length === 1 ? 'file' : 'files'}`)
 	if (databases.length > 0) found.push(`star database ${databases.map(starDatabaseName).join(', ')}`)
 
-	if (found.length === 0) return { status: 'unavailable', code: 'noIndexes', resolvedPath, message: 'The folders hold no index file and no supported star database (ASTAP D05, D20, D50, D80, or HNSKY G14, G16).' }
+	if (found.length === 0) return { status: 'unavailable', code: 'noIndexes', resolvedPath, message: `The folders hold no index file and no supported star database (ASTAP D05, D20, D50, D80, or HNSKY G14, G16).${indexDirectory.trim() ? '' : ' Download the index bands that cover the field of view of your images.'}` }
 	const blind = files.nebulosa.length + files.astrometryNet.length > 0 ? '' : ' Without index files, only images with a known position and scale are solved.'
 	const unreadable = files.unreadable.length === 0 ? '' : ` ${files.unreadable.length} ${files.unreadable.length === 1 ? 'subfolder' : 'subfolders'} of the index folder cannot be read and ${files.unreadable.length === 1 ? 'is' : 'are'} left out.`
 	return { status: 'available', code: 'ok', resolvedPath, message: `Found ${found.join(', ')}.${blind}${unreadable} The files are read once a solve needs them.` }
@@ -544,11 +553,13 @@ export class ExternalToolsStore {
 	// Tail of the changes in progress, which run one at a time.
 	#queue: Promise<unknown> = Promise.resolve()
 
-	// Creates the store of the settings in database, publishing changes to listener; probe starts the programs a check tests.
+	// Creates the store of the settings in database, publishing changes to listener; probe starts the programs a check
+	// tests, and defaultIndexDirectory is the folder the built-in solver searches when its Index Folder is empty.
 	constructor(
 		readonly database: AppDatabase,
 		readonly listener?: ExternalToolListener,
 		readonly probe: ProgramProbe = probeProgram,
+		readonly defaultIndexDirectory: string = DEFAULT_QUAD_INDEX_DIRECTORY,
 	) {}
 
 	// Returns the saved settings of a program, the defaults when never saved.
@@ -569,13 +580,13 @@ export class ExternalToolsStore {
 	}
 
 	// Returns the state of a program. A web service is configured once signed in, a program once its executable (the
-	// built-in solver, a folder) is set.
+	// built-in solver always) is set.
 	#state(id: ExternalToolId): ExternalToolState {
 		const { revision, ...config } = this.#tool(id)
 		const tool = definition(id)
 		const lastCheck = this.#checks.get(id)
 		const signedIn = this.#sessions.has(id)
-		const status = (tool.session ? signedIn : hasSettings(config)) ? 'configured' : 'notConfigured'
+		const status = (tool.session ? signedIn : hasSettings(id, config)) ? 'configured' : 'notConfigured'
 		return { ...tool, status, config, revision, ...(lastCheck && { lastCheck }), ...(tool.session && { signedIn }) }
 	}
 
@@ -662,7 +673,7 @@ export class ExternalToolsStore {
 	async check(id: ExternalToolId, config: ExternalToolConfig): Promise<ExternalToolCheck> {
 		const start = performance.now()
 		const checked = configOf(id, config)
-		const inspection = await inspectTool(id, checked, this.#sessions.has(id), this.probe)
+		const inspection = await inspectTool(id, checked, this.#sessions.has(id), this.probe, this.defaultIndexDirectory)
 		const check: ExternalToolCheck = { ...inspection, config: checked, checkedAt: Date.now(), duration: performance.now() - start }
 
 		if (sameConfig(this.#tool(id), checked)) {
@@ -673,26 +684,28 @@ export class ExternalToolsStore {
 		return check
 	}
 
-	// Checks the saved settings of every program with an executable (the built-in solver, a folder) set, all at once, so their states are known after a
+	// Checks the saved settings of every program with an executable set (and the built-in solver), all at once, so their states are known after a
 	// restart without anyone testing them; each result becomes the program's latest check. Web services are left out,
 	// since a restart signs out of them.
 	async checkSaved(): Promise<void> {
 		await Promise.all(
 			EXTERNAL_TOOLS.filter((tool) => !tool.session).map(async ({ id }) => {
 				const { revision: _, ...config } = this.#tool(id)
-				if (hasSettings(config)) await this.check(id, config)
+				if (hasSettings(id, config)) await this.check(id, config)
 			}),
 		)
 	}
 
 	// Returns the settings a run of a program uses, or undefined when the program is not configured (a web service
-	// not signed in to, the built-in solver without a folder). A service resolves them once when an operation starts and keeps the returned snapshot for the
+	// not signed in to, a program without an executable). The built-in solver gets the default index folder for an empty
+	// Index Folder. A service resolves them once when an operation starts and keeps the returned snapshot for the
 	// whole operation, so a later save applies to the next operations only.
 	resolve(id: ExternalToolId): Promise<Readonly<ResolvedExternalTool> | undefined> {
 		const { revision: _, ...tool } = this.#tool(id)
 		const session = this.#sessions.get(id)
-		if (!(definition(id).session ? session : hasSettings(tool))) return Promise.resolve(undefined)
-		return Promise.resolve(Object.freeze({ ...tool, ...(session && { session }) }))
+		if (!(definition(id).session ? session : hasSettings(id, tool))) return Promise.resolve(undefined)
+		const defaulted = definition(id).fields.includes('indexDirectory') && !tool.indexDirectory?.trim() && { indexDirectory: this.defaultIndexDirectory }
+		return Promise.resolve(Object.freeze({ ...tool, ...defaulted, ...(session && { session }) }))
 	}
 
 	// Runs a change of the settings after the ones in progress, one at a time.

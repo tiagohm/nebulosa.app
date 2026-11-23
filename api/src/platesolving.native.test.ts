@@ -132,9 +132,9 @@ writeIndex(INDEXES, 0.2)
 writeIndex(INDEXES, 0.28)
 
 // Creates a service whose built-in solver reads the folders.
-async function setup(indexDirectory: string, catalogDirectory = '') {
+async function setup(indexDirectory: string, catalogDirectory = '', defaultIndexDirectory?: string) {
 	const images = new ImageStore()
-	const tools = new ExternalToolsStore(AppDatabase.memory())
+	const tools = new ExternalToolsStore(AppDatabase.memory(), undefined, undefined, defaultIndexDirectory)
 	await tools.save('nebulosa', { executable: '', timeout: 60000, indexDirectory, catalogDirectory }, 0)
 	const events: PlateSolvingEvent[] = []
 	const service = new PlateSolvingService(images, tools, (event) => events.push(event))
@@ -267,6 +267,22 @@ describe('solve', () => {
 		expect(result.outcome).toBe('noSolution')
 		expect(result.warnings).toContain('The index folder holds no index file that serves this field and scale.')
 		service[Symbol.dispose]()
+	})
+
+	test('an empty Index Folder searches the default index folder, which may not exist yet', async () => {
+		const missing = join(root, `default-${folders++}`)
+		const { service, info } = await setup('', '', missing)
+		const result = await service.solve(info.id, BLIND)
+
+		expect(result.outcome).toBe('noSolution')
+		expect(result.warnings).toContain(`The index folder ${missing} does not exist: download index bands in the settings of the Nebulosa solver, or set another folder.`)
+
+		mkdirSync(missing)
+		writeIndex(missing, 0.28)
+		const { service: other, info: image } = await setup('', '', missing)
+		expect((await other.solve(image.id, BLIND)).outcome).toBe('solved')
+		service[Symbol.dispose]()
+		other[Symbol.dispose]()
 	})
 
 	test('a damaged index file is skipped with a warning', async () => {

@@ -14,7 +14,7 @@ Where each kind of state lives, and why.
   Long-lived services, such as Mount Remote Control listeners and Meridian Flip Monitors, are never restarted after a restart.
 - **Tab memory**: the presentation of the tab, such as the document view, selections, drafts, and the results a tool shows; it starts over on a reload.
 - **Browser storage**: only the view state of the tab (`ViewPersistence` of `web/src/profile/view.ts`): the active profile, the fields the profile schema marks as view state, and a few view entries such as the expanded panel sections, kept for the tab across its reloads or for every tab of the browser.
-- **Files under the data directory**: scientific files stay files (captured frames, the products of the Calibration Library, Image Stacking, and Live Stacking, SPK kernels, the IERS tables), and the database holds their identities and metadata.
+- **Files under the data directory**: scientific files stay files (captured frames, the products of the Calibration Library, Image Stacking, and Live Stacking, SPK kernels, the IERS tables, the downloaded quad index files of the built-in plate solver), and the database holds their identities and metadata.
   A product directory without a row is never adopted, but moved aside, never deleted.
 - **Bundled assets**: the catalogs the `bin` scripts generate are read-only assets embedded or bundled with the application, not operational state.
 - **The URL path**: the route.

@@ -12,6 +12,7 @@ import { readFits } from 'nebulosa/src/io/formats/fits/fits'
 import { bufferSource } from 'nebulosa/src/io/io'
 import { luminanceImage, readImageFrom } from './imagedecode'
 import { findQuadIndexFiles, findStarDatabases, largestStarDatabase, type NativeSolveErrorCode, type NativeSolveParameters, type NativeWorkerRequest, type NativeWorkerResponse, starDatabaseName } from './platesolving.native'
+import { errorCode } from './util'
 
 // Worker thread of the built-in plate solver (see platesolving.native.ts). For each solve it detects the stars of the
 // grayscale copy of an image, or of the FITS of private pixels it decodes, searches the quad index files of the folder
@@ -102,15 +103,25 @@ class IndexCache {
 	// Files skipped when the folder was opened, for the warnings of every solve.
 	#skipped: string[] = []
 
-	// Returns the indexes of a folder (none for an empty one) that can serve an image of width × height pixels at a range
-	// of scales, opening them when the folder or its files changed, with the warnings about the files skipped.
-	async indexes(directory: string, width: number, height: number, scale: NativeSolveParameters['scale']): Promise<{ readonly indexes: QuadIndex[]; readonly warnings: string[] }> {
+	// Returns the indexes of a folder (none for an empty one, or for one that does not exist, such as the default index
+	// folder before any download) that can serve an image of width × height pixels at a range of scales, opening them
+	// when the folder or its files changed, with the warnings about the files skipped and whether the folder is missing.
+	async indexes(directory: string, width: number, height: number, scale: NativeSolveParameters['scale']): Promise<{ readonly indexes: QuadIndex[]; readonly warnings: string[]; readonly missing?: boolean }> {
 		if (!directory) {
 			this.#close()
 			return { indexes: [], warnings: [] }
 		}
 
-		const files = await findQuadIndexFiles(directory)
+		let files
+
+		try {
+			files = await findQuadIndexFiles(directory)
+		} catch (error) {
+			if (errorCode(error) !== 'ENOENT') throw error
+			this.#close()
+			return { indexes: [], warnings: [`The index folder ${directory} does not exist: download index bands in the settings of the Nebulosa solver, or set another folder.`], missing: true }
+		}
+
 		const signature = await signatureOf([...files.nebulosa, ...files.astrometryNet])
 
 		if (directory !== this.#directory || signature !== this.#signature) {
@@ -255,12 +266,12 @@ async function solve(request: NativeSolveParameters, signal: AbortSignal): Promi
 	signal.throwIfAborted()
 	const { width, height, position, scale } = request
 	const options: NativePlateSolveOptions = { width, height, ...position, ...(scale && { scale }), timeout: remaining() }
-	const { indexes, warnings } = await cache.indexes(request.indexDirectory, width, height, scale)
+	const { indexes, warnings, missing } = await cache.indexes(request.indexDirectory, width, height, scale)
 
 	if (indexes.length > 0) {
 		const result = await nativePlateSolve(stars, indexes, { ...options, timeout: remaining() }, signal)
 		if (result) return { result, warnings }
-	} else if (request.indexDirectory) {
+	} else if (request.indexDirectory && !missing) {
 		warnings.push('The index folder holds no index file that serves this field and scale.')
 	}
 

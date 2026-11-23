@@ -3,7 +3,7 @@
 Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
 
 Plate solving finds where an image document points, its scale, and its orientation, as a WCS solution, through ASTAP, Astrometry.net Local, Astrometry.net Online (nova.astrometry.net), or the built-in Nebulosa solver.
-`PlateSolvingService` (`api/src/platesolving.ts`, hints in `api/src/platesolving.hints.ts`, Nova in `api/src/platesolving.nova.ts`, the built-in solver in `api/src/platesolving.native.ts` on its worker `api/src/platesolving.worker.ts`) solves for every consumer.
+`PlateSolvingService` (`api/src/platesolving.ts`, hints in `api/src/platesolving.hints.ts`, Nova in `api/src/platesolving.nova.ts`, the built-in solver in `api/src/platesolving.native.ts` on its worker `api/src/platesolving.worker.ts`, its downloadable index bands in `api/src/platesolving.downloads.ts`) solves for every consumer.
 Images → Plate Solver (`web/src/images/PlateSolverPanel.tsx`, `web/src/platesolving/`) solves by hand, chooses the solution shown, and offers the astrometric tools built on it: measurements and markers, target offset, the context menu, and Sync Mount.
 
 ## Purpose
@@ -18,6 +18,7 @@ One service gives all of them the same solve, hints, and acceptance rules.
 - Its solutions feed [Annotation](annotation.md), [Streak Detection](streak-detection.md), the [Star Profile Inspector](star-profile-inspector.md), the celestial [Overlay](overlay.md), and Mount Nudge, whose pad moves by the orientation of the latest solved frame of the camera.
 - Providers are configured in [External Tools](external-tools.md); Nova uploads the image to the Astrometry.net web service.
 - The built-in solver is the toolkit's native solver (`core/src/astrometry/solvers/native.ts`): it detects the stars of the image with the toolkit's detector, searches the quad index files of its index folder (Nebulosa `.nqi` tiles, written by `bun make:quads`, and Astrometry.net index files) and, around a known position and scale, the quads it builds from the largest ASTAP or HNSKY star database of its star database folder.
+- Its index folder defaults to a folder of the data directory, into which the settings of the built-in solver download bands of `.nqi` tiles built from a star database (ASTAP D20) and shared on Google Drive.
 - On a camera tab the settings belong to the physical camera and are shared with the operations of that camera.
 - The toolkit (`core`) parses and proves the WCS and does the spherical geometry.
 - Sync Mount syncs the mount of the active equipment setup on the solution shown, through the mount commands; Target Offset may take its target from the [Sky Map](sky-map.md) selection.
@@ -35,3 +36,4 @@ One service gives all of them the same solve, hints, and acceptance rules.
 - The built-in solver searches the star database only when the index files found nothing and both a position and a scale are known; without index files it cannot solve blind.
 - An index file or subfolder that cannot be read is skipped with a warning of the result, and of two files of one tile the one holding more quads is searched; Astrometry.net index files are read whole where they cannot be mapped (on Windows), so a folder holding many of them needs that much memory once a field uses them.
 - The cache of a solve does not follow the contents of the folders of the built-in solver, so a solve repeated after its index files changed answers with the kept result.
+- A band is downloaded only on an explicit request, one at a time, and replaces the installed files of its band only once its archive has the size and SHA-256 of the catalog; a download does not survive a restart, and the downloaded bands are searched only while the Index Folder is empty or holds the default folder.

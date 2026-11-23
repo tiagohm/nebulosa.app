@@ -1,7 +1,7 @@
-import type { ConnectionStatus, ConnectionType, ConnectRequest, RemoteConnectRequest, ServerEvent } from 'api'
+import type { ConnectionStatus, ConnectionType, ConnectRequest, DiscoveredAlpacaDevice, DiscoveredAlpacaServer, RemoteConnectRequest, ServerEvent } from 'api'
 import { nanoid } from 'nanoid'
 import { proxy } from 'valtio'
-import { type ApiFetch, browserFetch, jsonInit, responseError } from '../http'
+import { type ApiFetch, browserFetch, fetchJson, jsonInit, responseError } from '../http'
 import { SnapshotRefreshes } from '../refresh'
 
 // Saved connections of the workspace and the connections the server holds open. Saved connections belong to the server
@@ -103,6 +103,45 @@ export function removeConnection(state: ConnectionState, id: string) {
 	state.connections = state.connections.filter((c) => c.id !== id)
 	if (state.selected === id) state.selected = undefined
 	delete state.errors[id]
+}
+
+// Display name of each Alpaca device type, in the terms of the application (an Alpaca telescope is a mount).
+const ALPACA_DEVICE_LABELS: Readonly<Record<DiscoveredAlpacaDevice['type'], string>> = {
+	camera: 'Camera',
+	telescope: 'Mount',
+	focuser: 'Focuser',
+	filterwheel: 'Filter wheel',
+	rotator: 'Rotator',
+	dome: 'Dome',
+	switch: 'Switch',
+	covercalibrator: 'Cover calibrator',
+	observingconditions: 'Weather',
+	safetymonitor: 'Safety monitor',
+	video: 'Video',
+}
+
+// Asks the Nebulosa server to search its own network for Alpaca servers and resolves those that answered, once its listen
+// window closed. Rejects with the server's message on failure, or with an AbortError when the signal aborts.
+export function discoverAlpacaServers(signal?: AbortSignal, request: ApiFetch = browserFetch): Promise<DiscoveredAlpacaServer[]> {
+	return fetchJson<DiscoveredAlpacaServer[]>({ fetch: request }, '/api/connections/alpaca/discover', { signal })
+}
+
+// Returns the endpoint of a discovered Alpaca server, host:port.
+export function discoveredEndpoint(server: DiscoveredAlpacaServer): string {
+	return `${server.host}:${server.port}`
+}
+
+// Returns the devices of a discovered Alpaca server in words: their count and their distinct kinds, in the server's order.
+export function discoveredDevices(devices: readonly DiscoveredAlpacaDevice[]): string {
+	if (devices.length === 0) return 'No devices listed'
+	const kinds = [...new Set(devices.map((d) => ALPACA_DEVICE_LABELS[d.type] ?? d.type))]
+	return `${devices.length} ${devices.length === 1 ? 'device' : 'devices'}: ${kinds.join(', ')}`
+}
+
+// Returns the form filled with a discovered Alpaca server: its host and port, and its name (else its endpoint) only when
+// the form has no name yet, so a name the operator typed is never replaced.
+export function fillFromDiscovered(form: ConnectionInput, server: DiscoveredAlpacaServer): ConnectionInput {
+	return { ...form, type: 'ALPACA', host: server.host, port: server.port, name: form.name.trim() ? form.name : (server.name ?? discoveredEndpoint(server)) }
 }
 
 // Refreshes of the open server connections, ordered against the events and answers that open or close one meanwhile.

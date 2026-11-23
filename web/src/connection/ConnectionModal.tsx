@@ -1,7 +1,8 @@
-import type { ConnectionType } from 'api'
-import { type SubmitEvent, useEffect, useState } from 'react'
+import type { ConnectionType, DiscoveredAlpacaServer } from 'api'
+import { type SubmitEvent, useEffect, useRef, useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { deviceState } from '../equipment/equipment'
+import { aborted } from '../http'
 import { activeProfile, forgetConnection, profileState, selectConnection } from '../profile/profile'
 import { Button } from '../ui/Button'
 import { ConfirmButton } from '../ui/ConfirmButton'
@@ -12,11 +13,12 @@ import { SectionHeading } from '../ui/SectionHeading'
 import { Select } from '../ui/Select'
 import { StatusBadge, type StatusTone } from '../ui/StatusBadge'
 import { TextInput } from '../ui/TextInput'
-import { connect, type Connection, type ConnectionInput, type ConnectionRequest, connectionState, DEFAULT_PORT, disconnect, highlightConnection, removeConnection, saveConnection, serverOf } from './connection'
+import { connect, type Connection, type ConnectionInput, type ConnectionRequest, connectionState, DEFAULT_PORT, disconnect, discoverAlpacaServers, discoveredDevices, discoveredEndpoint, fillFromDiscovered, highlightConnection, removeConnection, sameEndpoint, saveConnection, serverOf } from './connection'
 
 // Modal that leads with the saved connections: it connects or disconnects the highlighted one on the server, makes it the
 // one the active profile works with, and opens its Equipment Setup. Creating, editing, and removing a connection replace
-// the list with a form until it is saved or cancelled. Opening it highlights the profile's connection.
+// the list with a form until it is saved or cancelled; for an Alpaca connection, the form can search the network of the
+// Nebulosa server for Alpaca servers and fill itself with the one chosen. Opening it highlights the profile's connection.
 
 // Initial form values for a new connection: an INDI server on the default port.
 const EMPTY_FORM: ConnectionInput = { name: '', host: '', port: DEFAULT_PORT, type: 'INDI' }
@@ -254,6 +256,7 @@ function ConnectionForm({ connection, onDone }: ConnectionFormProps) {
 			<SectionHeading>{connection ? 'Edit connection' : 'New connection'}</SectionHeading>
 			<TextInput autoFocus label="Name" placeholder="Observatory" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
 			<Select label="Type" className="flex-none" options={CONNECTION_TYPES} format={typeLabel} value={form.type} onChange={(type) => setForm({ ...form, type })} />
+			{form.type === 'ALPACA' && <AlpacaDiscovery form={form} onPick={(server) => setForm(fillFromDiscovered(form, server))} />}
 			<div className="grid grid-cols-[minmax(0,1fr)_11rem] gap-4">
 				<TextInput type="url" disabled={form.type === 'SIMULATOR'} title={form.type === 'SIMULATOR' ? 'The simulator runs inside the Nebulosa server' : undefined} label="Host" placeholder="192.168.0.10" value={form.host} onChange={(e) => setForm({ ...form, host: e.target.value })} />
 				<NumberInput disabled={form.type === 'SIMULATOR'} label="Port" min={1} max={65535} value={form.port} onChange={(port) => setForm({ ...form, port })} />
@@ -274,5 +277,77 @@ function ConnectionForm({ connection, onDone }: ConnectionFormProps) {
 				</div>
 			</div>
 		</form>
+	)
+}
+
+// Properties of the search for Alpaca servers of the connection form.
+interface AlpacaDiscoveryProps {
+	// Current values of the form, whose endpoint marks the server it matches.
+	readonly form: ConnectionInput
+	// Fills the form with the chosen server.
+	readonly onPick: (server: DiscoveredAlpacaServer) => void
+}
+
+// What the search for Alpaca servers shows: nothing searched yet, a search running, the servers found, or its failure.
+type DiscoveryView = { readonly kind: 'idle' } | { readonly kind: 'searching' } | { readonly kind: 'found'; readonly servers: readonly DiscoveredAlpacaServer[] } | { readonly kind: 'failed'; readonly message: string }
+
+// Search, run on demand by the Nebulosa server on its own network, for the Alpaca servers that answer discovery, and the
+// list of those found; choosing one fills the form. The results live only while the form shows an Alpaca connection, and
+// a running search is abandoned when it stops showing one.
+function AlpacaDiscovery({ form, onPick }: AlpacaDiscoveryProps) {
+	const [view, setView] = useState<DiscoveryView>({ kind: 'idle' })
+	const { connections } = useSnapshot(connectionState)
+	// Request of the running search, aborted when the form closes or leaves the Alpaca type.
+	const request = useRef<AbortController>(undefined)
+
+	// Abandons the running search on unmount.
+	useEffect(() => () => request.current?.abort(), [])
+
+	// Runs a search, replacing the servers of the previous one.
+	async function handleSearch() {
+		const controller = new AbortController()
+		request.current = controller
+		setView({ kind: 'searching' })
+
+		try {
+			setView({ kind: 'found', servers: await discoverAlpacaServers(controller.signal) })
+		} catch (error) {
+			if (!aborted(error)) setView({ kind: 'failed', message: error instanceof Error ? error.message : 'Unable to search the network' })
+		}
+	}
+
+	const searching = view.kind === 'searching'
+	const status = searching ? 'Searching the network of the Nebulosa server…' : view.kind === 'found' ? `${view.servers.length} ${view.servers.length === 1 ? 'server' : 'servers'} found` : 'Search the network of the Nebulosa server for Alpaca servers to fill in this connection.'
+
+	return (
+		<div className="flex flex-col gap-2">
+			<div className="flex items-center gap-4">
+				<p className="m-0 min-w-0 flex-1 text-sm leading-5 text-ink-300">{status}</p>
+				<Button variant="secondary" className="flex-none" disabled={searching} onClick={() => void handleSearch()}>
+					{searching ? 'Searching…' : view.kind === 'idle' ? 'Find servers' : 'Search again'}
+				</Button>
+			</div>
+			{view.kind === 'found' && (
+				<div className="max-h-56 overflow-y-auto">
+					<List emptyText="No Alpaca server answered. The search reaches only the network of the Nebulosa server, and only servers with discovery turned on and UDP port 32227 open in their firewall.">
+						{view.servers.map((server) => {
+							const endpoint = discoveredEndpoint(server)
+							const saved = connections.find((c) => sameEndpoint({ type: 'ALPACA', host: server.host, port: server.port }, c))
+							return (
+								<ListItem
+									key={endpoint}
+									title={server.name ?? endpoint}
+									description={[server.manufacturer, server.name && endpoint, discoveredDevices(server.devices)].filter(Boolean).join(' · ')}
+									meta={saved && `Saved as “${saved.name}”`}
+									selected={sameEndpoint({ type: 'ALPACA', host: server.host, port: server.port }, form)}
+									onClick={() => onPick(server)}
+								/>
+							)
+						})}
+					</List>
+				</div>
+			)}
+			{view.kind === 'failed' && <p className="m-0 text-sm leading-5 text-danger">{view.message}</p>}
+		</div>
 	)
 }

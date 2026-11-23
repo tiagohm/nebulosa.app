@@ -216,7 +216,7 @@ export const CREDIT_GROUPS: readonly CreditGroup[] = [
 			},
 			{ name: 'Watney Astrometry', owner: 'Jusas', url: 'https://github.com/Jusas/WatneyAstrometry', use: 'Search positions and star density steps of the built-in plate solver around a known position.' },
 			{ name: 'INDI', owner: 'INDI Library', url: 'https://indilib.org/', use: 'Protocol of the INDI connections to devices.' },
-			{ name: 'ASCOM Alpaca', owner: 'ASCOM Initiative', url: 'https://ascom-standards.org/', use: 'Protocol of the Alpaca connections to devices.' },
+			{ name: 'ASCOM Alpaca', owner: 'ASCOM Initiative', url: 'https://ascom-standards.org/', use: 'Protocol of the Alpaca connections to devices and of the discovery of Alpaca servers on the network.' },
 			{ name: 'LX200 command set', owner: 'Meade Instruments', url: 'https://soundstepper.sourceforge.net/LX200_Compatible_Commands.html', use: 'Protocol Mount Remote Control speaks to planetarium programs.' },
 			{ name: 'Stellarium telescope protocol', owner: 'Stellarium', url: 'https://github.com/Stellarium/stellarium/tree/master/plugins/TelescopeControl', use: 'Protocol Mount Remote Control speaks to Stellarium.' },
 			{ name: 'Hough transform', owner: 'Paul V. C. Hough, R. O. Duda, and P. E. Hart', url: 'https://doi.org/10.1145/361237.361242', use: 'Streak detection and the trails of DARV.', notice: 'Communications of the ACM 15, 11 (1972).' },

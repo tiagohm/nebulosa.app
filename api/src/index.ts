@@ -10,6 +10,7 @@ import { CaptureFrameRegistry, createCaptureFrameRoutes } from './captureframes'
 import { CameraCaptures, createCaptureRoutes } from './captures'
 import { CloseApproachesService, createCloseApproachRoutes } from './closeapproaches'
 import { type ConnectionStatus, type ConnectRequest, connections, createConnectionRoutes } from './connection'
+import { createAlpacaDiscoveryRoutes } from './connection.discovery'
 import { CoverCommands, createCoverRoutes } from './covers'
 import { createDarkLibraryWizardRoutes, DarkLibraryWizardSessions } from './darklibrarywizard'
 import { DarkLibraryWizardAnalyzer } from './darklibrarywizard.analysis'
@@ -191,6 +192,7 @@ export type {
 export type { CloseApproach, CloseApproachErrorCode, CloseApproachFilters, CloseApproachHistoryFilters, CloseApproachPageResponse } from './closeapproaches'
 export type { CloseApproachBody, CloseApproachSort, CloseApproachSortField } from 'nebulosa/src/adapters/orbits/sbd'
 export type { ConnectionCloseCause, ConnectionEvent, ConnectionRegistryEvent, ConnectionStatus, ConnectionType, ConnectRequest, RemoteConnectRequest } from './connection'
+export type { DiscoveredAlpacaDevice, DiscoveredAlpacaServer } from './connection.discovery'
 export type { CommandAccepted, CommandError, CommandErrorCode, CommandRequest } from './commands'
 export type { EclipseDirection, EclipseLocation } from './eclipses'
 export type { ApiError } from './http'
@@ -1573,6 +1575,7 @@ export const routes = {
 	...createOperationHistoryRoutes(operationHistory),
 	...createNotificationRoutes(notifications),
 	...createConnectionRoutes(connections),
+	...createAlpacaDiscoveryRoutes(),
 	...createIndiRoutes(indi),
 	...createMountRoutes(mounts),
 	...createMountRemoteControlRoutes(mountRemoteControl),

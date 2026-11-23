@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, spyOn, test } from 'bun:test'
-import { connect, type ConnectionState, disconnect, handleConnectionEvent, highlightConnection, refreshServers, removeConnection, saveConnection, serverOf } from './connection'
+import { connect, type ConnectionState, disconnect, discoverAlpacaServers, discoveredDevices, fillFromDiscovered, handleConnectionEvent, highlightConnection, refreshServers, removeConnection, saveConnection, serverOf } from './connection'
 
 function newState(): ConnectionState {
 	return { open: true, connections: [], servers: [], errors: {} }
@@ -192,5 +192,35 @@ describe('refresh', () => {
 		await refreshed
 
 		expect(state.servers.map(({ id }) => id)).toEqual(['other', 'opened'])
+	})
+})
+
+describe('alpaca discovery', () => {
+	const server = { host: '192.168.0.20', port: 11111, name: 'Observatory', devices: [] }
+
+	test('fills the endpoint and the name of an unnamed form', () => {
+		expect(fillFromDiscovered({ name: ' ', host: '', port: 7624, type: 'ALPACA' }, server)).toEqual({ name: 'Observatory', host: '192.168.0.20', port: 11111, type: 'ALPACA' })
+		expect(fillFromDiscovered({ name: '', host: '', port: 7624, type: 'ALPACA' }, { ...server, name: undefined }).name).toBe('192.168.0.20:11111')
+	})
+
+	test('keeps a name the operator typed', () => {
+		expect(fillFromDiscovered({ name: 'Rig', host: 'old', port: 1, type: 'ALPACA' }, server)).toEqual({ name: 'Rig', host: '192.168.0.20', port: 11111, type: 'ALPACA' })
+	})
+
+	test('describes the devices by count and kind', () => {
+		expect(discoveredDevices([])).toBe('No devices listed')
+		expect(
+			discoveredDevices([
+				{ name: 'Main', type: 'camera' },
+				{ name: 'Guide', type: 'camera' },
+				{ name: 'Mount', type: 'telescope' },
+			]),
+		).toBe('3 devices: Camera, Mount')
+	})
+
+	test('rejects with the message of a failed search', async () => {
+		const request = () => Promise.resolve(Response.json({ error: 'Unable to bind', code: 'discoveryFailed' }, { status: 500 }))
+		await expect(discoverAlpacaServers(undefined, request)).rejects.toThrow('Unable to bind')
+		expect(await discoverAlpacaServers(undefined, () => Promise.resolve(Response.json([server])))).toEqual([server])
 	})
 })

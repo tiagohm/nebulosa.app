@@ -16,7 +16,7 @@ Shell and workspace:
 - **Shell, routes, workspaces, status bar**: Implemented ([UI Structure](ui-and-layout.md)).
 - **About page**: Implemented.
 - **Profiles**: Implemented ([Persistence and State](persistence-and-state.md)).
-- **Connections (INDI, Alpaca, simulator)**: Implemented.
+- **Connections (INDI, Alpaca, simulator)**: Implemented; the Alpaca servers on the network of the Nebulosa server can be discovered (IPv4 broadcast only).
 - **Equipment Setup**: Implemented.
 - **Equipment Catalog**: Implemented ([Equipment Catalog](equipment-catalog.md)).
 - **Observing sites**: Implemented ([Observing Sites and Time Zones](observing-sites-and-time-zones.md)).

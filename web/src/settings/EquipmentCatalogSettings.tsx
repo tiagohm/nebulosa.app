@@ -1,12 +1,12 @@
 import type { CatalogCameraFields, CatalogTelescopeFields } from 'api'
-import { type ReactNode, useState } from 'react'
+import { type ReactNode, useEffect, useRef, useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { calibrationLibraryRuntime } from '../calibrationlibrary/calibrationlibrary'
 import { cameraBindingsState, type CatalogCamera, catalogState, type CatalogTelescope } from '../equipment/catalog'
 import { profilesUsingTelescope } from '../equipment/telescopes'
 import { formatFocalRatio, formatMillimeters, formatPixelSize } from '../format'
 import { profileState } from '../profile/profile'
-import { type CatalogKind, navigate, routeState } from '../shell/route'
+import { type CatalogKind, navigate, routeState, setLeaveGuard } from '../shell/route'
 import { useMediaQuery, WIDE_SCREEN } from '../shell/useMediaQuery'
 import { EmptyState } from '../shell/WorkspaceLayout'
 import { Button } from '../ui/Button'
@@ -14,15 +14,16 @@ import { List, ListItem } from '../ui/List'
 import { Modal, ModalActions } from '../ui/Modal'
 import { SegmentedControl } from '../ui/SegmentedControl'
 import { Select } from '../ui/Select'
-import { CatalogCameraEditor } from './CatalogCameraEditor'
+import { CatalogCameraEditor, cameraUsageText } from './CatalogCameraEditor'
 import { CatalogTelescopeEditor } from './CatalogTelescopeEditor'
 
 // Equipment Catalog section of the Settings page: the physical cameras calibration frames and masters are recorded
 // against and the telescopes and lenses the Equipment Setup refers to, one catalog shared by every profile, tab, and
 // browser, and the editor of the one shown. Each camera device is bound to a camera in the Equipment Setup, and its
 // Telescope and Guide Telescope may refer to a telescope. The kind listed and the item shown are part of the URL; without
-// an item, the first one of the kind is shown. Showing another item, another kind, or creating one with unsaved changes
-// asks before discarding them. Nothing here commands a device.
+// an item, the first one of the kind is shown. The lists show the archived items last. Leaving an item or a new one with
+// unsaved changes, for another item, another kind, another section, or another workspace, asks before discarding them.
+// Nothing here commands a device.
 
 export interface EquipmentCatalogSettingsProps {
 	// Kind of equipment listed, from the route; absent lists the cameras.
@@ -50,6 +51,8 @@ interface CatalogItem {
 	readonly description: string
 	// Its use, on its own line under the description.
 	readonly meta: string
+	// Whether it is archived, which lists it last.
+	readonly archived: boolean
 }
 
 // Content of the Equipment Catalog section.
@@ -58,16 +61,39 @@ export function EquipmentCatalogSettings({ catalog = 'cameras', item }: Equipmen
 	const wide = useMediaQuery(WIDE_SCREEN)
 	const [creating, setCreating] = useState(false)
 	const [dirty, setDirty] = useState(false)
-	const [pending, setPending] = useState<Shown>()
-	const listed: readonly { readonly id: string; readonly name: string }[] = catalog === 'cameras' ? cameras : telescopes
+	// Step held until the person discards the unsaved changes or keeps editing.
+	const [pending, setPending] = useState<() => void>()
+	// Removes the leave guard of the unsaved changes; absent while there are none.
+	const unguard = useRef<() => void>(undefined)
+	const listed = listOrder<{ readonly id: string; readonly name: string; readonly archived: boolean }>(catalog === 'cameras' ? cameras : telescopes)
 	const selectedId = item !== undefined ? listed.find((entry) => entry.id === item)?.id : listed[0]?.id
 	const selectedName = listed.find((entry) => entry.id === selectedId)?.name
 	const camera = catalog === 'cameras' ? cameras.find((entry) => entry.id === selectedId) : undefined
 	const telescope = catalog === 'telescopes' ? telescopes.find((entry) => entry.id === selectedId) : undefined
 	const noun = catalog === 'cameras' ? 'camera' : 'telescope'
 
-	function show(next: Shown) {
+	// Holds every navigation away from the item while its changes are unsaved.
+	useEffect(() => {
+		if (!dirty) return undefined
+		const remove = setLeaveGuard((proceed) => {
+			setPending(() => proceed)
+			return false
+		})
+		unguard.current = remove
+		return () => {
+			remove()
+			unguard.current = undefined
+		}
+	}, [dirty])
+
+	// Drops the unsaved changes and their guard at once, so a navigation right after it is not held.
+	function forget() {
+		unguard.current?.()
 		setDirty(false)
+	}
+
+	function show(next: Shown) {
+		forget()
 		setCreating(next.kind === 'new')
 		if (next.kind === 'item') navigate(routeState, { workspace: 'settings', section: 'equipment-catalog', catalog: next.catalog, item: next.id })
 		else navigate(routeState, { workspace: 'settings', section: 'equipment-catalog', ...(next.catalog === 'telescopes' && { catalog: next.catalog }) })
@@ -80,7 +106,7 @@ export function EquipmentCatalogSettings({ catalog = 'cameras', item }: Equipmen
 			if (next.kind === 'list') return
 		}
 
-		if (dirty) setPending(next)
+		if (dirty) setPending(() => () => show(next))
 		else show(next)
 	}
 
@@ -90,7 +116,14 @@ export function EquipmentCatalogSettings({ catalog = 'cameras', item }: Equipmen
 
 	function saved(id: string) {
 		if (creating) show({ kind: 'item', catalog, id })
-		else setDirty(false)
+		else forget()
+	}
+
+	function discard() {
+		const proceed = pending
+		setPending(undefined)
+		forget()
+		proceed?.()
 	}
 
 	function detail() {
@@ -111,9 +144,9 @@ export function EquipmentCatalogSettings({ catalog = 'cameras', item }: Equipmen
 	const kinds = <SegmentedControl options={CATALOG_KINDS} value={catalog} format={(kind) => KIND_LABELS[kind]} onChange={(kind) => request({ kind: 'list', catalog: kind })} />
 	const list =
 		catalog === 'cameras' ? (
-			<CameraList cameras={cameras} selected={creating ? undefined : selectedId} onSelect={(id) => request({ kind: 'item', catalog, id })} onAdd={() => request({ kind: 'new', catalog })} wide={wide} kinds={kinds} />
+			<CameraList cameras={cameras} selected={creating ? undefined : selectedId} onSelect={(id) => request({ kind: 'item', catalog, id })} onAdd={() => request({ kind: 'new', catalog })} wide={wide} kinds={kinds} creating={creating} />
 		) : (
-			<TelescopeList telescopes={telescopes} selected={creating ? undefined : selectedId} onSelect={(id) => request({ kind: 'item', catalog, id })} onAdd={() => request({ kind: 'new', catalog })} wide={wide} kinds={kinds} />
+			<TelescopeList telescopes={telescopes} selected={creating ? undefined : selectedId} onSelect={(id) => request({ kind: 'item', catalog, id })} onAdd={() => request({ kind: 'new', catalog })} wide={wide} kinds={kinds} creating={creating} />
 		)
 
 	return (
@@ -123,19 +156,12 @@ export function EquipmentCatalogSettings({ catalog = 'cameras', item }: Equipmen
 				{detail()}
 			</div>
 			<Modal open={pending !== undefined} onClose={() => setPending(undefined)} title="Discard unsaved changes?" className="max-w-md">
-				<p className="m-0 text-sm leading-5 text-ink-200">
-					The changes to {creating ? `the new ${noun}` : selectedName} were not saved. Showing another {pending?.catalog === catalog ? noun : 'list'} discards them.
-				</p>
+				<p className="m-0 text-sm leading-5 text-ink-200">The changes to {creating ? `the new ${noun}` : selectedName} were not saved. Leaving them discards them.</p>
 				<ModalActions>
 					<Button variant="secondary" onClick={() => setPending(undefined)} data-autofocus>
 						Keep Editing
 					</Button>
-					<Button
-						onClick={() => {
-							if (pending) show(pending)
-							setPending(undefined)
-						}}
-					>
+					<Button variant="danger" onClick={discard}>
 						Discard Changes
 					</Button>
 				</ModalActions>
@@ -159,24 +185,47 @@ interface ItemListProps {
 	readonly kinds: ReactNode
 	// Label of the action that adds an item, such as Add Camera.
 	readonly addLabel: string
-	// Text of an empty list, and of the select option of an item being created.
-	readonly emptyText: string
+	// Text of the select option of an item being created.
 	readonly newText: string
+	// Whether an item is being created, which shows the list even while the kind has none.
+	readonly creating: boolean
+}
+
+// Returns the items of a kind in the order the lists show them: as the catalog keeps them, the archived ones last.
+function listOrder<T extends { readonly archived: boolean }>(items: readonly T[]): readonly T[] {
+	return [...items.filter((entry) => !entry.archived), ...items.filter((entry) => entry.archived)]
 }
 
 // Items of a kind of the catalog with the switch of kind and the action that adds one: a sidebar on wide screens, a
-// select on narrow ones.
-function ItemList({ items, selected, onSelect, onAdd, wide, kinds, addLabel, emptyText, newText }: ItemListProps) {
+// select on narrow ones, whose options name the archived items. A kind with no item and none being created shows only
+// the switch, since the empty detail offers the action that adds one.
+function ItemList({ items, selected, onSelect, onAdd, wide, kinds, addLabel, newText, creating }: ItemListProps) {
+	const ordered = listOrder(items)
+	const empty = items.length === 0 && !creating
+
 	if (!wide) {
 		return (
 			<div className="flex flex-none flex-col gap-2 border-b border-line-100 p-3">
 				{kinds}
-				<div className="flex items-center gap-2">
-					{items.length > 0 && <Select className="min-w-0 flex-1" options={items.map((entry) => entry.id)} value={selected ?? ''} format={(id) => items.find((entry) => entry.id === id)?.name ?? newText} onChange={onSelect} />}
-					<Button variant="secondary" onClick={onAdd}>
-						{addLabel}
-					</Button>
-				</div>
+				{!empty && (
+					<div className="flex items-center gap-2">
+						{items.length > 0 && (
+							<Select
+								className="min-w-0 flex-1"
+								options={ordered.map((entry) => entry.id)}
+								value={selected ?? ''}
+								format={(id) => {
+									const entry = items.find((candidate) => candidate.id === id)
+									return entry ? (entry.archived ? `${entry.name} · Archived` : entry.name) : newText
+								}}
+								onChange={onSelect}
+							/>
+						)}
+						<Button variant="secondary" className="flex-none" onClick={onAdd}>
+							{addLabel}
+						</Button>
+					</div>
+				)}
 			</div>
 		)
 	}
@@ -184,33 +233,37 @@ function ItemList({ items, selected, onSelect, onAdd, wide, kinds, addLabel, emp
 	return (
 		<aside className="flex w-80 flex-none flex-col border-r border-line-100 bg-base-000">
 			<div className="flex-none border-b border-line-100 p-2">{kinds}</div>
-			<List emptyText={emptyText} className="min-h-0 flex-1 overflow-y-auto p-2">
-				{items.map((entry) => (
-					<ListItem
-						opens
-						key={entry.id}
-						title={entry.name}
-						description={
-							<span className="flex flex-col">
-								<span>{entry.description}</span>
-								<span className="text-ink-300 tabular-nums">{entry.meta}</span>
-							</span>
-						}
-						selected={entry.id === selected}
-						onClick={() => onSelect(entry.id)}
-					/>
-				))}
-			</List>
-			<div className="flex-none border-t border-line-100 p-2">
-				<Button variant="secondary" className="w-full" onClick={onAdd}>
-					{addLabel}
-				</Button>
-			</div>
+			{!empty && (
+				<>
+					<List emptyText={newText} className="min-h-0 flex-1 overflow-y-auto p-2">
+						{ordered.map((entry) => (
+							<ListItem
+								opens
+								key={entry.id}
+								title={entry.name}
+								description={
+									<span className="flex flex-col">
+										<span>{entry.description}</span>
+										<span className="text-ink-300 tabular-nums">{entry.meta}</span>
+									</span>
+								}
+								selected={entry.id === selected}
+								onClick={() => onSelect(entry.id)}
+							/>
+						))}
+					</List>
+					<div className="flex-none border-t border-line-100 p-2">
+						<Button variant="secondary" className="w-full" onClick={onAdd}>
+							{addLabel}
+						</Button>
+					</div>
+				</>
+			)}
 		</aside>
 	)
 }
 
-interface KindListProps extends Pick<ItemListProps, 'selected' | 'onSelect' | 'onAdd' | 'wide' | 'kinds'> {}
+interface KindListProps extends Pick<ItemListProps, 'selected' | 'onSelect' | 'onAdd' | 'wide' | 'kinds' | 'creating'> {}
 
 export interface CameraListProps extends KindListProps {
 	// Cameras of the catalog, in list order.
@@ -234,11 +287,11 @@ function CameraList({ cameras, ...props }: CameraListProps) {
 		if (camera.archived) return 'Archived'
 		const bound = Object.values(bindings).filter((binding) => binding.cameraId === camera.id).length
 		const usage = summary?.cameras.find((entry) => entry.cameraId === camera.id)
-		return `${bound} bound · ${usage?.frames ?? 0} frames · ${usage?.masters ?? 0} masters`
+		return cameraUsageText(bound, usage?.frames ?? 0, usage?.masters ?? 0)
 	}
 
-	const items = cameras.map((camera) => ({ id: camera.id, name: camera.name, description: cameraDescription(camera), meta: meta(camera) }))
-	return <ItemList items={items} addLabel="Add Camera" emptyText="No cameras in the catalog." newText="New Camera" {...props} />
+	const items = cameras.map((camera) => ({ id: camera.id, name: camera.name, description: cameraDescription(camera), meta: meta(camera), archived: camera.archived }))
+	return <ItemList items={items} addLabel="Add Camera" newText="New Camera" {...props} />
 }
 
 export interface TelescopeListProps extends KindListProps {
@@ -246,10 +299,10 @@ export interface TelescopeListProps extends KindListProps {
 	readonly telescopes: readonly CatalogTelescope[]
 }
 
-// Returns what the list says of a telescope: its model, aperture, focal length, and focal ratio, in millimeters.
+// Returns what the list says of a telescope: its model, aperture and focal length in millimeters, and focal ratio.
 export function telescopeDescription({ model, aperture, focalLength }: Pick<CatalogTelescopeFields, 'model' | 'aperture' | 'focalLength'>) {
 	const ratio = aperture !== undefined && focalLength !== undefined && formatFocalRatio(focalLength / aperture)
-	return [model, aperture !== undefined && formatMillimeters(aperture), focalLength !== undefined && `${formatMillimeters(focalLength)} FL`, ratio].filter(Boolean).join(' · ') || 'No model or optics'
+	return [model, aperture !== undefined && `${formatMillimeters(aperture)} aperture`, focalLength !== undefined && `${formatMillimeters(focalLength)} FL`, ratio].filter(Boolean).join(' · ') || 'No model or optics'
 }
 
 // Telescopes of the catalog, with how many profiles use each.
@@ -263,6 +316,6 @@ function TelescopeList({ telescopes, ...props }: TelescopeListProps) {
 		return used === 1 ? '1 profile' : `${used} profiles`
 	}
 
-	const items = telescopes.map((telescope) => ({ id: telescope.id, name: telescope.name, description: telescopeDescription(telescope), meta: meta(telescope) }))
-	return <ItemList items={items} addLabel="Add Telescope" emptyText="No telescopes in the catalog." newText="New Telescope" {...props} />
+	const items = telescopes.map((telescope) => ({ id: telescope.id, name: telescope.name, description: telescopeDescription(telescope), meta: meta(telescope), archived: telescope.archived }))
+	return <ItemList items={items} addLabel="Add Telescope" newText="New Telescope" {...props} />
 }

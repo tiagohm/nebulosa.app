@@ -185,6 +185,6 @@ function tileKey({ left, top }: ImageRect): string {
 // Tiles of the pixel readout of the tab.
 export const pixelTiles = new SampleTileCache()
 
-// Whether the status line of the viewer reads the samples under the pointer, set from the Image Inspector and kept in
+// Whether the status line of the viewer reads the samples under the pointer, set from the viewer toolbar and kept in
 // browser storage (pixelInspectionEntry of profile/view.ts).
 export const pixelInspection = proxy<{ enabled: boolean }>({ enabled: false })

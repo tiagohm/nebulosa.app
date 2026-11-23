@@ -1,5 +1,5 @@
 import { cn } from 'cn'
-import { type KeyboardEvent, useRef } from 'react'
+import { type KeyboardEvent, type ReactNode, useRef } from 'react'
 import { Field } from './Field'
 import { moveIndex } from './navigation'
 
@@ -16,8 +16,8 @@ export interface SegmentedControlProps<T extends string> {
 	readonly value: T
 	// Called with the option chosen; not called for the selected one.
 	readonly onChange: (value: T) => void
-	// Display text of an option; the option itself when absent.
-	readonly format?: (value: T) => string
+	// Display content of an option, a text or a text with a mark such as a colour swatch; the option itself when absent.
+	readonly format?: (value: T) => ReactNode
 	// Why an option cannot be chosen, its tooltip; undefined for an available option.
 	readonly disabledReason?: (value: T) => string | undefined
 	// Whether the whole control is disabled.

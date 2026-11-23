@@ -52,7 +52,7 @@ import type { NebulosaStarDetectionSettings, StarDetectionSettings } from './sta
 // Each guide BLOB is decoded on a worker thread of the session (guiding.worker.ts), which also takes the grayscale copy,
 // detects its stars with the built-in detector and the settings of the request (while guiding, only in the regions
 // around the stars the guider uses; see guidingRegions), and answers both with the FITS/XISF bytes; a session that
-// detects with ASTAP has the worker decode only and runs ASTAP on the frame file here, about half a second per frame.
+// detects with ASTAP has the worker decode only and runs ASTAP on the frame file here.
 // The stars feed the tracker synchronously, and the guide star of each frame is profiled on its grayscale copy
 // (guidingprofile.ts) into the record, with the progress of the exposure the camera counts down. The bytes of
 // the newest frame are opened as a capture document of the image store and recorded in the capture frame registry as

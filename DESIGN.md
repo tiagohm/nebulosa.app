@@ -33,6 +33,9 @@ colors:
     map-radiant: 'oklch(0.6 0.08 360)'
     axis-1: 'oklch(0.72 0.08 245)'
     axis-2: 'oklch(0.72 0.08 330)'
+    channel-red: 'oklch(0.7 0.09 28)'
+    channel-green: 'oklch(0.74 0.09 150)'
+    channel-blue: 'oklch(0.72 0.085 250)'
 typography:
     headline:
         fontFamily: "'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"
@@ -229,6 +232,8 @@ The Sky's star map is drawn on a canvas in the same palette, read from the token
 ### Measurement Axes
 
 Two axes of one measurement plotted together, the RA and DEC of the guiding graphs and the horizontal and vertical cuts of a star profile, draw in `axis-1` slate and `axis-2` mauve, the framings' low chroma, never Ember Clay or a signal colour, so a curve never reads as the selection or as a state. On a guide frame the detected stars are Moonlight circles (rejected ones dashed Graticule) and the measured star Starlight Cream; only the lock cross is Ember Clay.
+
+The colour planes of an image plotted together, the curves of the Image Inspector's histogram, draw in `channel-red`, `channel-green`, and `channel-blue`, the hues the operator expects of each channel at the framings' low chroma, never the signal colours; luminance and a mono plane are Moonlight, and the second green of a raw mosaic is dashed. The legend shows each plane's swatch beside its name, and the plane whose statistics are listed is drawn heavier over the others, which are faint.
 
 ### Named Rules
 

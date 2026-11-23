@@ -151,6 +151,8 @@ export const ICONS = {
 	database: 'M4 6c0-1.7 3.6-3 8-3s8 1.3 8 3s-3.6 3-8 3s-8-1.3-8-3zM4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3',
 	// A comet with its curved tail between two asteroids: the small bodies of the solar system.
 	smallBodies: 'M4.5 16.5a3 3 0 1 0 6 0a3 3 0 1 0-6 0M5.6 14.1Q8.5 7.5 15 4M9.9 18.4Q16.5 15.5 20 9M16.8 18.5a1.2 1.2 0 1 0 2.4 0a1.2 1.2 0 1 0-2.4 0M3.8 5.5a1.2 1.2 0 1 0 2.4 0a1.2 1.2 0 1 0-2.4 0',
+	// A magnifier over a block of four pixels: the samples under the pointer.
+	pixelInspect: 'M3 3h8v8H3zM7 3v8M3 7h8M15.5 10a4.5 4.5 0 1 0 0 9a4.5 4.5 0 1 0 0-9M18.7 18.2L21.5 21',
 	// An open eye: shown.
 	eye: 'M2.5 12s3.5-6.5 9.5-6.5s9.5 6.5 9.5 6.5s-3.5 6.5-9.5 6.5s-9.5-6.5-9.5-6.5zM12 9a3 3 0 1 0 0 6a3 3 0 1 0 0-6',
 	// An eye struck through: hidden.

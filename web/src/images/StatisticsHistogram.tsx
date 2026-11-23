@@ -4,8 +4,9 @@ import { binAt, HISTOGRAM_HEIGHT, HISTOGRAM_MARGIN, HISTOGRAM_WIDTH, type Histog
 
 // Histogram of the Image Inspector: the step outline of each plane shown over a common axis in source units, linear or
 // logarithmic counts. A drag across the plot zooms to the values it spans, a double click returns to the whole range,
-// and hovering reads the count of each plane at the value under the pointer. Nothing here measures anything: zoom,
-// scale, and hover only redraw the counts already fetched.
+// within the values the series cover, and hovering reads the count of each plane at the value under the pointer. A
+// muted plane is drawn faint under the others, so the plane whose statistics are listed stands out among them. Nothing
+// here measures anything: zoom, scale, and hover only redraw the counts already fetched.
 
 // Distance a drag must span to zoom, in SVG units; a shorter one is a click.
 const ZOOM_MINIMUM = 3
@@ -18,6 +19,8 @@ export interface StatisticsHistogramSeries {
 	readonly stroke: string
 	// Dash pattern of an outline that must read apart from a solid one of the same color.
 	readonly dash?: string
+	// Whether the outline is drawn faint, under the others.
+	readonly muted?: boolean
 	// Its histogram.
 	readonly histogram: HistogramSeries
 }
@@ -43,7 +46,8 @@ function pointerX(event: PointerEvent<SVGSVGElement>) {
 export function StatisticsHistogram({ series, log, zoom, onZoom }: StatisticsHistogramProps) {
 	const [hover, setHover] = useState<number>()
 	const [drag, setDrag] = useState<readonly [number, number]>()
-	const range = zoom ?? histogramRange(series.map((s) => s.histogram))
+	const whole = histogramRange(series.map((s) => s.histogram))
+	const range = zoom ?? whole
 	const scale = histogramScale(
 		series.map((s) => s.histogram),
 		range,
@@ -68,8 +72,8 @@ export function StatisticsHistogram({ series, log, zoom, onZoom }: StatisticsHis
 				}}
 				onPointerUp={() => {
 					if (drag && Math.abs(drag[1] - drag[0]) >= ZOOM_MINIMUM) {
-						const a = valueAt(Math.min(drag[0], drag[1]), scale)
-						const b = valueAt(Math.max(drag[0], drag[1]), scale)
+						const a = Math.max(whole[0], valueAt(Math.min(drag[0], drag[1]), scale))
+						const b = Math.min(whole[1], valueAt(Math.max(drag[0], drag[1]), scale))
 						if (b > a) onZoom([a, b])
 					}
 					setDrag(undefined)
@@ -78,8 +82,8 @@ export function StatisticsHistogram({ series, log, zoom, onZoom }: StatisticsHis
 				onPointerLeave={() => setHover(undefined)}
 				onDoubleClick={() => onZoom(undefined)}
 			>
-				{series.map((s) => (
-					<path key={s.label} d={histogramPath(s.histogram, scale)} fill="none" stroke={s.stroke} strokeWidth={1} strokeDasharray={s.dash} strokeLinejoin="round" />
+				{[...series.filter((s) => s.muted), ...series.filter((s) => !s.muted)].map((s) => (
+					<path key={s.label} d={histogramPath(s.histogram, scale)} fill="none" stroke={s.stroke} strokeWidth={s.muted ? 1 : 1.5} strokeOpacity={s.muted ? 0.4 : 1} strokeDasharray={s.dash} strokeLinejoin="round" />
 				))}
 				{drag && Math.abs(drag[1] - drag[0]) >= ZOOM_MINIMUM && <rect x={Math.min(drag[0], drag[1])} y={HISTOGRAM_MARGIN} width={Math.abs(drag[1] - drag[0])} height={HISTOGRAM_HEIGHT - 2 * HISTOGRAM_MARGIN} fill="var(--color-accent)" fillOpacity={0.15} />}
 				{hover !== undefined && !drag && <line x1={hover} x2={hover} y1={HISTOGRAM_MARGIN} y2={HISTOGRAM_HEIGHT - HISTOGRAM_MARGIN} stroke="var(--color-ink-300)" strokeDasharray="2 2" />}

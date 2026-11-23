@@ -84,7 +84,7 @@ import { PixelCursorStatus } from './PixelCursorStatus'
 import { pixelInspection } from './pixeltiles'
 import { SaveImageModal } from './SaveImageModal'
 import { SaveImagePopover } from './SaveImagePopover'
-import { useStatisticsAreaTool } from './statisticsArea'
+import { stopAreaSelection, useStatisticsAreaTool } from './statisticsArea'
 import { StatisticsAreaOverlay } from './StatisticsAreaOverlay'
 import { TargetOffsetOverlay } from './TargetOffsetOverlay'
 import { IMAGE_TOOL_DEFINITIONS, type ImageToolId, imageToolsFor } from './tools'
@@ -111,12 +111,13 @@ import { IMAGE_TOOL_DEFINITIONS, type ImageToolId, imageToolsFor } from './tools
 // With a solution of the image shown, its grid, centre, passive aids (crosshair, orientation, scale bar), and the
 // coordinates under the pointer are drawn from that solution, and the measure mode of the toolbar draws measurements
 // (astrometryTool.ts). With the Image Inspector shown, Select Area of its statistics takes the presses over the image to
-// draw the area measured (statisticsArea.ts), which is drawn while the Inspector is shown. Clicks go to the first owner
-// of: a Guiding star pick (which disables the measure modes), the area selection, a measure mode, the Plate Solver tool
+// draw the area measured (statisticsArea.ts), which is drawn while the Inspector is shown; while it does, a bar over the
+// viewer says so with Cancel, and the panel, when it is a drawer over the image, closes until the area is drawn. Clicks
+// go to the first owner of: a Guiding star pick (which disables the measure modes), the area selection, a measure mode, the Plate Solver tool
 // (selecting and editing measurements), then Star Detection, the Star Profile Inspector (measuring the star at the
 // click, a star detected there if any), Streak Detection, and Annotation. The toolbar hides every overlay of a document
 // and shows them again as they were; while hidden only the Guiding star pick stays, so a click or a measure never acts
-// on what cannot be seen. With Inspect Pixels of the Image Inspector on, the status line adds the native samples under
+// on what cannot be seen. With Inspect Pixels of the viewer toolbar on, the status line adds the native samples under
 // the pointer (PixelCursorStatus) after the sky coordinates of a solution.
 
 // Distance from the pointer a click looks for a star within, in screen pixels.
@@ -215,6 +216,9 @@ export function ImagesWorkspace() {
 	const panelState = useWorkspacePanel('images')
 	const { setOpen: setPanelOpen } = panelState
 	const panelRequested = state.panelRequested === true
+	const selectingArea = !!areaTool
+	// Whether the area selection is in progress, as last seen, and whether it closed the drawer to uncover the image.
+	const areaSelection = useRef({ selecting: false, closedDrawer: false })
 	// Whether the panel is open as a sheet under the viewer on a narrow screen; the bottom area then yields its room to the
 	// viewer, so the frame the tool changes stays in sight.
 	const sheetOpen = definition.sheet === true && !panelState.docked && panelState.open
@@ -226,6 +230,24 @@ export function ImagesWorkspace() {
 		imagesState.panelRequested = false
 		setPanelOpen(true)
 	}, [panelRequested, setPanelOpen])
+
+	// Closes the drawer over the image while an area is drawn, and opens it again once the selection ends, so the operator
+	// sees the image to draw on and then the statistics of what was drawn. A docked panel stays as it is.
+	useEffect(() => {
+		const current = areaSelection.current
+		if (selectingArea === current.selecting) return
+		current.selecting = selectingArea
+
+		if (selectingArea) {
+			if (!panelState.docked && panelState.open) {
+				current.closedDrawer = true
+				setPanelOpen(false)
+			}
+		} else if (current.closedDrawer) {
+			current.closedDrawer = false
+			if (!panelState.docked) setPanelOpen(true)
+		}
+	}, [selectingArea, panelState.docked, panelState.open, setPanelOpen])
 
 	const toolBar = <ImageToolBar tools={imageToolsFor(document)} selected={tool} disabled={!document} onSelect={pickTool} />
 	const openButton = <IconButton icon="folder" onClick={() => setChoosing(true)} label="Open file" />
@@ -250,7 +272,7 @@ export function ImagesWorkspace() {
 		>
 			<div ref={viewerRef} className="flex h-full flex-col bg-base-000">
 				{state.documents.length > 0 && <DocumentTabs documents={state.documents} activeKey={state.activeKey} onClose={(key) => closeImage(imagesState, key)} />}
-				<div className="min-h-0 flex-1">
+				<div className="relative min-h-0 flex-1">
 					<ImageViewer
 						view={view?.view ?? FIT_VIEW}
 						onViewChange={(next) => document && setImageView(imagesState, document.key, next)}
@@ -264,6 +286,7 @@ export function ImagesWorkspace() {
 									<IconButton icon="expand" label={fullscreen ? 'Exit full screen' : 'Full screen'} pressed={fullscreen} disabled={!fullscreenSupported} onClick={toggleFullscreen} />
 									<OriginalToggle documentKey={document.key} view={view} info={document.info} />
 									<IconButton icon="layers" label={overlaysHidden ? 'Show overlays' : 'Hide overlays'} pressed={hasOverlays && !overlaysHidden} disabled={!hasOverlays} onClick={() => toggleImageOverlays(imagesState, document.key)} />
+									<IconButton icon="pixelInspect" label={inspectPixels ? 'Stop inspecting pixels' : 'Inspect pixels: the samples under the pointer in the status line'} pressed={inspectPixels} disabled={!imageInfo} onClick={() => (pixelInspection.enabled = !inspectPixels)} />
 									<span className="mx-1 h-5 w-px bg-line-100" />
 									<DisplayToolbar key={document.key} documentKey={document.key} info={document.info} view={view} />
 									<span className="mx-1 h-5 w-px bg-line-100" />
@@ -358,6 +381,16 @@ export function ImagesWorkspace() {
 							)
 						}
 					/>
+					{selectingArea && (
+						<div className="absolute inset-x-0 bottom-9 z-10 flex justify-center px-3">
+							<div className="flex max-w-full items-center gap-3 rounded-md border border-line-100 bg-base-200 py-1.5 pr-1.5 pl-3 text-sm leading-5 text-ink-200 shadow-[0_12px_32px_rgb(0_0_0/0.45)]">
+								<span className="min-w-0">Drag over the image to choose the area measured.</span>
+								<Button variant="secondary" onClick={stopAreaSelection}>
+									Cancel
+								</Button>
+							</div>
+						</div>
+					)}
 				</div>
 				{document?.camera && framesShown && !sheetOpen && <CameraBottom document={document} />}
 				{/* Inside the column, so the menu stays visible while it fills the screen. */}

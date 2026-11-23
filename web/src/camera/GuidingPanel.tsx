@@ -226,7 +226,7 @@ export function GuidingSections({ device, availability, guideOutput, mount, sett
 				description={(detector) => (
 					<>
 						Stars are detected with the Star Detection settings ({detector} detector), chosen when looping starts; the guider accepts those of 5 sigma or more.
-						{detection.provider === 'astap' && ' ASTAP runs as a separate program on every frame, about half a second on a full frame.'}
+						{detection.provider === 'astap' && ' ASTAP runs as a separate program on every frame.'}
 					</>
 				)}
 			/>

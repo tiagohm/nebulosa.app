@@ -84,6 +84,16 @@
 	--color-axis-2: oklch(0.72 0.08 330);
 }
 
+/* Colours of the colour planes of an image plotted together, the red, green, and blue curves of the Image Inspector's
+   histogram and their swatches: the hues the operator expects of each channel at the framings' low chroma and
+   lightness, so no curve glows on a night screen and none reads as a failure, a success, or a notice, whose signal
+   colours are far more saturated. The luminance of a colour image and the one plane of a mono image draw in Moonlight. */
+@theme static {
+	--color-channel-red: oklch(0.7 0.09 28);
+	--color-channel-green: oklch(0.74 0.09 150);
+	--color-channel-blue: oklch(0.72 0.085 250);
+}
+
 /* Outline colours of the framings (web/src/framing/palette.ts reads them for the canvases of the Framing preview and the
    Sky, and the legends show them as swatches): the low chroma of the map hues, so nothing on a night screen glows, a
    step lighter, so a field of view reads over the stars and a survey image, and 55 to 60° apart in hue (rust, ochre,

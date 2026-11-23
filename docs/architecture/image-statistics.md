@@ -4,7 +4,7 @@ Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
 
 Image statistics measures the original decoded samples of an image document, whole or inside a rectangle: per-plane counts, moments, order statistics, histograms, and a background noise estimate.
 `ImageStatisticsService` (`api/src/imagestatistics.ts`) runs the toolkit's scan on the image worker that holds the pixels.
-The Histogram and Statistics section of the Image Inspector (`web/src/images/ImageStatisticsSection.tsx`, store `web/src/images/statistics.ts`) shows them, and its pixel readout (`web/src/images/PixelCursorStatus.tsx`, samples served by `api/src/imagesamples.ts`) shows the samples under the pointer.
+The Histogram and Statistics section of the Image Inspector (`web/src/images/ImageStatisticsSection.tsx`, store `web/src/images/statistics.ts`) shows them, and the pixel readout of the viewer (`web/src/images/PixelCursorStatus.tsx`, samples served by `api/src/imagesamples.ts`), turned on by Inspect Pixels of the viewer toolbar, shows the samples under the pointer.
 
 ## Purpose
 

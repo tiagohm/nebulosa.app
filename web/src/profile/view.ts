@@ -396,7 +396,7 @@ export function sectionsEntry(sections: CollapsibleSections): ViewEntry {
 	}
 }
 
-// Keeps whether the viewer status line reads the samples under the pointer (Inspect Pixels of the Image Inspector).
+// Keeps whether the viewer status line reads the samples under the pointer (Inspect Pixels of the viewer toolbar).
 export function pixelInspectionEntry(inspection: { enabled: boolean }): ViewEntry {
 	return {
 		name: 'pixelInspection',

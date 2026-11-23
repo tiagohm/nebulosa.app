@@ -8,43 +8,45 @@ import { tppaFrameRole, tppaRuntime } from '../camera/tppa'
 import { connectionState } from '../connection/connection'
 import { formatDuration, formatFixed, formatPixelLength, formatTemperature, MISSING, formatZonedDateTime } from '../format'
 import { useActiveTimeZone } from '../location/useLocation'
+import { activeProfile, profileState, starDetectionSettings } from '../profile/profile'
 import { CollapsibleSection } from '../shell/CollapsibleSection'
 import { EmptyState } from '../shell/WorkspaceLayout'
 import { type ImageQualityStatus, imageQuality } from '../stars/quality'
-import { PROVIDER_LABELS, starsState } from '../stars/stars'
+import { useAstapConfigured } from '../stars/StarRequestControls'
+import { PROVIDER_LABELS, runDetection, starsState } from '../stars/stars'
+import { Actions } from '../ui/Actions'
 import { Button } from '../ui/Button'
 import { DataRow } from '../ui/DataRow'
 import { Notice } from '../ui/Notice'
 import type { CameraFrameSelection } from './cameratabs'
 import { connectionLabel, frameUnavailableReason } from './captureframes'
-import { documentPath, type ImageDocument } from './images'
+import { documentPath, type ImageDocument, imageUnavailableReason } from './images'
 import { ImageStatisticsSection } from './ImageStatisticsSection'
 import type { ImageToolPanelProps } from './tools'
 
-// Image Inspector, the default contextual tool of the Images workspace: properties, the provenance of a
-// live stack snapshot, the camera, origin, session, and storage of the frame a camera tab
-// shows (with the focuser position of an Auto Focus frame when its session recorded it), the quality the measurements already made
-// on the image give (never measured here), acquisition data, the parameters of the current rendering, the histogram and
-// statistics of its original samples (ImageStatisticsSection, measured only while expanded), and the header of the active
-// document. The display settings are changed from the viewer toolbar (DisplayToolbar).
+// Image Inspector, the default contextual tool of the Images workspace. It leads with the properties, the camera, origin,
+// session, and storage of the frame a camera tab shows (with the focuser position of an Auto Focus frame when its session
+// recorded it), the provenance of a live stack snapshot, acquisition data, the parameters of the current rendering, the
+// histogram and statistics of its original samples (ImageStatisticsSection, measured only while expanded), and the header
+// of the active document. The display settings (DisplayToolbar) and Inspect Pixels are changed from the viewer toolbar.
 
 // Names of the RGB channels, in the order of a per-channel stretch.
 const CHANNEL_NAMES = ['R', 'G', 'B'] as const
 
-// Acquisition fields shown, in display order: label and the formatted value, absent when the image does
+// Acquisition fields shown, in display order: label and the formatted value with its unit, absent when the image does
 // not have it. Every field is always listed, so images can be compared at a glance.
 const ACQUISITION_FIELDS: readonly (readonly [label: string, format: (acquisition: ImageAcquisition) => string | undefined])[] = [
 	['Object', (a) => a.object],
 	['Date (UTC)', (a) => a.date && formatDate(a.date)],
-	['Exposure (s)', (a) => a.exposure?.toString()],
+	['Exposure', (a) => (a.exposure === undefined ? undefined : `${a.exposure} s`)],
 	['Filter', (a) => a.filter],
 	['Gain', (a) => a.gain?.toString()],
 	['Offset', (a) => a.offset?.toString()],
-	['Sensor temp. (°C)', (a) => (a.temperature === undefined ? undefined : formatFixed(a.temperature, 1))],
+	['Sensor temp.', (a) => (a.temperature === undefined ? undefined : formatTemperature(a.temperature))],
 	['Binning', (a) => a.binning && `${a.binning.x}×${a.binning.y}`],
 	['Camera', (a) => a.camera],
 	['Telescope', (a) => a.telescope],
-	['Focal length (mm)', (a) => a.focalLength?.toString()],
+	['Focal length', (a) => (a.focalLength === undefined ? undefined : `${Number(a.focalLength.toFixed(1))} mm`)],
 ]
 
 // Inspector of the active image document.
@@ -52,7 +54,8 @@ export function ImageInspector({ document, view, onOpen }: ImageToolPanelProps) 
 	if (!document) {
 		return (
 			<EmptyState
-				title="No image open"
+				title="Nothing to inspect"
+				description="Open an image to see its quality, properties, and statistics."
 				action={
 					<Button variant="secondary" onClick={onOpen}>
 						Open Image
@@ -71,8 +74,8 @@ export function ImageInspector({ document, view, onOpen }: ImageToolPanelProps) 
 				<DataRow label="Name">{document.name}</DataRow>
 				{path && (
 					<DataRow label="Folder">
-						<span title={path} className="block truncate">
-							{directoryOf(path)}
+						<span title={path} className="block truncate [direction:rtl]">
+							<bdi>{directoryOf(path)}</bdi>
 						</span>
 					</DataRow>
 				)}
@@ -85,11 +88,10 @@ export function ImageInspector({ document, view, onOpen }: ImageToolPanelProps) 
 						<DataRow label="Channels">{info.channels === 3 ? 'RGB' : info.bayer ? `Mono (CFA ${info.bayer})` : 'Mono'}</DataRow>
 					</>
 				) : (
-					<Notice>{document.status === 'loading' ? 'Opening…' : 'Unavailable'}</Notice>
+					<Notice>{imageUnavailableReason(document)}</Notice>
 				)}
 			</CollapsibleSection>
 			{document.camera?.shown && !document.camera.live && <CapturedFrame frame={document.camera.shown.frame} selection={document.camera.selection.kind} />}
-			{info && <Quality imageId={info.id} />}
 			{info?.origin === 'derived' && <Derivation provenance={info.provenance} />}
 			{info && <Acquisition info={info} />}
 			{view?.rendering && <AppliedDisplay result={view.rendering.result} />}
@@ -239,37 +241,6 @@ function CapturedFrame({ frame, selection }: CapturedFrameProps) {
 	)
 }
 
-// Labels of the states of the quality of an image.
-const QUALITY_LABELS: Readonly<Record<ImageQualityStatus, string>> = { 'not-measured': 'Not measured', pending: 'Measuring', measured: 'Measured', failed: 'Failed' }
-
-// Labels of who asked for a star detection.
-const MEASURED_BY_LABELS: Readonly<Record<StarDetectionOrigin['kind'], string>> = { manual: 'Star Detection', autofocus: 'Auto Focus' }
-
-interface QualityProps {
-	// Id of the image document shown.
-	readonly imageId: string
-}
-
-// Quality of the image shown, from the latest star detection of its image id: its state, the aggregate HFD (in
-// pixels, only when measured), the star counts, the detector, and who measured it. Nothing is measured here.
-function Quality({ imageId }: QualityProps) {
-	const stars = useSnapshot(starsState)
-	const quality = imageQuality(stars, imageId)
-	const measured = quality.status === 'measured'
-
-	return (
-		<CollapsibleSection id="images.inspector.quality" title="Quality">
-			<DataRow label="State">{quality.status === 'failed' ? <span className="text-danger">{QUALITY_LABELS.failed}</span> : QUALITY_LABELS[quality.status]}</DataRow>
-			{measured && <DataRow label="HFD">{formatPixelLength(quality.hfdPx)}</DataRow>}
-			{measured && <DataRow label="Stars (accepted / detected)">{`${quality.acceptedStars ?? 0} / ${quality.detectedStars ?? 0}`}</DataRow>}
-			{quality.provider && <DataRow label="Detector">{PROVIDER_LABELS[quality.provider]}</DataRow>}
-			{quality.origin && <DataRow label="Measured by">{MEASURED_BY_LABELS[quality.origin]}</DataRow>}
-			{quality.error && <Notice error>{quality.error}</Notice>}
-			{quality.status === 'not-measured' && <Notice>Run Star Detection to measure the HFD of this image.</Notice>}
-		</CollapsibleSection>
-	)
-}
-
 interface InfoProps {
 	// Opened image.
 	readonly info: ImageInfo
@@ -336,15 +307,23 @@ interface AppliedDisplayProps {
 	readonly result: RenderResult
 }
 
-// Parameters the server applied to the current rendering, such as the values an auto stretch computed.
+// Levels of a stretch, in display order: the label of its row and its field, a normalized sample value in [0, 1].
+const STRETCH_LEVELS = [
+	['Shadows', 'shadow'],
+	['Midtones', 'midtone'],
+	['Highlights', 'highlight'],
+] as const
+
+// Parameters the server applied to the current rendering, such as the values an auto stretch computed, one row per level
+// of the stretch with the value of each channel.
 function AppliedDisplay({ result }: AppliedDisplayProps) {
 	return (
 		<CollapsibleSection id="images.inspector.applied-display" title="Applied Display" defaultOpen={false}>
 			<DataRow label="Debayer">{result.cfa ?? 'Off'}</DataRow>
 			<DataRow label="Channels">{result.channels === 3 ? 'RGB' : 'Mono'}</DataRow>
-			{result.stretch.map((stretch, i) => (
-				<DataRow key={i} label={`Stretch${result.stretch.length === 3 ? ` ${CHANNEL_NAMES[i]}` : ''}`}>
-					{formatFixed(stretch.shadow, 4)} - {formatFixed(stretch.highlight, 4)} | {formatFixed(stretch.midtone, 4)}
+			{STRETCH_LEVELS.map(([label, level]) => (
+				<DataRow key={level} label={result.stretch.length > 1 ? `${label} (${CHANNEL_NAMES.slice(0, result.stretch.length).join(' / ')})` : label}>
+					{result.stretch.map((stretch) => formatFixed(stretch[level], 4)).join(' / ')}
 				</DataRow>
 			))}
 		</CollapsibleSection>
@@ -361,7 +340,7 @@ function Header({ info }: InfoProps) {
 				{cards.map(([keyword, value]) => (
 					<div key={keyword} className="contents">
 						<dt className="text-ink-300">{keyword}</dt>
-						<dd className="m-0 break-all text-ink-100">{String(value ?? '')}</dd>
+						<dd className="m-0 min-w-0 wrap-break-word text-ink-100">{String(value ?? '')}</dd>
 					</div>
 				))}
 			</dl>

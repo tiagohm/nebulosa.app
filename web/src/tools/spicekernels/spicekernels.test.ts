@@ -78,6 +78,31 @@ test('a snapshot request answered after a newer one is dropped', async () => {
 	expect(s.revision).toBe(4)
 })
 
+test('a failed read is kept until a read succeeds, and the known snapshot stays', async () => {
+	const s = state()
+	await refreshSpiceKernels(s, () => Promise.reject(new Error('offline')))
+	expect(s.loadFailed).toBeTrue()
+
+	await refreshSpiceKernels(s, () => respond(snapshot('a', 1)))
+	expect(s.loadFailed).toBeUndefined()
+
+	await refreshSpiceKernels(s, () => respond({ error: 'Nope' }, 500))
+	expect(s.loadFailed).toBeTrue()
+	expect(s.snapshot?.revision).toBe(1)
+})
+
+test('a change of the offline switch drops the failure of the last attempt to change it', () => {
+	const s = state()
+	applySpiceKernelSnapshot(s, snapshot('a', 1))
+	s.errors.settings = 'Nope'
+
+	applySpiceKernelSnapshot(s, snapshot('a', 2))
+	expect(s.errors.settings).toBe('Nope')
+
+	applySpiceKernelSnapshot(s, { ...snapshot('a', 3), offline: true })
+	expect(s.errors.settings).toBeUndefined()
+})
+
 test('commands keep their failures and stream an upload as the body', async () => {
 	const s = state()
 	const calls: { url: string; init?: RequestInit }[] = []

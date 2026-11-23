@@ -19,10 +19,11 @@ export interface CheckboxProps {
 	readonly hideLabel?: boolean
 }
 
-// Labeled checkbox.
+// Labeled checkbox. The label is pressable 3.5 px above and below its line, a margin it takes back, so the target grows to
+// 24.5 px without moving the layout.
 export function Checkbox({ label, checked, onChange, disabled, className, title, hideLabel = false }: CheckboxProps) {
 	return (
-		<label title={title} className={cn('flex cursor-pointer items-center gap-2 text-sm text-ink-200 select-none has-disabled:cursor-not-allowed has-disabled:text-ink-300', className)}>
+		<label title={title} className={cn('-my-1 flex cursor-pointer items-center gap-2 py-1 text-sm text-ink-200 select-none has-disabled:cursor-not-allowed has-disabled:text-ink-300', className)}>
 			<input type="checkbox" checked={checked} disabled={disabled} onChange={(e) => onChange(e.target.checked)} className="m-0 size-3.5 cursor-pointer accent-accent disabled:cursor-not-allowed" />
 			{!hideLabel && label}
 		</label>

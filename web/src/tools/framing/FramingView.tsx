@@ -230,7 +230,7 @@ function ViewControls() {
 								return survey ? surveyRegime(survey) : 'Surveys'
 							}}
 						/>
-						<Checkbox label="Every wavelength" className="pb-2" checked={everyWavelength} disabled={!surveys} onChange={setEveryWavelength} />
+						<Checkbox label="Every wavelength" className="mb-0 pb-2" checked={everyWavelength} disabled={!surveys} onChange={setEveryWavelength} />
 					</>
 				))}
 			<SegmentedControl label="Fit" options={FITS} value={preview.fit} onChange={(fit) => (framingPreviewState.fit = fit)} format={(fit) => (fit === 'all' ? 'Every' : 'Selected')} />

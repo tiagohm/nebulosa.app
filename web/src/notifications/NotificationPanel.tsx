@@ -131,7 +131,7 @@ export function NotificationPanel({ top, right, width, filter, onFilterChange, a
 					</div>
 					<SegmentedControl options={FILTERS} value={filter} onChange={onFilterChange} format={(value) => FILTER_TEXT[value]} className="w-36 flex-none" />
 				</div>
-				<Checkbox label="All connections" title="List the notifications of every connection, each naming its connection" checked={allConnections} onChange={onAllConnectionsChange} className="min-h-6 self-start" />
+				<Checkbox label="All connections" title="List the notifications of every connection, each naming its connection" checked={allConnections} onChange={onAllConnectionsChange} className="my-0 min-h-6 self-start" />
 			</div>
 			{groups.length > 0 ? (
 				<div ref={listRef} className="flex min-h-0 flex-col overflow-y-auto border-t border-line-100 px-2 pb-1">

@@ -37,6 +37,8 @@ export interface SpiceKernelsState {
 	pending: Record<string, true>
 	// Why the last request of an action failed, by action key.
 	errors: Record<string, string>
+	// Whether the latest read of the snapshot failed (the server unreachable or refusing it); absent once one succeeds.
+	loadFailed?: true
 }
 
 // Library of the server, shared by every view of the tab.
@@ -45,25 +47,34 @@ export const spiceKernelsState = proxy<SpiceKernelsState>({ revision: 0, pending
 // Generation of the latest snapshot request; an older response is dropped.
 let generation = 0
 
-// Replaces the library with a snapshot of the server, unless it is older than the events already applied.
+// Replaces the library with a snapshot of the server, unless it is older than the events already applied. A change of the
+// offline switch, from this tab or another, drops the failure of the last attempt of this tab to change it.
 export function applySpiceKernelSnapshot(state: SpiceKernelsState, snapshot: SpiceKernelLibrarySnapshot) {
 	if (snapshot.epoch === state.epoch && snapshot.revision < state.revision) return
+	if (state.snapshot && state.snapshot.offline !== snapshot.offline) delete state.errors.settings
 	state.epoch = snapshot.epoch
 	state.revision = snapshot.revision
 	state.snapshot = snapshot
 }
 
-// Fetches the library again; called on every socket (re)open and after every change event.
+// Fetches the library again; called on every socket (re)open and after every change event. A failure of the latest
+// request is kept in loadFailed and the snapshot already known stays; the next socket open reads it again.
 export async function refreshSpiceKernels(state: SpiceKernelsState, request: ApiFetch = browserFetch) {
 	const current = ++generation
 
 	try {
 		const response = await request('/api/spice-kernels')
-		if (!response.ok || current !== generation) return
+		if (current !== generation) return
+		if (!response.ok) {
+			state.loadFailed = true
+			return
+		}
 		const snapshot = (await response.json()) as SpiceKernelLibrarySnapshot
-		if (current === generation) applySpiceKernelSnapshot(state, snapshot)
+		if (current !== generation) return
+		applySpiceKernelSnapshot(state, snapshot)
+		delete state.loadFailed
 	} catch {
-		// The server is unreachable; the next socket open refreshes the library.
+		if (current === generation) state.loadFailed = true
 	}
 }
 

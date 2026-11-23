@@ -33,7 +33,6 @@ import { SegmentedControl } from '../ui/SegmentedControl'
 import { Select } from '../ui/Select'
 import { Slider } from '../ui/Slider'
 import { useNow } from '../useNow'
-import { holdCameraFrame } from './cameratabs'
 import { type ImageAstrometryState, type ImagePlateSolvingState, imagesState, imageUnavailableReason, selectPlateSolution, setPlateSolveOverlay, setPlateSolveRequest } from './images'
 import { MarkersSection, MeasurementsSection } from './MeasurementsSection'
 import { TargetOffsetSection } from './TargetOffsetSection'
@@ -167,8 +166,7 @@ interface ExecutionProps {
 	readonly submitError?: string
 }
 
-// Solve Image and Cancel, with the state of the job shown. Solving holds the frame a camera tab shows first, so the frame solved stays
-// shown.
+// Solve Image and Cancel, with the state of the job shown.
 function Execution({ documentKey, imageId, request, job, submitError, unavailable }: ExecutionProps) {
 	const active = isActive(job)
 	const now = useNow(active)
@@ -176,7 +174,6 @@ function Execution({ documentKey, imageId, request, job, submitError, unavailabl
 
 	async function solve() {
 		if (imageId === undefined) return
-		holdCameraFrame(imagesState, documentKey)
 		// A submission shows its own job: the choice of an earlier solution gives way to it.
 		selectPlateSolution(imagesState, documentKey, undefined)
 		await runPlateSolve(plateSolvingState, imageId, request)

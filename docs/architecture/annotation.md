@@ -18,7 +18,7 @@ It turns a plate solution into named objects and links them to the rest of the a
 - The local job reads the embedded sky catalog built by `bun make:catalog`; the solar-system search uses the toolkit's SkyBoT client and needs the network.
 - The observation instant and site come from the image header, read by the toolkit (`core`).
 - Selected objects open in the [Sky Map](sky-map.md) at the current time or the image time; minor bodies are looked up there by designation.
-- The drawing is an [Overlay](overlay.md); its defaults come from the profile (see [Persistence and State](persistence-and-state.md)), and on a camera tab a run holds the frame shown (see [Capture Frames](capture-frames.md)).
+- The drawing is an [Overlay](overlay.md); its defaults come from the profile (see [Persistence and State](persistence-and-state.md)), and a run never holds the frame a camera tab shows (see [Capture Frames](capture-frames.md)).
 
 ## Rules and Limitations
 

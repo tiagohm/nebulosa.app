@@ -16,7 +16,7 @@ The registry gives every camera one place for its frames, keeps them reachable a
 
 - Producers: Camera Acquisition, [Auto Focus](auto-focus.md), [TPPA](tppa.md), [iPolar](ipolar.md), [Mount Pointing Model](mount-pointing-model.md), [Target Centering](target-centering.md), [DARV](darv.md), [Flat Wizard](flat-wizard.md), [Dark Library Wizard](dark-library-wizard.md), and [Guiding](guiding.md).
 - Frames are documents of the [Shared Image](shared-image.md) store; the registry owns their closing and leases them to clients.
-- The analyses and tools of Images run on the frame a camera tab shows and hold it while they run.
+- The analyses and tools of Images run on the frame a camera tab shows; only the operator holds it, so a tab following the latest frame moves on while an analysis of an earlier frame runs.
 - [Live Stacking](live-stacking.md) receives Camera Acquisition frames through the frame sink and shows its stacks in the camera tab.
 - Each frame records the camera of the [Equipment Catalog](equipment-catalog.md) its device was bound to, which [Image Stacking](image-stacking.md) reads back.
 - Saved frames are rows of the operational database (see [Persistence and State](persistence-and-state.md)).

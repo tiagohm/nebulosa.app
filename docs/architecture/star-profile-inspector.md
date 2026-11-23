@@ -17,7 +17,7 @@ It is a short, explicit interaction, so it runs only when the operator clicks a 
 - A star found by [Star Detection](star-detection.md) is sent with the click.
 - Widths in arcseconds come from a [Plate Solving](plate-solving.md) solution of the same image.
 - The plot and texts of a profile are shared with the [Guiding](guiding.md) panel.
-- The marker is an [Overlay](overlay.md); on a camera tab a click holds the frame shown (see [Capture Frames](capture-frames.md)).
+- The marker is an [Overlay](overlay.md); a click never holds the frame a camera tab shows (see [Capture Frames](capture-frames.md)).
 - The settings are one profile preference shared by every document.
 
 ## Rules and Limitations

@@ -17,7 +17,7 @@ It answers that on demand without tuning, leaving stars, nebulae, and gradients 
 - The toolkit (`core`) detects and classifies the streaks.
 - The classification may use the solution of a [Plate Solving](plate-solving.md) job and the stars of a [Star Detection](star-detection.md) job of the same image, frozen when the job is submitted.
 - The detector settings are one profile preference shared by every document.
-- The lines are an [Overlay](overlay.md); on a camera tab a run holds the frame shown (see [Capture Frames](capture-frames.md)).
+- The lines are an [Overlay](overlay.md); a run never holds the frame a camera tab shows (see [Capture Frames](capture-frames.md)).
 
 ## Rules and Limitations
 

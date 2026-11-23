@@ -19,7 +19,6 @@ import { List, ListItem } from '../ui/List'
 import { Notice } from '../ui/Notice'
 import { NumberInput } from '../ui/NumberInput'
 import { useNow } from '../useNow'
-import { holdCameraFrame } from './cameratabs'
 import { type ImageStreaksState, type ImageViewState, imagesState, imageUnavailableReason, selectStreak, setStreakView } from './images'
 import type { ImageToolPanelProps } from './tools'
 
@@ -145,8 +144,7 @@ interface AnalysisProps {
 	readonly submitError?: string
 }
 
-// Run and Cancel, the context of the classification, and the state of the latest job. Running holds the frame a camera
-// tab shows first, so the frame analyzed stays shown.
+// Run and Cancel, the context of the classification, and the state of the latest job.
 function Analysis({ documentKey, imageId, request, job, streaks, solutionAvailable, starsAvailable, submitError, unavailable }: AnalysisProps) {
 	const active = isActive(job)
 	const now = useNow(active)
@@ -166,7 +164,6 @@ function Analysis({ documentKey, imageId, request, job, streaks, solutionAvailab
 					disabled={active || imageId === undefined || unavailable !== undefined}
 					onClick={() => {
 						if (imageId === undefined) return
-						holdCameraFrame(imagesState, documentKey)
 						void runStreakDetection(streaksState, imageId, request)
 					}}
 				>

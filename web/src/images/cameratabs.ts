@@ -31,7 +31,7 @@ import {
 // Camera tabs of the Images workspace. Every connected camera of the watched connection has a camera tab, created and
 // removed with the camera and never closed by the operator. A camera tab shows one frame of the server's capture frame
 // registry at a time, chosen by its selection: the latest frame of the camera, which it follows as new frames arrive, a
-// saved frame, or a frame held for a manual analysis. Every frame it shows uses the same view state: zoom and pan
+// saved frame, or a frame the operator held for analysis. Every frame it shows uses the same view state: zoom and pan
 // (adapted when the image size changes), the applied display settings (those its camera saved in the profile before
 // any, never the settings being edited in a popup of the viewer toolbar), and Show Original.
 // Showing a frame is a transaction: the frame is opened under a lease and rendered while the previous frame stays
@@ -41,8 +41,8 @@ import {
 // tab whose lease was lost shows its selection again rather than another frame. The view state of a camera that
 // disconnects is kept in memory and given back to its tab when it reconnects.
 
-// Frame a camera tab shows: the latest frame of the camera, followed as new frames arrive; a saved frame; a frame held
-// because a manual analysis was started on it while it was the latest; or a snapshot of a stack, or a color composition
+// Frame a camera tab shows: the latest frame of the camera, followed as new frames arrive; a saved frame; a frame the
+// operator held for analysis while it was the latest; or a snapshot of a stack, or a color composition
 // of stacks, of the Live Stacking session of the camera, followed as the stacks grow.
 export type CameraFrameSelection = { readonly kind: 'latest' } | { readonly kind: 'saved'; readonly frameId: string } | { readonly kind: 'inspect'; readonly frameId: string } | { readonly kind: 'liveStack'; readonly sessionId: string; readonly target: LiveStackingViewTarget }
 
@@ -462,8 +462,8 @@ export function followLiveStacks(state: ImagesState, event: ServerEvent, frames:
 	}
 }
 
-// Holds the frame a camera tab shows for a manual analysis started on it: a tab following the latest frame stops
-// following it, and a frame being opened is dropped, so the frame analyzed stays shown. Ignored for any other
+// Holds the frame a camera tab shows for analysis, on the operator's request only (no tool or analysis holds it): a
+// tab following the latest frame stops following it, and a frame being opened is dropped, so the frame analyzed stays shown. Ignored for any other
 // document, and for a tab already showing a saved or held frame.
 export function holdCameraFrame(state: ImagesState, key: string) {
 	const camera = cameraTabOf(state, key)?.camera

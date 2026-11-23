@@ -15,7 +15,6 @@ import { Checkbox } from '../ui/Checkbox'
 import { DataRow } from '../ui/DataRow'
 import { Notice } from '../ui/Notice'
 import { useNow } from '../useNow'
-import { holdCameraFrame } from './cameratabs'
 import { type ImageStarsState, imagesState, imageUnavailableReason, setStarMarkers } from './images'
 import type { ImageToolPanelProps } from './tools'
 
@@ -77,7 +76,7 @@ function StarDetection({ documentKey, imageId, stars, unavailable }: StarDetecti
 			<CollapsibleSection id="images.star-detection.acceptance" title="Acceptance" defaultOpen={false}>
 				<AcceptanceControls request={request} onChange={edit} />
 			</CollapsibleSection>
-			<Analysis documentKey={documentKey} imageId={imageId} request={request} job={job} submitError={imageId === undefined ? undefined : submitErrors[imageId]} unavailable={unavailable} />
+			<Analysis imageId={imageId} request={request} job={job} submitError={imageId === undefined ? undefined : submitErrors[imageId]} unavailable={unavailable} />
 			{imageId !== undefined && (
 				<>
 					<Results job={job} result={result} resultError={resultError} />
@@ -96,8 +95,6 @@ function StarDetection({ documentKey, imageId, stars, unavailable }: StarDetecti
 }
 
 interface AnalysisProps {
-	// Key of the document.
-	readonly documentKey: string
 	// Server id of the image; absent until the document has one.
 	readonly imageId?: string
 	// Why the document has no image yet.
@@ -110,8 +107,8 @@ interface AnalysisProps {
 	readonly submitError?: string
 }
 
-// Run and Cancel, with the state of the latest job. Running holds the frame a camera tab shows first, so the frame analyzed stays shown.
-function Analysis({ documentKey, imageId, request, job, submitError, unavailable }: AnalysisProps) {
+// Run and Cancel, with the state of the latest job.
+function Analysis({ imageId, request, job, submitError, unavailable }: AnalysisProps) {
 	const active = isActive(job)
 	const now = useNow(active)
 	const astapReady = useAstapConfigured() || request.detector.provider !== 'astap'
@@ -124,7 +121,6 @@ function Analysis({ documentKey, imageId, request, job, submitError, unavailable
 					disabled={active || !astapReady || imageId === undefined}
 					onClick={() => {
 						if (imageId === undefined) return
-						holdCameraFrame(imagesState, documentKey)
 						void runDetection(starsState, imageId, request)
 					}}
 				>

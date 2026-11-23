@@ -10,7 +10,6 @@ function selection() {
 	const commits: PixelRect[] = []
 	const interaction = rectangleSelection({
 		image: () => IMAGE,
-		onStart: () => events.push('start'),
 		onDraft: (rect) => drafts.push(rect),
 		onCommit: (rect) => commits.push(rect),
 		onLeave: () => events.push('leave'),
@@ -30,7 +29,7 @@ test('a drag inside the image previews and commits the rectangle', () => {
 	expect(interaction.onPointerDown({ x: 10.5, y: 10.5 }, VIEW)).toBeTrue()
 	interaction.onPointerMove({ x: 20.5, y: 30.5 }, VIEW)
 	interaction.onPointerUp({ x: 120, y: 30.5 }, VIEW)
-	expect(events).toEqual(['start'])
+	expect(events).toEqual([])
 	expect(drafts).toEqual([undefined, { left: 10, top: 10, width: 11, height: 21 }, undefined])
 	expect(commits).toEqual([{ left: 10, top: 10, width: 90, height: 21 }])
 })
@@ -52,5 +51,5 @@ test('a cancel drops the rectangle in progress, then leaves the selection', () =
 	expect(drafts.at(-1)).toBeUndefined()
 	expect(commits).toEqual([])
 	interaction.onCancel()
-	expect(events).toEqual(['start', 'leave'])
+	expect(events).toEqual(['leave'])
 })

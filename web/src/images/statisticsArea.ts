@@ -3,13 +3,12 @@ import { proxy, useSnapshot } from 'valtio'
 import type { ViewerInteraction } from '../viewer/interaction'
 import { type PixelRect, rectangleSelection } from '../viewer/rectangleSelection'
 import type { Size } from '../viewer/transform'
-import { holdCameraFrame } from './cameratabs'
 import { imagesState, setStatisticsArea } from './images'
 
 // Selection of the area the Histogram and Statistics section of the Image Inspector measures: Select Area puts one
 // document in selection mode, where a drag over the image draws the rectangle (rectangleSelection) and its release
-// commits it as the document's area and leaves the mode. The first press holds the frame a camera tab shows, so a new
-// frame never replaces the image under the drag. Escape drops the rectangle in progress, then leaves the mode. The mode
+// commits it as the document's area and leaves the mode. A camera tab following the latest frame keeps following it
+// during the drag; Hold for analysis keeps one frame under it. Escape drops the rectangle in progress, then leaves the mode. The mode
 // and the rectangle in progress live in their own store, so a pointer move renders only the overlay that draws it.
 
 // Selection in progress: the document in selection mode and the rectangle being drawn over its image.
@@ -65,10 +64,6 @@ export function useStatisticsAreaTool(options: StatisticsAreaToolOptions): Viewe
 		() =>
 			rectangleSelection({
 				image: () => latest.current.image,
-				onStart: () => {
-					// A frame the camera would replace stays shown while its area is drawn.
-					if (latest.current.documentKey) holdCameraFrame(imagesState, latest.current.documentKey)
-				},
 				onDraft: (rect) => {
 					const { imageId } = latest.current
 					statisticsAreaSelection.draft = rect && imageId ? { imageId, rect } : undefined

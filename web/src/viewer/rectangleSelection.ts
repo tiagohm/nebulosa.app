@@ -26,8 +26,6 @@ export interface PixelRect {
 export interface RectangleSelectionOptions {
 	// Size of the image shown, in pixels; absent takes no press.
 	readonly image: () => Size | undefined
-	// Called when a press inside the image starts a rectangle.
-	readonly onStart: () => void
 	// Called with the rectangle in progress, or undefined when there is none.
 	readonly onDraft: (rect: PixelRect | undefined) => void
 	// Called with the committed rectangle when a drag is released.
@@ -62,7 +60,6 @@ export function rectangleSelection(options: RectangleSelectionOptions): ViewerIn
 			const image = options.image()
 			if (!image || !pixelAt(image, point)) return false
 			start = point
-			options.onStart()
 			options.onDraft(undefined)
 			return true
 		},

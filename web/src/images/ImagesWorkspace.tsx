@@ -100,7 +100,7 @@ import { IMAGE_TOOL_DEFINITIONS, type ImageToolId, imageToolsFor } from './tools
 // Curve of its Auto Focus or the graph of its guiding on request; while Guiding is the tool, a click on the session's
 // current guide frame selects the star nearest it. Documents, with their own zoom,
 // pan, display settings, and tool, stay open while the tab lives, across document and workspace switches; a camera
-// tab follows the latest frame of its camera until a saved frame is selected, a manual analysis or Hold for analysis
+// tab follows the latest frame of its camera until a saved frame is selected or Hold for analysis
 // holds the frame shown, and Return to Latest follows it again.
 // The viewer toolbar fills the screen with the tabs, the viewer, and the bottom area (Full screen), switches a document
 // between its adjusted rendering and its original one while they differ, and holds its display
@@ -346,8 +346,6 @@ export function ImagesWorkspace() {
 														if (!pixelAt(imageInfo, point)) return
 														const index = stars && pickStar(stars, point, STAR_PICK_RADIUS / overlay.scale, true)
 														const star = index === undefined ? undefined : stars?.stars[index]
-														// A frame the camera would replace stays shown while its star is looked at.
-														holdCameraFrame(imagesState, document.key)
 														void inspectStar(imagesState, document.key, imageInfo.id, star ? { x: star.x, y: star.y } : { x: point.x - 0.5, y: point.y - 0.5 }, !!star, profileSettings)
 													}
 												: lines && document && tool === 'streak-detection'
@@ -482,8 +480,8 @@ interface CameraControlsProps {
 // Labels of the selections of a camera tab, as its toolbar shows them.
 const SELECTION_LABELS: Readonly<Record<NonNullable<ImageDocument['camera']>['selection']['kind'], string>> = { latest: 'Latest', saved: 'Saved frame', inspect: 'Held for analysis', liveStack: 'Live stack' }
 
-// Frame a camera tab shows, Hold for analysis while it follows the latest frame (keeping the frame shown without
-// running a tool, as an analysis started on it would) and Return to Latest while it does not, and the toggles of the
+// Frame a camera tab shows, Hold for analysis while it follows the latest frame (the only way to keep the frame shown:
+// no tool or analysis holds it) and Return to Latest while it does not, and the toggles of the
 // bottom area and of the central reticle (for Mount Nudge or framing). None commands the camera: they only change which
 // frame the tab shows and how.
 function CameraControls({ document, framesShown, onToggleFrames, reticle, onToggleReticle }: CameraControlsProps) {

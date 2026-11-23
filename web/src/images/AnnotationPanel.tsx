@@ -29,7 +29,6 @@ import { Select } from '../ui/Select'
 import { TextInput } from '../ui/TextInput'
 import { VirtualList } from '../ui/VirtualList'
 import { useNow } from '../useNow'
-import { holdCameraFrame } from './cameratabs'
 import { type AnnotationDensity, type AnnotationLayers, centerImageView, type ImageAnnotationState, imagesState, imageUnavailableReason, selectAnnotation, setAnnotationView } from './images'
 import type { ImageToolPanelProps } from './tools'
 
@@ -147,21 +146,9 @@ function Annotation({ documentKey, info, annotation, selectedSolution, unavailab
 
 	return (
 		<>
-			<Analysis documentKey={documentKey} imageId={imageId} request={request} context={context} job={job} wcsAvailable={wcsAvailable} submitError={submitError('local')} unavailable={unavailable} />
+			<Analysis imageId={imageId} request={request} context={context} job={job} wcsAvailable={wcsAvailable} submitError={submitError('local')} unavailable={unavailable} />
 			{imageId !== undefined && (
-				<SolarSystemBodies
-					documentKey={documentKey}
-					imageId={imageId}
-					request={solarRequest}
-					context={context}
-					job={solar.job}
-					result={solar.result}
-					resultError={solar.resultError}
-					wcsAvailable={wcsAvailable}
-					submitError={submitError('solarSystemBodies')}
-					unavailable={unavailable}
-					onBodiesChange={(bodies) => edit({ bodies })}
-				/>
+				<SolarSystemBodies imageId={imageId} request={solarRequest} context={context} job={solar.job} result={solar.result} resultError={solar.resultError} wcsAvailable={wcsAvailable} submitError={submitError('solarSystemBodies')} unavailable={unavailable} onBodiesChange={(bodies) => edit({ bodies })} />
 			)}
 			<CollapsibleSection id="images.annotation.layers" title="Layers" defaultOpen={false}>
 				<Checkbox label="Deep-sky objects" checked={annotation.layers.deepSky} onChange={(deepSky) => edit({ layers: { deepSky } })} />
@@ -209,8 +196,6 @@ function Annotation({ documentKey, info, annotation, selectedSolution, unavailab
 }
 
 interface AnalysisProps {
-	// Key of the document.
-	readonly documentKey: string
 	// Server id of the image; absent until the document has one.
 	readonly imageId?: string
 	// Why no analysis can run yet.
@@ -228,9 +213,8 @@ interface AnalysisProps {
 }
 
 // The WCS, the observation date and site of the image that both kinds use, Run and Cancel, and the state of the latest
-// job. Without a date in the header, the analysis moves the stars to the current time. Running holds the frame a
-// camera tab shows first, so the frame annotated stays shown.
-function Analysis({ documentKey, imageId, request, context, job, wcsAvailable, submitError, unavailable }: AnalysisProps) {
+// job. Without a date in the header, the analysis moves the stars to the current time.
+function Analysis({ imageId, request, context, job, wcsAvailable, submitError, unavailable }: AnalysisProps) {
 	const timeZone = useActiveTimeZone()
 	const active = isActive(job)
 	const now = useNow(active)
@@ -249,7 +233,6 @@ function Analysis({ documentKey, imageId, request, context, job, wcsAvailable, s
 					disabled={active || imageId === undefined || unavailable !== undefined || !wcsAvailable}
 					onClick={() => {
 						if (imageId === undefined) return
-						holdCameraFrame(imagesState, documentKey)
 						void runAnnotation(annotationsState, imageId, request)
 					}}
 				>
@@ -278,8 +261,6 @@ function Analysis({ documentKey, imageId, request, context, job, wcsAvailable, s
 }
 
 interface SolarSystemBodiesProps {
-	// Key of the document.
-	readonly documentKey: string
 	// Server id of the image.
 	readonly imageId: string
 	// Why no search can run yet.
@@ -306,7 +287,7 @@ interface SolarSystemBodiesProps {
 // the IMCCE SkyBoT service at the observation date of the image header, seen from the site of the header (geocentric
 // positions corrected for its parallax) or else from the center of the Earth. An image without an observation date
 // cannot be searched. It never runs on its own, and its failure leaves the local annotation as it is.
-function SolarSystemBodies({ documentKey, imageId, request, context, job, result, resultError, wcsAvailable, submitError, unavailable, onBodiesChange }: SolarSystemBodiesProps) {
+function SolarSystemBodies({ imageId, request, context, job, result, resultError, wcsAvailable, submitError, unavailable, onBodiesChange }: SolarSystemBodiesProps) {
 	const active = isActive(job)
 	const now = useNow(active)
 	const changed = job && !sameAnnotationRequest(job.request, request)
@@ -324,7 +305,6 @@ function SolarSystemBodies({ documentKey, imageId, request, context, job, result
 				<Button
 					disabled={active || unavailable !== undefined || !wcsAvailable || !observation || !chosen}
 					onClick={() => {
-						holdCameraFrame(imagesState, documentKey)
 						void runAnnotation(annotationsState, imageId, request)
 					}}
 				>

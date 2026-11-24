@@ -173,7 +173,7 @@ function FrameCard({ card, selected, focusable, loading, error, restored, newer,
 			</span>
 			<span className="flex h-4 items-center gap-1">
 				<span className={cn('min-w-0 flex-1 truncate', error || unavailable ? 'text-danger' : 'text-ink-100')}>{state}</span>
-				{newer && <span className="flex-none rounded-xs bg-accent px-1 text-on-accent">New</span>}
+				{newer && <span className="flex-none rounded-xs border border-line-200 px-1 leading-3.5 text-ink-100">New</span>}
 				{frame?.file === 'saved' && <Icon name="save" className="size-3.5 flex-none text-ink-300" />}
 			</span>
 		</button>

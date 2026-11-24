@@ -451,7 +451,7 @@ function OriginalToggle({ documentKey, view, info }: OriginalToggleProps) {
 	return (
 		<>
 			<IconButton icon="original" label={on ? 'Show adjusted' : 'Show original'} pressed={on} disabled={!view.rendering || view.renderPending} onClick={() => void toggleOriginal(imagesState, documentKey)} />
-			{on && <span className="px-1 text-xs text-accent">{mosaic ? 'Raw CFA / Mosaic' : 'Original'}</span>}
+			{on && <span className="px-1 text-xs text-ink-200 max-sm:hidden">{mosaic ? 'Raw CFA / Mosaic' : 'Original'}</span>}
 		</>
 	)
 }
@@ -513,7 +513,7 @@ function ViewerToolbar({ document, view, narrow, fullscreen, overlays, inspectPi
 		onSelect: () => (pixelInspection.enabled = !inspectPixels),
 	}
 	const reticleToggle: MenuToggle = { icon: 'reticle', label: reticle ? 'Hide reticle' : 'Show reticle', pressed: reticle, onSelect: onToggleReticle }
-	const overlaysButton = <IconButton icon="layers" label={overlays.hidden ? 'Show overlays' : 'Hide overlays'} pressed={overlays.available && !overlays.hidden} disabled={!overlays.available} onClick={() => toggleImageOverlays(imagesState, document.key)} />
+	const overlaysButton = <IconButton icon="layers" label={overlays.hidden ? 'Show overlays' : 'Hide overlays'} pressed={overlays.hidden} disabled={!overlays.available} onClick={() => toggleImageOverlays(imagesState, document.key)} />
 	const saveButton = <SaveImagePopover document={document} view={view} onSaveToServer={onSaveToServer} />
 	const measureSelect = measure && <Select label={narrow ? 'Measure' : undefined} options={ASTROMETRY_MODES} value={measure.mode} format={(option) => MODE_LABELS[option]} disabled={measure.disabled} onChange={measure.onChange} className={narrow ? undefined : 'w-36 flex-none'} />
 

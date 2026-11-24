@@ -301,7 +301,6 @@ export function ImageViewer({ image, loading = false, error, empty, view, onView
 	const pointed = image && cursor ? toImage(transform, cursor) : undefined
 	const pixel = pointed && pixelAt({ width, height }, pointed)
 	const viewerCursor: ViewerCursor | undefined = pointed && cursor && { image: pointed, ...(pixel && { pixel }), viewport: cursor }
-	const fitted = view.kind === 'fit' && !view.center
 
 	return (
 		<div className="flex h-full min-h-0 flex-col bg-base-000">
@@ -309,7 +308,7 @@ export function ImageViewer({ image, loading = false, error, empty, view, onView
 				{/* A phone zooms with a pinch, so only Fit to view stays in its one-row toolbar. */}
 				<IconButton icon="zoomOut" label="Zoom out (-)" disabled={!image} onClick={() => zoom(1 / ZOOM_STEP)} className="max-sm:hidden" />
 				<IconButton icon="zoomIn" label="Zoom in (+)" disabled={!image} onClick={() => zoom(ZOOM_STEP)} className="max-sm:hidden" />
-				<IconButton icon="fit" label="Fit to view (0)" disabled={!image} pressed={!!image && fitted} onClick={fitView} />
+				<IconButton icon="fit" label="Fit to view (0)" disabled={!image} onClick={fitView} />
 				<IconButton icon="actualSize" label="Actual size (1)" disabled={!image} onClick={actualSize} className="max-sm:hidden" />
 				{toolbar && <span className="mx-1 h-5 w-px bg-line-100" />}
 				{toolbar}

@@ -1,7 +1,8 @@
 import type { Size } from './transform'
 
 // Central reticle overlay of the image viewer: crosshair lines through the image center and two rings,
-// drawn in image pixel coordinates so it follows zoom and pan, with strokes of constant screen width.
+// drawn in image pixel coordinates so it follows zoom and pan, with strokes of constant screen width, in a translucent
+// Starlight Cream: a framing aid, never the selection colour the overlays keep for what is chosen.
 
 // Radii of the rings as fractions of the image's smaller dimension.
 const RING_FRACTIONS = [0.05, 0.2] as const
@@ -13,7 +14,7 @@ export function Reticle({ width, height }: Size) {
 	const side = Math.min(width, height)
 
 	return (
-		<g stroke="var(--color-accent)" strokeOpacity={0.8} strokeWidth={1} fill="none" vectorEffect="non-scaling-stroke">
+		<g stroke="var(--color-ink-100)" strokeOpacity={0.6} strokeWidth={1} fill="none" vectorEffect="non-scaling-stroke">
 			<line x1={0} y1={cy} x2={width} y2={cy} vectorEffect="non-scaling-stroke" />
 			<line x1={cx} y1={0} x2={cx} y2={height} vectorEffect="non-scaling-stroke" />
 			{RING_FRACTIONS.map((fraction) => (

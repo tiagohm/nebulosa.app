@@ -908,7 +908,7 @@ function DocumentTabs({ documents, activeKey, onClose }: DocumentTabsProps) {
 
 	return (
 		<div className="flex h-9 flex-none items-end border-b border-line-100 bg-base-100">
-			<div ref={stripRef} onKeyDown={handleKeyDown} className="flex min-w-0 flex-1 items-end gap-px overflow-x-auto px-2 [scrollbar-width:none]">
+			<div ref={stripRef} onKeyDown={handleKeyDown} className="flex min-w-0 flex-1 items-end gap-px overflow-x-auto px-2 scrollbar-none">
 				{documents.map((document) => {
 					const active = document.key === activeKey
 					const closable = isClosable(document)

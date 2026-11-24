@@ -64,11 +64,6 @@ export function defaultSettings(provider: StarDetectorProvider): StarDetectionSe
 	return provider === 'nebulosa' ? DEFAULT_NEBULOSA_SETTINGS : DEFAULT_ASTAP_SETTINGS
 }
 
-// Returns a request switched to a detector with its default settings; the request itself when it uses it.
-export function withProvider(request: StarDetectionRequest, provider: StarDetectorProvider): StarDetectionRequest {
-	return request.detector.provider === provider ? request : { ...request, detector: { ...defaultSettings(provider) } }
-}
-
 // Settings of a detector a control edits; searchRegion and maximumRadius apply to the built-in detector only.
 export interface StarDetectorPatch {
 	// Maximum number of stars kept.

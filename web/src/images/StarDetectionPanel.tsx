@@ -1,30 +1,36 @@
-import type { StarDetectionJob, StarDetectionRequest, StarDetectionResult } from 'api'
+import type { StarDetectionJob, StarDetectionRequest, StarDetectionResult, StarDetectorProvider } from 'api'
 import type { DetectedStar } from 'nebulosa/src/imaging/stars/detector'
+import type { ReactNode } from 'react'
 import { useSnapshot } from 'valtio'
-import { isActive, analysisElapsed, ANALYSIS_STATE_LABELS } from '../analysis'
-import { formatDuration, formatFixed, formatPixelLength, formatPixelPosition, formatSignificant, MISSING } from '../format'
-import { activeProfile, profileState, setStarDetectionSettings, starDetectionSettings } from '../profile/profile'
+import { analysisElapsed, isActive } from '../analysis'
+import { formatClockTime, formatDuration, formatFixed, formatPixelLength, formatPixelPosition, formatSignificant } from '../format'
+import { useActiveTimeZone } from '../location/useLocation'
+import { activeProfile, profileState, setStarDetectionSettings, setStarDetector, starDetectionSettings } from '../profile/profile'
 import { CollapsibleSection } from '../shell/CollapsibleSection'
 import { EmptyState } from '../shell/WorkspaceLayout'
-import { AcceptanceControls, DetectorControls, DetectorSettingsControls, useAstapConfigured } from '../stars/StarRequestControls'
-import { cancelDetection, PROVIDER_LABELS, runDetection, sameRequest, starsState } from '../stars/stars'
+import { acceptanceSummary, AcceptanceControls, AstapSettingsButton, detectionSummary, DetectorControls, DetectorSettingsControls, settingsSummary, useAstapConfigured } from '../stars/StarRequestControls'
+import { cancelDetection, DEFAULT_STAR_ACCEPTANCE, defaultSettings, PROVIDER_LABELS, runDetection, sameRequest, starsState } from '../stars/stars'
 import { useStarResult } from '../stars/useStarResult'
 import { Actions } from '../ui/Actions'
 import { Button } from '../ui/Button'
 import { Checkbox } from '../ui/Checkbox'
 import { DataRow } from '../ui/DataRow'
 import { Notice } from '../ui/Notice'
+import { SectionHeading } from '../ui/SectionHeading'
 import { useNow } from '../useNow'
 import { type ImageStarsState, imagesState, imageUnavailableReason, setStarMarkers } from './images'
 import type { ImageToolPanelProps } from './tools'
 
-// Star Detection tool of the Images workspace: runs a detection of the active document on the server with
-// the built-in detector or ASTAP, and shows the outcome, the aggregate HFD, the star selected in the viewer,
-// and how the markers are drawn. Settings are the profile's star detection request, shared by every document and by
-// the frames of Auto Focus and Guiding, and sent only by Run Detection; a result always belongs to the image it measured.
-// The settings are editable before the document has an image (a camera tab waiting for its first frame), with Run
-// Detection disabled until it has one. ASTAP's executable and timeout are not set here but in Settings → External
-// Tools, which the detector section links to.
+// Star Detection tool of the Images workspace: runs a detection of the active document on the server with the built-in
+// detector or ASTAP, and reads the frame as a focus and seeing gauge: the aggregate HFD of its accepted stars, the star
+// selected in the viewer, and how the markers are drawn. The panel has two states: before the image has a detection
+// (or after one failed or was cancelled) it is Run Detection above the settings; once one runs or measured, the
+// settings fold into one collapsed section and the measurement takes the panel. Settings are the profile's star
+// detection request, shared by every document and by the frames of Auto Focus and Guiding, and sent only by Run
+// Detection; each detector keeps its own settings, so switching back restores them. A result always belongs to the
+// image it measured. The settings are editable before the document has an image (a camera tab waiting for its first
+// frame), with Run Detection disabled until it has one. ASTAP's executable and timeout are set in Settings → External
+// Tools, which the panel links to.
 
 // Star Detection panel of the active document.
 export function StarDetectionPanel({ document, view, onOpen }: ImageToolPanelProps) {
@@ -55,46 +61,144 @@ interface StarDetectionProps {
 	readonly unavailable?: string
 }
 
-// Sections of the Star Detection panel of a document: the settings always, the analysis and the results once it has an
-// image.
+// Sections of the Star Detection panel of a document: Run Detection and the latest job always, then the settings until
+// the image has a detection that runs or completed, or the measurement, the selected star, and the markers once it
+// has, with the settings folded.
 function StarDetection({ documentKey, imageId, stars, unavailable }: StarDetectionProps) {
 	const { job, result, resultError } = useStarResult(imageId)
 	const { submitErrors } = useSnapshot(starsState)
 	const profiles = useSnapshot(profileState)
 	const request = starDetectionSettings(activeProfile(profiles).settings)
-	const selected = result && stars?.selected?.jobId === result.jobId ? result.stars[stars.selected.index] : undefined
 	const edit = (next: StarDetectionRequest) => setStarDetectionSettings(profileState, next)
+	const choose = (provider: StarDetectorProvider) => setStarDetector(profileState, provider)
+	const execution = <Execution imageId={imageId} request={request} job={job} submitError={imageId === undefined ? undefined : submitErrors[imageId]} unavailable={unavailable} />
+
+	if (imageId === undefined || !job || job.state === 'failed' || job.state === 'cancelled') {
+		return (
+			<>
+				{execution}
+				<SettingsSections request={request} onChange={edit} onProvider={choose} />
+			</>
+		)
+	}
+
+	const selected = result && stars?.selected?.jobId === result.jobId ? result.stars[stars.selected.index] : undefined
 
 	return (
 		<>
-			<CollapsibleSection id="images.star-detection.detector" title="Detector">
-				<DetectorControls request={request} onChange={edit} />
-			</CollapsibleSection>
-			<CollapsibleSection id="images.star-detection.detection" title="Detection" defaultOpen={false}>
-				<DetectorSettingsControls request={request} onChange={edit} />
-			</CollapsibleSection>
-			<CollapsibleSection id="images.star-detection.acceptance" title="Acceptance" defaultOpen={false}>
-				<AcceptanceControls request={request} onChange={edit} />
-			</CollapsibleSection>
-			<Analysis imageId={imageId} request={request} job={job} submitError={imageId === undefined ? undefined : submitErrors[imageId]} unavailable={unavailable} />
-			{imageId !== undefined && (
-				<>
-					<Results job={job} result={result} resultError={resultError} />
-					<SelectedStar star={selected} />
-				</>
-			)}
-			{stars && (
+			{execution}
+			<DetectionSettings request={request} onChange={edit} onProvider={choose} />
+			{job.summary && <Measurement job={job} result={result} resultError={resultError} />}
+			{result && <SelectedStar star={selected} />}
+			{result && stars && (
 				<CollapsibleSection id="images.star-detection.visualization" title="Visualization">
 					<Checkbox label="Show stars" checked={stars.visible} onChange={(visible) => setStarMarkers(imagesState, documentKey, { visible })} />
 					<Checkbox label="Accepted stars only" checked={stars.acceptedOnly} disabled={!stars.visible} onChange={(acceptedOnly) => setStarMarkers(imagesState, documentKey, { acceptedOnly })} />
-					<Notice>Click a star in the image to inspect it. Showing or hiding the markers never runs a detection.</Notice>
+					<Notice>Click a star in the image to inspect it.</Notice>
 				</CollapsibleSection>
 			)}
 		</>
 	)
 }
 
-interface AnalysisProps {
+interface SettingsProps {
+	// Star detection request of the profile.
+	readonly request: StarDetectionRequest
+	// Called with the edited request.
+	readonly onChange: (request: StarDetectionRequest) => void
+	// Called with the detector chosen.
+	readonly onProvider: (provider: StarDetectorProvider) => void
+}
+
+// Settings of an image without a detection, one section each with a summary while collapsed: the detector open, its
+// settings and the acceptance collapsed.
+function SettingsSections({ request, onChange, onProvider }: SettingsProps) {
+	return (
+		<>
+			<CollapsibleSection id="images.star-detection.detector" title="Detector" summary={PROVIDER_LABELS[request.detector.provider]}>
+				<DetectorControls request={request} onProvider={onProvider} />
+				<SharedNotice />
+			</CollapsibleSection>
+			<CollapsibleSection id="images.star-detection.detection" title="Detection" summary={detectionSummary(request)} defaultOpen={false}>
+				<DetectorSettingsControls request={request} onChange={onChange} />
+			</CollapsibleSection>
+			<CollapsibleSection id="images.star-detection.acceptance" title="Acceptance" summary={acceptanceSummary(request)} defaultOpen={false}>
+				<AcceptanceControls request={request} onChange={onChange} />
+				<ResetButton request={request} onChange={onChange} />
+			</CollapsibleSection>
+		</>
+	)
+}
+
+// Settings of an image with a detection, folded into one section collapsed by default, whose summary names the
+// detector and its settings.
+function DetectionSettings({ request, onChange, onProvider }: SettingsProps) {
+	return (
+		<CollapsibleSection id="images.star-detection.settings" title="Detection Settings" summary={settingsSummary(request)} defaultOpen={false}>
+			<DetectorControls request={request} onProvider={onProvider} />
+			<SharedNotice />
+			<SettingsGroup title="Detection">
+				<DetectorSettingsControls request={request} onChange={onChange} />
+			</SettingsGroup>
+			<SettingsGroup title="Acceptance">
+				<AcceptanceControls request={request} onChange={onChange} />
+			</SettingsGroup>
+			<ResetButton request={request} onChange={onChange} />
+		</CollapsibleSection>
+	)
+}
+
+// Says who else uses the settings edited here.
+function SharedNotice() {
+	return <Notice>These are the profile's settings: Auto Focus measures its frames with them, and Guiding finds its stars with the detector.</Notice>
+}
+
+// Puts the selected detector and the acceptance back to their defaults; the other detector keeps its settings.
+function ResetButton({ request, onChange }: Pick<SettingsProps, 'request' | 'onChange'>) {
+	return (
+		<Button variant="secondary" className="self-start" onClick={() => onChange({ detector: defaultSettings(request.detector.provider), acceptance: DEFAULT_STAR_ACCEPTANCE })}>
+			Reset to Defaults
+		</Button>
+	)
+}
+
+// Titled group of controls inside a section, below a divider.
+function SettingsGroup({ title, children }: { readonly title: string; readonly children: ReactNode }) {
+	return (
+		<div className="mt-1 flex flex-col gap-2 border-t border-line-100 pt-3">
+			<SectionHeading>{title}</SectionHeading>
+			{children}
+		</div>
+	)
+}
+
+// Returns the outcome of a job in words with the tone that tints it: whether it measured the frame once completed,
+// else its state.
+function jobStatus(job: Pick<StarDetectionJob, 'state' | 'summary'>): { readonly label: string; readonly tone: 'default' | 'success' | 'warning' | 'danger' } {
+	switch (job.state) {
+		case 'queued':
+			return { label: 'Queued', tone: 'default' }
+		case 'running':
+			return { label: 'Running', tone: 'default' }
+		case 'completed':
+			switch (job.summary?.measurement) {
+				case 'ok':
+					return { label: 'Measured', tone: 'success' }
+				case 'noStars':
+					return { label: 'No stars', tone: 'warning' }
+				case 'unavailable':
+					return { label: 'Too few accepted', tone: 'warning' }
+				default:
+					return { label: 'Completed', tone: 'default' }
+			}
+		case 'failed':
+			return { label: 'Failed', tone: 'danger' }
+		case 'cancelled':
+			return { label: 'Cancelled', tone: 'default' }
+	}
+}
+
+interface ExecutionProps {
 	// Server id of the image; absent until the document has one.
 	readonly imageId?: string
 	// Why the document has no image yet.
@@ -107,95 +211,103 @@ interface AnalysisProps {
 	readonly submitError?: string
 }
 
-// Run and Cancel, with the state of the latest job.
-function Analysis({ imageId, request, job, submitError, unavailable }: AnalysisProps) {
+// Run Detection and Cancel, each saying why while disabled, with the outcome of the latest job of the image: its
+// state and time while it runs, and whether it measured the frame once it ends.
+function Execution({ imageId, request, job, submitError, unavailable }: ExecutionProps) {
 	const active = isActive(job)
 	const now = useNow(active)
 	const astapReady = useAstapConfigured() || request.detector.provider !== 'astap'
-	const changed = job && !sameRequest(job.request, request)
+	const changed = job?.state === 'completed' && !sameRequest(job.request, request)
+	const reason = imageId === undefined ? (unavailable ?? 'The document has no image yet.') : active ? 'A detection of this image is running.' : astapReady ? undefined : 'ASTAP is not configured.'
+	const status = job && jobStatus(job)
 
 	return (
-		<CollapsibleSection id="images.star-detection.analysis" title="Analysis">
+		<CollapsibleSection id="images.star-detection.analysis" title="Analysis" summary={status?.label}>
 			<Actions>
-				<Button
-					disabled={active || !astapReady || imageId === undefined}
-					onClick={() => {
-						if (imageId === undefined) return
-						void runDetection(starsState, imageId, request)
-					}}
-				>
+				<Button className="max-sm:min-h-12.5" disabled={reason !== undefined} title={reason} onClick={() => imageId !== undefined && void runDetection(starsState, imageId, request)}>
 					Run Detection
 				</Button>
-				<Button variant="secondary" disabled={!active || !job} onClick={() => job && void cancelDetection(job.jobId)}>
+				<Button variant="secondary" className="max-sm:min-h-12.5" disabled={!active} title={active ? undefined : 'No detection of this image is running.'} onClick={() => job && void cancelDetection(job.jobId)}>
 					Cancel
 				</Button>
 			</Actions>
-			{!astapReady && <Notice error>ASTAP is not configured.</Notice>}
+			{!astapReady && (
+				<>
+					<Notice warning>ASTAP is not configured. Set its executable in Settings → External Tools, or choose the Nebulosa detector.</Notice>
+					<AstapSettingsButton />
+				</>
+			)}
 			{unavailable && <Notice>{unavailable} The settings apply to the next detection.</Notice>}
 			{submitError && <Notice error>{submitError}</Notice>}
-			{job ? (
-				<>
-					<DataRow label="Status">{ANALYSIS_STATE_LABELS[job.state]}</DataRow>
-					<DataRow label="Elapsed">{formatDuration(analysisElapsed(job, now) / 1000)}</DataRow>
-					{job.error && <Notice error>{job.error}</Notice>}
-					{changed && <Notice>The settings changed since this detection; run it again to apply them.</Notice>}
-				</>
+			{job && status ? (
+				<div className="flex flex-col">
+					<DataRow label="Status" tone={status.tone}>
+						{status.label}
+					</DataRow>
+					<DataRow label={active ? 'Elapsed' : 'Duration'}>{formatDuration(analysisElapsed(job, now) / 1000)}</DataRow>
+				</div>
 			) : (
 				imageId !== undefined && <Notice>No detection of this image yet.</Notice>
 			)}
+			{job?.error && <Notice error>{job.error}</Notice>}
+			{changed && <Notice warning>The settings changed since this detection; run it again to apply them.</Notice>}
 		</CollapsibleSection>
 	)
 }
 
-interface ResultsProps {
-	// Latest job of the image.
-	readonly job?: StarDetectionJob
+interface MeasurementProps {
+	// Completed job of the image.
+	readonly job: StarDetectionJob
 	// Its result, once fetched.
 	readonly result?: StarDetectionResult
 	// Why its result could not be fetched.
 	readonly resultError?: string
 }
 
-// Counts and aggregate HFD of the latest completed job.
-function Results({ job, result, resultError }: ResultsProps) {
-	const summary = job?.summary
+// Aggregate HFD of the accepted stars as the one Readout of the panel, then how many stars were accepted and which
+// detection measured it.
+function Measurement({ job, result, resultError }: MeasurementProps) {
+	const timeZone = useActiveTimeZone()
+	const summary = job.summary
+	if (!summary) return null
+	const hfd = summary.measurement === 'ok' && summary.aggregateHfd !== undefined ? formatPixelLength(summary.aggregateHfd) : undefined
+	const accepted = `${summary.acceptedCount} of ${summary.detectedCount}`
 
 	return (
-		<CollapsibleSection id="images.star-detection.results" title="Results">
-			{summary ? (
-				<>
-					<DataRow label="Detector">{PROVIDER_LABELS[job.request.detector.provider]}</DataRow>
-					<DataRow label="Detected stars">{summary.detectedCount}</DataRow>
-					<DataRow label="Accepted stars">{summary.acceptedCount}</DataRow>
-					<DataRow label="Aggregate HFD">{summary.measurement === 'ok' ? formatPixelLength(summary.aggregateHfd) : MISSING}</DataRow>
-					<DataRow label="Duration">{formatDuration(summary.elapsed / 1000)}</DataRow>
-					{summary.measurement === 'noStars' && <Notice>No stars were detected in this image.</Notice>}
-					{summary.measurement === 'unavailable' && <Notice>Too few stars were accepted for an aggregate HFD.</Notice>}
-					{result?.warnings.map((warning) => (
-						<Notice key={warning}>{warning}</Notice>
-					))}
-					{resultError && <Notice error>{resultError}</Notice>}
-				</>
-			) : (
-				<Notice>{job && isActive(job) ? 'Detecting…' : 'No results.'}</Notice>
+		<CollapsibleSection id="images.star-detection.results" title="Measurement" summary={hfd ? `HFD ${hfd} · ${summary.acceptedCount} stars` : jobStatus(job).label}>
+			{hfd && (
+				<div className="flex flex-wrap items-baseline justify-between gap-x-3">
+					<SectionHeading>HFD</SectionHeading>
+					<span className="ml-auto text-3xl leading-9 font-semibold tracking-[-0.01em] text-ink-100 tabular-nums">{hfd}</span>
+				</div>
 			)}
+			<DataRow label="Accepted stars">{accepted}</DataRow>
+			<Notice>
+				Median HFD of the accepted stars · {PROVIDER_LABELS[job.request.detector.provider]} · {formatClockTime(job.queuedAt, timeZone, { seconds: true, named: true })}
+			</Notice>
+			{summary.measurement === 'noStars' && <Notice warning>No stars were detected in this image.</Notice>}
+			{summary.measurement === 'unavailable' && <Notice warning>Too few stars were accepted for an aggregate HFD. Loosen the acceptance criteria or detect more stars.</Notice>}
+			{result?.warnings.map((warning) => (
+				<Notice key={warning}>{warning}</Notice>
+			))}
+			{resultError && <Notice error>{resultError}</Notice>}
 		</CollapsibleSection>
 	)
 }
 
-// Measurements of the star selected in the viewer.
+// Measurements of the star selected in the viewer, summarized while collapsed.
 function SelectedStar({ star }: { readonly star?: DetectedStar }) {
 	return (
-		<CollapsibleSection id="images.star-detection.selected-star" title="Selected Star">
+		<CollapsibleSection id="images.star-detection.selected-star" title="Selected Star" summary={star ? `HFD ${formatPixelLength(star.hfd)} · SNR ${formatFixed(star.snr, 1)}` : undefined}>
 			{star ? (
-				<>
+				<div className="flex flex-col">
 					<DataRow label="Position">{formatPixelPosition(star.x, star.y, 2)}</DataRow>
 					<DataRow label="HFD">{formatPixelLength(star.hfd)}</DataRow>
 					<DataRow label="SNR">{formatFixed(star.snr, 1)}</DataRow>
-					<DataRow label="Flux">{formatSignificant(star.flux)}</DataRow>
-				</>
+					<DataRow label="Flux">{formatSignificant(star.flux)} normalized</DataRow>
+				</div>
 			) : (
-				<Notice>No star selected.</Notice>
+				<Notice>No star selected. Click a star in the image.</Notice>
 			)}
 		</CollapsibleSection>
 	)

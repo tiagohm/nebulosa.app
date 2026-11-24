@@ -113,7 +113,7 @@ export type ImageToolDefinition = ImageToolOnImage | CameraOperationTool
 export const IMAGE_TOOL_DEFINITIONS: Readonly<Record<ImageToolId, ImageToolDefinition>> = {
 	inspector: { id: 'inspector', label: 'Image Inspector', panelTitle: 'Image Inspector', icon: 'histogram', category: 'image', outputs: ['display'], panel: ImageInspector },
 	'plate-solver': { id: 'plate-solver', label: 'Plate Solving', panelTitle: 'Plate Solving', icon: 'plateSolve', category: 'image', outputs: ['analysis'], panel: PlateSolverPanel },
-	'star-detection': { id: 'star-detection', label: 'Star Detection', panelTitle: 'Star Detection', icon: 'starDetection', category: 'image', outputs: ['analysis'], panel: StarDetectionPanel },
+	'star-detection': { id: 'star-detection', label: 'Star Detection', panelTitle: 'Star Detection', icon: 'starDetection', category: 'image', outputs: ['analysis'], panel: StarDetectionPanel, sheet: true },
 	'star-profile': { id: 'star-profile', label: 'Star Profile Inspector', panelTitle: 'Star Profile Inspector', icon: 'starProfile', category: 'image', outputs: ['analysis'], panel: StarProfileInspectorPanel },
 	'streak-detection': { id: 'streak-detection', label: 'Streak Detection', panelTitle: 'Streak Detection', icon: 'streakDetection', category: 'image', outputs: ['analysis'], panel: StreakDetectionPanel },
 	annotation: { id: 'annotation', label: 'Annotation', panelTitle: 'Annotation', icon: 'annotation', category: 'image', outputs: ['analysis'], panel: AnnotationPanel },

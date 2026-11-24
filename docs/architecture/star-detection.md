@@ -16,7 +16,7 @@ One service gives both the same measurement, so the HFD Auto Focus measured on a
 - An analysis job of the [Shared Image](shared-image.md) store; it holds no device.
 - [Auto Focus](auto-focus.md) measures its frames through it.
 - The ASTAP provider is configured in [External Tools](external-tools.md); the built-in one uses the toolkit (`core`).
-- The detector settings are one profile preference shared by every document and by the frames of Auto Focus and Guiding.
+- The detector settings are one profile preference, which keeps the settings of each detector, shared by every document and by the frames of Auto Focus and Guiding.
 - [Streak Detection](streak-detection.md) may use its accepted stars, and the [Star Profile Inspector](star-profile-inspector.md) receives a star it found.
 - The markers are an [Overlay](overlay.md); a run never holds the frame a camera tab shows (see [Capture Frames](capture-frames.md)).
 - Captures never analyze their frames; [Guiding](guiding.md), the stacking analyses, and the Star Profile Inspector run the toolkit's detector on their own.

@@ -4,7 +4,7 @@ import { proxy, snapshot } from 'valtio'
 import { ORIGINAL_DISPLAY_SETTINGS } from '../images/display'
 import { DEFAULT_IMAGE_ASTROMETRY } from '../platesolving/preferences'
 import { DEFAULT_STAR_PROFILE_SETTINGS } from '../stars/starprofile.settings'
-import { DEFAULT_STAR_REQUEST } from '../stars/stars'
+import { DEFAULT_ASTAP_SETTINGS, DEFAULT_STAR_REQUEST } from '../stars/stars'
 import { DEFAULT_STREAK_SETTINGS } from '../streaks/streaks'
 import {
 	meridianFlipSettings,
@@ -82,6 +82,7 @@ import {
 	setDateTimePreferences,
 	dateTimePreferences,
 	setStarDetectionSettings,
+	setStarDetector,
 	setStreakDetectionSettings,
 	setImageAstrometrySettings,
 	imageAstrometrySettings,
@@ -582,6 +583,22 @@ describe('camera forms', () => {
 		const request = { detector: { provider: 'nebulosa', maxStars: 50, minSNR: 2, searchRegion: 0, maximumRadius: 24 }, acceptance: { minSNR: 0, minHfd: 1, maxHfd: 0, edgeMargin: 10 } } as const
 		setStarDetectionSettings(state, request)
 		expect(starDetectionSettings(state.profiles[0].settings)).toEqual(request)
+	})
+
+	test('choosing a detector restores its last settings and keeps the acceptance', () => {
+		const state = load()
+		const tuned = { detector: { provider: 'nebulosa', maxStars: 50, minSNR: 2, searchRegion: 0, maximumRadius: 24 }, acceptance: { minSNR: 0, minHfd: 1, maxHfd: 0, edgeMargin: 10 } } as const
+		setStarDetectionSettings(state, tuned)
+
+		setStarDetector(state, 'astap')
+		expect(starDetectionSettings(state.profiles[0].settings)).toEqual({ detector: DEFAULT_ASTAP_SETTINGS, acceptance: tuned.acceptance })
+
+		setStarDetectionSettings(state, { detector: { provider: 'astap', maxStars: 300, minSNR: 15 }, acceptance: tuned.acceptance })
+		setStarDetector(state, 'nebulosa')
+		expect(starDetectionSettings(state.profiles[0].settings)).toEqual(tuned)
+
+		setStarDetector(state, 'astap')
+		expect(starDetectionSettings(state.profiles[0].settings).detector).toEqual({ provider: 'astap', maxStars: 300, minSNR: 15 })
 	})
 
 	test('the Star Profile Inspector settings are the profile ones, and are persisted', () => {

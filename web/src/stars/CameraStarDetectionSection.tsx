@@ -32,7 +32,7 @@ export function CameraStarDetectionSection({ id, device, provider, description, 
 
 	return (
 		<CollapsibleSection id={id} title="Star Detection" summary={label} defaultOpen={defaultOpen}>
-			<Notice>{description(<span className="text-accent">{label}</span>)}</Notice>
+			<Notice>{description(<span className="text-ink-100">{label}</span>)}</Notice>
 			{provider === 'astap' && !astapConfigured && <Notice error>{label} is not configured.</Notice>}
 			{device && (
 				<Button variant="secondary" className="self-start" onClick={() => openCameraTool(device.connectionId, device.id, 'star-detection')}>

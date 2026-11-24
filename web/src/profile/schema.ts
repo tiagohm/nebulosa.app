@@ -1,5 +1,6 @@
 import type {
 	AnnotationBodies,
+	AstapStarDetectionSettings,
 	AutoFocusRequest,
 	CaptureDither,
 	CaptureRequest,
@@ -17,6 +18,7 @@ import type {
 	MountRemoteProtocol,
 	MountRemoteStartRequest,
 	PlateSolveRequest,
+	NebulosaStarDetectionSettings,
 	PulseCaptureDither,
 	SkyObjectCategory,
 	SkyObjectRef,
@@ -65,8 +67,8 @@ export interface ProfileSettings {
 	// Forms of each physical camera edited so far, by saved connection id, then device id.
 	cameras: Record<string, Record<string, CameraSettings>>
 	// Star detection request edited in Images → Star Detection, shared by every document and by the frames of Auto
-	// Focus; absent until edited, and then DEFAULT_STAR_REQUEST holds.
-	starDetection?: StarDetectionRequest
+	// Focus and Guiding, with the settings of each detector; absent until edited, and then DEFAULT_STAR_REQUEST holds.
+	starDetection?: StarDetectionPreference
 	// Settings of the Star Profile Inspector, shared by every document; absent until edited, and then
 	// DEFAULT_STAR_PROFILE_SETTINGS holds. The stars it measured are never stored.
 	starProfile?: StarProfileSettings
@@ -133,6 +135,13 @@ export interface ProfileSettings {
 	// Preferences of the Astro Weather tool; absent until edited, and then DEFAULT_ASTRO_WEATHER_PREFERENCES holds. Tab
 	// memory, like the forecasts, the sites typed in, and the night shown.
 	astroWeather?: AstroWeatherPreferences
+}
+
+// Star detection request of a profile, with the settings each detector had when it was last edited, so choosing a
+// detector again restores them instead of its defaults.
+export interface StarDetectionPreference extends StarDetectionRequest {
+	// Last settings of each detector, by detector; absent until one is edited, and then its defaults hold.
+	readonly detectors?: { readonly nebulosa?: NebulosaStarDetectionSettings; readonly astap?: AstapStarDetectionSettings }
 }
 
 // How Annotation draws its results and what its next runs ask for.

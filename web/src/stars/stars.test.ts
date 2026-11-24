@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import type { StarDetectionJob, StarDetectionResult } from 'api'
 import { proxy } from 'valtio'
-import { DEFAULT_ASTAP_SETTINGS, DEFAULT_STAR_REQUEST, handleStarsEvent, latestJob, latestResult, loadResult, markerRadius, pickStar, refreshStars, runDetection, sameRequest, starPaths, type StarsState, withAcceptance, withDetectorSettings, withProvider } from './stars'
+import { DEFAULT_ASTAP_SETTINGS, DEFAULT_STAR_REQUEST, handleStarsEvent, latestJob, latestResult, loadResult, markerRadius, pickStar, refreshStars, runDetection, sameRequest, starPaths, type StarsState, withAcceptance, withDetectorSettings } from './stars'
 
 function state(): StarsState {
 	return proxy<StarsState>({ jobs: {}, latest: {}, results: {}, resultErrors: {}, submitErrors: {} })
@@ -159,15 +159,13 @@ describe('overlay geometry', () => {
 })
 
 describe('request edits', () => {
-	test('switch detectors from their defaults and keep only the settings a detector has', () => {
+	test('edit only the settings a detector has', () => {
 		const builtin = withDetectorSettings(DEFAULT_STAR_REQUEST, { maxStars: 100, searchRegion: 12, maximumRadius: 48 })
 		expect(builtin.detector).toEqual({ provider: 'nebulosa', maxStars: 100, minSNR: 0, searchRegion: 12, maximumRadius: 48 })
-		expect(withProvider(builtin, 'nebulosa')).toBe(builtin)
 
-		const astap = withDetectorSettings(withProvider(builtin, 'astap'), { minSNR: 20, searchRegion: 5, maximumRadius: 16 })
+		const astap = withDetectorSettings({ ...builtin, detector: DEFAULT_ASTAP_SETTINGS }, { minSNR: 20, searchRegion: 5, maximumRadius: 16 })
 		expect(astap.detector).toEqual({ provider: 'astap', maxStars: 0, minSNR: 20 })
 		expect(withAcceptance(astap, { minHfd: 1.5 }).acceptance).toEqual({ minSNR: 0, minHfd: 1.5, maxHfd: 0, edgeMargin: 0 })
 		expect(DEFAULT_STAR_REQUEST.detector).toEqual({ provider: 'nebulosa', maxStars: 500, minSNR: 0, searchRegion: 0, maximumRadius: 32 })
-		expect(withProvider(astap, 'nebulosa').detector).toEqual(DEFAULT_STAR_REQUEST.detector)
 	})
 })

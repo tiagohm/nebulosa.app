@@ -3,8 +3,9 @@ import type { OverlayView } from '../viewer/transform'
 import { markerRadius, starPaths } from './stars'
 
 // Star markers of a detection result over the shared image viewer, used by the Images workspace and Camera
-// Capture alike: a circle per star, as large as its HFD and never smaller than a few screen pixels, in the
-// accent color for accepted stars and dashed gray for rejected ones, plus a highlighted selected star. It is
+// Capture alike: a circle per star, as large as its HFD and never smaller than a few screen pixels, Moonlight for
+// accepted stars and dashed Graticule for rejected ones, and the selected star ringed in Ember Clay, the one marker
+// that glows (DESIGN.md, the One Ember Rule), with a heavier stroke so it stands out without its hue. It is
 // a pure function of the result and draws in image pixel coordinates, so the viewer's zoom and pan move it;
 // the caller shows it only over the image the result measured. Only the markers inside the view are drawn.
 
@@ -33,9 +34,9 @@ export function StarOverlay({ result, view, acceptedOnly, selected }: StarOverla
 
 	return (
 		<g fill="none" strokeWidth={1} vectorEffect="non-scaling-stroke">
-			{paths.rejected && <path d={paths.rejected} stroke="var(--color-ink-300)" strokeOpacity={0.7} strokeDasharray="3 3" vectorEffect="non-scaling-stroke" />}
-			{paths.accepted && <path d={paths.accepted} stroke="var(--color-accent)" strokeOpacity={0.9} vectorEffect="non-scaling-stroke" />}
-			{star && <circle cx={star.x + 0.5} cy={star.y + 0.5} r={markerRadius(star.hfd, minRadius) + SELECTED_RING / view.scale} stroke="var(--color-success)" strokeWidth={2} vectorEffect="non-scaling-stroke" />}
+			{paths.rejected && <path d={paths.rejected} stroke="var(--color-line-200)" strokeDasharray="4 3" vectorEffect="non-scaling-stroke" />}
+			{paths.accepted && <path d={paths.accepted} stroke="var(--color-ink-200)" vectorEffect="non-scaling-stroke" />}
+			{star && <circle cx={star.x + 0.5} cy={star.y + 0.5} r={markerRadius(star.hfd, minRadius) + SELECTED_RING / view.scale} stroke="var(--color-accent)" strokeWidth={2.5} vectorEffect="non-scaling-stroke" />}
 		</g>
 	)
 }

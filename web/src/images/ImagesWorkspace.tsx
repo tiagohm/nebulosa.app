@@ -1,6 +1,6 @@
 import type { ImageInfo, SaveFormat } from 'api'
 import { cn } from 'cn'
-import { type KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { type KeyboardEvent, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { AnnotationOverlay, shownAnnotations } from '../annotations/AnnotationOverlay'
 import { annotationMatchesWcs, annotationPlateSolveJobId } from '../annotations/annotations'
@@ -27,6 +27,7 @@ import { WcsCursorStatus } from '../platesolving/WcsCursorStatus'
 import { WcsGridOverlay } from '../platesolving/WcsGridOverlay'
 import { WcsOverlay } from '../platesolving/WcsOverlay'
 import { activeProfile, cameraFramesShown, imageAstrometrySettings, profileState, setCameraFramesShown, setLastImageDirectory, starProfileSettings } from '../profile/profile'
+import { NARROW_SCREEN, useMediaQuery } from '../shell/useMediaQuery'
 import { EmptyState, useWorkspacePanel, WorkspaceLayout } from '../shell/WorkspaceLayout'
 import { StarOverlay } from '../stars/StarOverlay'
 import { inspectStar, starProfileOf, TAP_SEARCH_DISTANCE, tapSearchRadius } from '../stars/starprofile'
@@ -37,9 +38,10 @@ import { StreakOverlay } from '../streaks/StreakOverlay'
 import { pickStreak } from '../streaks/streaks'
 import { useStreakResult } from '../streaks/useStreakResult'
 import { Button } from '../ui/Button'
-import { Icon } from '../ui/Icon'
+import { Icon, type IconName } from '../ui/Icon'
 import { IconButton } from '../ui/IconButton'
 import { moveIndex } from '../ui/navigation'
+import { Popover } from '../ui/Popover'
 import { Select } from '../ui/Select'
 import { ImageViewer } from '../viewer/ImageViewer'
 import { Reticle } from '../viewer/Reticle'
@@ -214,6 +216,7 @@ export function ImagesWorkspace() {
 	// Column of the tabs, the viewer, and the bottom area of a camera tab, which fills the screen on request.
 	const viewerRef = useRef<HTMLDivElement>(null)
 	const { active: fullscreen, supported: fullscreenSupported, toggle: toggleFullscreen } = useFullscreen(viewerRef)
+	const narrow = useMediaQuery(NARROW_SCREEN)
 	const panelState = useWorkspacePanel('images')
 	const { setOpen: setPanelOpen } = panelState
 	const panelRequested = state.panelRequested === true
@@ -283,19 +286,18 @@ export function ImagesWorkspace() {
 						toolbar={
 							document &&
 							view && (
-								<>
-									<IconButton icon="expand" label={fullscreen ? 'Exit full screen' : 'Full screen'} pressed={fullscreen} disabled={!fullscreenSupported} onClick={toggleFullscreen} />
-									<OriginalToggle documentKey={document.key} view={view} info={document.info} />
-									<IconButton icon="layers" label={overlaysHidden ? 'Show overlays' : 'Hide overlays'} pressed={hasOverlays && !overlaysHidden} disabled={!hasOverlays} onClick={() => toggleImageOverlays(imagesState, document.key)} />
-									<IconButton icon="pixelInspect" label={inspectPixels ? 'Stop inspecting pixels' : 'Inspect pixels: the samples under the pointer in the status line'} pressed={inspectPixels} disabled={!imageInfo} onClick={() => (pixelInspection.enabled = !inspectPixels)} />
-									<span className="mx-1 h-5 w-px bg-line-100" />
-									<DisplayToolbar key={document.key} documentKey={document.key} info={document.info} view={view} />
-									<span className="mx-1 h-5 w-px bg-line-100" />
-									<SaveImagePopover document={document} view={view} onSaveToServer={(format) => setSaving({ key: document.key, format })} />
-									<span className="mx-1 h-5 w-px bg-line-100" />
-									{solution && <Select options={ASTROMETRY_MODES} value={mode} format={(option) => MODE_LABELS[option]} disabled={!!picking || overlaysHidden} onChange={(next) => setModes((current) => ({ ...current, [document.key]: next }))} className="w-36 flex-none" />}
-									{document.camera && <CameraControls document={document} framesShown={framesShown} onToggleFrames={() => setCameraFramesShown(profileState, !framesShown)} reticle={reticle} onToggleReticle={() => setReticles({ ...reticles, [document.key]: !reticle })} />}
-								</>
+								<ViewerToolbar
+									document={document}
+									view={view}
+									narrow={narrow}
+									fullscreen={{ active: fullscreen, supported: fullscreenSupported, toggle: toggleFullscreen }}
+									overlays={{ available: hasOverlays, hidden: overlaysHidden }}
+									inspectPixels={inspectPixels}
+									reticle={reticle}
+									onToggleReticle={() => setReticles({ ...reticles, [document.key]: !reticle })}
+									measure={solution ? { mode, disabled: !!picking || overlaysHidden, onChange: (next) => setModes((current) => ({ ...current, [document.key]: next })) } : undefined}
+									onSaveToServer={(format) => setSaving({ key: document.key, format })}
+								/>
 							)
 						}
 						overlays={
@@ -393,7 +395,7 @@ export function ImagesWorkspace() {
 						</div>
 					)}
 				</div>
-				{document?.camera && framesShown && !sheetOpen && <CameraBottom document={document} />}
+				{document?.camera && !sheetOpen && <CameraBottom document={document} expanded={framesShown} onToggle={() => setCameraFramesShown(profileState, !framesShown)} />}
 				{/* Inside the column, so the menu stays visible while it fills the screen. */}
 				{menu && solution && document?.info && menu.key === document.key && (
 					<ImageMenu
@@ -453,27 +455,171 @@ function OriginalToggle({ documentKey, view, info }: OriginalToggleProps) {
 	)
 }
 
-interface CameraControlsProps {
-	// Camera tab.
+// Full screen of the viewer column, as useFullscreen reports it.
+interface FullscreenControl {
+	// Whether the column fills the screen.
+	readonly active: boolean
+	// Whether the browser can show an element in full screen.
+	readonly supported: boolean
+	// Enters or leaves full screen.
+	readonly toggle: () => void
+}
+
+// Measure mode of a document with a plate solution.
+interface MeasureControl {
+	// Mode chosen.
+	readonly mode: AstrometryMode
+	// Whether the mode cannot be changed, as while Guiding picks a star or the overlays are hidden.
+	readonly disabled: boolean
+	// Chooses a mode.
+	readonly onChange: (mode: AstrometryMode) => void
+}
+
+interface ViewerToolbarProps {
+	// Document shown.
 	readonly document: ImageDocument
-	// Whether the capture frames carousel is shown.
-	readonly framesShown: boolean
-	// Shows or hides the carousel.
-	readonly onToggleFrames: () => void
-	// Whether the central reticle is drawn over the frame.
+	// View state of the document.
+	readonly view: ImageViewState
+	// Whether the screen is a phone's, where the toolbar keeps one row.
+	readonly narrow: boolean
+	// Full screen of the viewer column.
+	readonly fullscreen: FullscreenControl
+	// Whether the document has overlays to show, and whether they are hidden.
+	readonly overlays: { readonly available: boolean; readonly hidden: boolean }
+	// Whether Inspect Pixels is on.
+	readonly inspectPixels: boolean
+	// Whether the central reticle is drawn, on a camera tab.
 	readonly reticle: boolean
 	// Shows or hides the reticle.
 	readonly onToggleReticle: () => void
+	// Measure mode, while the document has a plate solution.
+	readonly measure?: MeasureControl
+	// Opens the save dialog of the document in a format.
+	readonly onSaveToServer: (format: SaveFormat) => void
+}
+
+// Controls of the viewer toolbar of a document, after the zoom controls of the viewer: the view toggles, the display
+// controls, Save, the measure mode, and the frame controls of a camera tab. On a phone they keep one row: the display
+// controls are one Display popup, and Full Screen, Inspect Pixels, the reticle, and the measure mode a More menu.
+function ViewerToolbar({ document, view, narrow, fullscreen, overlays, inspectPixels, reticle, onToggleReticle, measure, onSaveToServer }: ViewerToolbarProps) {
+	const fullscreenToggle: MenuToggle = { icon: 'expand', label: fullscreen.active ? 'Exit full screen' : 'Full screen', pressed: fullscreen.active, disabled: !fullscreen.supported, onSelect: fullscreen.toggle }
+	const pixelsToggle: MenuToggle = {
+		icon: 'pixelInspect',
+		label: inspectPixels ? 'Stop inspecting pixels' : 'Inspect pixels',
+		title: inspectPixels ? undefined : 'Inspect pixels: the samples under the pointer in the status line',
+		pressed: inspectPixels,
+		disabled: !document.info,
+		onSelect: () => (pixelInspection.enabled = !inspectPixels),
+	}
+	const reticleToggle: MenuToggle = { icon: 'reticle', label: reticle ? 'Hide reticle' : 'Show reticle', pressed: reticle, onSelect: onToggleReticle }
+	const overlaysButton = <IconButton icon="layers" label={overlays.hidden ? 'Show overlays' : 'Hide overlays'} pressed={overlays.available && !overlays.hidden} disabled={!overlays.available} onClick={() => toggleImageOverlays(imagesState, document.key)} />
+	const saveButton = <SaveImagePopover document={document} view={view} onSaveToServer={onSaveToServer} />
+	const measureSelect = measure && <Select label={narrow ? 'Measure' : undefined} options={ASTROMETRY_MODES} value={measure.mode} format={(option) => MODE_LABELS[option]} disabled={measure.disabled} onChange={measure.onChange} className={narrow ? undefined : 'w-36 flex-none'} />
+
+	if (narrow) {
+		return (
+			<>
+				<OriginalToggle documentKey={document.key} view={view} info={document.info} />
+				{overlaysButton}
+				<DisplayToolbar key={document.key} documentKey={document.key} info={document.info} view={view} compact />
+				{saveButton}
+				{document.camera && <CameraFrameButton document={document} />}
+				<MoreMenu items={document.camera ? [fullscreenToggle, pixelsToggle, reticleToggle] : [fullscreenToggle, pixelsToggle]}>{measureSelect}</MoreMenu>
+			</>
+		)
+	}
+
+	return (
+		<>
+			<ToggleButton toggle={fullscreenToggle} />
+			<OriginalToggle documentKey={document.key} view={view} info={document.info} />
+			{overlaysButton}
+			<ToggleButton toggle={pixelsToggle} />
+			<span className="mx-1 h-5 w-px bg-line-100" />
+			<DisplayToolbar key={document.key} documentKey={document.key} info={document.info} view={view} />
+			<span className="mx-1 h-5 w-px bg-line-100" />
+			{saveButton}
+			<span className="mx-1 h-5 w-px bg-line-100" />
+			{measureSelect}
+			{document.camera && <CameraControls document={document} reticle={reticleToggle} />}
+		</>
+	)
+}
+
+// Toggle of the viewer toolbar, an icon button on a wide screen and a row of the More menu on a phone.
+interface MenuToggle {
+	// Icon of the toggle.
+	readonly icon: IconName
+	// Name of its action in its current state, the row's text and the button's tooltip.
+	readonly label: string
+	// Longer tooltip, when the label alone does not say what the toggle does.
+	readonly title?: string
+	// Whether it is on.
+	readonly pressed: boolean
+	// Whether it cannot be used.
+	readonly disabled?: boolean
+	// Turns it on or off.
+	readonly onSelect: () => void
+}
+
+// Icon button of a toggle of the viewer toolbar.
+function ToggleButton({ toggle }: { readonly toggle: MenuToggle }) {
+	return <IconButton icon={toggle.icon} label={toggle.title ?? toggle.label} pressed={toggle.pressed} disabled={toggle.disabled} onClick={toggle.onSelect} />
+}
+
+interface MoreMenuProps {
+	// Toggles of the menu, in display order.
+	readonly items: readonly MenuToggle[]
+	// Controls under the toggles, such as the measure mode.
+	readonly children?: ReactNode
+}
+
+// More menu of the viewer toolbar on a phone: a row for each toggle, the one on in the selection colour, which closes
+// the menu when chosen, then the other controls.
+function MoreMenu({ items, children }: MoreMenuProps) {
+	const [open, setOpen] = useState(false)
+
+	return (
+		<Popover icon="more" label="More" open={open} onOpenChange={setOpen}>
+			<div className="-mx-1 flex flex-col">
+				{items.map((item) => (
+					<button
+						key={item.icon}
+						type="button"
+						title={item.title}
+						disabled={item.disabled}
+						onClick={() => {
+							setOpen(false)
+							item.onSelect()
+						}}
+						className={cn(
+							'flex cursor-pointer items-center gap-2.5 rounded-sm border-0 px-2 py-1.5 text-left font-mono text-sm whitespace-nowrap transition-colors duration-150 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent disabled:cursor-not-allowed disabled:bg-transparent disabled:text-ink-300 motion-reduce:transition-none pointer-coarse:min-h-11',
+							item.pressed ? 'bg-accent-subtle text-accent' : 'bg-transparent text-ink-100 hover:bg-base-300',
+						)}
+					>
+						<Icon name={item.icon} className={item.pressed ? undefined : 'text-ink-200'} />
+						{item.label}
+					</button>
+				))}
+			</div>
+			{children && <div className="border-t border-line-100 pt-2">{children}</div>}
+		</Popover>
+	)
+}
+
+interface CameraControlsProps {
+	// Camera tab.
+	readonly document: ImageDocument
+	// Toggle of the central reticle drawn over the frame.
+	readonly reticle: MenuToggle
 }
 
 // Labels of the selections of a camera tab, as its toolbar shows them.
 const SELECTION_LABELS: Readonly<Record<NonNullable<ImageDocument['camera']>['selection']['kind'], string>> = { latest: 'Latest', saved: 'Saved frame', inspect: 'Held for analysis', liveStack: 'Live stack' }
 
-// Frame a camera tab shows, Hold for analysis while it follows the latest frame (the only way to keep the frame shown:
-// no tool or analysis holds it) and Return to Latest while it does not, and the toggles of the
-// bottom area and of the central reticle (for Mount Nudge or framing). None commands the camera: they only change which
-// frame the tab shows and how.
-function CameraControls({ document, framesShown, onToggleFrames, reticle, onToggleReticle }: CameraControlsProps) {
+// Frame a camera tab shows, its Hold for Analysis or Return to Latest (CameraFrameButton), and the toggle of the central
+// reticle (for Mount Nudge or framing). None commands the camera: they only change which frame the tab shows and how.
+function CameraControls({ document, reticle }: CameraControlsProps) {
 	const frames = useSnapshot(captureFramesState)
 	const camera = document.camera
 	if (!camera || document.source.kind !== 'camera') return null
@@ -489,15 +635,23 @@ function CameraControls({ document, framesShown, onToggleFrames, reticle, onTogg
 				{restored ? 'Latest saved' : SELECTION_LABELS[camera.selection.kind]}
 				{camera.live && ` · ${camera.live.revision} frames`}
 			</span>
-			{following ? (
-				<IconButton icon="pin" label="Hold for analysis" disabled={!camera.shown} onClick={() => holdCameraFrame(imagesState, document.key)} />
-			) : (
-				<IconButton icon="skipToEnd" label="Return to Latest" onClick={() => void selectCameraFrame(imagesState, document.key, { kind: 'latest' }, captureFramesState)} />
-			)}
-			<IconButton icon="images" label={framesShown ? 'Hide frames and focus curve' : 'Show frames and focus curve'} pressed={framesShown} onClick={onToggleFrames} />
-			<IconButton icon="reticle" label={reticle ? 'Hide reticle' : 'Show reticle'} pressed={reticle} onClick={onToggleReticle} />
+			<CameraFrameButton document={document} />
+			<ToggleButton toggle={reticle} />
 			<CaptureStatus connectionId={document.source.connectionId} deviceId={document.source.deviceId} />
 		</>
+	)
+}
+
+// Hold for Analysis while a camera tab follows the latest frame (the only way to keep the frame shown: no tool or
+// analysis holds it), and Return to Latest while it does not.
+function CameraFrameButton({ document }: { readonly document: ImageDocument }) {
+	const camera = document.camera
+	if (!camera) return null
+
+	return camera.selection.kind === 'latest' ? (
+		<IconButton icon="pin" label="Hold for analysis" disabled={!camera.shown} onClick={() => holdCameraFrame(imagesState, document.key)} />
+	) : (
+		<IconButton icon="skipToEnd" label="Return to Latest" onClick={() => void selectCameraFrame(imagesState, document.key, { kind: 'latest' }, captureFramesState)} />
 	)
 }
 
@@ -544,19 +698,27 @@ const BOTTOM_VIEW_LABELS: Readonly<Record<BottomView, string>> = { frames: 'Capt
 interface CameraBottomProps {
 	// Camera tab.
 	readonly document: ImageDocument
+	// Whether the view is shown under its header; the header stays when it is not.
+	readonly expanded: boolean
+	// Shows or hides the view.
+	readonly onToggle: () => void
 }
 
-// Bottom area of a camera tab: the capture frames carousel, and, once its camera has an Auto Focus, a guiding, or a mount
-// pointing session, a switch to the Focus Curve, the guiding graph, or the Pointing Map of that session. They belong to the session, never to the frame
-// selected, so they keep updating whatever frame or tool is shown; choosing a view never changes the selection. A view
-// whose session is gone shows the carousel. The view is kept per camera tab (bottomview.ts), and a new Auto Focus session
-// of the camera shows its Focus Curve once.
-function CameraBottom({ document }: CameraBottomProps) {
+// Bottom area of a camera tab: a header that collapses it, then the capture frames carousel, or, once its camera has an
+// Auto Focus, a guiding, or a mount pointing session, the Focus Curve, the guiding graph, or the Pointing Map of that
+// session, chosen in the header. The header stays while the area is collapsed, so the choice and the way back are always
+// in sight; choosing a view expands the area. The views belong to the session, never to the frame selected, so they keep
+// updating whatever frame or tool is shown; choosing a view never changes the selection. A view whose session is gone
+// shows the carousel. The view is kept per camera tab (bottomview.ts), and a new Auto Focus session of the camera shows
+// its Focus Curve once.
+function CameraBottom({ document, expanded, onToggle }: CameraBottomProps) {
 	const autoFocus = useSnapshot(autoFocusRuntime)
 	const bottom = useSnapshot(cameraBottomViews)
 	const guidingState = useSnapshot(guidingRuntime)
 	const mountPointing = useSnapshot(mountPointingRuntime)
-	const key = document.source.kind === 'camera' ? cameraKey(document.source.connectionId, document.source.deviceId) : undefined
+	const frames = useSnapshot(captureFramesState)
+	const source = document.source.kind === 'camera' ? document.source : undefined
+	const key = source ? cameraKey(source.connectionId, source.deviceId) : undefined
 	const session = key ? autoFocus.sessions[key] : undefined
 	const following = session && autoFocusRunning(session) ? session.sessionId : undefined
 
@@ -564,48 +726,66 @@ function CameraBottom({ document }: CameraBottomProps) {
 		if (following) followAutoFocus(cameraBottomViews, document.key, following)
 	}, [document.key, following])
 
-	if (!key) return null
+	if (!key || !source) return null
 
 	const guiding = guidingState.sessions[key]
 	const pointing = mountPointing.sessions[key]
 	const available = BOTTOM_VIEWS.filter((option) => option === 'frames' || (option === 'curve' && session) || (option === 'guiding' && guiding) || (option === 'pointing' && pointing))
-	if (available.length === 1) return <CaptureFramesCarousel document={document} />
 	const chosen = bottom.views[document.key] ?? 'frames'
 	const view = available.includes(chosen) ? chosen : 'frames'
-	const onView = (next: BottomView) => chooseBottomView(cameraBottomViews, document.key, next)
+	const frameKey = frameSourceKey(source.connectionId, source.deviceId)
+	const savedCount = frames.sources[frameKey]?.count ?? frames.frames[frameKey]?.length ?? 0
+	const state = view === 'frames' ? `${savedCount} saved` : view === 'pointing' && pointing ? MOUNT_POINTING_STATE_LABELS[pointing.state] : view === 'guiding' && guiding ? (guiding.active ? GUIDING_STATE_LABELS[guiding.state] : 'Stopped') : session && AUTO_FOCUS_STATE_LABELS[session.state]
 
-	const views = (
-		<span className="flex gap-3">
-			{available.map((option) => (
-				<button
-					key={option}
-					type="button"
-					onClick={() => onView(option)}
-					className={cn('cursor-pointer border-0 bg-transparent p-0 font-mono text-xs tracking-wide uppercase focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent', option === view ? 'text-accent' : 'text-ink-300 hover:text-ink-100')}
-				>
-					{BOTTOM_VIEW_LABELS[option]}
-				</button>
-			))}
-		</span>
-	)
-
-	if (view === 'frames') return <CaptureFramesCarousel document={document} title={views} />
+	// Shows a view, expanding the area when it is collapsed.
+	function onView(next: BottomView) {
+		chooseBottomView(cameraBottomViews, document.key, next)
+		if (!expanded) onToggle()
+	}
 
 	return (
 		<div className="flex-none border-t border-line-100 bg-base-100">
-			<div className="flex items-center justify-between px-3 pt-1.5 font-mono text-xs tracking-wide text-ink-300 uppercase">
-				{views}
-				<span>{view === 'pointing' && pointing ? MOUNT_POINTING_STATE_LABELS[pointing.state] : view === 'guiding' && guiding ? (guiding.active ? GUIDING_STATE_LABELS[guiding.state] : 'Stopped') : session && AUTO_FOCUS_STATE_LABELS[session.state]}</span>
-			</div>
-			<div className="px-2 pb-2">
-				{view === 'pointing' && pointing ? (
-					<PointingMapView session={pointing} />
-				) : view === 'guiding' && guiding ? (
-					<GuidingGraphs session={guiding} telemetry={guidingState.telemetry[guiding.sessionId]} events={guidingState.events[guiding.sessionId]} />
+			<div className="flex min-h-8 items-center gap-3 pr-3 pl-1 font-mono text-xs tracking-wide text-ink-300 uppercase">
+				<button
+					type="button"
+					title={`${expanded ? 'Hide' : 'Show'} ${BOTTOM_VIEW_LABELS[view]}`}
+					onClick={onToggle}
+					className="flex size-7 flex-none cursor-pointer items-center justify-center rounded-sm border-0 bg-transparent p-0 text-ink-300 transition-colors duration-150 hover:bg-base-300 hover:text-ink-100 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent motion-reduce:transition-none pointer-coarse:size-9"
+				>
+					<Icon name="stepForward" className={cn('size-3.5 transition-transform duration-150 motion-reduce:transition-none', expanded && 'rotate-90')} />
+				</button>
+				{available.length === 1 ? (
+					<span>{BOTTOM_VIEW_LABELS.frames}</span>
 				) : (
-					session && <FocusCurve summary={session} session={autoFocus.details[session.sessionId]} />
+					<span className="flex min-w-0 gap-3 overflow-x-auto">
+						{available.map((option) => (
+							<button
+								key={option}
+								type="button"
+								onClick={() => onView(option)}
+								className={cn('flex-none cursor-pointer border-0 bg-transparent p-0 font-mono text-xs tracking-wide whitespace-nowrap uppercase focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent', option === view ? 'text-accent' : 'text-ink-300 hover:text-ink-100')}
+							>
+								{BOTTOM_VIEW_LABELS[option]}
+							</button>
+						))}
+					</span>
 				)}
+				<span className="ml-auto flex-none">{state}</span>
 			</div>
+			{expanded &&
+				(view === 'frames' ? (
+					<CaptureFramesCarousel document={document} />
+				) : (
+					<div className="px-2 pb-2">
+						{view === 'pointing' && pointing ? (
+							<PointingMapView session={pointing} />
+						) : view === 'guiding' && guiding ? (
+							<GuidingGraphs session={guiding} telemetry={guidingState.telemetry[guiding.sessionId]} events={guidingState.events[guiding.sessionId]} />
+						) : (
+							session && <FocusCurve summary={session} session={autoFocus.details[session.sessionId]} />
+						)}
+					</div>
+				))}
 		</div>
 	)
 }

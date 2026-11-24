@@ -1,6 +1,6 @@
 import type { CaptureFrameSummary } from 'api'
 import { cn } from 'cn'
-import { type KeyboardEvent, type ReactNode, useEffect, useRef } from 'react'
+import { type KeyboardEvent, useEffect, useRef } from 'react'
 import { useSnapshot } from 'valtio'
 import { formatClockTime, formatExposureTime, formatZonedDateTime, MISSING } from '../format'
 import { useActiveSite, useDisplayZone } from '../location/useLocation'
@@ -10,18 +10,17 @@ import { type CameraFrameSelection, selectCameraFrame } from './cameratabs'
 import { captureFramesState, frameSourceKey, frameUnavailableReason, loadOlderFrames, loadRecentFrames } from './captureframes'
 import { type ImageDocument, imagesState } from './images'
 
-// Capture frames carousel of a camera tab, below the viewer: the Latest card first, the dynamic reference to the latest
-// frame of the camera, then a card for each saved frame, newest first, without the one Latest already shows. Selecting
-// a card selects what the tab shows; it only opens and renders the frame, and never runs an analysis. Cards show
-// metadata only (no pixels are loaded for them), with a reserved area for a future thumbnail. Arrow keys, Home, and
-// End move between cards, and Enter or Space selects one. The saved frames of the camera are fetched when its tab is
-// shown, and its older saved frames a page at a time by the Older Frames card at the end of the strip.
+// Capture frames carousel of a camera tab, in its bottom area under the viewer, which heads it: the Latest card first,
+// the dynamic reference to the latest frame of the camera, then a card for each saved frame, newest first, without the
+// one Latest already shows. Selecting a card selects what the tab shows; it only opens and renders the frame, and never
+// runs an analysis. Cards show metadata only (no pixels are loaded for them), with a reserved area for a future
+// thumbnail that a phone leaves out, so its cards are two lines. Arrow keys, Home, and End move between cards, and
+// Enter or Space selects one. The saved frames of the camera are fetched when its tab is shown, and its older saved
+// frames a page at a time by the Older Frames card at the end of the strip.
 
 interface CaptureFramesCarouselProps {
 	// Camera tab.
 	readonly document: ImageDocument
-	// Heading of the strip, such as the switch between the views of the bottom area; "Captured Frames" when absent.
-	readonly title?: ReactNode
 }
 
 // Card of the carousel: the Latest card or a saved frame.
@@ -44,7 +43,7 @@ function frameTooltip(frame: CaptureFrameSummary, timeZone: string): string {
 }
 
 // Carousel of the frames of a camera tab.
-export function CaptureFramesCarousel({ document, title }: CaptureFramesCarouselProps) {
+export function CaptureFramesCarousel({ document }: CaptureFramesCarouselProps) {
 	const frames = useSnapshot(captureFramesState)
 	const stripRef = useRef<HTMLDivElement>(null)
 	const camera = document.camera
@@ -97,27 +96,21 @@ export function CaptureFramesCarousel({ document, title }: CaptureFramesCarousel
 	}
 
 	return (
-		<div className="flex-none border-t border-line-100 bg-base-100">
-			<div className="flex items-center justify-between px-3 pt-1.5 font-mono text-xs tracking-wide text-ink-300 uppercase">
-				{title ?? <span>Captured Frames</span>}
-				<span>{summary?.count ?? saved.length} saved</span>
-			</div>
-			<div ref={stripRef} onKeyDown={handleKeyDown} className="flex gap-2 overflow-x-auto px-3 pt-1.5 pb-2">
-				{cards.map((card, index) => (
-					<FrameCard
-						key={card.kind === 'latest' ? 'latest' : card.frame.frameId}
-						card={card}
-						selected={isSelected(card, camera.selection)}
-						focusable={index === focusIndex}
-						loading={!!card.frame && camera.requested === card.frame.frameId}
-						error={isSelected(card, camera.selection) ? camera.error : undefined}
-						restored={card.kind === 'latest' && summary?.latestRestored === true}
-						newer={card.kind === 'latest' && newer}
-						onSelect={() => choose(index)}
-					/>
-				))}
-				{frames.next[key] !== undefined && <OlderFramesCard loading={frames.loading[key] === true} onLoad={() => void loadOlderFrames(captureFramesState, source.connectionId, source.deviceId)} />}
-			</div>
+		<div ref={stripRef} onKeyDown={handleKeyDown} className="flex gap-2 overflow-x-auto px-3 pt-0.5 pb-2">
+			{cards.map((card, index) => (
+				<FrameCard
+					key={card.kind === 'latest' ? 'latest' : card.frame.frameId}
+					card={card}
+					selected={isSelected(card, camera.selection)}
+					focusable={index === focusIndex}
+					loading={!!card.frame && camera.requested === card.frame.frameId}
+					error={isSelected(card, camera.selection) ? camera.error : undefined}
+					restored={card.kind === 'latest' && summary?.latestRestored === true}
+					newer={card.kind === 'latest' && newer}
+					onSelect={() => choose(index)}
+				/>
+			))}
+			{frames.next[key] !== undefined && <OlderFramesCard loading={frames.loading[key] === true} onLoad={() => void loadOlderFrames(captureFramesState, source.connectionId, source.deviceId)} />}
 		</div>
 	)
 }
@@ -167,21 +160,21 @@ function FrameCard({ card, selected, focusable, loading, error, restored, newer,
 			title={[frame ? frameTooltip(frame, displayZone.zone) : 'No captured image available', error].filter(Boolean).join('\n')}
 			onClick={onSelect}
 			className={cn(
-				'flex h-36 w-36 flex-none cursor-pointer flex-col gap-1 rounded-sm border bg-base-000 p-1.5 text-left font-mono text-xs text-ink-200 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent disabled:cursor-not-allowed disabled:opacity-60',
+				'flex h-36 w-36 flex-none cursor-pointer flex-col gap-1 rounded-sm border bg-base-000 p-1.5 text-left font-mono text-xs text-ink-200 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent disabled:cursor-not-allowed disabled:opacity-60 max-sm:h-auto max-sm:w-32',
 				selected ? 'border-accent ring-1 ring-accent' : 'border-line-100 hover:border-line-200',
 			)}
 		>
-			<span className="relative flex min-h-0 flex-1 items-center justify-center rounded-xs bg-base-200 text-ink-300">
+			<span className="flex min-h-0 flex-1 items-center justify-center rounded-xs bg-base-200 text-ink-300 max-sm:hidden">
 				<Icon name={card.kind === 'latest' ? 'camera' : 'images'} className="size-8" />
-				{newer && <span className="absolute top-1 right-1 rounded-xs bg-accent px-1 text-xs text-on-accent">New</span>}
 			</span>
 			<span className="flex items-baseline justify-between gap-1 text-ink-300">
 				<span>{frame ? timeOf(frame.time, displayZone.zone) : MISSING}</span>
 				{frame?.acquisition?.exposure !== undefined && <span>{frame.acquisition.exposure}s</span>}
 			</span>
-			<span className="flex h-4 items-center justify-between gap-1">
-				<span className={cn('truncate', error || unavailable ? 'text-danger' : 'text-ink-100')}>{state}</span>
-				{frame?.file === 'saved' && <Icon name="save" className="size-3.5 text-ink-300" />}
+			<span className="flex h-4 items-center gap-1">
+				<span className={cn('min-w-0 flex-1 truncate', error || unavailable ? 'text-danger' : 'text-ink-100')}>{state}</span>
+				{newer && <span className="flex-none rounded-xs bg-accent px-1 text-on-accent">New</span>}
+				{frame?.file === 'saved' && <Icon name="save" className="size-3.5 flex-none text-ink-300" />}
 			</span>
 		</button>
 	)
@@ -202,7 +195,7 @@ function OlderFramesCard({ loading, onLoad }: OlderFramesCardProps) {
 			disabled={loading}
 			title="Show older saved frames"
 			onClick={onLoad}
-			className="flex h-36 w-28 flex-none cursor-pointer flex-col items-center justify-center gap-2 rounded-sm border border-dashed border-line-100 bg-base-000 p-1.5 font-mono text-xs text-ink-300 hover:border-line-200 hover:text-ink-100 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent disabled:cursor-wait disabled:opacity-60"
+			className="flex h-36 w-28 flex-none cursor-pointer flex-col items-center justify-center gap-2 rounded-sm border border-dashed border-line-100 bg-base-000 p-1.5 font-mono text-xs text-ink-300 hover:border-line-200 hover:text-ink-100 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent disabled:cursor-wait disabled:opacity-60 max-sm:h-auto max-sm:flex-row"
 		>
 			<Icon name="images" className="size-5" />
 			<span>{loading ? 'Loading…' : 'Older frames'}</span>

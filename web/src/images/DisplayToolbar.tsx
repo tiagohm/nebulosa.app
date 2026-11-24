@@ -17,10 +17,21 @@ import { applyDisplay, copySettings, currentDisplaySettings, type ImageViewState
 // only by their Apply to View and discarded when it closes, and Reset Parameters restores the neutral values in the
 // draft without applying them. Every apply patches only its own settings (applyDisplay), and the settings applied are
 // saved in the profile. Debayer is disabled for an image that is not a CFA mosaic, and Color for a grayscale
-// rendering; everything is disabled until the document is first rendered.
+// rendering; everything is disabled until the document is first rendered. On a phone the toolbar is a single Display
+// popup instead, whose segments switch between the same sections, all kept mounted while it is open so a draft
+// survives a switch, with Invert as a checkbox under them.
 
-// Popup of the toolbar: Debayer, or one of the sections applied with Apply to View.
-type DisplayPopup = 'debayer' | DisplaySection
+// Popup of the toolbar: Debayer, one of the sections applied with Apply to View, or all of them on a phone.
+type DisplayPopup = 'debayer' | DisplaySection | 'display'
+
+// Section of the phone's Display popup: Debayer or a section applied with Apply to View.
+type DisplayPart = 'debayer' | DisplaySection
+
+// Sections of the phone's Display popup, in display order.
+const DISPLAY_PARTS: readonly DisplayPart[] = ['debayer', 'stretch', 'tone', 'color']
+
+// Short names of the sections of the phone's Display popup, which fit four segments in its width.
+const DISPLAY_PART_LABELS: Readonly<Record<DisplayPart, string>> = { debayer: 'Debayer', stretch: 'Stretch', tone: 'Tone', color: 'Color' }
 
 // CFA pattern choices: the image's own pattern, then every known pattern.
 const PATTERN_OPTIONS = ['auto', ...CFA_PATTERNS] as const
@@ -47,11 +58,14 @@ export interface DisplayToolbarProps {
 	readonly info?: ImageInfo
 	// View state of the document.
 	readonly view: ImageViewState
+	// Whether the controls are one Display popup, as on a phone.
+	readonly compact?: boolean
 }
 
 // Display controls of a document in the viewer toolbar.
-export function DisplayToolbar({ documentKey, info, view }: DisplayToolbarProps) {
+export function DisplayToolbar({ documentKey, info, view, compact = false }: DisplayToolbarProps) {
 	const [popup, setPopup] = useState<DisplayPopup>()
+	const [part, setPart] = useState<DisplayPart>('stretch')
 	const applied = view.display.applied
 	const rendering = view.rendering?.result
 	const ready = info !== undefined && applied !== undefined
@@ -64,6 +78,44 @@ export function DisplayToolbar({ documentKey, info, view }: DisplayToolbarProps)
 	// Returns the props that make a popover show one popup of the toolbar at a time.
 	function popover(id: DisplayPopup) {
 		return { open: popup === id, onOpenChange: (open: boolean) => setPopup(open ? id : undefined) }
+	}
+
+	// Inverts the image shown.
+	function invert() {
+		const current = currentDisplaySettings(imagesState, documentKey)
+		if (current) apply({ invert: !current.invert })
+	}
+
+	// Returns why a section of the phone's Display popup cannot be chosen, or undefined when it can.
+	function partUnavailable(id: DisplayPart): string | undefined {
+		if (id === 'debayer' && !(ready && isMosaic(info))) return 'The image is not a CFA mosaic.'
+		if (id === 'color' && !color) return 'The image is shown in grayscale.'
+		return undefined
+	}
+
+	if (compact) {
+		const shownPart = partUnavailable(part) ? 'stretch' : part
+
+		return (
+			<Popover icon="sliders" label="Display" disabled={!ready} {...popover('display')}>
+				{ready && (
+					<>
+						<SegmentedControl options={DISPLAY_PARTS} value={shownPart} format={(p) => DISPLAY_PART_LABELS[p]} disabledReason={partUnavailable} onChange={setPart} />
+						<div className={shownPart === 'debayer' ? 'contents' : 'hidden'}>{isMosaic(info) && <DebayerControls info={info} applied={applied} onApply={apply} />}</div>
+						<div className={shownPart === 'stretch' ? 'contents' : 'hidden'}>
+							<StretchControls applied={applied} color={color} rendering={rendering} onApply={apply} />
+						</div>
+						<div className={shownPart === 'tone' ? 'contents' : 'hidden'}>
+							<ToneControls applied={applied} onApply={apply} />
+						</div>
+						<div className={shownPart === 'color' ? 'contents' : 'hidden'}>{color && <ColorControls applied={applied} onApply={apply} />}</div>
+						<div className="border-t border-line-100 pt-2">
+							<Checkbox label="Invert" checked={applied.invert} onChange={invert} />
+						</div>
+					</>
+				)}
+			</Popover>
+		)
 	}
 
 	return (
@@ -80,16 +132,7 @@ export function DisplayToolbar({ documentKey, info, view }: DisplayToolbarProps)
 			<Popover icon="color" label="Color" disabled={!color} {...popover('color')}>
 				{ready && <ColorControls applied={applied} onApply={apply} />}
 			</Popover>
-			<IconButton
-				icon="invert"
-				label="Invert"
-				pressed={applied?.invert === true}
-				disabled={!ready}
-				onClick={() => {
-					const current = currentDisplaySettings(imagesState, documentKey)
-					if (current) apply({ invert: !current.invert })
-				}}
-			/>
+			<IconButton icon="invert" label="Invert" pressed={applied?.invert === true} disabled={!ready} onClick={invert} />
 		</>
 	)
 }

@@ -19,6 +19,9 @@ const LABEL_BUDGET = 48
 // Gap between a label and the boundary it labels, in screen pixels.
 const LABEL_GAP = 4
 
+// Advance of a character of the monospace label font, as a fraction of its size, to keep a label inside the image.
+const CHARACTER_ADVANCE = 0.6
+
 // Width of the major lines, in screen pixels; minor ones are three quarters of it.
 const STROKE = 1
 
@@ -44,6 +47,8 @@ export function WcsGridOverlay({ solution, image, view, settings }: WcsGridOverl
 
 	const colors = GRID_COLOR_VALUES[settings.color]
 	const unit = 1 / view.scale
+	// Part of the image on screen, where the labels are kept whole.
+	const bounds = { x: Math.max(0, x), y: Math.max(0, y), width: Math.min(image.width, x + width) - Math.max(0, x), height: Math.min(image.height, y + height) - Math.max(0, y) }
 
 	return (
 		<g fill="none">
@@ -66,7 +71,7 @@ export function WcsGridOverlay({ solution, image, view, settings }: WcsGridOverl
 			{settings.labels && (
 				<g stroke="var(--color-base-000)" strokeOpacity={0.85} strokeWidth={3 * unit} paintOrder="stroke" fontSize={LABEL_SIZE * unit} className="font-mono tabular-nums">
 					{labels.map((label) => (
-						<Label key={label.key} label={label} unit={unit} color={colors[label.axis]} />
+						<Label key={label.key} label={label} unit={unit} color={colors[label.axis]} bounds={bounds} />
 					))}
 				</g>
 			)}
@@ -81,26 +86,39 @@ interface LabelProps {
 	readonly unit: number
 	// CSS color of the text.
 	readonly color: string
+	// Part of the image on screen, in image pixels, inside which the label is kept whole.
+	readonly bounds: OverlayView['visible']
 }
 
-// Label of a line, inside the visible image next to where the line crosses its boundary.
-function Label({ label, unit, color }: LabelProps) {
+// Label of a line, inside the visible image next to where the line crosses its boundary; a label near a corner slides
+// along its edge so the next edge never cuts it.
+function Label({ label, unit, color, bounds }: LabelProps) {
 	const { point, edge, text } = label
 	const gap = LABEL_GAP * unit
+	const halfWidth = (text.length * CHARACTER_ADVANCE * LABEL_SIZE * unit) / 2
+	const halfHeight = (LABEL_SIZE * unit) / 2
+	const x = clamp(point.x, bounds.x + gap + halfWidth, bounds.x + bounds.width - gap - halfWidth)
+	const y = clamp(point.y, bounds.y + gap + halfHeight, bounds.y + bounds.height - gap - halfHeight)
 	const position =
 		edge === 'left'
-			? ({ x: point.x + gap, y: point.y, anchor: 'start', baseline: 'central' } as const)
+			? ({ x: point.x + gap, y, anchor: 'start', baseline: 'central' } as const)
 			: edge === 'right'
-				? ({ x: point.x - gap, y: point.y, anchor: 'end', baseline: 'central' } as const)
+				? ({ x: point.x - gap, y, anchor: 'end', baseline: 'central' } as const)
 				: edge === 'top'
-					? ({ x: point.x, y: point.y + gap, anchor: 'middle', baseline: 'hanging' } as const)
-					: ({ x: point.x, y: point.y - gap, anchor: 'middle', baseline: 'auto' } as const)
+					? ({ x, y: point.y + gap, anchor: 'middle', baseline: 'hanging' } as const)
+					: ({ x, y: point.y - gap, anchor: 'middle', baseline: 'auto' } as const)
 
 	return (
 		<text x={position.x} y={position.y} fill={color} textAnchor={position.anchor} dominantBaseline={position.baseline}>
 			{text}
 		</text>
 	)
+}
+
+// Returns value within [min, max], or the middle of the range when it is empty, as for a label wider than the part of
+// the image on screen.
+function clamp(value: number, min: number, max: number): number {
+	return min > max ? (min + max) / 2 : Math.min(max, Math.max(min, value))
 }
 
 // Returns a polyline as SVG path data, coordinates rounded to 0.01 px.

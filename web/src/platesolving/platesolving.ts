@@ -1,4 +1,4 @@
-import type { MountCoordinate, MountState, PlateSolutions, PlateSolveJob, PlateSolveRequest, PlateSolveResult, PlateSolverProvider, PlateSolveSnapshot, PlateSolveStage, ResolvedPlateSolveHints, ServerEvent } from 'api'
+import type { MountCoordinate, MountState, PlateSolutions, PlateSolveJob, PlateSolveRequest, PlateSolveResult, PlateSolverProvider, PlateSolveSnapshot, PlateSolveStage, PlateSolveStrategy, ResolvedPlateSolveHints, ServerEvent } from 'api'
 import type { PlateSolution } from 'nebulosa/src/astrometry/solvers/platesolver'
 import { normalizeAngle, toDeg, toHour } from 'nebulosa/src/math/units/angle'
 import { proxy, ref } from 'valtio'
@@ -37,6 +37,9 @@ export const PROVIDER_LABELS: Readonly<Record<PlateSolverProvider, string>> = { 
 
 // Solvers, in selector order.
 export const PROVIDERS: readonly PlateSolverProvider[] = ['astap', 'astrometryLocal', 'nova', 'nebulosa']
+
+// Display names of the strategies.
+export const STRATEGY_LABELS: Readonly<Record<PlateSolveStrategy, string>> = { assisted: 'Assisted', blind: 'Blind' }
 
 // External Tools entry of each solver, for its availability and its settings link.
 export const PROVIDER_TOOLS: Readonly<Record<PlateSolverProvider, string>> = { astap: 'astap', astrometryLocal: 'astrometryLocal', nova: 'nova', nebulosa: 'nebulosa' }
@@ -85,12 +88,26 @@ export function solutionOptions(state: Pick<PlateSolvingState, 'jobs' | 'headers
 	return ['latest', ...(header ? ['header'] : []), ...jobs]
 }
 
+// Whether a job ended with a solution.
+export function isSolved(job: Pick<PlateSolveJob, 'state' | 'summary'> | undefined): boolean {
+	return job?.state === 'completed' && job.summary?.outcome === 'solved'
+}
+
+// Returns the job the latest solution of an image comes from: its latest job when that one solved, otherwise the newest
+// job of the image that solved, so a solve that runs, fails, or ends without a solution never takes away the solution
+// shown; the latest job when none solved.
+export function latestSolvedJob(state: Pick<PlateSolvingState, 'jobs' | 'latest'>, imageId: string): PlateSolveJob | undefined {
+	const latest = latestJob(state, imageId)
+	if (isSolved(latest)) return latest
+	return completedJobs(state, imageId).find(isSolved) ?? latest
+}
+
 // Returns the job a selection names for an image: the job selected, when it is a known job of that image, otherwise the
-// latest job of the image. 'header' names the solution of the header and gives no job.
+// job of its latest solution (latestSolvedJob). 'header' names the solution of the header and gives no job.
 export function selectedJob(state: Pick<PlateSolvingState, 'jobs' | 'latest'>, imageId: string, selected: string | undefined): PlateSolveJob | undefined {
 	if (selected === 'header') return undefined
 	const job = selected === undefined ? undefined : state.jobs[selected]
-	return job?.imageId === imageId ? job : latestJob(state, imageId)
+	return job?.imageId === imageId ? job : latestSolvedJob(state, imageId)
 }
 
 // Returns the solution a selection names for an image: the header's for 'header', otherwise the WCS of the selected

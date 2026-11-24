@@ -65,8 +65,8 @@ export function WcsAidsOverlay({ solution, image, view, cursor, crosshair, corne
 			{aids.anchor && aids.directions && (
 				<g>
 					<circle cx={aids.anchor.x} cy={aids.anchor.y} r={2 * unit} fill="var(--color-ink-100)" />
-					{aids.directions.north && <CornerArrow from={aids.anchor} direction={aids.directions.north} unit={unit} label="N" color="var(--color-accent)" />}
-					{aids.directions.east && <CornerArrow from={aids.anchor} direction={aids.directions.east} unit={unit} label="E" color="var(--color-ink-100)" />}
+					{aids.directions.north && <CornerArrow from={aids.anchor} direction={aids.directions.north} unit={unit} label="N" color="var(--color-ink-100)" />}
+					{aids.directions.east && <CornerArrow from={aids.anchor} direction={aids.directions.east} unit={unit} label="E" color="var(--color-ink-200)" />}
 				</g>
 			)}
 			{aids.bar && (

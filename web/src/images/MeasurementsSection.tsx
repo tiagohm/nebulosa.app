@@ -45,7 +45,7 @@ export function MeasurementsSection({ documentKey, solution, astrometry, style }
 
 	return (
 		<CollapsibleSection id="images.plate-solver.measurements" title="Measurements" summary={measurements.length > 0 ? String(measurements.length) : undefined}>
-			{!solution && <Notice>Measurements need a solution of this image: solve it, or choose the solution of its header.</Notice>}
+			{!solution && <Notice>Measurements need a solution of this image.</Notice>}
 			<List emptyText="No measurement. Choose Distance, Rectangle, or Circle in the viewer toolbar, then drag or click twice on the image." className="max-h-60 overflow-y-auto">
 				{measurements.map((measurement, index) => (
 					<ListItem

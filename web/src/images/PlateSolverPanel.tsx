@@ -1,17 +1,17 @@
-import type { PlateSolveHint, PlateSolveJob, PlateSolveRequest, PlateSolveResult } from 'api'
+import type { PlateSolveHint, PlateSolveJob, PlateSolveRequest, PlateSolveResult, ResolvedPlateSolveHints } from 'api'
 import type { PlateSolution } from 'nebulosa/src/astrometry/solvers/platesolver'
-import { useEffect, useState } from 'react'
+import { type ReactNode, useEffect, useState } from 'react'
 import { useSnapshot } from 'valtio'
-import { isActive, analysisElapsed, ANALYSIS_STATE_LABELS } from '../analysis'
+import { analysisElapsed, isActive } from '../analysis'
 import { controlRuntime, sendCommand, watchedDeviceState } from '../equipment-control/control'
 import { roleAvailability } from '../equipment/availability'
 import { useRoleDevice } from '../equipment/useEquipment'
 import { formatArcmin, formatClockTime, formatDegrees, formatDuration, MISSING } from '../format'
 import { useActiveTimeZone } from '../location/useLocation'
 import { operationsState } from '../operations'
-import { formatPositionAngle, formatPixelScale } from '../platesolving/coordinates'
-import { AdvancedControls, HintControls, SolverControls, StrategyControls, useSolverConfigured } from '../platesolving/PlateSolveControls'
-import { cancelPlateSolve, effectivePlateSolveRequest, loadHints, mountSyncBlocker, mountSyncSupport, mountSyncTarget, plateSolveSettings, plateSolvingState, PROVIDER_LABELS, runPlateSolve, solutionOptions, STAGE_LABELS } from '../platesolving/platesolving'
+import { type CoordinateStyle, formatDeclinationAs, formatPixelScale, formatPositionAngle, formatRightAscensionAs } from '../platesolving/coordinates'
+import { AdvancedControls, advancedSummary, HintControls, hintsSummary, settingsSummary, SolverControls, StrategyControls, useSolverBlocker, useSolverState } from '../platesolving/PlateSolveControls'
+import { cancelPlateSolve, effectivePlateSolveRequest, isSolved, loadHints, loadPlateSolveResult, mountSyncBlocker, mountSyncSupport, mountSyncTarget, plateSolveSettings, plateSolvingState, PROVIDER_LABELS, runPlateSolve, solutionOptions, STAGE_LABELS, STRATEGY_LABELS } from '../platesolving/platesolving'
 import { type AstrometryGridSettings, COORDINATE_FORMATS, COORDINATE_PRECISION_RANGE, type CoordinateFormat, GRID_COLORS, GRID_OPACITY_RANGE, type GridColor, ORIENTATION_MODES, type OrientationMode } from '../platesolving/preferences'
 import { usePlateSolution } from '../platesolving/usePlateSolution'
 import { fitsToViewer, imageTopPositionAngle, wcsFrame } from '../platesolving/wcs'
@@ -29,6 +29,7 @@ import { ConfirmButton } from '../ui/ConfirmButton'
 import { DataRow } from '../ui/DataRow'
 import { Notice } from '../ui/Notice'
 import { NumberInput } from '../ui/NumberInput'
+import { SectionHeading } from '../ui/SectionHeading'
 import { SegmentedControl } from '../ui/SegmentedControl'
 import { Select } from '../ui/Select'
 import { Slider } from '../ui/Slider'
@@ -39,14 +40,19 @@ import { TargetOffsetSection } from './TargetOffsetSection'
 import type { ImageToolPanelProps } from './tools'
 
 // Plate Solver tool of the Images workspace: solves the active document on the server with ASTAP, Astrometry.net Local,
-// or Astrometry.net Online, and shows the solution (centre in the frame of its WCS, scale, rotation, parity, field of view), the hints it
-// used with their origins, and its overlay. The settings are those the profile shares between the documents, or on a
-// camera tab those of its camera, which the operations of that camera share; a document keeps only its hints. They are
-// sent only by Solve Image; zoom, pan, stretch, or the overlay never solve. The settings are editable before the document has an
-// image (a camera tab waiting for its first frame), with Solve Image disabled until it has one. A job stays bound to the image it solved, so switching
-// documents never shows its solution on another one, and a job that ends never replaces the solution chosen. Solvers
-// are configured in Settings → External Tools, which the solver section links to. Sync Mount, after a confirmation,
-// syncs the MOUNT of the active equipment setup on the centre of the solution shown; nothing here moves a mount.
+// Astrometry.net Online, or the built-in solver, and shows the solution (centre in the frame of its WCS, scale, rotation,
+// parity, field of view), the hints it used with their origins, and its overlay. The panel has two states: before the
+// document shows a solution it is Solve Image above the settings; once it shows one, the settings fold into one
+// collapsed section and the solution and the tools built on it (Sync Mount, Sky, measurements, markers, target offset,
+// what is drawn) take the panel. The settings are those the profile shares between the documents, or on a camera tab
+// those of its camera, which the operations of that camera share; a document keeps only its hints. They are sent only
+// by Solve Image; zoom, pan, stretch, or the overlay never solve. The settings are editable before the document has an
+// image (a camera tab waiting for its first frame), with Solve Image disabled until it has one. A job stays bound to the
+// image it solved, so switching documents never shows its solution on another one. The latest solution is that of the
+// newest solve that found one, so a solve that runs, fails, or ends without a solution keeps the solution shown, and a
+// solution chosen in Solutions stays shown whatever ends. Solvers are configured in Settings → External Tools, which the
+// solver controls link to. Sync Mount, after a confirmation, syncs the MOUNT of the active equipment setup on the centre
+// of the solution shown; nothing here moves a mount.
 
 // Display names of the hint origins.
 const SOURCE_LABELS: Readonly<Record<PlateSolveHint['source'], string>> = { user: 'request', header: 'header', optics: 'optics', default: 'default' }
@@ -96,14 +102,16 @@ interface PlateSolverProps {
 	readonly camera?: CameraIdentity
 }
 
-// Sections of the Plate Solver panel of a document: the settings always, the execution, the solutions, and the
-// measurements once it has an image.
+// Sections of the Plate Solver panel of a document: Solve Image and the latest solve always, then the settings until a
+// solution is shown, or the solution and its tools once one is, with the settings folded.
 function PlateSolver({ documentKey, imageId, image, name, plateSolving, astrometry, unavailable, camera }: PlateSolverProps) {
 	const state = useSnapshot(plateSolvingState)
 	const profiles = useSnapshot(profileState)
 	const { settings } = activeProfile(profiles)
 	const { coordinates } = imageAstrometrySettings(settings)
-	const { job, result, solution, resultError } = usePlateSolution(imageId, plateSolving.selected)
+	const fromHeader = plateSolving.selected === 'header'
+	const { job, latest, result, solution, resultError } = usePlateSolution(imageId, plateSolving.selected)
+	const shown = fromHeader ? undefined : job
 	const request = effectivePlateSolveRequest(plateSolving.request, camera ? cameraPlateSolving(settings, camera) : imagePlateSolving(settings))
 
 	// Keeps the hints in the document, and the settings with the camera of a camera tab or else in the profile.
@@ -119,36 +127,123 @@ function PlateSolver({ documentKey, imageId, image, name, plateSolving, astromet
 		if (imageId !== undefined) void loadHints(plateSolvingState, imageId)
 	}, [imageId])
 
+	const execution = <Execution documentKey={documentKey} imageId={imageId} request={request} latest={latest} shown={shown} submitError={imageId === undefined ? undefined : state.submitErrors[imageId]} resultError={resultError} unavailable={unavailable} />
+
+	if (imageId === undefined || !solution) {
+		return (
+			<>
+				{execution}
+				<SettingsSections request={request} onChange={edit} offered={offered} />
+				{imageId !== undefined && (
+					<>
+						<Solutions documentKey={documentKey} imageId={imageId} selected={plateSolving.selected} />
+						{astrometry.measurements.length > 0 && <MeasurementsSection documentKey={documentKey} image={image} astrometry={astrometry} style={coordinates} />}
+						{astrometry.markers.length > 0 && <MarkersSection documentKey={documentKey} image={image} astrometry={astrometry} style={coordinates} />}
+					</>
+				)}
+			</>
+		)
+	}
+
 	return (
 		<>
-			<CollapsibleSection id="images.plate-solver.solver" title="Solver">
-				<SolverControls request={request} onChange={edit} />
-			</CollapsibleSection>
-			<CollapsibleSection id="images.plate-solver.solving-strategy" title="Solving Strategy">
-				<StrategyControls request={request} onChange={edit} />
-			</CollapsibleSection>
-			<CollapsibleSection id="images.plate-solver.solve-hints" title="Solve Hints" defaultOpen={false}>
-				<HintControls request={request} onChange={edit} offered={offered} />
-			</CollapsibleSection>
-			<CollapsibleSection id="images.plate-solver.advanced-settings" title="Advanced Settings" defaultOpen={false}>
-				<AdvancedControls request={request} onChange={edit} />
-			</CollapsibleSection>
-			<Execution documentKey={documentKey} imageId={imageId} request={request} job={plateSolving.selected === 'header' ? undefined : job} submitError={imageId === undefined ? undefined : state.submitErrors[imageId]} unavailable={unavailable} />
-			{imageId !== undefined && (
-				<>
-					<Solution job={plateSolving.selected === 'header' ? undefined : job} result={result} solution={solution} fromHeader={plateSolving.selected === 'header'} resultError={resultError} />
-					{solution && result && <SolverDetails result={result} />}
-					{solution && <MountSync solution={solution} />}
-					{solution && image && <SkyFootprint documentKey={documentKey} imageId={imageId} name={name} image={image} solution={solution} />}
-					<Solutions documentKey={documentKey} imageId={imageId} selected={plateSolving.selected} />
-					<MeasurementsSection documentKey={documentKey} solution={solution} image={image} astrometry={astrometry} style={coordinates} />
-					<MarkersSection documentKey={documentKey} solution={solution} image={image} astrometry={astrometry} style={coordinates} />
-					<TargetOffsetSection documentKey={documentKey} solution={solution} image={image} astrometry={astrometry} style={coordinates} />
-				</>
-			)}
+			{execution}
+			<SolveSettings request={request} onChange={edit} offered={offered} />
+			<Solution job={shown} latest={plateSolving.selected === undefined ? latest : undefined} solution={solution} style={coordinates} />
+			{shown && result && <SolverDetails result={result} solution={solution} />}
+			<Solutions documentKey={documentKey} imageId={imageId} selected={plateSolving.selected} />
+			<MountSync solution={solution} />
+			{image && <SkyFootprint documentKey={documentKey} imageId={imageId} name={name} image={image} solution={solution} />}
+			<MeasurementsSection documentKey={documentKey} solution={solution} image={image} astrometry={astrometry} style={coordinates} />
+			<MarkersSection documentKey={documentKey} solution={solution} image={image} astrometry={astrometry} style={coordinates} />
+			<TargetOffsetSection documentKey={documentKey} solution={solution} image={image} astrometry={astrometry} style={coordinates} />
 			<Visualization documentKey={documentKey} plateSolving={plateSolving} />
 		</>
 	)
+}
+
+interface SettingsProps {
+	// Pending request of the document.
+	readonly request: PlateSolveRequest
+	// Called with the edited request.
+	readonly onChange: (request: PlateSolveRequest) => void
+	// Hints the image offers, shown as placeholders.
+	readonly offered?: ResolvedPlateSolveHints
+}
+
+// Settings of a document without a solution shown, one section each: the solver and the strategy open, the hints and the
+// advanced settings collapsed, each with a summary while collapsed.
+function SettingsSections({ request, onChange, offered }: SettingsProps) {
+	const solverState = useSolverState(request.provider)
+
+	return (
+		<>
+			<CollapsibleSection id="images.plate-solver.solver" title="Solver" summary={`${PROVIDER_LABELS[request.provider]} · ${solverState}`}>
+				<SolverControls request={request} onChange={onChange} />
+			</CollapsibleSection>
+			<CollapsibleSection id="images.plate-solver.solving-strategy" title="Solving Strategy" summary={STRATEGY_LABELS[request.strategy]}>
+				<StrategyControls request={request} onChange={onChange} />
+			</CollapsibleSection>
+			<CollapsibleSection id="images.plate-solver.solve-hints" title="Solve Hints" summary={hintsSummary(request)} defaultOpen={false}>
+				<HintControls request={request} onChange={onChange} offered={offered} />
+			</CollapsibleSection>
+			<CollapsibleSection id="images.plate-solver.advanced-settings" title="Advanced Settings" summary={advancedSummary(request)} defaultOpen={false}>
+				<AdvancedControls request={request} onChange={onChange} />
+			</CollapsibleSection>
+		</>
+	)
+}
+
+// Settings of a document showing a solution, folded into one section collapsed by default, whose summary names the
+// solver and the strategy.
+function SolveSettings({ request, onChange, offered }: SettingsProps) {
+	return (
+		<CollapsibleSection id="images.plate-solver.solve-settings" title="Solve Settings" summary={settingsSummary(request)} defaultOpen={false}>
+			<SolverControls request={request} onChange={onChange} />
+			<SettingsGroup title="Strategy">
+				<StrategyControls request={request} onChange={onChange} />
+			</SettingsGroup>
+			<SettingsGroup title="Hints">
+				<HintControls request={request} onChange={onChange} offered={offered} />
+			</SettingsGroup>
+			<SettingsGroup title="Advanced">
+				<AdvancedControls request={request} onChange={onChange} />
+			</SettingsGroup>
+		</CollapsibleSection>
+	)
+}
+
+// Titled group of controls inside a section, below a divider.
+function SettingsGroup({ title, children }: { readonly title: string; readonly children: ReactNode }) {
+	return (
+		<div className="mt-1 flex flex-col gap-2 border-t border-line-100 pt-3">
+			<SectionHeading>{title}</SectionHeading>
+			{children}
+		</div>
+	)
+}
+
+// Returns the outcome of a job in words with the tone that tints it: Solved and No solution once completed, else its
+// state.
+function jobStatus(job: Pick<PlateSolveJob, 'state' | 'summary'>): { readonly label: string; readonly tone: 'default' | 'success' | 'warning' | 'danger' } {
+	switch (job.state) {
+		case 'queued':
+			return { label: 'Queued', tone: 'default' }
+		case 'running':
+			return { label: 'Running', tone: 'default' }
+		case 'completed':
+			return isSolved(job) ? { label: 'Solved', tone: 'success' } : { label: 'No solution', tone: 'warning' }
+		case 'failed':
+			return { label: 'Failed', tone: 'danger' }
+		case 'cancelled':
+			return { label: 'Cancelled', tone: 'default' }
+	}
+}
+
+// Returns how long a running job has run, in whole seconds, as the timer ticks once a second: "12 s", "1 min 05 s".
+function formatRunning(milliseconds: number): string {
+	const seconds = Math.floor(milliseconds / 1000)
+	return seconds < 60 ? `${seconds} s` : formatDuration(seconds)
 }
 
 interface ExecutionProps {
@@ -160,17 +255,34 @@ interface ExecutionProps {
 	readonly unavailable?: string
 	// Pending request of the document.
 	readonly request: PlateSolveRequest
-	// Job shown.
-	readonly job?: PlateSolveJob
+	// Latest job of the image, whatever its state.
+	readonly latest?: PlateSolveJob
+	// Job whose solution is shown, which may be older than the latest; absent for the header solution.
+	readonly shown?: PlateSolveJob
 	// Why the latest submission failed.
 	readonly submitError?: string
+	// Why the result of the job shown could not be fetched.
+	readonly resultError?: string
 }
 
-// Solve Image and Cancel, with the state of the job shown.
-function Execution({ documentKey, imageId, request, job, submitError, unavailable }: ExecutionProps) {
-	const active = isActive(job)
+// Solve Image and Cancel, with the state of the latest solve of the image: its step and time while it runs, and its
+// outcome once it ends. A solve that ends without the solution shown says which solution stays.
+function Execution({ documentKey, imageId, request, latest, shown, submitError, resultError, unavailable }: ExecutionProps) {
+	const active = isActive(latest)
 	const now = useNow(active)
-	const configured = useSolverConfigured(request.provider)
+	const timeZone = useActiveTimeZone()
+	const blocker = useSolverBlocker(request.provider)
+	const results = useSnapshot(plateSolvingState).results
+	const ended = latest !== undefined && !active
+	const failedSearch = latest?.state === 'completed' && !isSolved(latest)
+	const reason = imageId === undefined ? (unavailable ?? 'The document has no image yet.') : active ? 'A solve of this image is running.' : blocker
+	const status = latest && jobStatus(latest)
+	// The latest solve ended without becoming the solution shown, which stays.
+	const kept = ended && !isSolved(latest) && shown !== undefined && isSolved(shown) && shown.jobId !== latest.jobId
+
+	useEffect(() => {
+		if (failedSearch && latest) void loadPlateSolveResult(plateSolvingState, latest.jobId)
+	}, [failedSearch, latest])
 
 	async function solve() {
 		if (imageId === undefined) return
@@ -180,88 +292,108 @@ function Execution({ documentKey, imageId, request, job, submitError, unavailabl
 	}
 
 	return (
-		<CollapsibleSection id="images.plate-solver.execution" title="Execution">
+		<CollapsibleSection id="images.plate-solver.execution" title="Solve" summary={status?.label}>
 			<Actions>
-				<Button disabled={active || !configured || imageId === undefined} onClick={() => void solve()}>
+				<Button className="max-sm:min-h-12.5" disabled={reason !== undefined} title={reason} onClick={() => void solve()}>
 					Solve Image
 				</Button>
-				<Button variant="secondary" disabled={!active || !job} onClick={() => job && void cancelPlateSolve(job.jobId)}>
+				<Button variant="secondary" className="max-sm:min-h-12.5" disabled={!active} title={active ? undefined : 'No solve of this image is running.'} onClick={() => latest && void cancelPlateSolve(latest.jobId)}>
 					Cancel
 				</Button>
 			</Actions>
-			{!configured && <Notice error>{PROVIDER_LABELS[request.provider]} is not configured.</Notice>}
+			{blocker && <Notice warning>{blocker}</Notice>}
 			{unavailable && <Notice>{unavailable} The settings apply to the next solve.</Notice>}
 			{submitError && <Notice error>{submitError}</Notice>}
-			{job ? (
-				<>
-					<DataRow label="Status">{ANALYSIS_STATE_LABELS[job.state]}</DataRow>
-					{job.state === 'running' && job.stage && <DataRow label="Step">{STAGE_LABELS[job.stage]}</DataRow>}
-					<DataRow label="Solver">{PROVIDER_LABELS[job.request.provider]}</DataRow>
-					<DataRow label="Elapsed">{formatDuration(analysisElapsed(job, now) / 1000)}</DataRow>
-					{job.remote?.submissionId !== undefined && <DataRow label="Remote submission">{job.remote.submissionId}</DataRow>}
-					{job.remote?.jobId !== undefined && <DataRow label="Remote job">{job.remote.jobId}</DataRow>}
-					{job.error && <Notice error>{job.error}</Notice>}
-				</>
+			{latest && status ? (
+				<div className="flex flex-col">
+					<DataRow label="Status" tone={status.tone}>
+						{status.label}
+					</DataRow>
+					{latest.state === 'running' && latest.stage && <DataRow label="Step">{STAGE_LABELS[latest.stage]}</DataRow>}
+					{active && <DataRow label="Elapsed">{formatRunning(analysisElapsed(latest, now))}</DataRow>}
+					{ended && latest.jobId !== shown?.jobId && <DataRow label="Duration">{formatDuration(analysisElapsed(latest, now) / 1000)}</DataRow>}
+					{latest.remote?.submissionId !== undefined && <DataRow label="Remote submission">{latest.remote.submissionId}</DataRow>}
+					{latest.remote?.jobId !== undefined && <DataRow label="Remote job">{latest.remote.jobId}</DataRow>}
+				</div>
 			) : (
-				imageId !== undefined && <Notice>No plate solve of this image yet.</Notice>
+				imageId !== undefined && <Notice>This image is not solved yet.</Notice>
 			)}
+			{latest?.state === 'failed' && latest.error && <Notice error>{latest.error}</Notice>}
+			{failedSearch && results[latest.jobId]?.warnings.map((warning) => <Notice key={warning}>{warning}</Notice>)}
+			{kept && <Notice>The solution of {formatClockTime(shown.queuedAt, timeZone, { seconds: true, named: true })} stays shown.</Notice>}
+			{resultError && <Notice error>{resultError}</Notice>}
 		</CollapsibleSection>
 	)
 }
 
 interface SolutionProps {
-	// Job shown, absent for the header solution.
+	// Job of the solution shown, absent for the header solution.
 	readonly job?: PlateSolveJob
-	// Its result, once fetched.
-	readonly result?: PlateSolveResult
+	// Latest job of the image while the latest solution is shown, to say when a newer solve runs or ended without one.
+	readonly latest?: PlateSolveJob
 	// Solution shown.
-	readonly solution?: PlateSolution
-	// Whether it is the solution of the header.
-	readonly fromHeader: boolean
-	// Why the result could not be fetched.
-	readonly resultError?: string
+	readonly solution: PlateSolution
+	// How the centre is written.
+	readonly style: CoordinateStyle
 }
 
-// Centre, scale, orientation, and field of the solution shown.
-function Solution({ job, result, solution, fromHeader, resultError }: SolutionProps) {
-	const noSolution = job?.summary?.outcome === 'noSolution'
-	const topAngle = solution && imageTopPositionAngle(solution, fitsToViewer(Number(solution.CRPIX1), Number(solution.CRPIX2)))
+// Centre of the solution shown as the one Readout of the panel, then its scale, orientation, parity, and field, with
+// where it comes from.
+function Solution({ job, latest, solution, style }: SolutionProps) {
+	const timeZone = useActiveTimeZone()
+	const topAngle = imageTopPositionAngle(solution, fitsToViewer(Number(solution.CRPIX1), Number(solution.CRPIX2)))
+	const source = job ? `${PROVIDER_LABELS[job.request.provider]} ${STRATEGY_LABELS[job.request.strategy]} · ${formatClockTime(job.queuedAt, timeZone, { seconds: true, named: true })}` : 'Image header'
+	const newer = latest && job && latest.jobId !== job.jobId ? latest : undefined
 
 	return (
-		<CollapsibleSection id="images.plate-solver.solution" title="Solution">
-			{solution ? (
-				<>
-					<DataRow label="Source">{fromHeader ? 'Image header' : PROVIDER_LABELS[result?.request.provider ?? 'astap']}</DataRow>
-					<DataRow label={`RA (${wcsFrame(solution)})`}>{formatRightAscension(solution.rightAscension)}</DataRow>
-					<DataRow label={`Dec (${wcsFrame(solution)})`}>{formatDeclination(solution.declination)}</DataRow>
-					<DataRow label="Pixel Scale">{formatPixelScale(solution.scale)}</DataRow>
-					<DataRow label="PA of Image Top">{formatPositionAngle(topAngle)}</DataRow>
-					<DataRow label="Parity">{solution.parity === 'NORMAL' ? 'Normal' : 'Flipped'}</DataRow>
-					<DataRow label="Field of View">
-						{formatArcmin(solution.width)} × {formatArcmin(solution.height)}
-					</DataRow>
-					<DataRow label="Projection">{String(solution.CTYPE1 ?? MISSING).trim()}</DataRow>
-				</>
-			) : (
-				<Notice error={!!resultError}>{resultError ?? (noSolution ? 'The search ended without a solution.' : job && isActive(job) ? 'Solving…' : 'No solution.')}</Notice>
-			)}
-			{noSolution && result?.warnings.map((warning) => <Notice key={warning}>{warning}</Notice>)}
+		<CollapsibleSection id="images.plate-solver.solution" title="Solution" summary={`${formatRightAscensionAs(solution.rightAscension, style)} ${formatDeclinationAs(solution.declination, style)}`}>
+			<div className="flex flex-col">
+				<CentreRow label="RA">{formatRightAscensionAs(solution.rightAscension, style)}</CentreRow>
+				<CentreRow label="Dec">{formatDeclinationAs(solution.declination, style)}</CentreRow>
+			</div>
+			<Notice>
+				{wcsFrame(solution)} · {source}
+			</Notice>
+			{newer && isActive(newer) && <Notice>A new solve is running; this solution stays until it finds one.</Notice>}
+			<div className="flex flex-col">
+				<DataRow label="Pixel Scale">{formatPixelScale(solution.scale)}</DataRow>
+				<DataRow label="Field of View">
+					{formatArcmin(solution.width)} × {formatArcmin(solution.height)}
+				</DataRow>
+				<DataRow label="Radius">{formatArcmin(Math.hypot(solution.width / 2, solution.height / 2))}</DataRow>
+				<DataRow label="PA of Image Top">{formatPositionAngle(topAngle)}</DataRow>
+				<DataRow label="Parity">{solution.parity === 'NORMAL' ? 'Normal' : 'Flipped'}</DataRow>
+			</div>
 		</CollapsibleSection>
 	)
 }
 
-// What the solver used for the solution shown: its hints, duration, and warnings, collapsed by default.
-function SolverDetails({ result }: { readonly result: PlateSolveResult }) {
+// One coordinate of the solved centre at the Readout size, its name beside it.
+function CentreRow({ label, children }: { readonly label: string; readonly children: string }) {
+	return (
+		<div className="flex flex-wrap items-baseline justify-between gap-x-3">
+			<SectionHeading>{label}</SectionHeading>
+			<span className="ml-auto text-3xl leading-9 font-semibold tracking-[-0.01em] text-ink-100 tabular-nums">{children}</span>
+		</div>
+	)
+}
+
+// What the solver used for the solution shown: its strategy, hints, duration, and projection, and its warnings,
+// collapsed by default.
+function SolverDetails({ result, solution }: { readonly result: PlateSolveResult; readonly solution: PlateSolution }) {
 	const { hints } = result
 
 	return (
 		<CollapsibleSection id="images.plate-solver.solver-details" title="Solver Details" summary={formatDuration(result.elapsed / 1000)} defaultOpen={false}>
-			<DataRow label="Strategy">{result.request.strategy === 'blind' ? 'Blind' : 'Assisted'}</DataRow>
-			<DataRow label="Center hint">{hints.rightAscension && hints.declination ? `${formatRightAscension(hints.rightAscension.value)} ${formatDeclination(hints.declination.value)} (${SOURCE_LABELS[hints.rightAscension.source]})` : 'None'}</DataRow>
-			<DataRow label="Radius hint">{hints.radius ? `${formatDegrees(hints.radius.value, 1)} (${SOURCE_LABELS[hints.radius.source]})` : 'None'}</DataRow>
-			<DataRow label="Scale hint">{hints.scale ? `${formatPixelScale(hints.scale.value)} (${SOURCE_LABELS[hints.scale.source]})` : 'None'}</DataRow>
-			<DataRow label="Duration">{formatDuration(result.elapsed / 1000)}</DataRow>
-			<DataRow label="Waited">{formatDuration(result.queueTime / 1000)}</DataRow>
+			<div className="flex flex-col">
+				<DataRow label="Strategy">{STRATEGY_LABELS[result.request.strategy]}</DataRow>
+				<DataRow label="Centre hint">{hints.rightAscension && hints.declination ? `${formatRightAscension(hints.rightAscension.value)} ${formatDeclination(hints.declination.value)} (${SOURCE_LABELS[hints.rightAscension.source]})` : 'None'}</DataRow>
+				<DataRow label="Radius hint">{hints.radius ? `${formatDegrees(hints.radius.value, 1)} (${SOURCE_LABELS[hints.radius.source]})` : 'None'}</DataRow>
+				<DataRow label="Scale hint">{hints.scale ? `${formatPixelScale(hints.scale.value)} (${SOURCE_LABELS[hints.scale.source]})` : 'None'}</DataRow>
+				<DataRow label="Duration">{formatDuration(result.elapsed / 1000)}</DataRow>
+				<DataRow label="Waited">{formatDuration(result.queueTime / 1000)}</DataRow>
+				<DataRow label="Projection">{String(solution.CTYPE1 ?? MISSING).trim()}</DataRow>
+			</div>
 			{result.warnings.map((warning) => (
 				<Notice key={warning}>{warning}</Notice>
 			))}
@@ -300,9 +432,10 @@ function MountSync({ solution }: MountSyncProps) {
 			<Actions>
 				<ConfirmButton
 					title="Sync the mount?"
-					message={`${mount.device?.name ?? 'The mount'} takes RA ${formatRightAscension(solution.rightAscension)} and Dec ${formatDeclination(solution.declination)} (J2000) as the place it points at now, without moving. Sync only when the image was taken at the current pointing.`}
+					message={`${mount.device?.name ?? 'The mount'} takes RA ${formatRightAscension(solution.rightAscension)} and Dec ${formatDeclination(solution.declination)} (${wcsFrame(solution)}, sent as J2000) as the place it points at now, without moving. Sync only when the image was taken at the current pointing.`}
 					confirmLabel="Sync"
 					disabled={blocker !== undefined}
+					tooltip={blocker}
 					onConfirm={() => void sync()}
 				>
 					Sync Mount
@@ -332,16 +465,16 @@ function Solutions({ documentKey, imageId, selected }: SolutionsProps) {
 	if (options.length === 0) return null
 
 	const label = (option: string) => {
-		if (option === 'latest') return 'Latest solve'
+		if (option === 'latest') return 'Latest solution'
 		if (option === 'header') return 'Image header'
 		const job = state.jobs[option]
-		return `${PROVIDER_LABELS[job.request.provider]} ${job.request.strategy} · ${formatClockTime(job.queuedAt, timeZone, { seconds: true, named: true })}${job.summary?.outcome === 'noSolution' ? ' · no solution' : ''}`
+		return `${PROVIDER_LABELS[job.request.provider]} ${STRATEGY_LABELS[job.request.strategy]} · ${formatClockTime(job.queuedAt, timeZone, { seconds: true, named: true })}${isSolved(job) ? '' : ' · no solution'}`
 	}
 
 	return (
-		<CollapsibleSection id="images.plate-solver.solutions" title="Solutions">
+		<CollapsibleSection id="images.plate-solver.solutions" title="Solutions" summary={label(selected ?? 'latest')}>
 			<Select options={options} value={selected ?? 'latest'} format={label} onChange={(option) => selectPlateSolution(imagesState, documentKey, option === 'latest' ? undefined : option)} />
-			<Notice>A new solve never replaces the solution chosen here; the original file is never changed.</Notice>
+			<Notice>Latest solution follows the newest solve that found one. A solve or the header chosen here stays shown when other solves end; the file is never changed.</Notice>
 		</CollapsibleSection>
 	)
 }
@@ -378,7 +511,7 @@ function SkyFootprint({ documentKey, imageId, name, image, solution }: SkyFootpr
 					Show Footprint in Sky
 				</Button>
 			</Actions>
-			<Notice>The outline of the image borders through its solution, drawn over the stars of the Sky map at the time shown, beside the framing of the selection.</Notice>
+			<Notice>Draws the outline of the image on the Sky map at the time shown, beside the framing of the selection.</Notice>
 		</CollapsibleSection>
 	)
 }
@@ -404,7 +537,7 @@ function Visualization({ documentKey, plateSolving }: VisualizationProps) {
 			<Checkbox label="Grid labels" checked={grid.labels} onChange={(labels) => editGrid({ labels })} />
 			<Checkbox label="Minor grid lines" checked={grid.minor} onChange={(minor) => editGrid({ minor })} />
 			<Slider label="Grid opacity" value={grid.opacity} min={GRID_OPACITY_RANGE[0]} max={GRID_OPACITY_RANGE[1]} step={0.05} onChange={(opacity) => editGrid({ opacity })} />
-			<Select label="Grid color" options={GRID_COLORS} value={grid.color} format={(color) => GRID_COLOR_LABELS[color]} onChange={(color) => editGrid({ color })} />
+			<SegmentedControl label="Grid color" options={GRID_COLORS} value={grid.color} format={(color) => GRID_COLOR_LABELS[color]} onChange={(color) => editGrid({ color })} />
 			<SegmentedControl label="Orientation" options={ORIENTATION_MODES} value={orientation} format={(mode) => ORIENTATION_LABELS[mode]} onChange={(next) => setImageAstrometrySettings(profileState, { orientation: next })} />
 			<Checkbox label="Scale bar" checked={scaleBar} onChange={(shown) => setImageAstrometrySettings(profileState, { scaleBar: shown })} />
 			<Checkbox label="Crosshair" checked={crosshair} onChange={(shown) => setImageAstrometrySettings(profileState, { crosshair: shown })} />
@@ -416,13 +549,13 @@ function Visualization({ documentKey, plateSolving }: VisualizationProps) {
 				max={COORDINATE_PRECISION_RANGE[1]}
 				onChange={(precision) => setImageAstrometrySettings(profileState, { coordinates: { ...coordinates, precision: Math.round(Math.min(COORDINATE_PRECISION_RANGE[1], Math.max(COORDINATE_PRECISION_RANGE[0], precision))) } })}
 			/>
-			<Notice>The centre marks the solved centre. The grid, orientation, scale bar, and the coordinates under the pointer follow the selected solution and the part of the image on screen; decimals are a display choice, not an accuracy. Showing them never solves again.</Notice>
+			<Notice>Display only: the aids follow the solution shown, and decimals are not an accuracy.</Notice>
 		</CollapsibleSection>
 	)
 }
 
 // Names of the grid colors.
-const GRID_COLOR_LABELS: Readonly<Record<GridColor, string>> = { neutral: 'Neutral', accent: 'Accent', success: 'Green', axes: 'RA red, Dec blue' }
+const GRID_COLOR_LABELS: Readonly<Record<GridColor, string>> = { neutral: 'Neutral', axes: 'Per axis' }
 
 // Names of the orientation modes.
 const ORIENTATION_LABELS: Readonly<Record<OrientationMode, string>> = { hidden: 'Hidden', corner: 'Corner', center: 'Centre' }

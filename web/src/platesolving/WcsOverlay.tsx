@@ -50,13 +50,13 @@ export function WcsOverlay({ solution, image, view, marker, arrows }: WcsOverlay
 	return (
 		<g fill="none">
 			{marker && (
-				<g stroke="var(--color-success)" strokeWidth={SYMBOL_STROKE}>
+				<g stroke="var(--color-ink-100)" strokeWidth={SYMBOL_STROKE}>
 					<line x1={center.x - MARKER_SIZE * unit} y1={center.y} x2={center.x + MARKER_SIZE * unit} y2={center.y} vectorEffect="non-scaling-stroke" />
 					<line x1={center.x} y1={center.y - MARKER_SIZE * unit} x2={center.x} y2={center.y + MARKER_SIZE * unit} vectorEffect="non-scaling-stroke" />
 				</g>
 			)}
-			{arrows && north && <Arrow from={center} direction={north} unit={unit} label="N" color="var(--color-accent)" />}
-			{arrows && east && <Arrow from={center} direction={east} unit={unit} label="E" color="var(--color-ink-100)" />}
+			{arrows && north && <Arrow from={center} direction={north} unit={unit} label="N" color="var(--color-ink-100)" />}
+			{arrows && east && <Arrow from={center} direction={east} unit={unit} label="E" color="var(--color-ink-200)" />}
 		</g>
 	)
 }

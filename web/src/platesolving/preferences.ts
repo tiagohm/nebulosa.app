@@ -6,9 +6,9 @@
 // seconds of declination, or both in decimal degrees.
 export type CoordinateFormat = 'sexagesimal' | 'decimal'
 
-// Color of the grid: one theme color for both axes, or a color per axis, reddish meridians (right ascension) and
-// bluish parallels (declination).
-export type GridColor = 'neutral' | 'accent' | 'success' | 'axes'
+// Color of the grid: one neutral color for both axes, or a color per axis, the measurement axis colors of the theme:
+// slate meridians (right ascension) and mauve parallels (declination).
+export type GridColor = 'neutral' | 'axes'
 
 // Colors of the lines and labels of each axis of the grid, CSS colors.
 export interface GridAxisColors {
@@ -25,7 +25,7 @@ export type OrientationMode = 'hidden' | 'corner' | 'center'
 export const COORDINATE_FORMATS: readonly CoordinateFormat[] = ['sexagesimal', 'decimal']
 
 // Grid colors, in display order.
-export const GRID_COLORS: readonly GridColor[] = ['neutral', 'accent', 'success', 'axes']
+export const GRID_COLORS: readonly GridColor[] = ['neutral', 'axes']
 
 // Orientation modes, in display order.
 export const ORIENTATION_MODES: readonly OrientationMode[] = ['hidden', 'corner', 'center']
@@ -72,10 +72,9 @@ export const DEFAULT_IMAGE_ASTROMETRY: ImageAstrometrySettings = {
 	orientation: 'corner',
 }
 
-// Colors of the axes of each grid color; the axes one is a soft red and a soft blue, both readable over a dark sky.
+// Colors of the axes of each grid color, theme tokens: never Ember Clay or a signal color, so the grid never reads as a
+// selection or a state.
 export const GRID_COLOR_VALUES: Readonly<Record<GridColor, GridAxisColors>> = {
 	neutral: { rightAscension: 'var(--color-ink-200)', declination: 'var(--color-ink-200)' },
-	accent: { rightAscension: 'var(--color-accent)', declination: 'var(--color-accent)' },
-	success: { rightAscension: 'var(--color-success)', declination: 'var(--color-success)' },
-	axes: { rightAscension: '#f07a6e', declination: '#6aa8f0' },
+	axes: { rightAscension: 'var(--color-axis-1)', declination: 'var(--color-axis-2)' },
 }

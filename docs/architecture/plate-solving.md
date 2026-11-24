@@ -30,6 +30,7 @@ One service gives all of them the same solve, hints, and acceptance rules.
 - The current mount position is never a hint; a mount pointing session hints the position it commanded.
 - Only TAN and TAN-SIP solutions in the ICRS or FK5 J2000 of the document's size are accepted; a header's WCS is never replaced and no file is written.
 - Coordinates are shown in the frame of their solution, never relabelled.
+- The latest solution of an image is that of its newest solve that found one, so a solve that runs, fails, or ends without a solution never takes the solution shown away from the overlay or the tools that use it; a solution chosen by hand stays until another is chosen.
 - Measurements and markers are kept as image points in tab memory and recomputed from the selected solution.
 - ASTAP may not write SIP terms, only Nova and the built-in solver take a scale tolerance, and the following of a Nova job does not survive a restart.
 - The built-in solver runs one solve at a time on one worker, which keeps the indexes of its folder open between solves until their files change; a cancel stops it between slices of the search, while the star detection and the opening of an index cannot be interrupted.

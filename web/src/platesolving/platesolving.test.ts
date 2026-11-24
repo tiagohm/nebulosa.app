@@ -6,7 +6,9 @@ import {
 	completedJobs,
 	effectivePlateSolveRequest,
 	handlePlateSolvingEvent,
+	isSolved,
 	latestJob,
+	latestSolvedJob,
 	loadPlateSolveResult,
 	loadSolutions,
 	MAX_CACHED_IMAGES,
@@ -129,6 +131,45 @@ describe('solutions', () => {
 		expect(selectedJob(s, 'i1', 'j1')?.jobId).toBe('j1')
 		expect(selectedSolution(s, 'i1', 'j1')).toEqual(SOLUTION)
 		expect(selectedJob(s, 'i1', undefined)?.jobId).toBe('j2')
+	})
+
+	test('a solve that runs, fails, or finds nothing keeps the latest solution shown', () => {
+		const s = state()
+		const solved = { outcome: 'solved', elapsed: 10 } as const
+		handlePlateSolvingEvent(s, { type: 'plateSolving:updated', job: job({ state: 'completed', summary: solved }) })
+		expect(selectedJob(s, 'i1', undefined)?.jobId).toBe('j1')
+
+		handlePlateSolvingEvent(s, { type: 'plateSolving:updated', job: job({ jobId: 'j2', queuedAt: 2000, state: 'running' }) })
+		expect(latestJob(s, 'i1')?.jobId).toBe('j2')
+		expect(latestSolvedJob(s, 'i1')?.jobId).toBe('j1')
+
+		handlePlateSolvingEvent(s, { type: 'plateSolving:updated', job: job({ jobId: 'j2', queuedAt: 2000, state: 'completed', summary: { outcome: 'noSolution', elapsed: 60 } }) })
+		expect(selectedJob(s, 'i1', undefined)?.jobId).toBe('j1')
+
+		handlePlateSolvingEvent(s, { type: 'plateSolving:updated', job: job({ jobId: 'j3', queuedAt: 3000, state: 'failed' }) })
+		expect(selectedJob(s, 'i1', undefined)?.jobId).toBe('j1')
+
+		handlePlateSolvingEvent(s, { type: 'plateSolving:updated', job: job({ jobId: 'j4', queuedAt: 4000, state: 'completed', summary: solved }) })
+		expect(selectedJob(s, 'i1', undefined)?.jobId).toBe('j4')
+	})
+
+	test('an earlier equivalent job answered to a submission is the latest solution again', () => {
+		const s = state()
+		const solved = { outcome: 'solved', elapsed: 10 } as const
+		handlePlateSolvingEvent(s, { type: 'plateSolving:updated', job: job({ state: 'completed', summary: solved }) })
+		handlePlateSolvingEvent(s, { type: 'plateSolving:updated', job: job({ jobId: 'j2', queuedAt: 2000, state: 'completed', summary: solved }) })
+		s.latest.i1 = 'j1'
+
+		expect(latestSolvedJob(s, 'i1')?.jobId).toBe('j1')
+	})
+
+	test('without any solution the latest job is shown, whatever its state', () => {
+		const s = state()
+		handlePlateSolvingEvent(s, { type: 'plateSolving:updated', job: job({ state: 'completed', summary: { outcome: 'noSolution', elapsed: 60 } }) })
+
+		expect(isSolved(latestJob(s, 'i1'))).toBeFalse()
+		expect(selectedJob(s, 'i1', undefined)?.jobId).toBe('j1')
+		expect(selectedSolution(s, 'i1', undefined)).toBeUndefined()
 	})
 
 	test('the header solution is fetched once and chosen apart', async () => {

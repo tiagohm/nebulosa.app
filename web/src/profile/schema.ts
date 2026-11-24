@@ -429,7 +429,7 @@ export const DEFAULT_MOUNT_DITHER_SETTINGS: MountDitherSettings = { rightAscensi
 
 // Camera Acquisition form of a camera that has none yet: one light frame, previewed and saved in the server's default
 // directory with the server's default names, as FITS.
-export const DEFAULT_ACQUISITION_SETTINGS: CameraAcquisitionSettings = { exposureMode: 'single', count: 10, delay: 0, frameType: 'LIGHT', output: { mode: 'preview-save', format: 'FITS' } }
+export const DEFAULT_ACQUISITION_SETTINGS: CameraAcquisitionSettings = { exposureMode: 'single', count: 10, delay: 0, frameType: 'LIGHT', output: { mode: 'preview-only', format: 'FITS' } }
 
 // Plate solving settings of one physical camera, shared by Images → Plate Solver on its camera tab and by the operations
 // that solve its frames. They hold how to solve, never where: positional hints stay with each image or come from the

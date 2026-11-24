@@ -122,14 +122,18 @@ export function ImageStatisticsSection({ document, view }: ImageStatisticsSectio
 	const recalculate = () => imageId && void runStatistics(statisticsState, document.key, imageId, area && { ...area })
 
 	return (
-		<CollapsibleSection id={STATISTICS_SECTION} title="Histogram and Statistics" summary={summary} defaultOpen={false}>
+		<CollapsibleSection
+			id={STATISTICS_SECTION}
+			title="Histogram and Statistics"
+			summary={summary}
+			defaultOpen={false}
+			actions={active && job ? <IconButton icon="stop" label="Cancel the measurement" onClick={() => void cancelStatistics(job.jobId)} /> : <IconButton icon="refresh" label="Measure again" onClick={recalculate} />}
+		>
 			{!imageId || !info ? (
 				<Notice>{document.status === 'loading' ? 'Opening…' : 'The image is unavailable.'}</Notice>
 			) : (
 				<>
-					<DataRow label="Area" actions={active && job ? <IconButton icon="stop" label="Cancel the measurement" onClick={() => void cancelStatistics(job.jobId)} /> : <IconButton icon="refresh" label="Measure again" onClick={recalculate} />}>
-						{result ? formatArea(result.area, result.width, result.height) : formatArea(area, info.width, info.height)}
-					</DataRow>
+					<DataRow label="Area">{result ? formatArea(result.area, result.width, result.height) : formatArea(area, info.width, info.height)}</DataRow>
 					<Actions>
 						<Button variant="secondary" disabled={view?.overlaysHidden === true} title={view?.overlaysHidden ? 'Show the overlays to draw an area.' : 'Drag over the image to choose the pixels measured.'} onClick={() => (selecting ? stopAreaSelection() : startAreaSelection(document.key))}>
 							{selecting ? 'Cancel Selection' : 'Select Area'}

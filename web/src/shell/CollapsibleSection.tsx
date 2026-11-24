@@ -23,15 +23,18 @@ export interface CollapsibleSectionProps {
 	readonly children: ReactNode
 	// Extra classes of the details.
 	readonly className?: string
+	// Actions on the subject of the content, shown in the header while expanded.
+	readonly actions?: ReactNode
 }
 
 // Collapsible titled group of controls inside a contextual panel.
-export function CollapsibleSection({ id, title, summary, defaultOpen = true, children, className }: CollapsibleSectionProps) {
+export function CollapsibleSection({ id, title, summary, defaultOpen = true, children, className, actions }: CollapsibleSectionProps) {
 	const open = sectionOpen(useSnapshot(collapsibleSections), id, defaultOpen)
+	const summaryContent = actions && open ? <span className="ml-auto min-w-0">{actions}</span> : summary && !open ? <span className="ml-auto min-w-0 truncate text-xs text-ink-200">{summary}</span> : undefined
 
 	return (
 		<details open={open} onToggle={(e) => e.currentTarget.open !== open && setSectionOpen(collapsibleSections, id, e.currentTarget.open)} className={cn('border-b border-line-100 px-4 last:border-b-0', className)}>
-			<DisclosureSummary title={title}>{!open && summary && <span className="ml-auto min-w-0 truncate text-xs text-ink-200">{summary}</span>}</DisclosureSummary>
+			<DisclosureSummary title={title}>{summaryContent}</DisclosureSummary>
 			<div className="-mt-1 flex pb-3 flex-col gap-2 text-sm leading-5 text-ink-200">{children}</div>
 		</details>
 	)

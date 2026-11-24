@@ -29,7 +29,7 @@ import { WcsOverlay } from '../platesolving/WcsOverlay'
 import { activeProfile, cameraFramesShown, imageAstrometrySettings, profileState, setCameraFramesShown, setLastImageDirectory, starProfileSettings } from '../profile/profile'
 import { EmptyState, useWorkspacePanel, WorkspaceLayout } from '../shell/WorkspaceLayout'
 import { StarOverlay } from '../stars/StarOverlay'
-import { inspectStar, starProfileOf, tapSearchRadius } from '../stars/starprofile'
+import { inspectStar, starProfileOf, TAP_SEARCH_DISTANCE, tapSearchRadius } from '../stars/starprofile'
 import { StarProfileOverlay } from '../stars/StarProfileOverlay'
 import { pickStar } from '../stars/stars'
 import { useStarResult } from '../stars/useStarResult'
@@ -92,7 +92,7 @@ import { IMAGE_TOOL_DEFINITIONS, type ImageToolId, imageToolsFor } from './tools
 // Images workspace: a permanent camera tab for each connected camera of the watched connection, showing the frames
 // its camera takes, then FITS and XISF images opened from the server, one closable tab each, shown in the shared
 // viewer, with the contextual tool each document selected (the Image Inspector at first) in the contextual panel, a
-// sheet under the viewer on narrow screens for a tool that asks for one (Mount Nudge, Guiding), which hides the bottom area while
+// sheet under the viewer on narrow screens for a tool that asks for one (Star Detection, Streak Detection, Mount Nudge, Guiding), which hides the bottom area while
 // open so the frame stays in sight. It works without any connection or equipment; only the camera operations of a
 // camera tab command its camera, and the
 // toolbar of a camera tab shows the state of its capture whatever tool is selected, and its bottom area the Focus
@@ -123,8 +123,9 @@ import { IMAGE_TOOL_DEFINITIONS, type ImageToolId, imageToolsFor } from './tools
 // Distance from the pointer a click looks for a star within, in screen pixels.
 const STAR_PICK_RADIUS = 8
 
-// Distance from the pointer a click looks for a streak line within, in screen pixels.
-const STREAK_PICK_RADIUS = 8
+// Distance from the pointer a click looks for a streak line within, in screen pixels: about a fingertip, so a tap on a
+// phone finds a line one pixel wide; the closest line wins, so a wide reach never picks past a nearer one.
+const STREAK_PICK_RADIUS = TAP_SEARCH_DISTANCE
 
 // Distance from the pointer a click looks for an annotation marker within, in screen pixels.
 const ANNOTATION_PICK_RADIUS = 8

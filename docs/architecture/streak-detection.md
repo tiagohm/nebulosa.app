@@ -24,5 +24,6 @@ It answers that on demand without tuning, leaving stars, nebulae, and gradients 
 - Runs are explicit: no capture, sequence, or other analysis starts one.
 - Nothing is solved or detected for the classification, and no ephemeris, catalog, prior frame, or network is used.
 - A classification is an uncalibrated evidence weight, never a probability, and is kept apart from the detector's confidence.
+- The result shown is that of the newest completed detection of the image, so a detection that runs, fails, or is cancelled never takes it or its lines away.
 - Only straight lines are found: curved and sparsely dotted trails are missed, trails locked to a pixel row or column or along a frame edge are dropped as artifacts, and the whole image is analyzed without a region or mask.
 - There is no satellite or meteor prediction and no classification across frames.

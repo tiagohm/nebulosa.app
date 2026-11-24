@@ -9,8 +9,9 @@ import type { Point, Rect } from '../viewer/transform'
 // Streak detection jobs of the server as this tab knows them, for the Streak Detection tool of the Images workspace. The
 // server runs every job and keeps every result: this store mirrors the compact jobs of its snapshot and streaks:updated
 // events, remembers the latest job of each image id, and fetches the full result of a completed job (the streaks and
-// their classifications) only when a view needs it. A result is always matched to the image id it measured, so a late
-// result never lands on another image. Also holds the bounds the form keeps the minimum length within, and the pure
+// their classifications) only when a view needs it. The result shown is that of the newest completed job of the image,
+// so a detection that runs, fails, or is cancelled keeps the earlier result shown. A result is always matched to the
+// image id it measured, so a late result never lands on another image. Also holds the bounds the form keeps the minimum length within, and the pure
 // geometry of the streak overlay: the segments in view and the streak under a point.
 
 // Mirror of the server's streak detection jobs.
@@ -69,10 +70,21 @@ export function latestStreakJob(state: Pick<StreaksState, 'jobs' | 'latest'>, im
 	return latestOf(state, imageId)
 }
 
-// Returns the fetched result of the latest job of an image, when it completed.
-export function latestStreakResult(state: Pick<StreaksState, 'jobs' | 'latest' | 'results'>, imageId: string): StreakDetectionResult | undefined {
-	const job = latestStreakJob(state, imageId)
-	return job?.state === 'completed' ? state.results[job.jobId] : undefined
+// Returns the job whose result an image shows: its latest job when that one completed, otherwise the newest completed
+// job of the image, so a detection that runs, fails, or is cancelled never takes the result shown away; none when no
+// job of the image completed.
+export function shownStreakJob(state: Pick<StreaksState, 'jobs' | 'latest'>, imageId: string): StreakDetectionJob | undefined {
+	const latest = latestStreakJob(state, imageId)
+	if (latest?.state === 'completed') return latest
+	let shown: StreakDetectionJob | undefined
+	for (const job of Object.values(state.jobs)) if (job.imageId === imageId && job.state === 'completed' && (!shown || job.queuedAt > shown.queuedAt)) shown = job
+	return shown
+}
+
+// Returns the fetched result of the job an image shows (shownStreakJob).
+export function shownStreakResult(state: Pick<StreaksState, 'jobs' | 'latest' | 'results'>, imageId: string): StreakDetectionResult | undefined {
+	const job = shownStreakJob(state, imageId)
+	return job ? state.results[job.jobId] : undefined
 }
 
 // Records a job as a job of its image (trackJob); submitted makes it the latest of its image, as the answer to a

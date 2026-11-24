@@ -3,7 +3,8 @@ import type { OverlayView } from '../viewer/transform'
 import { streakSegments } from './streaks'
 
 // Streak lines of a detection result over the shared image viewer: a segment between the endpoints of each streak, with
-// short ticks across its ends and, when labeled, its number, plus a highlighted selected streak. No arrow is drawn: a
+// short ticks across its ends and, when labeled, its number. The lines are Moonlight and the selected one Ember Clay
+// with a heavier stroke, as the list marks it, so Ember only ever means the selection. No arrow is drawn: a
 // streak of a single frame has no known direction of motion. It is a pure function of the result and draws in image
 // pixel coordinates, so the viewer's zoom and pan move it while strokes, ticks, and labels keep their size on screen;
 // the caller shows it only over the image the result measured. Only the streaks inside the view are drawn.
@@ -37,7 +38,7 @@ export function StreakOverlay({ result, view, labels, selected }: StreakOverlayP
 		<g fill="none" strokeLinecap="round">
 			{segments.map(({ index, start, end }) => {
 				const isSelected = index === selected
-				const color = isSelected ? 'var(--color-success)' : 'var(--color-accent)'
+				const color = isSelected ? 'var(--color-accent)' : 'var(--color-ink-200)'
 				const length = Math.hypot(end.x - start.x, end.y - start.y) || 1
 				// Unit normal of the segment, for the ticks across its ends.
 				const nx = (-(end.y - start.y) / length) * TICK * unit
@@ -48,7 +49,7 @@ export function StreakOverlay({ result, view, labels, selected }: StreakOverlayP
 						<line x1={start.x} y1={start.y} x2={end.x} y2={end.y} strokeWidth={isSelected ? 2.5 : 1.5} vectorEffect="non-scaling-stroke" />
 						<path d={`M${start.x - nx} ${start.y - ny}L${start.x + nx} ${start.y + ny}M${end.x - nx} ${end.y - ny}L${end.x + nx} ${end.y + ny}`} strokeWidth={1.5} vectorEffect="non-scaling-stroke" />
 						{labels && (
-							<text x={start.x + nx * (LABEL_OFFSET / TICK)} y={start.y + ny * (LABEL_OFFSET / TICK)} fill={color} stroke="none" fontSize={LABEL_SIZE * unit} textAnchor="middle" dominantBaseline="central">
+							<text x={start.x + nx * (LABEL_OFFSET / TICK)} y={start.y + ny * (LABEL_OFFSET / TICK)} fill={isSelected ? 'var(--color-ink-100)' : 'var(--color-ink-200)'} stroke="none" fontSize={LABEL_SIZE * unit} textAnchor="middle" dominantBaseline="central">
 								{index + 1}
 							</text>
 						)}

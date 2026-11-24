@@ -1,37 +1,42 @@
 import type { StreakDetectionJob, StreakDetectionResult } from 'api'
 import { useEffect } from 'react'
 import { useSnapshot } from 'valtio'
-import { latestStreakJob, latestStreakResult, loadImageStreakJobs, loadStreakResult, streaksState } from './streaks'
+import { latestStreakJob, loadImageStreakJobs, loadStreakResult, shownStreakJob, shownStreakResult, streaksState } from './streaks'
 
-// Hook of the latest streak detection of an image, shared by the Images workspace and its Streak Detection tool: it
-// returns the latest job of the image id and its result, and fetches the result once the job completed, so only the
-// images on screen ever download their streaks. An image without a known job has its kept jobs fetched once.
+// Hook of the streak detection of an image, shared by the Images workspace and its Streak Detection tool: it returns the
+// latest job of the image id whatever its state, the job whose result is shown (the newest completed one, so a
+// detection that runs, fails, or is cancelled keeps the earlier result), and that result, fetched once the job
+// completed, so only the images on screen ever download their streaks. An image without a known job has its kept jobs
+// fetched once.
 
-// Latest streak detection of an image.
+// Streak detection of an image as a view shows it.
 export interface StreakResultView {
-	// Latest job of the image, if any.
+	// Latest job of the image, whatever its state; absent when it has none.
+	readonly latest?: StreakDetectionJob
+	// Completed job whose result is shown, which may be older than the latest; absent when none completed.
 	readonly job?: StreakDetectionJob
-	// Its result, once completed and fetched.
+	// Its result, once fetched.
 	readonly result?: StreakDetectionResult
-	// Why the result of the completed job could not be fetched.
+	// Why its result could not be fetched.
 	readonly resultError?: string
 }
 
-// Returns the latest streak detection of an image, fetching its result when needed; nothing without an image.
+// Returns the streak detection of an image, fetching the result shown when needed; nothing without an image.
 export function useStreakResult(imageId: string | undefined): StreakResultView {
 	const streaks = useSnapshot(streaksState)
-	const job = imageId === undefined ? undefined : latestStreakJob(streaks, imageId)
-	const completed = job?.state === 'completed' ? job.jobId : undefined
+	const latest = imageId === undefined ? undefined : latestStreakJob(streaks, imageId)
+	const job = imageId === undefined ? undefined : shownStreakJob(streaks, imageId)
+	const completed = job?.jobId
 
 	useEffect(() => {
 		if (completed) void loadStreakResult(streaksState, completed)
 	}, [completed])
 
 	useEffect(() => {
-		if (imageId && !job) void loadImageStreakJobs(streaksState, imageId)
-	}, [imageId, !job])
+		if (imageId && !latest) void loadImageStreakJobs(streaksState, imageId)
+	}, [imageId, !latest])
 
-	if (!imageId || !job) return {}
+	if (!imageId || !latest) return {}
 	// A result is a valtio ref, so the snapshot hands out the stored object itself, never a deep copy.
-	return { job, result: latestStreakResult(streaks, imageId), resultError: completed && streaks.resultErrors[completed] }
+	return { latest, job, result: shownStreakResult(streaks, imageId), resultError: completed && streaks.resultErrors[completed] }
 }

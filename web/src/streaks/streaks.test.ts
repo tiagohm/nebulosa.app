@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import type { StreakDetectionJob, StreakDetectionResult } from 'api'
 import type { Streak } from 'nebulosa/src/imaging/analysis/streak/types'
 import { proxy } from 'valtio'
-import { clampStreakSettings, DEFAULT_STREAK_SETTINGS, handleStreaksEvent, latestStreakJob, latestStreakResult, loadStreakResult, pickStreak, refreshStreaks, runStreakDetection, sameStreakRequest, streakSegments, type StreaksState } from './streaks'
+import { clampStreakSettings, DEFAULT_STREAK_SETTINGS, handleStreaksEvent, latestStreakJob, loadStreakResult, pickStreak, refreshStreaks, runStreakDetection, sameStreakRequest, shownStreakJob, shownStreakResult, streakSegments, type StreaksState } from './streaks'
 
 function state(): StreaksState {
 	return proxy<StreaksState>({ jobs: {}, latest: {}, results: {}, resultErrors: {}, submitErrors: {} })
@@ -82,8 +82,34 @@ describe('jobs', () => {
 		await loadStreakResult(streaks, 'job-1', request)
 		await loadStreakResult(streaks, 'job-1', request)
 		expect(calls).toEqual(['/api/streaks/job-1/result'])
-		expect(latestStreakResult(streaks, 'image-1')).toEqual(result)
-		expect(latestStreakResult(streaks, 'image-2')).toBeUndefined()
+		expect(shownStreakResult(streaks, 'image-1')).toEqual(result)
+		expect(shownStreakResult(streaks, 'image-2')).toBeUndefined()
+	})
+
+	test('a detection that runs, fails, or is cancelled keeps the newest completed result shown', () => {
+		const streaks = state()
+		expect(shownStreakJob(streaks, 'image-1')).toBeUndefined()
+
+		handleStreaksEvent(streaks, { type: 'streaks:updated', job: job({ state: 'completed' }) })
+		handleStreaksEvent(streaks, { type: 'streaks:updated', job: job({ jobId: 'job-2', state: 'completed', queuedAt: 2000 }) })
+		handleStreaksEvent(streaks, { type: 'streaks:updated', job: job({ jobId: 'job-3', state: 'running', queuedAt: 3000 }) })
+		expect(latestStreakJob(streaks, 'image-1')?.jobId).toBe('job-3')
+		expect(shownStreakJob(streaks, 'image-1')?.jobId).toBe('job-2')
+
+		handleStreaksEvent(streaks, { type: 'streaks:updated', job: job({ jobId: 'job-3', state: 'cancelled', queuedAt: 3000 }) })
+		expect(shownStreakJob(streaks, 'image-1')?.jobId).toBe('job-2')
+
+		handleStreaksEvent(streaks, { type: 'streaks:updated', job: job({ jobId: 'job-4', state: 'completed', queuedAt: 4000 }) })
+		expect(shownStreakJob(streaks, 'image-1')?.jobId).toBe('job-4')
+	})
+
+	test('a submission answered with an earlier equivalent job shows that job', async () => {
+		const streaks = state()
+		const { request } = fetcher({ '/api/images/image-1/streaks': [200, job({ jobId: 'old', state: 'completed', queuedAt: 500 })] })
+		handleStreaksEvent(streaks, { type: 'streaks:updated', job: job({ jobId: 'newer', state: 'completed', queuedAt: 2000 }) })
+
+		await runStreakDetection(streaks, 'image-1', { settings: DEFAULT_STREAK_SETTINGS }, request)
+		expect(shownStreakJob(streaks, 'image-1')?.jobId).toBe('old')
 	})
 
 	test('requests differ by settings and by context jobs', () => {

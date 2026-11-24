@@ -115,7 +115,7 @@ export const IMAGE_TOOL_DEFINITIONS: Readonly<Record<ImageToolId, ImageToolDefin
 	'plate-solver': { id: 'plate-solver', label: 'Plate Solving', panelTitle: 'Plate Solving', icon: 'plateSolve', category: 'image', outputs: ['analysis'], panel: PlateSolverPanel },
 	'star-detection': { id: 'star-detection', label: 'Star Detection', panelTitle: 'Star Detection', icon: 'starDetection', category: 'image', outputs: ['analysis'], panel: StarDetectionPanel, sheet: true },
 	'star-profile': { id: 'star-profile', label: 'Star Profile Inspector', panelTitle: 'Star Profile Inspector', icon: 'starProfile', category: 'image', outputs: ['analysis'], panel: StarProfileInspectorPanel },
-	'streak-detection': { id: 'streak-detection', label: 'Streak Detection', panelTitle: 'Streak Detection', icon: 'streakDetection', category: 'image', outputs: ['analysis'], panel: StreakDetectionPanel },
+	'streak-detection': { id: 'streak-detection', label: 'Streak Detection', panelTitle: 'Streak Detection', icon: 'streakDetection', category: 'image', outputs: ['analysis'], panel: StreakDetectionPanel, sheet: true },
 	annotation: { id: 'annotation', label: 'Annotation', panelTitle: 'Annotation', icon: 'annotation', category: 'image', outputs: ['analysis'], panel: AnnotationPanel },
 	'camera-acquisition': { id: 'camera-acquisition', label: 'Acquisition', panelTitle: 'Acquisition', icon: 'shutter', category: 'camera', panel: CameraAcquisitionTool },
 	'live-stacking': { id: 'live-stacking', label: 'Live Stacking', panelTitle: 'Live Stacking', icon: 'liveStack', category: 'camera', panel: LiveStackingTool },

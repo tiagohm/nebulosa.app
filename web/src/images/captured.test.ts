@@ -227,6 +227,18 @@ describe('camera tabs', () => {
 		expect(state.views[KEY].overlaysHidden).toBeTrue()
 		expect(tab(state).camera?.shown?.frame.frameId).toBe('s:1')
 	})
+
+	test('a frame held for analysis is held again when its camera reconnects', async () => {
+		const { io } = fakeIo()
+		const state = await cameraTab(io, 's:1')
+		holdCameraFrame(state, KEY)
+
+		reconcileCameraTabs(state, [], framesOf('s:2'), io, 'page')
+		reconcileCameraTabs(state, [CAMERA], framesOf('s:2'), io, 'page')
+		await Bun.sleep(10)
+
+		expect(tab(state).camera).toMatchObject({ selection: { kind: 'inspect', frameId: 's:1' }, shown: { frame: { frameId: 's:1' } } })
+	})
 })
 
 describe('following the latest frame', () => {

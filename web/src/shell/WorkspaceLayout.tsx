@@ -7,8 +7,8 @@ import { ContextualPanel } from './ContextualPanel'
 import { navigate, routeState, type WorkspaceId } from './route'
 import { useMediaQuery, WIDE_SCREEN } from './useMediaQuery'
 
-// Common frame of every workspace: optional tabs spanning the whole workspace (such as the Images document and
-// camera tabs), a header with the title (led in a tool of Tools by the way back to its catalog), the workspace's context controls (such as the Images tool bar)
+// Common frame of every workspace: optional tabs spanning the whole workspace (Images keeps its document and camera
+// tabs in its content instead, above the viewer they select for, so its full screen takes them along), a header with the title (led in a tool of Tools by the way back to its catalog), the workspace's context controls (such as the Images tool bar)
 // and actions, which wrap to a line of their own when they do not fit beside the title, the main content, and the
 // collapsible contextual panel. On
 // wide screens the panel's visibility is a preference of the active profile, kept per workspace; on

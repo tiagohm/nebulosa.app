@@ -25,7 +25,7 @@ The registry gives every camera one place for its frames, keeps them reachable a
 
 ## Rules and Limitations
 
-- A frame belongs to a physical camera (connection id + device id), never a role, profile, tool, or operation; a disconnected camera keeps its frames but loses its tab.
+- A frame belongs to a physical camera (connection id + device id), never a role, profile, tool, or operation; a disconnected camera keeps its frames but loses its tab, which comes back on reconnection with the saved or held frame it showed.
 - A frame becomes saved only once its write succeeds; saved rows are never pruned and no file is deleted with them.
 - After a restart no camera has a latest frame and only saved frames are available; a previewed-only frame can be opened only while it is the latest of its camera or leased.
 - Opening a frame never substitutes another one, and the preview may skip frames of a loop.

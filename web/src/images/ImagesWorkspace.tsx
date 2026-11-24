@@ -1,6 +1,6 @@
 import type { ImageInfo, SaveFormat } from 'api'
 import { cn } from 'cn'
-import { Fragment, type KeyboardEvent, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, type KeyboardEvent, type ReactNode, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { AnnotationOverlay, shownAnnotations } from '../annotations/AnnotationOverlay'
 import { annotationMatchesWcs, annotationPlateSolveJobId } from '../annotations/annotations'
@@ -764,6 +764,15 @@ function CameraBottom({ document, expanded, onToggle }: CameraBottomProps) {
 		if (!expanded) onToggle()
 	}
 
+	// Moves the choice of view, and the focus with it, by the arrow keys, Home, and End: the switch is one Tab stop.
+	function handleViewKey(e: KeyboardEvent<HTMLSpanElement>) {
+		const next = moveIndex(available.indexOf(view), available.length, e.key === 'ArrowUp' || e.key === 'ArrowDown' ? '' : e.key)
+		if (next === undefined) return
+		e.preventDefault()
+		onView(available[next])
+		e.currentTarget.querySelectorAll<HTMLElement>('[data-view]')[next]?.focus()
+	}
+
 	return (
 		<div className="flex-none border-t border-line-100 bg-base-100">
 			<CaptureReadout connectionId={source.connectionId} deviceId={source.deviceId} />
@@ -779,11 +788,13 @@ function CameraBottom({ document, expanded, onToggle }: CameraBottomProps) {
 				{available.length === 1 ? (
 					<span>{BOTTOM_VIEW_LABELS.frames}</span>
 				) : (
-					<span className="flex min-w-0 gap-3 overflow-x-auto">
+					<span onKeyDown={handleViewKey} className="flex min-w-0 gap-3 overflow-x-auto">
 						{available.map((option) => (
 							<button
 								key={option}
 								type="button"
+								data-view
+								tabIndex={option === view ? 0 : -1}
 								onClick={() => onView(option)}
 								className={cn('flex-none cursor-pointer border-0 bg-transparent p-0 font-mono text-xs tracking-wide whitespace-nowrap uppercase focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent', option === view ? 'text-accent' : 'text-ink-300 hover:text-ink-100')}
 							>
@@ -821,15 +832,49 @@ interface DocumentTabsProps {
 	readonly onClose: (key: string) => void
 }
 
-// Returns the tooltip of a document tab: where its file is, or which camera and frame it shows.
+// Returns the tooltip of a document tab: where its file is, or which camera and frame it shows, then why it could not
+// be opened, when it could not.
 function documentTooltip(document: ImageDocument): string {
-	if (document.camera) return `Frames of ${document.name}${document.camera.shown ? `, showing frame #${document.camera.shown.frame.generation}` : ''}`
-	return documentPath(document) ?? document.name
+	const subject = document.camera ? `Frames of ${document.name}${document.camera.shown ? `, showing frame #${document.camera.shown.frame.generation}` : ''}` : (documentPath(document) ?? document.name)
+	return document.status === 'error' && document.error ? `${subject}\nCould not open: ${document.error}` : subject
 }
 
-// Tab strip of the open documents. Arrow keys move between tabs, Delete closes the focused one. A camera tab has a camera icon and no way to close it.
+// Name of a document as its tab and the list of open documents show it: a camera icon for a camera tab, and an error
+// icon, never colour alone, for a document that could not be opened.
+function DocumentName({ document }: { readonly document: ImageDocument }) {
+	return (
+		<>
+			{document.camera && <Icon name="camera" className="size-3.5 flex-none" />}
+			{document.status === 'error' && <Icon name="error" className="size-3.5 flex-none text-danger" />}
+			<span className="truncate">{document.name}</span>
+		</>
+	)
+}
+
+// Tab strip of the open documents. Arrow keys move between tabs, Delete closes the focused one, and the tab shown is
+// scrolled into view. A camera tab has a camera icon and no way to close it. The close button of a tab not shown
+// appears on hover with a mouse and always on a touch screen, larger there; when the tabs overflow the strip, a list
+// of every open document at its end reaches the ones scrolled away.
 function DocumentTabs({ documents, activeKey, onClose }: DocumentTabsProps) {
 	const stripRef = useRef<HTMLDivElement>(null)
+	const [overflowing, setOverflowing] = useState(false)
+	const [listOpen, setListOpen] = useState(false)
+
+	// Measured before paint and whenever the strip resizes or the documents change.
+	useLayoutEffect(() => {
+		const strip = stripRef.current
+		if (!strip) return
+		const measure = () => setOverflowing(strip.scrollWidth > strip.clientWidth)
+		measure()
+		const observer = new ResizeObserver(measure)
+		observer.observe(strip)
+		return () => observer.disconnect()
+	}, [documents])
+
+	// Again once the list of open documents narrows the strip, which can hide part of the tab shown.
+	useEffect(() => {
+		stripRef.current?.querySelector('[data-active]')?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+	}, [activeKey, overflowing])
 
 	function handleKeyDown(e: KeyboardEvent<HTMLDivElement>) {
 		const index = documents.findIndex((d) => d.key === activeKey)
@@ -846,40 +891,66 @@ function DocumentTabs({ documents, activeKey, onClose }: DocumentTabsProps) {
 	}
 
 	return (
-		<div ref={stripRef} onKeyDown={handleKeyDown} className="flex h-9 flex-none items-end gap-px overflow-x-auto border-b border-line-100 bg-base-100 px-2">
-			{documents.map((document) => {
-				const active = document.key === activeKey
-				const closable = isClosable(document)
+		<div className="flex h-9 flex-none items-end border-b border-line-100 bg-base-100">
+			<div ref={stripRef} onKeyDown={handleKeyDown} className="flex min-w-0 flex-1 items-end gap-px overflow-x-auto px-2 [scrollbar-width:none]">
+				{documents.map((document) => {
+					const active = document.key === activeKey
+					const closable = isClosable(document)
 
-				return (
-					<div key={document.key} className={cn('group flex h-8 max-w-56 flex-none items-center rounded-t-sm border border-b-0', active ? 'border-line-100 bg-base-000 text-ink-100' : 'border-transparent text-ink-300 hover:bg-base-200 hover:text-ink-100')}>
-						<button
-							type="button"
-							data-tab
-							tabIndex={active ? 0 : -1}
-							title={documentTooltip(document)}
-							onClick={() => selectImage(imagesState, document.key)}
-							onAuxClick={(e) => e.button === 1 && closable && onClose(document.key)}
-							className={cn('flex h-full min-w-0 cursor-pointer items-center gap-2 border-0 bg-transparent pl-3 font-mono text-xs text-inherit focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent', closable ? 'pr-1' : 'pr-3')}
-						>
-							{document.camera && <Icon name="camera" className="size-3.5 flex-none" />}
-							{document.status === 'error' && <span className="size-1.5 flex-none rounded-full bg-danger" />}
-							<span className="truncate">{document.name}</span>
-						</button>
-						{closable && (
+					return (
+						<div key={document.key} data-active={active || undefined} className={cn('group flex h-8 max-w-56 flex-none items-center rounded-t-sm border border-b-0', active ? 'border-line-100 bg-base-000 text-ink-100' : 'border-transparent text-ink-300 hover:bg-base-200 hover:text-ink-100')}>
 							<button
 								type="button"
-								tabIndex={-1}
-								title={`Close ${document.name}`}
-								onClick={() => onClose(document.key)}
-								className={cn('mr-1 flex size-5 flex-none cursor-pointer items-center justify-center rounded-sm border-0 bg-transparent p-0 text-ink-300 hover:bg-base-300 hover:text-ink-100', active ? 'opacity-100' : 'opacity-0 group-hover:opacity-100')}
+								data-tab
+								tabIndex={active ? 0 : -1}
+								title={documentTooltip(document)}
+								onClick={() => selectImage(imagesState, document.key)}
+								onAuxClick={(e) => e.button === 1 && closable && onClose(document.key)}
+								className={cn('flex h-full min-w-0 cursor-pointer items-center gap-2 border-0 bg-transparent pl-3 font-mono text-xs text-inherit focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent', closable ? 'pr-1' : 'pr-3')}
 							>
-								<Icon name="close" className="size-3.5" strokeWidth={2} />
+								<DocumentName document={document} />
 							</button>
-						)}
+							{closable && (
+								<button
+									type="button"
+									tabIndex={-1}
+									title={`Close ${document.name} (Delete)`}
+									onClick={() => onClose(document.key)}
+									className={cn(
+										'mr-1 flex size-5 flex-none cursor-pointer items-center justify-center rounded-sm border-0 bg-transparent p-0 text-ink-300 hover:bg-base-300 hover:text-ink-100 pointer-coarse:size-7',
+										active ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100',
+									)}
+								>
+									<Icon name="close" className="size-3.5" strokeWidth={2} />
+								</button>
+							)}
+						</div>
+					)
+				})}
+			</div>
+			{overflowing && (
+				<Popover icon="stack" label="Open Documents" open={listOpen} onOpenChange={setListOpen} className="mr-1 self-center [&>button]:size-7">
+					<div className="-mx-1 flex max-h-80 flex-col overflow-y-auto">
+						{documents.map((document) => (
+							<button
+								key={document.key}
+								type="button"
+								title={documentTooltip(document)}
+								onClick={() => {
+									setListOpen(false)
+									selectImage(imagesState, document.key)
+								}}
+								className={cn(
+									'flex min-w-0 cursor-pointer items-center gap-2 rounded-sm border-0 px-2 py-1.5 text-left font-mono text-sm transition-colors duration-150 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent motion-reduce:transition-none pointer-coarse:min-h-11',
+									document.key === activeKey ? 'bg-accent-subtle text-accent' : 'bg-transparent text-ink-100 hover:bg-base-300',
+								)}
+							>
+								<DocumentName document={document} />
+							</button>
+						))}
 					</div>
-				)
-			})}
+				</Popover>
+			)}
 		</div>
 	)
 }

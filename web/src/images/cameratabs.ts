@@ -101,9 +101,10 @@ function cameraTabRank({ role }: CameraTabSource) {
 	return role === undefined ? 2 : CAMERA_TAB_RANK[role]
 }
 
-// View state and tool context of each camera tab removed with its camera, by document key; given back when the
-// camera reconnects. They hold no rendering.
-const parked = new Map<string, { readonly view: ImageViewState; readonly tool: ImageToolContext }>()
+// View state, tool context, and selection of a saved or held frame of each camera tab removed with its camera, by
+// document key; given back when the camera reconnects, so a frame held for analysis is shown again rather than lost to
+// a dropped connection. They hold no rendering.
+const parked = new Map<string, { readonly view: ImageViewState; readonly tool: ImageToolContext; readonly selection?: CameraFrameSelection }>()
 
 // Opens a captured frame on the server under a lease of client. Resolves to the opened frame, or to the message
 // of the refusal.
@@ -145,22 +146,24 @@ function cameraTabNames(cameras: readonly CameraTabSource[]): Map<string, string
 }
 
 // Makes the camera tabs match the connected cameras of the watched connection: a tab is added for each camera
-// without one, with the view state it had when its camera disconnected, and shows the latest frame of the camera
-// when frames knows one; the tab of a camera no longer listed is removed, releasing its lease, and its view state is
+// without one, with the view state it had when its camera disconnected, and shows the saved or held frame it showed
+// then, or else the latest frame of the camera when frames knows one; the tab of a camera no longer listed is removed, releasing its lease, and its view state is
 // kept for its return. Camera tabs come first, the Main Camera, then the Guide Camera, then the others by camera name
 // then id, never by the time of their frames; the other documents keep their order. The active document changes only when it was removed, or when there was
 // none.
 export function reconcileCameraTabs(state: ImagesState, cameras: readonly CameraTabSource[], frames: Pick<CaptureFramesState, 'sources'>, io: ImagesIo = browserIo, client: string = clientId) {
 	const sorted = cameras.toSorted((a, b) => cameraTabRank(a) - cameraTabRank(b) || a.name.localeCompare(b.name) || a.id.localeCompare(b.id))
 	const names = cameraTabNames(sorted)
-	const added: string[] = []
+	// Tabs added, with the frame each shows first.
+	const added: [key: string, selection: CameraFrameSelection][] = []
 
 	for (const document of state.documents.toReversed()) {
 		if (!document.camera || names.has(document.key)) continue
 		const view = state.views[document.key]
 		const tool = state.tools[document.key]
+		const { selection } = document.camera
 		removeDocument(state, document.key, io)
-		if (view && tool) parked.set(document.key, { view: { ...view, rendering: undefined, renderPending: false, error: undefined, display: { ...view.display, original: undefined } }, tool })
+		if (view && tool) parked.set(document.key, { view: { ...view, rendering: undefined, renderPending: false, error: undefined, display: { ...view.display, original: undefined } }, tool, ...((selection.kind === 'saved' || selection.kind === 'inspect') && { selection }) })
 	}
 
 	for (const camera of sorted) {
@@ -175,17 +178,18 @@ export function reconcileCameraTabs(state: ImagesState, cameras: readonly Camera
 
 		const restored = parked.get(key)
 		parked.delete(key)
-		state.documents.push({ key, name, source: { kind: 'camera', connectionId: camera.connectionId, deviceId: camera.id }, status: 'ready', camera: { selection: { kind: 'latest' } } })
+		const selection = restored?.selection ?? { kind: 'latest' }
+		state.documents.push({ key, name, source: { kind: 'camera', connectionId: camera.connectionId, deviceId: camera.id }, status: 'ready', camera: { selection } })
 		state.views[key] = restored?.view ?? newView(io.loadToolPreferences())
 		state.tools[key] = restored?.tool ?? { tool: 'inspector' }
-		added.push(key)
+		added.push([key, selection])
 	}
 
 	const order = [...sorted.map((camera) => cameraTabKey(camera.connectionId, camera.id)), ...state.documents.filter((d) => !d.camera).map((d) => d.key)]
 	if (order.some((key, i) => state.documents[i]?.key !== key)) state.documents = order.map((key) => state.documents.find((d) => d.key === key)!)
 	state.activeKey ??= state.documents[0]?.key
 
-	for (const key of added) void selectCameraFrame(state, key, { kind: 'latest' }, frames, io, client)
+	for (const [key, selection] of added) void selectCameraFrame(state, key, selection, frames, io, client)
 }
 
 // Selects the frame a camera tab shows and shows it (see showCameraFrame): the latest frame of the camera (the newest

@@ -7,8 +7,9 @@ import { type AnnotationProjection, type LabelCandidate, layoutLabels, type Proj
 // Annotation of an image over the shared image viewer: the constellation figures (clipped to the image) and names, the
 // outline or marker of each deep-sky object, a marker for each star, Sun, Moon, planet, satellite, asteroid, and comet
 // with the predicted motion of a body during the exposure and the uncertainty of its position, and the labels the
-// layout places, with the selected object highlighted. It is a pure function of projections computed once per result
-// and of the document's annotation state, and draws in image pixel coordinates, so the viewer's zoom and pan move it
+// layout places, in the hues of the Sky map, with the selected object highlighted in Ember. It is a pure function of
+// projections computed once per result and of the document's annotation state, and draws in image pixel coordinates,
+// so the viewer's zoom and pan move it
 // while strokes, markers, and labels keep their size on screen; only the objects in view are drawn, and only the labels
 // are laid out again when the view changes. The caller shows it only over the image the results annotated, with the WCS
 // they were computed with.
@@ -34,8 +35,20 @@ const MAX_CLEARANCE = 24
 // Labels placed at most for each density.
 export const LABEL_BUDGETS = { minimal: 15, balanced: 40, detailed: 150 } as const
 
-// Color of each group.
-const COLORS: Readonly<Record<AnnotationLayer, string>> = { star: 'var(--color-ink-200)', deepSky: 'var(--color-accent)', solarSystem: 'var(--color-success)', satellite: 'var(--color-success)', minorBody: 'var(--color-danger)' }
+// Color of the objects of each group, the Sky map's hues: catalog stars and natural satellites in Moonlight, the
+// low-chroma deep-sky olive, and the planets in violet; the Sun, the Moon, and comets take their own hue (objectColor).
+// Ember marks only the selected object, and no signal colour stands for a group.
+const COLORS: Readonly<Record<AnnotationLayer, string>> = { star: 'var(--color-ink-200)', deepSky: 'var(--color-map-deep-sky)', solarSystem: 'var(--color-map-planet)', satellite: 'var(--color-ink-200)', minorBody: 'var(--color-map-asteroid)' }
+
+// Colors of the bodies that differ from their group's, by object id: the Sun (NAIF code 10) and the Moon (301).
+const BODY_COLORS: Readonly<Record<string, string>> = { 'body:10': 'var(--color-map-sun)', 'body:301': 'var(--color-map-moon)' }
+
+// Returns the color an object is drawn in when it is not selected: its body's own hue, jade for a comet (SkyBoT
+// classes one as "Comet"), else its group's.
+function objectColor(object: Pick<AnnotationObject, 'id' | 'layer' | 'typeName'>): string {
+	if (object.layer === 'minorBody' && /comet/i.test(object.typeName)) return 'var(--color-map-comet)'
+	return BODY_COLORS[object.id] ?? COLORS[object.layer]
+}
 
 // Order in which the labels of each group are placed.
 const LAYER_PRIORITY: Readonly<Record<AnnotationLayer, number>> = { solarSystem: 0, deepSky: 1, satellite: 2, minorBody: 3, star: 4 }
@@ -110,7 +123,7 @@ export function AnnotationOverlay({ projection, view, state, selected }: Annotat
 			{shown.map((projected) => {
 				const { object, anchor, outline, approximate, motion, uncertainty } = projected
 				const isSelected = object.id === selected
-				const color = isSelected ? 'var(--color-ink-100)' : COLORS[object.layer]
+				const color = isSelected ? 'var(--color-accent)' : objectColor(object)
 				const width = isSelected ? 2.5 : 1.5
 
 				return (

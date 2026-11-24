@@ -528,10 +528,12 @@ const SITE_SOURCES: Readonly<Record<FitsLocationSource, AnnotationSiteSource>> =
 
 // Returns the site of an image header, from OBSGEO-X/Y/Z, OBSGEO-B/L/H, or SITELAT/SITELONG/SITEELEV as the toolkit
 // reads them (readFitsTime): its position for the parallax and its description in degrees and meters; undefined when
-// the header locates no site.
+// the header locates no site, or places it at exactly 0° N, 0° E, and 0 m, the placeholder a camera writes without a
+// site (simulators among them), never a real observatory.
 export function headerSite(header: FitsHeader): { readonly location: GeographicPosition; readonly site: AnnotationSite } | undefined {
 	const { location, locationSource } = readFitsTime(header)
 	if (!location || !locationSource) return undefined
+	if (location.latitude === 0 && location.longitude === 0 && location.elevation === 0) return undefined
 	return { location, site: { latitude: toDeg(location.latitude), longitude: toDeg(location.longitude), elevation: toMeter(location.elevation), source: SITE_SOURCES[locationSource] } }
 }
 

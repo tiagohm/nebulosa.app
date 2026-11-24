@@ -46,25 +46,42 @@ export function annotationKey(imageId: string, kind: AnnotationKind): string {
 // Groups a solar-system search lists when its request names none, as the server does.
 const ALL_BODIES: AnnotationBodies = { solarSystem: true, satellite: true, minorBody: true }
 
-// Whether two requests annotate the same way, as the server matches them: the same kind and WCS, and the same
-// magnitude limit of a local run or groups of a solar-system search.
-export function sameAnnotationRequest(a: AnnotationRequest, b: AnnotationRequest): boolean {
-	if (a.kind !== b.kind || a.plateSolveJobId !== b.plateSolveJobId) return false
-	if (a.kind === 'local') return a.magnitudeLimit === b.magnitudeLimit
-	const x = a.bodies ?? ALL_BODIES
-	const y = b.bodies ?? ALL_BODIES
-	return x.solarSystem === y.solarSystem && x.satellite === y.satellite && x.minorBody === y.minorBody
-}
-
 // Returns the latest job of a kind of an image.
 export function latestAnnotationJob(state: Pick<AnnotationsState, 'jobs' | 'latest'>, imageId: string, kind: AnnotationKind = 'local'): AnnotationJob | undefined {
 	return latestOf(state, annotationKey(imageId, kind))
 }
 
-// Returns the fetched result of the latest job of a kind of an image, when it completed.
-export function latestAnnotationResult(state: Pick<AnnotationsState, 'jobs' | 'latest' | 'results'>, imageId: string, kind: AnnotationKind = 'local'): AnnotationResult | undefined {
-	const job = latestAnnotationJob(state, imageId, kind)
-	return job?.state === 'completed' ? state.results[job.jobId] : undefined
+// Returns the job of a kind whose result an image shows: its latest job of that kind when that one completed, otherwise
+// the newest completed job of that kind of the image, so a run that waits, fails, or is cancelled never takes the result
+// shown away; none when no job of that kind of the image completed.
+export function shownAnnotationJob(state: Pick<AnnotationsState, 'jobs' | 'latest'>, imageId: string, kind: AnnotationKind = 'local'): AnnotationJob | undefined {
+	const latest = latestAnnotationJob(state, imageId, kind)
+	if (latest?.state === 'completed') return latest
+	let shown: AnnotationJob | undefined
+	for (const job of Object.values(state.jobs)) if (job.imageId === imageId && job.request.kind === kind && job.state === 'completed' && (!shown || job.queuedAt > shown.queuedAt)) shown = job
+	return shown
+}
+
+// Returns the fetched result of the job of a kind an image shows (shownAnnotationJob).
+export function shownAnnotationResult(state: Pick<AnnotationsState, 'jobs' | 'latest' | 'results'>, imageId: string, kind: AnnotationKind = 'local'): AnnotationResult | undefined {
+	const job = shownAnnotationJob(state, imageId, kind)
+	return job ? state.results[job.jobId] : undefined
+}
+
+// Groups a solar-system request lists, every group when it names none.
+export function requestedBodies(request: Pick<AnnotationRequest, 'bodies'>): AnnotationBodies {
+	return request.bodies ?? ALL_BODIES
+}
+
+// Whether the result of a job already answers a request, so running it would add nothing: the same kind and WCS, and a
+// magnitude limit no fainter than the job's for a local run (a brighter one only hides objects of the result), or no
+// group of bodies the job did not search for a solar-system search.
+export function annotationAnswers(job: Pick<AnnotationJob, 'request'>, request: AnnotationRequest): boolean {
+	if (job.request.kind !== request.kind || job.request.plateSolveJobId !== request.plateSolveJobId) return false
+	if (request.kind === 'local') return request.magnitudeLimit <= job.request.magnitudeLimit
+	const searched = requestedBodies(job.request)
+	const asked = requestedBodies(request)
+	return (!asked.solarSystem || searched.solarSystem) && (!asked.satellite || searched.satellite) && (!asked.minorBody || searched.minorBody)
 }
 
 // Records a job as a job of its kind of its image (trackJob); submitted makes it the latest of its kind of its image, as

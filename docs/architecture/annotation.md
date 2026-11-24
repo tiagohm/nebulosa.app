@@ -25,7 +25,10 @@ It turns a plate solution into named objects and links them to the rest of the a
 - Nothing is solved implicitly, and a local annotation queries no network.
 - Positions are astrometric ICRS (J2000), never apparent of date; a request carries no instant or observer.
 - The overlay is drawn only over the image annotated and only while the solution shown is the one it was computed with.
+- The result shown of each kind is that of its newest completed run on the image, so a run that waits, fails, or is cancelled never takes it or its overlay away.
+- A brighter magnitude limit only hides objects of the result shown; a new run is needed only for a fainter limit, another WCS, or another group of bodies.
 - A solar-system position that could not be corrected for the site stays geocentric and is labelled so, never shown as topocentric; there is no fallback to another service.
 - The catalog is not complete to any magnitude, solar-system positions are predictions, planets SkyBoT cannot compute are missing, and there are no artificial satellites.
+- A header site at exactly 0° N, 0° E, and 0 m is taken for the placeholder of a camera without a site, so the header locates none.
 - Without a site in the header the Moon may be up to a degree off, and the Sky workspace shows objects from the profile's site, not the image's.
 - There is no annotated image export.

@@ -186,6 +186,13 @@ describe('observation context', () => {
 		expect(observationContext(header({ 'DATE-OBS': '2026-10-27T03:00:00', SITELAT: 1, SITELONG: 2, SITEELEV: 3 }), undefined)).toMatchObject({ center: 'geocentricCorrected', site: { source: 'siteKeywords' } })
 	})
 
+	test('a site at 0° N, 0° E, and 0 m is a placeholder, not a site', () => {
+		const placeholder = observationContext(header({ 'DATE-OBS': '2026-10-27T03:00:00', SITELAT: 0, SITELONG: 0, SITEELEV: 0 }), undefined)
+		expect(placeholder).toMatchObject({ center: 'geocentric' })
+		expect(placeholder?.site).toBeUndefined()
+		expect(observationContext(header({ 'DATE-OBS': '2026-10-27T03:00:00', SITELAT: 0, SITELONG: 0, SITEELEV: 5 }), undefined)).toMatchObject({ center: 'geocentricCorrected' })
+	})
+
 	test('the current time without a date, when given', () => {
 		const now = Date.UTC(2026, 9, 28, 12)
 		expect(observationContext(header({ 'DATE-OBS': 'yesterday' }), 30)).toBeUndefined()

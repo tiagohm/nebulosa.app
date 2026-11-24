@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import type { AnnotationJob, AnnotationRequest, AnnotationResult } from 'api'
 import { proxy } from 'valtio'
 import {
+	annotationAnswers,
 	annotationKey,
 	annotationMatchesWcs,
 	annotationPlateSolveJobId,
@@ -9,14 +10,14 @@ import {
 	type AnnotationsState,
 	handleAnnotationsEvent,
 	latestAnnotationJob,
-	latestAnnotationResult,
 	loadAnnotationContext,
 	loadAnnotationResult,
 	minorBodyQuery,
 	refreshAnnotations,
 	resolveMinorBody,
 	runAnnotation,
-	sameAnnotationRequest,
+	shownAnnotationJob,
+	shownAnnotationResult,
 } from './annotations'
 
 const REQUEST: AnnotationRequest = { kind: 'local', magnitudeLimit: 12 }
@@ -70,30 +71,53 @@ describe('jobs', () => {
 		const annotations = state()
 		const completed = job({ state: 'completed' })
 		await refreshAnnotations(annotations, fetcher({ '/api/annotations': [200, { jobs: [completed] }] }).request)
-		expect(latestAnnotationResult(annotations, 'image-1')).toBeUndefined()
+		expect(shownAnnotationResult(annotations, 'image-1')).toBeUndefined()
 
 		const { request, calls } = fetcher({ '/api/annotations/job-1/result': [200, { jobId: 'job-1', imageId: 'image-1', objects: [] }] })
 		await loadAnnotationResult(annotations, 'job-1', request)
 		await loadAnnotationResult(annotations, 'job-1', request)
 		expect(calls).toHaveLength(1)
-		expect(latestAnnotationResult(annotations, 'image-1')?.jobId).toBe('job-1')
+		expect(shownAnnotationResult(annotations, 'image-1')?.jobId).toBe('job-1')
 
 		await loadAnnotationResult(annotations, 'job-9', fetcher({}).request)
 		expect(annotations.resultErrors['job-9']).toBe('Not found')
 	})
+
+	test('a run that waits, fails, or is cancelled keeps the newest completed result of its kind shown', async () => {
+		const annotations = state()
+		handleAnnotationsEvent(annotations, { type: 'annotations:updated', job: job({ state: 'completed' }) })
+		handleAnnotationsEvent(annotations, { type: 'annotations:updated', job: job({ jobId: 'minor', queuedAt: 1500, state: 'completed', request: { kind: 'solarSystemBodies', magnitudeLimit: 12 } }) })
+		await loadAnnotationResult(annotations, 'job-1', fetcher({ '/api/annotations/job-1/result': [200, { jobId: 'job-1', imageId: 'image-1', objects: [] }] }).request)
+		handleAnnotationsEvent(annotations, { type: 'annotations:updated', job: job({ jobId: 'job-2', queuedAt: 2000, state: 'running' }) })
+
+		expect(latestAnnotationJob(annotations, 'image-1')?.jobId).toBe('job-2')
+		expect(shownAnnotationJob(annotations, 'image-1')?.jobId).toBe('job-1')
+		expect(shownAnnotationResult(annotations, 'image-1')?.jobId).toBe('job-1')
+
+		handleAnnotationsEvent(annotations, { type: 'annotations:updated', job: job({ jobId: 'job-2', queuedAt: 2000, state: 'failed' }) })
+		expect(shownAnnotationJob(annotations, 'image-1')?.jobId).toBe('job-1')
+		expect(shownAnnotationJob(annotations, 'image-1', 'solarSystemBodies')?.jobId).toBe('minor')
+		expect(shownAnnotationJob(annotations, 'image-2')).toBeUndefined()
+
+		handleAnnotationsEvent(annotations, { type: 'annotations:updated', job: job({ jobId: 'job-3', queuedAt: 3000, state: 'completed' }) })
+		expect(shownAnnotationJob(annotations, 'image-1')?.jobId).toBe('job-3')
+	})
 })
 
 describe('requests and WCS', () => {
-	test('equivalent requests', () => {
-		expect(sameAnnotationRequest(REQUEST, { ...REQUEST })).toBeTrue()
-		expect(sameAnnotationRequest(REQUEST, { ...REQUEST, plateSolveJobId: 'p' })).toBeFalse()
-		expect(sameAnnotationRequest(REQUEST, { ...REQUEST, magnitudeLimit: 10 })).toBeFalse()
-		expect(sameAnnotationRequest(REQUEST, { ...REQUEST, kind: 'solarSystemBodies' })).toBeFalse()
+	test('a result answers a request it adds nothing to', () => {
+		const local = { request: REQUEST }
+		expect(annotationAnswers(local, { ...REQUEST })).toBeTrue()
+		expect(annotationAnswers(local, { ...REQUEST, magnitudeLimit: 10 })).toBeTrue()
+		expect(annotationAnswers(local, { ...REQUEST, magnitudeLimit: 13 })).toBeFalse()
+		expect(annotationAnswers(local, { ...REQUEST, plateSolveJobId: 'p' })).toBeFalse()
+		expect(annotationAnswers(local, { ...REQUEST, kind: 'solarSystemBodies' })).toBeFalse()
 
-		const minor: AnnotationRequest = { kind: 'solarSystemBodies', magnitudeLimit: 12 }
-		expect(sameAnnotationRequest(minor, { ...minor, magnitudeLimit: 10 })).toBeTrue()
-		expect(sameAnnotationRequest(minor, { ...minor, bodies: { solarSystem: true, satellite: true, minorBody: true } })).toBeTrue()
-		expect(sameAnnotationRequest(minor, { ...minor, bodies: { solarSystem: true, satellite: false, minorBody: true } })).toBeFalse()
+		const minor = { request: { kind: 'solarSystemBodies', magnitudeLimit: 12, bodies: { solarSystem: false, satellite: false, minorBody: true } } satisfies AnnotationRequest }
+		expect(annotationAnswers(minor, { ...minor.request, magnitudeLimit: 18 })).toBeTrue()
+		expect(annotationAnswers(minor, { ...minor.request, bodies: { solarSystem: false, satellite: false, minorBody: false } })).toBeTrue()
+		expect(annotationAnswers(minor, { ...minor.request, bodies: { solarSystem: true, satellite: false, minorBody: true } })).toBeFalse()
+		expect(annotationAnswers({ request: { kind: 'solarSystemBodies', magnitudeLimit: 12 } }, minor.request)).toBeTrue()
 	})
 
 	test('a result is drawn only with the WCS it was computed with', () => {

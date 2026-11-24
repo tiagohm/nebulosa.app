@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import type { StarProfileMeasured, StarProfileNoStar, StarProfileResult } from 'api'
 import { proxy } from 'valtio'
 import { clearStarProfile, type ImagesState, newView } from '../images/images'
-import { inspectStar, measuredStar, previewPixels, profileEllipse, reinspectStar, starProfileOf } from './starprofile'
+import { inspectStar, MAX_TAP_SEARCH_RADIUS, measuredStar, measurementOf, previewPixels, profileEllipse, reinspectStar, starProfileOf, tapSearchRadius } from './starprofile'
 import { DEFAULT_STAR_PROFILE_SETTINGS, sameMeasurement } from './starprofile.settings'
 
 const KEY = 'document'
@@ -48,7 +48,7 @@ describe('inspectStar', () => {
 	test('asks for the star near the point and keeps the answer', async () => {
 		const images = state()
 		const { calls, request } = deferredFetch()
-		const done = inspectStar(images, KEY, IMAGE, POINT, false, DEFAULT_STAR_PROFILE_SETTINGS, request)
+		const done = inspectStar(images, KEY, IMAGE, POINT, false, DEFAULT_STAR_PROFILE_SETTINGS, 0, request)
 
 		expect(images.views[KEY].starProfile).toMatchObject({ imageId: IMAGE, status: 'measuring' })
 		expect(calls[0].url).toBe('/api/images/image/star-profile')
@@ -64,7 +64,7 @@ describe('inspectStar', () => {
 	test('says when a detection already found the star', async () => {
 		const images = state()
 		const { calls, request } = deferredFetch()
-		const done = inspectStar(images, KEY, IMAGE, POINT, true, DEFAULT_STAR_PROFILE_SETTINGS, request)
+		const done = inspectStar(images, KEY, IMAGE, POINT, true, DEFAULT_STAR_PROFILE_SETTINGS, 0, request)
 
 		expect(calls[0].body.detected).toBeTrue()
 		calls[0].answer(MEASURED)
@@ -74,7 +74,7 @@ describe('inspectStar', () => {
 	test('keeps why no star was found, with no measured star', async () => {
 		const images = state()
 		const { calls, request } = deferredFetch()
-		const done = inspectStar(images, KEY, IMAGE, POINT, false, DEFAULT_STAR_PROFILE_SETTINGS, request)
+		const done = inspectStar(images, KEY, IMAGE, POINT, false, DEFAULT_STAR_PROFILE_SETTINGS, 0, request)
 		calls[0].answer(NO_STAR)
 		await done
 
@@ -85,8 +85,8 @@ describe('inspectStar', () => {
 	test('a newer measurement aborts the one before it, and a late answer of that one is dropped', async () => {
 		const images = state()
 		const { calls, request } = deferredFetch()
-		const first = inspectStar(images, KEY, IMAGE, POINT, false, DEFAULT_STAR_PROFILE_SETTINGS, request)
-		const second = inspectStar(images, KEY, IMAGE, { x: 50, y: 60 }, false, DEFAULT_STAR_PROFILE_SETTINGS, request)
+		const first = inspectStar(images, KEY, IMAGE, POINT, false, DEFAULT_STAR_PROFILE_SETTINGS, 0, request)
+		const second = inspectStar(images, KEY, IMAGE, { x: 50, y: 60 }, false, DEFAULT_STAR_PROFILE_SETTINGS, 0, request)
 
 		expect(calls[0].signal.aborted).toBeTrue()
 		expect(calls[1].signal.aborted).toBeFalse()
@@ -102,7 +102,7 @@ describe('inspectStar', () => {
 	test('an answer arriving after the state was cleared never comes back', async () => {
 		const images = state()
 		const { calls, request } = deferredFetch()
-		const done = inspectStar(images, KEY, IMAGE, POINT, false, DEFAULT_STAR_PROFILE_SETTINGS, request)
+		const done = inspectStar(images, KEY, IMAGE, POINT, false, DEFAULT_STAR_PROFILE_SETTINGS, 0, request)
 
 		clearStarProfile(images.views[KEY])
 		expect(calls[0].signal.aborted).toBeTrue()
@@ -115,7 +115,7 @@ describe('inspectStar', () => {
 	test('an answer for a document closed meanwhile is dropped', async () => {
 		const images = state()
 		const { calls, request } = deferredFetch()
-		const done = inspectStar(images, KEY, IMAGE, POINT, false, DEFAULT_STAR_PROFILE_SETTINGS, request)
+		const done = inspectStar(images, KEY, IMAGE, POINT, false, DEFAULT_STAR_PROFILE_SETTINGS, 0, request)
 
 		delete images.views[KEY]
 		calls[0].answer(MEASURED)
@@ -126,17 +126,59 @@ describe('inspectStar', () => {
 	test('a failure is kept with its message', async () => {
 		const images = state()
 		const { calls, request } = deferredFetch()
-		const done = inspectStar(images, KEY, IMAGE, POINT, false, DEFAULT_STAR_PROFILE_SETTINGS, request)
+		const done = inspectStar(images, KEY, IMAGE, POINT, false, DEFAULT_STAR_PROFILE_SETTINGS, 0, request)
 		calls[0].fail(new Error('unreachable'))
 		await done
 
 		expect(images.views[KEY].starProfile).toMatchObject({ status: 'failed', error: 'unreachable' })
 	})
 
+	test('a tap widens the search radius to its own, never narrows it', async () => {
+		const images = state()
+		const { calls, request } = deferredFetch()
+		const wide = inspectStar(images, KEY, IMAGE, POINT, false, DEFAULT_STAR_PROFILE_SETTINGS, 40, request)
+		const narrow = inspectStar(images, KEY, IMAGE, POINT, false, DEFAULT_STAR_PROFILE_SETTINGS, 2, request)
+
+		expect(calls[0].body.searchRadius).toBe(40)
+		expect(calls[1].body.searchRadius).toBe(8)
+		calls[0].answer(NO_STAR)
+		calls[1].answer(NO_STAR)
+		await Promise.all([wide, narrow])
+	})
+
+	test('the star measured before stays while the next one of the same image measures, and a failure drops it', async () => {
+		const images = state()
+		const { calls, request } = deferredFetch()
+		const first = inspectStar(images, KEY, IMAGE, POINT, false, DEFAULT_STAR_PROFILE_SETTINGS, 0, request)
+		calls[0].answer(MEASURED)
+		await first
+
+		const second = inspectStar(images, KEY, IMAGE, { x: 50, y: 60 }, false, DEFAULT_STAR_PROFILE_SETTINGS, 0, request)
+		expect(images.views[KEY].starProfile?.status).toBe('measuring')
+		expect(measuredStar(images.views[KEY].starProfile)).toEqual(MEASURED)
+
+		calls[1].fail(new Error('unreachable'))
+		await second
+		expect(images.views[KEY].starProfile).toMatchObject({ status: 'failed', result: undefined })
+	})
+
+	test('the star of another image is not kept while measuring', async () => {
+		const images = state()
+		const { calls, request } = deferredFetch()
+		const first = inspectStar(images, KEY, IMAGE, POINT, false, DEFAULT_STAR_PROFILE_SETTINGS, 0, request)
+		calls[0].answer(MEASURED)
+		await first
+
+		const second = inspectStar(images, KEY, 'next frame', POINT, false, DEFAULT_STAR_PROFILE_SETTINGS, 0, request)
+		expect(images.views[KEY].starProfile?.result).toBeUndefined()
+		calls[1].answer(NO_STAR)
+		await second
+	})
+
 	test('a failed response keeps the message of the API', async () => {
 		const images = state()
 		const { calls, request } = deferredFetch()
-		const done = inspectStar(images, KEY, IMAGE, POINT, false, DEFAULT_STAR_PROFILE_SETTINGS, request)
+		const done = inspectStar(images, KEY, IMAGE, POINT, false, DEFAULT_STAR_PROFILE_SETTINGS, 0, request)
 		calls[0].answer({ error: 'Image not found', code: 'notFound' } as unknown as StarProfileResult, 404)
 		await done
 
@@ -148,12 +190,25 @@ describe('reinspectStar', () => {
 	test('measures the same point with new settings, keeping how the star was found', async () => {
 		const images = state()
 		const { calls, request } = deferredFetch()
-		const first = inspectStar(images, KEY, IMAGE, POINT, true, DEFAULT_STAR_PROFILE_SETTINGS, request)
+		const first = inspectStar(images, KEY, IMAGE, POINT, true, DEFAULT_STAR_PROFILE_SETTINGS, 0, request)
 		calls[0].answer(MEASURED)
 		await first
 
 		const again = reinspectStar(images, KEY, { ...DEFAULT_STAR_PROFILE_SETTINGS, model: 'moments', minSNR: 3 }, request)
 		expect(calls[1].body).toEqual({ x: 10.5, y: 20.5, detected: true, model: 'moments', searchRadius: 8, maximumRadius: 32, minSNR: 3 })
+		calls[1].answer(MEASURED)
+		await again
+	})
+
+	test('keeps the search radius its tap asked for', async () => {
+		const images = state()
+		const { calls, request } = deferredFetch()
+		const first = inspectStar(images, KEY, IMAGE, POINT, false, DEFAULT_STAR_PROFILE_SETTINGS, 40, request)
+		calls[0].answer(MEASURED)
+		await first
+
+		const again = reinspectStar(images, KEY, { ...DEFAULT_STAR_PROFILE_SETTINGS, searchRadius: 4 }, request)
+		expect(calls[1].body.searchRadius).toBe(40)
 		calls[1].answer(MEASURED)
 		await again
 	})
@@ -179,6 +234,15 @@ test('two settings ask for the same measurement unless a measured value differs'
 	expect(sameMeasurement(DEFAULT_STAR_PROFILE_SETTINGS, { ...DEFAULT_STAR_PROFILE_SETTINGS })).toBeTrue()
 	expect(sameMeasurement(DEFAULT_STAR_PROFILE_SETTINGS, { ...DEFAULT_STAR_PROFILE_SETTINGS, minSNR: 3 })).toBeFalse()
 	expect(sameMeasurement(DEFAULT_STAR_PROFILE_SETTINGS, { ...DEFAULT_STAR_PROFILE_SETTINGS, model: 'moments' })).toBeFalse()
+})
+
+test('a tap searches a fixed distance on screen, bounded in image pixels', () => {
+	expect(tapSearchRadius(1)).toBe(24)
+	expect(tapSearchRadius(4)).toBe(6)
+	expect(tapSearchRadius(0.54)).toBe(45)
+	expect(tapSearchRadius(0.01)).toBe(MAX_TAP_SEARCH_RADIUS)
+	expect(measurementOf(DEFAULT_STAR_PROFILE_SETTINGS, 3).searchRadius).toBe(8)
+	expect(measurementOf(DEFAULT_STAR_PROFILE_SETTINGS, 30).searchRadius).toBe(30)
 })
 
 test('the ellipse holds half of each FWHM axis, rotated in degrees', () => {

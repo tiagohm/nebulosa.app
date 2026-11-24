@@ -29,7 +29,7 @@ import { WcsOverlay } from '../platesolving/WcsOverlay'
 import { activeProfile, cameraFramesShown, imageAstrometrySettings, profileState, setCameraFramesShown, setLastImageDirectory, starProfileSettings } from '../profile/profile'
 import { EmptyState, useWorkspacePanel, WorkspaceLayout } from '../shell/WorkspaceLayout'
 import { StarOverlay } from '../stars/StarOverlay'
-import { inspectStar, starProfileOf } from '../stars/starprofile'
+import { inspectStar, starProfileOf, tapSearchRadius } from '../stars/starprofile'
 import { StarProfileOverlay } from '../stars/StarProfileOverlay'
 import { pickStar } from '../stars/stars'
 import { useStarResult } from '../stars/useStarResult'
@@ -358,7 +358,7 @@ export function ImagesWorkspace() {
 														if (!pixelAt(imageInfo, point)) return
 														const index = stars && pickStar(stars, point, STAR_PICK_RADIUS / overlay.scale, true)
 														const star = index === undefined ? undefined : stars?.stars[index]
-														void inspectStar(imagesState, document.key, imageInfo.id, star ? { x: star.x, y: star.y } : { x: point.x - 0.5, y: point.y - 0.5 }, !!star, profileSettings)
+														void inspectStar(imagesState, document.key, imageInfo.id, star ? { x: star.x, y: star.y } : { x: point.x - 0.5, y: point.y - 0.5 }, !!star, profileSettings, tapSearchRadius(overlay.scale))
 													}
 												: lines && document && tool === 'streak-detection'
 													? (point, overlay) => {

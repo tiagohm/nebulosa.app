@@ -22,7 +22,8 @@ It is a short, explicit interaction, so it runs only when the operator clicks a 
 
 ## Rules and Limitations
 
-- A measurement belongs to the image it measured, lives in tab memory only, and is never stored; a newer one supersedes it.
+- A measurement belongs to the image it measured, lives in tab memory only, and is never stored; a newer one supersedes it, the star shown staying until it answers.
+- A click searches at least a fixed distance on screen whatever the zoom, so the search radius setting is only a floor.
 - The delivered model may differ from the requested one: a rejected Moffat fit falls back to the moments.
 - Its HFD is not comparable with the HFD of Star Detection.
 - A star beside a much brighter neighbor may be ambiguous, a Moffat fit is often rejected on a faint star, saturation is unknown on a rescaled image, and a mosaic without a trusted pattern is measured as is.

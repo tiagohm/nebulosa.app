@@ -115,13 +115,15 @@ export interface ImageStarProfileState {
 	readonly imageId: string
 	// What was asked for.
 	readonly request: StarProfileRequest
+	// Least search radius the tap asked for, in image pixels; absent or 0 for none.
+	readonly tapRadius?: number
 	// Identity of the measurement among those of the tab; a later answer of any other is dropped.
 	readonly token: number
 	// Whether it runs, what it found, or that it failed.
 	status: 'measuring' | StarProfileResult['status'] | 'failed'
 	// Aborts it while it runs.
 	controller?: AbortController
-	// What the server answered.
+	// What the server answered; while it measures, the star it measured before on the same image, if any.
 	result?: StarProfileResult
 	// Why it failed.
 	error?: string

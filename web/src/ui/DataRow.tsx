@@ -30,13 +30,15 @@ export interface DataRowProps extends VariantProps<typeof value> {
 	readonly children: ReactNode
 	// Icon buttons acting on the value, shown after it; absent for a value with no action.
 	readonly actions?: ReactNode
+	// Tooltip of the row, such as how the value is measured; absent for a datum its label explains.
+	readonly title?: string
 }
 
 // Label and value of one datum.
-export function DataRow({ label, tone, children, actions }: DataRowProps) {
+export function DataRow({ label, tone, children, actions, title }: DataRowProps) {
 	if (!actions) {
 		return (
-			<div className="flex flex-wrap items-baseline justify-between gap-x-3 text-sm leading-5">
+			<div title={title} className="flex flex-wrap items-baseline justify-between gap-x-3 text-sm leading-5">
 				<span className="min-w-0 wrap-break-word text-ink-300">{label}</span>
 				<span className={value({ tone })}>{children}</span>
 			</div>
@@ -44,7 +46,7 @@ export function DataRow({ label, tone, children, actions }: DataRowProps) {
 	}
 
 	return (
-		<div className="flex flex-wrap items-center justify-between gap-x-3 text-sm leading-5">
+		<div title={title} className="flex flex-wrap items-center justify-between gap-x-3 text-sm leading-5">
 			<span className="min-w-0 wrap-break-word text-ink-300">{label}</span>
 			<span className="ml-auto flex max-w-full min-w-0 items-center gap-1">
 				<span className={value({ tone })}>{children}</span>

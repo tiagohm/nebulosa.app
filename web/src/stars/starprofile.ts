@@ -1,44 +1,70 @@
 import type { StarProfileMeasurement, StarProfilePreview, StarProfileRequest, StarProfileResult } from 'api'
 import { ref } from 'valtio'
 import { type ApiFetch, browserFetch, fetchJson, jsonInit } from '../http'
-import { clearStarProfile, type ImageStarProfileState, type ImagesState, message } from '../images/images'
+import { type ImageStarProfileState, type ImagesState, message } from '../images/images'
 import type { Point } from '../viewer/transform'
 import type { StarProfileMeasurementSettings } from './starprofile.settings'
 
 // Star Profile Inspector of a document: asks the server for the profile of the star near a point of its image and keeps
 // the latest answer in the view state of the document, in tab memory only. Nothing runs unless a person points at a star
 // or asks to measure it again. A newer measurement aborts the one before it, and an answer commits only while its token
-// is still the current one, since an abort may lose the race with a response. Showing another frame or closing the
-// document drops the state, so a measurement is never shown over an image it did not measure.
+// is still the current one, since an abort may lose the race with a response. While a measurement of the same image
+// runs, the star measured before it stays, so the panel never empties between two answers; a failure drops it. A tap
+// searches at least a fixed distance on screen whatever the zoom, so a finger finds a star on a phone at fit zoom.
+// Showing another frame or closing the document drops the state, so a measurement is never shown over an image it did
+// not measure.
+
+// Least distance a tap searches around it for a star, in CSS pixels on screen: about a fingertip.
+export const TAP_SEARCH_DISTANCE = 24
+
+// Most a tap widens the search, in image pixels, which bounds the region the server reads at a small zoom.
+export const MAX_TAP_SEARCH_RADIUS = 128
 
 // Token of the latest measurement started in the tab.
 let token = 0
 
-// Measures the star near a point of the image of a document, replacing what the document shows. detected says that a
-// star detection already found a star at the point. Ignored for an unknown key.
-export function inspectStar(state: ImagesState, key: string, imageId: string, point: Point, detected: boolean, settings: StarProfileMeasurementSettings, request: ApiFetch = browserFetch) {
-	const { model, searchRadius, maximumRadius, minSNR } = settings
-	const body: StarProfileRequest = { x: point.x, y: point.y, ...(detected && { detected }), model, searchRadius, maximumRadius, minSNR }
-	return measure(state, key, imageId, body, request)
+// Returns the search radius a tap asks for at a zoom, in whole image pixels, as the region the server reads is: at least
+// TAP_SEARCH_DISTANCE on screen, at most MAX_TAP_SEARCH_RADIUS. scale is the zoom of the viewer, in screen pixels per
+// image pixel, greater than 0.
+export function tapSearchRadius(scale: number) {
+	return Math.min(Math.ceil(TAP_SEARCH_DISTANCE / scale), MAX_TAP_SEARCH_RADIUS)
 }
 
-// Measures again the star of a document with new settings, from the same point. Ignored without one.
+// Returns what a measurement asks for with the settings, its search radius widened to at least tapRadius, in image
+// pixels.
+export function measurementOf({ model, searchRadius, maximumRadius, minSNR }: StarProfileMeasurementSettings, tapRadius = 0): StarProfileMeasurementSettings {
+	return { model, searchRadius: Math.max(searchRadius, tapRadius), maximumRadius, minSNR }
+}
+
+// Measures the star near a point of the image of a document, replacing what the document shows. detected says that a
+// star detection already found a star at the point; tapRadius, in image pixels, is the least search radius the tap
+// asks for (tapSearchRadius), 0 for none. Ignored for an unknown key.
+export function inspectStar(state: ImagesState, key: string, imageId: string, point: Point, detected: boolean, settings: StarProfileMeasurementSettings, tapRadius: number, request: ApiFetch = browserFetch) {
+	const body: StarProfileRequest = { x: point.x, y: point.y, ...(detected && { detected }), ...measurementOf(settings, tapRadius) }
+	return measure(state, key, imageId, body, tapRadius, request)
+}
+
+// Measures again the star of a document with new settings, from the same point and with the search its tap asked for.
+// Ignored without one.
 export function reinspectStar(state: ImagesState, key: string, settings: StarProfileMeasurementSettings, request: ApiFetch = browserFetch) {
 	const current = state.views[key]?.starProfile
 	if (!current) return Promise.resolve()
-	const { model, searchRadius, maximumRadius, minSNR } = settings
-	return measure(state, key, current.imageId, { ...current.request, model, searchRadius, maximumRadius, minSNR }, request)
+	const tapRadius = current.tapRadius ?? 0
+	return measure(state, key, current.imageId, { ...current.request, ...measurementOf(settings, tapRadius) }, tapRadius, request)
 }
 
-// Runs a measurement and commits its answer while it is still the one the document waits for.
-async function measure(state: ImagesState, key: string, imageId: string, body: StarProfileRequest, request: ApiFetch) {
+// Runs a measurement and commits its answer while it is still the one the document waits for, keeping the star the
+// document measured on the same image until then.
+async function measure(state: ImagesState, key: string, imageId: string, body: StarProfileRequest, tapRadius: number, request: ApiFetch) {
 	const view = state.views[key]
 	if (!view) return
 
-	clearStarProfile(view)
+	const previous = view.starProfile
+	previous?.controller?.abort()
+	const kept = previous?.imageId === imageId ? measuredStar(previous) : undefined
 	const current = ++token
 	const controller = new AbortController()
-	view.starProfile = { imageId, request: body, token: current, status: 'measuring', controller: ref(controller) }
+	view.starProfile = { imageId, request: body, tapRadius, token: current, status: 'measuring', controller: ref(controller), ...(kept && { result: ref(kept) }) }
 
 	// Returns the state of this measurement, unless another one took its place.
 	const latest = () => {
@@ -57,6 +83,7 @@ async function measure(state: ImagesState, key: string, imageId: string, body: S
 		const profile = latest()
 		if (!profile) return
 		profile.status = 'failed'
+		profile.result = undefined
 		profile.error = message(error)
 		profile.controller = undefined
 	}

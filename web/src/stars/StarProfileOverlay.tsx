@@ -3,10 +3,10 @@ import type { OverlayView } from '../viewer/transform'
 import { measuredStar, profileEllipse } from './starprofile'
 import type { StarProfileSettings } from './starprofile.settings'
 
-// Marker of the Star Profile Inspector over the shared image viewer: the point asked about until a star answers, then
-// the cross at its centroid, its half-flux circle, and the ellipse of its FWHM axes. It is a pure function of the state
-// and draws in image pixel coordinates, so the viewer's zoom and pan move it; the caller shows it only over the image
-// the state measured.
+// Marker of the Star Profile Inspector over the shared image viewer: the point asked about while it measures or when no
+// star answers, then the cross at its centroid, its half-flux circle, and the ellipse of its FWHM axes. It is a pure
+// function of the state and draws in image pixel coordinates, so the viewer's zoom and pan move it; the caller shows it
+// only over the image the state measured.
 
 // Half the length of the arms of the cross, in screen pixels.
 const CROSS_SIZE = 8
@@ -25,7 +25,7 @@ interface StarProfileOverlayProps {
 
 // Marker of a measurement.
 export function StarProfileOverlay({ state, view, settings }: StarProfileOverlayProps) {
-	const measured = measuredStar(state)
+	const measured = state.status === 'measuring' ? undefined : measuredStar(state)
 
 	if (!measured) {
 		const { x, y } = state.request

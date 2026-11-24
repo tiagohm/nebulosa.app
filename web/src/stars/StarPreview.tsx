@@ -4,8 +4,10 @@ import { previewPixels, profileEllipse } from './starprofile'
 import type { StarProfileSettings } from './starprofile.settings'
 
 // Preview of a measured star: the samples the server measured around it, never the stretched rendering of the image,
-// one square per pixel from the sky at black to its peak at white, whatever its display settings, with the pixel grid,
-// its centroid, its half-flux circle, and the ellipse of its FWHM axes drawn over them. It fills the width of its panel.
+// one square per pixel from the sky at black to its peak at a dimmed white, whatever its display settings, so it never
+// is the brightest thing of a screen used in the dark, with the pixel grid, its centroid, its half-flux circle, and the
+// ellipse of its FWHM axes drawn over them in the color of its marker on the image: success for a valid measurement,
+// danger for an invalid one. It fills the width of its panel.
 
 interface StarPreviewProps {
 	// Measured star.
@@ -31,7 +33,7 @@ export function StarPreview({ star, settings }: StarPreviewProps) {
 
 	return (
 		<div className="relative overflow-hidden rounded-md border border-line-100 bg-black">
-			<canvas ref={canvas} width={width} height={height} className="block h-auto w-full [image-rendering:pixelated]" />
+			<canvas ref={canvas} width={width} height={height} className="block h-auto w-full brightness-80 [image-rendering:pixelated]" />
 			<svg viewBox={`0 0 ${width} ${height}`} className="absolute inset-0 size-full">
 				<title>{`${width} × ${height} pixels around the star`}</title>
 				{settings.grid && (
@@ -44,7 +46,7 @@ export function StarPreview({ star, settings }: StarPreviewProps) {
 						))}
 					</g>
 				)}
-				<g fill="none" stroke="var(--color-accent)" strokeWidth={1.5}>
+				<g fill="none" stroke={profile.valid ? 'var(--color-success)' : 'var(--color-danger)'} strokeWidth={1.5}>
 					<line x1={cx - 1.5} x2={cx + 1.5} y1={cy} y2={cy} vectorEffect="non-scaling-stroke" />
 					<line x1={cx} x2={cx} y1={cy - 1.5} y2={cy + 1.5} vectorEffect="non-scaling-stroke" />
 					{settings.halfFlux && profile.hfd !== undefined && <circle cx={cx} cy={cy} r={profile.hfd / 2} strokeDasharray="3 3" vectorEffect="non-scaling-stroke" />}

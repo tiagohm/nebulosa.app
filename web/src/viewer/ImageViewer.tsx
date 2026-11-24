@@ -1,5 +1,6 @@
 import { cn } from 'cn'
 import { type KeyboardEvent, type MouseEvent, type PointerEvent, type ReactNode, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { MISSING } from '../format'
 import { IconButton } from '../ui/IconButton'
 import { type GestureEvent, type GestureState, IDLE_GESTURE, isPanning, routeGesture, type ViewerInteraction } from './interaction'
 import { centered, FIT_VIEW, manualView, type OverlayView, panBy, type Point, pixelAt, type Size, toImage, type ViewerView, type ViewTransform, viewTransform, visibleRegion, ZOOM_STEP, zoomAt } from './transform'
@@ -61,8 +62,11 @@ export interface ImageViewerProps {
 	// point, its client position in CSS pixels, and the current view; returns whether it was handled, which keeps the
 	// browser's own menu from opening.
 	readonly onImageContextMenu?: (point: Point, client: Point, view: OverlayView) => boolean
-	// Extra status line content after the pixel under the pointer, given the cursor (absent off the viewport).
+	// Extra status line content after the pixel under the pointer, given the cursor (absent off the viewport); values in
+	// the line's tone, their labels in StatusLabel.
 	readonly status?: (cursor?: ViewerCursor) => ReactNode
+	// State of the subject that leads the status line whatever the pointer does, such as which frame a camera tab shows.
+	readonly caption?: ReactNode
 	// Extra toolbar controls, after the view controls.
 	readonly toolbar?: ReactNode
 }
@@ -77,7 +81,7 @@ const WHEEL_ZOOM_RATE = 0.0015
 const CLICK_TOLERANCE = 4
 
 // Image viewer.
-export function ImageViewer({ image, loading = false, error, empty, view, onViewChange, overlays, onImageClick, interaction, onImageContextMenu, status, toolbar }: ImageViewerProps) {
+export function ImageViewer({ image, loading = false, error, empty, view, onViewChange, overlays, onImageClick, interaction, onImageContextMenu, status, caption, toolbar }: ImageViewerProps) {
 	const viewportRef = useRef<HTMLDivElement>(null)
 	const [viewport, setViewport] = useState<Size>({ width: 0, height: 0 })
 	// Pointer position over the viewport, in viewport pixels; the pixel under it follows zoom and pan.
@@ -343,18 +347,22 @@ export function ImageViewer({ image, loading = false, error, empty, view, onView
 				)}
 				{!image && <div className="absolute inset-0">{error ? <ViewerMessage tone="error">{error}</ViewerMessage> : loading ? <ViewerMessage>Loading image…</ViewerMessage> : empty}</div>}
 			</div>
-			<div className="flex h-6 flex-none items-center gap-4 overflow-hidden border-t border-line-100 bg-base-100 px-3 text-xs leading-4 whitespace-nowrap text-ink-300 tabular-nums">
+			<div className="flex h-6 flex-none items-center gap-4 overflow-hidden border-t border-line-100 bg-base-100 px-3 text-xs leading-4 whitespace-nowrap text-ink-100 tabular-nums">
+				{caption}
 				{image ? (
 					<>
-						<span>
-							{width} × {height}
+						{/* The size never changes, so a phone leaves it out for the readings under the pointer. */}
+						<span className="max-sm:hidden">
+							{width} × {height} <StatusLabel>px</StatusLabel>
 						</span>
 						<span>{formatZoom(transform.scale)}</span>
-						<span>{pixel ? `x ${pixel.x}  y ${pixel.y}` : 'x –  y –'}</span>
+						<span>
+							<StatusLabel>x</StatusLabel> {pixel ? pixel.x : MISSING} <StatusLabel>y</StatusLabel> {pixel ? pixel.y : MISSING}
+						</span>
 						{status?.(viewerCursor)}
 					</>
 				) : (
-					<span>No image</span>
+					<span className="text-ink-300">{loading ? 'Loading…' : 'No image'}</span>
 				)}
 				{loading && image && <span className="text-accent">Rendering…</span>}
 				{error && image && <span className="truncate text-danger">{error}</span>}
@@ -376,6 +384,11 @@ function pinchSpan(pointers: ReadonlyMap<number, Point>): PinchSpan | undefined 
 	const [a, b] = pointers.values()
 	if (!a || !b) return undefined
 	return { distance: Math.hypot(a.x - b.x, a.y - b.y), center: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 } }
+}
+
+// Label of a value of the status line, in the muted tone, so the values read first.
+export function StatusLabel({ children }: { readonly children: ReactNode }) {
+	return <span className="text-ink-300">{children}</span>
 }
 
 // Returns a zoom scale as a percentage with up to one decimal.

@@ -2,7 +2,27 @@ import { expect, test } from 'bun:test'
 import type { CameraCapabilities, CaptureFrame, CaptureRequest, CaptureSession } from 'api'
 import { proxy } from 'valtio'
 import { DEFAULT_ACQUISITION_SETTINGS, DEFAULT_DITHER_SETTINGS, DEFAULT_EXPOSURE_SETTINGS, DEFAULT_GUIDING_SETTINGS, DEFAULT_MOUNT_DITHER_SETTINGS } from '../profile/schema'
-import { cameraKey, captureCount, captureDither, type CaptureDitherInput, captureElapsed, captureRemaining, captureRequest, fitExposure, frameProgress, type CaptureRuntime, captureRunning, captureSnoop, captureStatus, fileState, handleCaptureEvent, refreshCaptures, startCapture, stopCapture } from './capture'
+import {
+	cameraKey,
+	captureCount,
+	captureDither,
+	captureFrames,
+	type CaptureDitherInput,
+	captureElapsed,
+	captureRemaining,
+	captureRequest,
+	fitExposure,
+	frameProgress,
+	type CaptureRuntime,
+	captureRunning,
+	captureSnoop,
+	captureStatus,
+	fileState,
+	handleCaptureEvent,
+	refreshCaptures,
+	startCapture,
+	stopCapture,
+} from './capture'
 import { convertExposure, exposureUnitOf, fromSeconds, toSeconds } from './ExposureTimeInput'
 
 function newState() {
@@ -158,6 +178,8 @@ test('describes the state of a capture', () => {
 	expect(captureStatus(session({ phase: 'stopped', stopping: true }))).toBe('Stopped')
 	expect(captureCount(session({ captured: 12, count: 30 }))).toBe('Captured 12 / 30')
 	expect(captureCount(session({ captured: 152, count: undefined }))).toBe('Captured 152')
+	expect(captureFrames(session({ captured: 12, count: 30 }))).toBe('12 / 30')
+	expect(captureFrames(session({ captured: 152, count: undefined }))).toBe('152')
 	expect(captureElapsed(session({ startedAt: 1000, endedAt: 4500 }), 9999)).toBe(3.5)
 	expect(captureRunning(session({ phase: 'waiting' }))).toBeTrue()
 	expect(captureRunning(session({ phase: 'stopped' }))).toBeFalse()

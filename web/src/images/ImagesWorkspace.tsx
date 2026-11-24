@@ -7,7 +7,7 @@ import { annotationMatchesWcs, annotationPlateSolveJobId } from '../annotations/
 import { mergeProjections, pickAnnotation, projectAnnotations } from '../annotations/geometry'
 import { useAnnotationResult } from '../annotations/useAnnotationResult'
 import { AUTO_FOCUS_STATE_LABELS, autoFocusRunning, autoFocusRuntime } from '../camera/autofocus'
-import { cameraKey, captureCount, captureRuntime, captureRunning, captureStatus, FILE_STATE_LABELS, fileState } from '../camera/capture'
+import { cameraKey, captureFrames, captureRuntime, captureRunning, captureStatus, FILE_STATE_LABELS, fileState } from '../camera/capture'
 import { DarvOverlay, useDarvOverlay } from '../camera/DarvOverlay'
 import { FocusCurve } from '../camera/FocusCurve'
 import { GUIDING_STATE_LABELS, guidingRuntime, selectGuidingTarget } from '../camera/guiding'
@@ -324,6 +324,7 @@ export function ImagesWorkspace() {
 									)
 								: undefined
 						}
+						caption={document?.camera && <CameraSelectionCaption document={document} />}
 						status={
 							solution || (inspectPixels && imageInfo)
 								? (cursor) => (
@@ -617,28 +618,36 @@ interface CameraControlsProps {
 // Labels of the selections of a camera tab, as its toolbar shows them.
 const SELECTION_LABELS: Readonly<Record<NonNullable<ImageDocument['camera']>['selection']['kind'], string>> = { latest: 'Latest', saved: 'Saved frame', inspect: 'Held for analysis', liveStack: 'Live stack' }
 
-// Frame a camera tab shows, its Hold for Analysis or Return to Latest (CameraFrameButton), and the toggle of the central
-// reticle (for Mount Nudge or framing). None commands the camera: they only change which frame the tab shows and how.
+// Hold for Analysis or Return to Latest of a camera tab (CameraFrameButton), and the toggle of the central reticle (for
+// Mount Nudge or framing). Neither commands the camera: they only change which frame the tab shows and how.
 function CameraControls({ document, reticle }: CameraControlsProps) {
+	if (!document.camera) return null
+
+	return (
+		<>
+			<span className="h-5 w-px bg-line-100" />
+			<CameraFrameButton document={document} />
+			<ToggleButton toggle={reticle} />
+		</>
+	)
+}
+
+// Which frame a camera tab shows, in words, leading the viewer's status line: the latest frame (of an earlier server run
+// when that is all there is), a saved frame, a frame held for analysis, or a live stack with its frame count; the
+// danger tone, with the reason as its tooltip, when the frame could not be shown.
+function CameraSelectionCaption({ document }: { readonly document: ImageDocument }) {
 	const frames = useSnapshot(captureFramesState)
 	const camera = document.camera
 	if (!camera || document.source.kind !== 'camera') return null
 
 	const source = frames.sources[frameSourceKey(document.source.connectionId, document.source.deviceId)]
-	const following = camera.selection.kind === 'latest'
-	const restored = following && source?.latestRestored && !!camera.shown
+	const restored = camera.selection.kind === 'latest' && source?.latestRestored && !!camera.shown
 
 	return (
-		<>
-			<span className="h-5 w-px bg-line-100" />
-			<span title={camera.error} className={cn('px-1 text-xs', camera.error ? 'text-danger' : following ? 'text-success' : 'text-accent')}>
-				{restored ? 'Latest saved' : SELECTION_LABELS[camera.selection.kind]}
-				{camera.live && ` · ${camera.live.revision} frames`}
-			</span>
-			<CameraFrameButton document={document} />
-			<ToggleButton toggle={reticle} />
-			<CaptureStatus connectionId={document.source.connectionId} deviceId={document.source.deviceId} />
-		</>
+		<span title={camera.error} className={camera.error ? 'text-danger' : undefined}>
+			{restored ? 'Latest saved' : SELECTION_LABELS[camera.selection.kind]}
+			{camera.live && ` · ${camera.live.revision} frames`}
+		</span>
 	)
 }
 
@@ -655,18 +664,19 @@ function CameraFrameButton({ document }: { readonly document: ImageDocument }) {
 	)
 }
 
-interface CaptureStatusProps {
+interface CaptureReadoutProps {
 	// Id of the connection that provides the camera.
 	readonly connectionId: string
 	// Exact id of the camera.
 	readonly deviceId: string
 }
 
-// Compact state of the capture of a camera tab's camera, whatever tool is selected: what it does (with the time left
-// of an exposure or delay), its frame count, and the file state of its latest frame while it runs, or that it was
-// aborted or why it failed; only a failure is in the danger colour, since an abort is the operator's own command.
+// State of the capture of a camera tab's camera, whatever tool or frame is shown, heading its bottom area so it reads
+// from across the room: the frames captured in the Readout style, then what the capture does (with the time of an
+// exposure or delay) and the file state of its latest frame while it runs, or that it was aborted or why it failed,
+// wrapping rather than cut. Only a failure is in the danger colour, since an abort is the operator's own command.
 // Nothing is shown for a camera that never captured or whose capture ended normally.
-function CaptureStatus({ connectionId, deviceId }: CaptureStatusProps) {
+function CaptureReadout({ connectionId, deviceId }: CaptureReadoutProps) {
 	const runtime = useSnapshot(captureRuntime)
 	const key = cameraKey(connectionId, deviceId)
 	const session = runtime.sessions[key]
@@ -678,17 +688,16 @@ function CaptureStatus({ connectionId, deviceId }: CaptureStatusProps) {
 
 	const frame = runtime.frames[key]
 	const file = running && frame?.sessionId === session.sessionId && frame.file ? FILE_STATE_LABELS[fileState(frame)] : undefined
-	const status = captureStatus(session)
 
 	return (
-		<>
-			<span className="h-5 w-px bg-line-100" />
-			<span title={status} className={cn('max-w-72 truncate px-1 text-xs tabular-nums', failed ? 'text-danger' : 'text-ink-100')}>
-				{status}
-				{running && ` · ${captureCount(session)}`}
+		<div className="flex flex-wrap items-baseline gap-x-3 px-3 pt-1.5">
+			<span className="text-xs font-medium tracking-[0.08em] text-ink-300 uppercase">Captured</span>
+			<span className="text-3xl leading-9 font-semibold tracking-[-0.01em] text-ink-100 tabular-nums">{captureFrames(session)}</span>
+			<span className={cn('min-w-0 text-sm leading-5 tabular-nums', failed ? 'text-danger' : 'text-ink-200')}>
+				{captureStatus(session)}
 				{file && ` · ${file}`}
 			</span>
-		</>
+		</div>
 	)
 }
 
@@ -745,6 +754,7 @@ function CameraBottom({ document, expanded, onToggle }: CameraBottomProps) {
 
 	return (
 		<div className="flex-none border-t border-line-100 bg-base-100">
+			<CaptureReadout connectionId={source.connectionId} deviceId={source.deviceId} />
 			<div className="flex min-h-8 items-center gap-3 pr-3 pl-1 font-mono text-xs tracking-wide text-ink-300 uppercase">
 				<button
 					type="button"

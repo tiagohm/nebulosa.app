@@ -22,7 +22,7 @@ import { SegmentedControl } from '../ui/SegmentedControl'
 import { Select } from '../ui/Select'
 import { TextInput } from '../ui/TextInput'
 import { useNow } from '../useNow'
-import { abortCapture, cameraKey, captureElapsed, captureRemaining, captureRequest, captureRuntime, captureRunning, captureStatus, FILE_STATE_LABELS, fileState, resumeCapture, startCapture, stopCapture } from './capture'
+import { abortCapture, cameraKey, captureElapsed, captureFrames, captureRemaining, captureRequest, captureRuntime, captureRunning, captureStatus, FILE_STATE_LABELS, fileState, resumeCapture, startCapture, stopCapture } from './capture'
 import { type DitherDevices, DitheringSection, useCaptureDither } from './DitheringSection'
 import { CameraSettings, ExposureSection } from './ExposureSettings'
 
@@ -271,7 +271,7 @@ function CaptureState({ session }: CaptureStateProps) {
 	const progress = session.phase === 'exposing' ? session.exposure?.progress : session.phase === 'waiting' ? session.delay?.progress : undefined
 	const { dither } = session
 	const status = captureStatus(session)
-	const frames = session.count === undefined ? String(session.captured) : `${session.captured} / ${session.count}`
+	const frames = captureFrames(session)
 	const remaining = captureRemaining(session)
 
 	return (

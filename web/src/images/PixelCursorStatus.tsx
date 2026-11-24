@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { useSnapshot } from 'valtio'
 import { formatSampleValue, MISSING } from '../format'
-import type { ViewerCursor } from '../viewer/ImageViewer'
+import { StatusLabel, type ViewerCursor } from '../viewer/ImageViewer'
 import type { Size } from '../viewer/transform'
 import { type PixelReading, pixelTiles, readPixel, type SampleTileCache } from './pixeltiles'
 
@@ -24,10 +24,20 @@ export interface PixelCursorStatusProps {
 	readonly cache?: SampleTileCache
 }
 
+// Returns the labelled values of a reading: R, G, and B of an RGB pixel, the CFA phase of a photosite, or Value; the
+// value missing without a reading.
+export function pixelReadingParts(reading?: PixelReading): readonly (readonly [label: string, value: string])[] {
+	if (!reading) return [['Value', MISSING]]
+	const { values, phase } = reading
+	if (values.length === 3) return values.map((value, i) => [RGB_LABELS[i], formatSampleValue(value)] as const)
+	return [[phase ?? 'Value', formatSampleValue(values[0])]]
+}
+
 // Returns the text of a reading.
-export function formatPixelReading({ values, phase }: PixelReading): string {
-	if (values.length === 3) return values.map((value, i) => `${RGB_LABELS[i]} ${formatSampleValue(value)}`).join('  ')
-	return phase ? `${phase} ${formatSampleValue(values[0])}` : `Value ${formatSampleValue(values[0])}`
+export function formatPixelReading(reading: PixelReading): string {
+	return pixelReadingParts(reading)
+		.map(([label, value]) => `${label} ${value}`)
+		.join('  ')
 }
 
 // Samples of the pixel under the pointer.
@@ -44,5 +54,13 @@ export function PixelCursorStatus({ imageId, image, cursor, cache = pixelTiles }
 	const tile = x !== undefined && y !== undefined ? cache.get(imageId, x, y, image) : undefined
 	const reading = tile && x !== undefined && y !== undefined ? readPixel(tile, x, y) : undefined
 	// A photosite of a mosaic is its own native sample, whatever color the debayered preview shows there.
-	return <span title={reading?.phase ? 'Native sample of the photosite, not the debayered color shown' : undefined}>{reading ? formatPixelReading(reading) : `Value ${MISSING}`}</span>
+	return (
+		<span title={reading?.phase ? 'Native sample of the photosite, not the debayered color shown' : undefined} className="flex gap-2">
+			{pixelReadingParts(reading).map(([label, value]) => (
+				<span key={label}>
+					<StatusLabel>{label}</StatusLabel> {value}
+				</span>
+			))}
+		</span>
+	)
 }

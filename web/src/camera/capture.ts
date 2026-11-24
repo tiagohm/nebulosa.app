@@ -299,9 +299,14 @@ export function captureRemaining(session: Pick<CaptureSession, 'phase' | 'count'
 	return Math.max(0, frames * exposureTime + Math.max(0, frames - 1) * delay - exposing + waiting)
 }
 
-// Returns the frame count of a session: taken out of requested, or taken so far for a loop.
+// Returns the frames of a session as a bare count: taken out of requested ("12 / 30"), or taken so far for a loop ("152").
+export function captureFrames(session: Pick<CaptureSession, 'captured' | 'count'>): string {
+	return session.count === undefined ? String(session.captured) : `${session.captured} / ${session.count}`
+}
+
+// Returns the frame count of a session as a phrase: taken out of requested, or taken so far for a loop.
 export function captureCount(session: Pick<CaptureSession, 'captured' | 'count'>): string {
-	return session.count === undefined ? `Captured ${session.captured}` : `Captured ${session.captured} / ${session.count}`
+	return `Captured ${captureFrames(session)}`
 }
 
 // State of a frame's file: not-saved for a frame that is only previewed, otherwise its CaptureFileState.

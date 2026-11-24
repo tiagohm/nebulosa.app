@@ -253,7 +253,7 @@ The root font is 14 px, so every rem-based size is a multiple of 14 px (Tailwind
 
 ### Hierarchy
 
-- **Readout** (600, 26.25 px, 31.5 px line, −0.01em, tabular figures): the one live reading of a tool meant to be read from across the room or on a phone at arm's length, such as the time to the meridian transit of the Meridian Flip tool. At most one per screen, in Starlight Cream, never Ember.
+- **Readout** (600, 26.25 px, 31.5 px line, −0.01em, tabular figures): the one live reading of a tool meant to be read from across the room or on a phone at arm's length, such as the time to the meridian transit of the Meridian Flip tool, or the frames captured by a camera tab's camera, which heads its bottom area. At most one in a tool's content and one in a camera tab, in Starlight Cream, never Ember.
 - **Headline** (600, 17.5 px, 24.5 px line, −0.01em): modal titles only.
 - **Wordmark** (600, 15.75 px, 28 px line): the "Nebulosa" name beside the logo in the top bar, hidden on phones.
 - **Title** (600, 12.25 px, 17.5 px line): workspace and tool titles in the header, tool card names, page titles.

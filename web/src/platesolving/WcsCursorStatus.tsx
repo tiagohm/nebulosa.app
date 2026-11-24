@@ -1,6 +1,6 @@
 import type { PlateSolution } from 'nebulosa/src/astrometry/solvers/platesolver'
 import { MISSING } from '../format'
-import type { ViewerCursor } from '../viewer/ImageViewer'
+import { StatusLabel, type ViewerCursor } from '../viewer/ImageViewer'
 import { type CoordinateStyle, formatDeclinationAs, formatPixelScale, formatRightAscensionAs } from './coordinates'
 import { pixelScaleAt, skyAt, wcsFrame } from './wcs'
 
@@ -25,9 +25,13 @@ export function WcsCursorStatus({ solution, cursor, style }: WcsCursorStatusProp
 
 	return (
 		<>
-			<span>RA {sky ? formatRightAscensionAs(sky[0], style) : MISSING}</span>
-			<span>Dec {sky ? formatDeclinationAs(sky[1], style) : MISSING}</span>
-			<span className="max-sm:hidden">{wcsFrame(solution)}</span>
+			<span>
+				<StatusLabel>RA</StatusLabel> {sky ? formatRightAscensionAs(sky[0], style) : MISSING}
+			</span>
+			<span>
+				<StatusLabel>Dec</StatusLabel> {sky ? formatDeclinationAs(sky[1], style) : MISSING}
+			</span>
+			<span className="text-ink-300 max-sm:hidden">{wcsFrame(solution)}</span>
 			<span className="max-md:hidden">{scale ? formatPixelScale(scale) : MISSING}</span>
 		</>
 	)

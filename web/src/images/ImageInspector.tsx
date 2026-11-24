@@ -10,7 +10,6 @@ import { formatDuration, formatFixed, formatTemperature, MISSING, formatZonedDat
 import { useActiveTimeZone } from '../location/useLocation'
 import { CollapsibleSection } from '../shell/CollapsibleSection'
 import { EmptyState } from '../shell/WorkspaceLayout'
-import { Button } from '../ui/Button'
 import { DataRow } from '../ui/DataRow'
 import { Notice } from '../ui/Notice'
 import type { CameraFrameSelection } from './cameratabs'
@@ -45,20 +44,9 @@ const ACQUISITION_FIELDS: readonly (readonly [label: string, format: (acquisitio
 ]
 
 // Inspector of the active image document.
-export function ImageInspector({ document, view, onOpen }: ImageToolPanelProps) {
-	if (!document) {
-		return (
-			<EmptyState
-				title="Nothing to inspect"
-				description="Open an image to see its quality, properties, and statistics."
-				action={
-					<Button variant="secondary" onClick={onOpen}>
-						Open Image
-					</Button>
-				}
-			/>
-		)
-	}
+export function ImageInspector({ document, view }: ImageToolPanelProps) {
+	// The viewer beside it holds the way to open an image, so the panel only says what it will show.
+	if (!document) return <EmptyState title="Nothing to inspect" description="Open an image to see its quality, properties, and statistics." />
 
 	const { info } = document
 	const path = documentPath(document)

@@ -169,7 +169,7 @@ function FrameCard({ card, selected, focusable, loading, error, restored, newer,
 			</span>
 			<span className="flex items-baseline justify-between gap-1 text-ink-300">
 				<span>{frame ? timeOf(frame.time, displayZone.zone) : MISSING}</span>
-				{frame?.acquisition?.exposure !== undefined && <span>{frame.acquisition.exposure}s</span>}
+				{frame?.acquisition?.exposure !== undefined && <span>{formatExposureTime(frame.acquisition.exposure)}</span>}
 			</span>
 			<span className="flex h-4 items-center gap-1">
 				<span className={cn('min-w-0 flex-1 truncate', error || unavailable ? 'text-danger' : 'text-ink-100')}>{state}</span>

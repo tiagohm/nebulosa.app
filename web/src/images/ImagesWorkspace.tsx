@@ -254,7 +254,7 @@ export function ImagesWorkspace() {
 	}, [selectingArea, panelState.docked, panelState.open, setPanelOpen])
 
 	const toolBar = <ImageToolBar tools={imageToolsFor(document)} selected={tool} disabled={!document} onSelect={pickTool} />
-	const openButton = <IconButton icon="folder" onClick={() => setChoosing(true)} label="Open file" />
+	const openButton = <IconButton icon="folder" onClick={() => setChoosing(true)} label="Open Image" />
 	const waiting = document?.camera && !document.info
 
 	// Selects a tool of the active document; picking the selected tool opens its panel again.
@@ -379,9 +379,25 @@ export function ImagesWorkspace() {
 						}
 						empty={
 							waiting ? (
-								<EmptyState title="No captured image available" description="Take a frame with Camera Acquisition: the next frame of this camera appears here." />
+								<EmptyState
+									title="No captured image available"
+									description="Take a frame with Camera Acquisition: the next frame of this camera appears here."
+									action={
+										<Button variant="secondary" onClick={() => pickTool('camera-acquisition')}>
+											Open Acquisition
+										</Button>
+									}
+								/>
 							) : (
-								<EmptyState title="No image open" description="Open a FITS or XISF image from the server, or connect a camera to follow its frames." action={openButton} />
+								<EmptyState
+									title="No image open"
+									description="Open a FITS or XISF image from the server, or connect a camera to follow its frames."
+									action={
+										<Button variant="secondary" onClick={() => setChoosing(true)}>
+											Open Image
+										</Button>
+									}
+								/>
 							)
 						}
 					/>

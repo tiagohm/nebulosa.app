@@ -125,7 +125,7 @@ components:
         backgroundColor: 'transparent'
         textColor: '{colors.ink-200}'
         rounded: '{rounded.sm}'
-        size: '28px'
+        size: '33.25px'
     icon-button-pressed:
         backgroundColor: '{colors.accent-subtle}'
         textColor: '{colors.accent}'
@@ -314,7 +314,7 @@ Quiet and exact: controls step back so readings lead.
 
 ### Icon Buttons
 
-28 px square, 6 px corners, a 17.5 px line icon in Moonlight. Hover fills Horizon Haze and turns the icon Starlight Cream; pressed (a toggle) is Ember Wash with an Ember Clay icon. The label is the tooltip and visually hidden text.
+33.25 px square, the height of a field, 6 px corners, a 17.5 px line icon in Moonlight. Hover fills Horizon Haze and turns the icon Starlight Cream; pressed (a toggle) is Ember Wash with an Ember Clay icon. The label is the tooltip, with why while the button is disabled.
 
 ### Inputs / Fields
 

@@ -1,6 +1,6 @@
 import type { ImageInfo, SaveFormat } from 'api'
 import { cn } from 'cn'
-import { type KeyboardEvent, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, type KeyboardEvent, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { AnnotationOverlay, shownAnnotations } from '../annotations/AnnotationOverlay'
 import { annotationMatchesWcs, annotationPlateSolveJobId } from '../annotations/annotations'
@@ -440,17 +440,18 @@ interface OriginalToggleProps {
 	readonly info?: ImageInfo
 }
 
-// Show Original toggle of the viewer toolbar, with the name of what the original shows while it is on. It is offered
-// only while the original differs from the applied rendering (differsFromOriginal), or while it is shown.
+// Show Original toggle of the viewer toolbar, with the name of what the original shows while it is on. It is always in
+// its place, and disabled, saying why, while the original looks like the applied rendering (differsFromOriginal).
 function OriginalToggle({ documentKey, view, info }: OriginalToggleProps) {
 	const on = view.display.showOriginal
 	const { applied } = view.display
-	if (!on && !(info && applied && differsFromOriginal(info, applied))) return null
+	const offered = on || (!!info && !!applied && differsFromOriginal(info, applied))
 	const mosaic = !!info && isMosaic(info)
+	const label = on ? 'Show adjusted' : offered ? 'Show original' : 'Show original (the display settings leave the image as it is)'
 
 	return (
 		<>
-			<IconButton icon="original" label={on ? 'Show adjusted' : 'Show original'} pressed={on} disabled={!view.rendering || view.renderPending} onClick={() => void toggleOriginal(imagesState, documentKey)} />
+			<IconButton icon="original" label={label} pressed={on} disabled={!offered || !view.rendering || view.renderPending} onClick={() => void toggleOriginal(imagesState, documentKey)} />
 			{on && <span className="px-1 text-xs text-ink-200 max-sm:hidden">{mosaic ? 'Raw CFA / Mosaic' : 'Original'}</span>}
 		</>
 	)
@@ -503,19 +504,37 @@ interface ViewerToolbarProps {
 // controls, Save, the measure mode, and the frame controls of a camera tab. On a phone they keep one row: the display
 // controls are one Display popup, and Full Screen, Inspect Pixels, the reticle, and the measure mode a More menu.
 function ViewerToolbar({ document, view, narrow, fullscreen, overlays, inspectPixels, reticle, onToggleReticle, measure, onSaveToServer }: ViewerToolbarProps) {
-	const fullscreenToggle: MenuToggle = { icon: 'expand', label: fullscreen.active ? 'Exit full screen' : 'Full screen', pressed: fullscreen.active, disabled: !fullscreen.supported, onSelect: fullscreen.toggle }
+	const fullscreenToggle: MenuToggle = {
+		icon: 'expand',
+		label: fullscreen.active ? 'Exit full screen' : 'Full screen',
+		title: fullscreen.supported ? undefined : 'Full screen (this browser cannot show a page element in full screen)',
+		pressed: fullscreen.active,
+		disabled: !fullscreen.supported,
+		onSelect: fullscreen.toggle,
+	}
 	const pixelsToggle: MenuToggle = {
 		icon: 'pixelInspect',
 		label: inspectPixels ? 'Stop inspecting pixels' : 'Inspect pixels',
-		title: inspectPixels ? undefined : 'Inspect pixels: the samples under the pointer in the status line',
+		title: inspectPixels ? undefined : document.info ? 'Inspect pixels: the samples under the pointer in the status line' : 'Inspect pixels (no image is shown yet)',
 		pressed: inspectPixels,
 		disabled: !document.info,
 		onSelect: () => (pixelInspection.enabled = !inspectPixels),
 	}
 	const reticleToggle: MenuToggle = { icon: 'reticle', label: reticle ? 'Hide reticle' : 'Show reticle', pressed: reticle, onSelect: onToggleReticle }
-	const overlaysButton = <IconButton icon="layers" label={overlays.hidden ? 'Show overlays' : 'Hide overlays'} pressed={overlays.hidden} disabled={!overlays.available} onClick={() => toggleImageOverlays(imagesState, document.key)} />
+	const overlaysButton = <IconButton icon="layers" label={overlays.hidden ? 'Show overlays' : overlays.available ? 'Hide overlays' : 'Hide overlays (nothing is drawn over the image)'} pressed={overlays.hidden} disabled={!overlays.available} onClick={() => toggleImageOverlays(imagesState, document.key)} />
 	const saveButton = <SaveImagePopover document={document} view={view} onSaveToServer={onSaveToServer} />
-	const measureSelect = measure && <Select label={narrow ? 'Measure' : undefined} options={ASTROMETRY_MODES} value={measure.mode} format={(option) => MODE_LABELS[option]} disabled={measure.disabled} onChange={measure.onChange} className={narrow ? undefined : 'w-36 flex-none'} />
+	const measureSelect = (
+		<Select
+			label={narrow ? 'Measure' : undefined}
+			options={ASTROMETRY_MODES}
+			value={measure?.mode ?? 'pan'}
+			format={(option) => MODE_LABELS[option]}
+			disabled={!measure || measure.disabled}
+			title={measure ? undefined : 'Measuring needs a plate solution of the image.'}
+			onChange={(mode) => measure?.onChange(mode)}
+			className={narrow ? undefined : 'w-36 flex-none'}
+		/>
+	)
 
 	if (narrow) {
 		return (
@@ -530,21 +549,35 @@ function ViewerToolbar({ document, view, narrow, fullscreen, overlays, inspectPi
 		)
 	}
 
-	return (
+	// Groups in a fixed order, each control always in its place (disabled, saying why, when it cannot be used), so no
+	// button moves between documents; only a camera tab adds its frame controls, at the end.
+	const groups = [
 		<>
 			<ToggleButton toggle={fullscreenToggle} />
 			<OriginalToggle documentKey={document.key} view={view} info={document.info} />
 			{overlaysButton}
 			<ToggleButton toggle={pixelsToggle} />
-			<span className="mx-1 h-5 w-px bg-line-100" />
-			<DisplayToolbar key={document.key} documentKey={document.key} info={document.info} view={view} />
-			<span className="mx-1 h-5 w-px bg-line-100" />
-			{saveButton}
-			<span className="mx-1 h-5 w-px bg-line-100" />
-			{measureSelect}
-			{document.camera && <CameraControls document={document} reticle={reticleToggle} />}
-		</>
-	)
+		</>,
+		<DisplayToolbar key={document.key} documentKey={document.key} info={document.info} view={view} />,
+		saveButton,
+		measureSelect,
+	]
+
+	if (document.camera) {
+		groups.push(
+			<>
+				<CameraFrameButton document={document} />
+				<ToggleButton toggle={reticleToggle} />
+			</>,
+		)
+	}
+
+	return groups.map((group, index) => (
+		<Fragment key={index}>
+			{index > 0 && <span className="mx-1 h-5 w-px flex-none bg-line-100" />}
+			{group}
+		</Fragment>
+	))
 }
 
 // Toggle of the viewer toolbar, an icon button on a wide screen and a row of the More menu on a phone.
@@ -608,29 +641,8 @@ function MoreMenu({ items, children }: MoreMenuProps) {
 	)
 }
 
-interface CameraControlsProps {
-	// Camera tab.
-	readonly document: ImageDocument
-	// Toggle of the central reticle drawn over the frame.
-	readonly reticle: MenuToggle
-}
-
-// Labels of the selections of a camera tab, as its toolbar shows them.
+// Labels of the selections of a camera tab, as its status line shows them.
 const SELECTION_LABELS: Readonly<Record<NonNullable<ImageDocument['camera']>['selection']['kind'], string>> = { latest: 'Latest', saved: 'Saved frame', inspect: 'Held for analysis', liveStack: 'Live stack' }
-
-// Hold for Analysis or Return to Latest of a camera tab (CameraFrameButton), and the toggle of the central reticle (for
-// Mount Nudge or framing). Neither commands the camera: they only change which frame the tab shows and how.
-function CameraControls({ document, reticle }: CameraControlsProps) {
-	if (!document.camera) return null
-
-	return (
-		<>
-			<span className="h-5 w-px bg-line-100" />
-			<CameraFrameButton document={document} />
-			<ToggleButton toggle={reticle} />
-		</>
-	)
-}
 
 // Which frame a camera tab shows, in words, leading the viewer's status line: the latest frame (of an earlier server run
 // when that is all there is), a saved frame, a frame held for analysis, or a live stack with its frame count; the

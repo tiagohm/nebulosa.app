@@ -189,8 +189,7 @@ export function VirtualList<T>({ items, itemKey, title, description, meta, toolt
 		<section className={cn('flex min-h-0 min-w-0 flex-col gap-2 text-ink-100', className)}>
 			{search && (
 				<div className="flex flex-wrap items-end gap-x-3 gap-y-2">
-					<TextInput ref={searchRef} label="Search" className="w-60 max-sm:w-full" value={query} placeholder={searchPlaceholder} onChange={(e) => handleQuery(e.target.value)} onKeyDown={handleSearchKeyDown} />
-					<span className="pb-2 text-xs text-ink-300 tabular-nums">{count(total, items.length)}</span>
+					<TextInput ref={searchRef} label={`Search (${count(total, items.length)} objects)`} className="w-full" value={query} placeholder={searchPlaceholder} onChange={(e) => handleQuery(e.target.value)} onKeyDown={handleSearchKeyDown} />
 				</div>
 			)}
 			{total > 0 ? (

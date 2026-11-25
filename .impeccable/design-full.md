@@ -36,6 +36,18 @@ colors:
     channel-red: 'oklch(0.7 0.09 28)'
     channel-green: 'oklch(0.74 0.09 150)'
     channel-blue: 'oklch(0.72 0.085 250)'
+    frame-1: 'oklch(0.72 0.085 35)'
+    frame-2: 'oklch(0.74 0.085 85)'
+    frame-3: 'oklch(0.72 0.085 140)'
+    frame-4: 'oklch(0.72 0.07 195)'
+    frame-5: 'oklch(0.7 0.075 250)'
+    frame-6: 'oklch(0.72 0.085 345)'
+    orbit-1: 'oklch(0.76 0.085 85)'
+    orbit-2: 'oklch(0.74 0.08 145)'
+    orbit-3: 'oklch(0.74 0.07 200)'
+    orbit-4: 'oklch(0.72 0.075 255)'
+    orbit-5: 'oklch(0.72 0.08 305)'
+    orbit-6: 'oklch(0.74 0.08 355)'
 typography:
     headline:
         fontFamily: "'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"
@@ -235,6 +247,10 @@ Two axes of one measurement plotted together, the RA and DEC of the guiding grap
 
 The colour planes of an image plotted together, the curves of the Image Inspector's histogram, draw in `channel-red`, `channel-green`, and `channel-blue`, the hues the operator expects of each channel at the framings' low chroma, never the signal colours; luminance and a mono plane are Moonlight, and the second green of a raw mosaic is dashed. The legend shows each plane's swatch beside its name, and the plane whose statistics are listed is drawn heavier over the others, which are faint.
 
+### Planet Viewers
+
+The schematic disks of the Jupiter and Saturn Observing Planners (`jupiter-*`, `saturn-*`) are toned-down tans and umbers, so a planet is never the brightest fill of a night screen, with the shadows on Jupiter's disk near black. Their moons (`moon-*`: sulfur Io, icy Europa, mauve Ganymede, warm gray Callisto; Mimas, Enceladus, Tethys, Dione, Rhea, Titan, and Iapetus a step apart in lightness where their hues are near) sit at the map hues' low chroma, away from the signal colours and from Ember Clay, which only rings the moons of the selected event. Saturn's ring history draws the solar opening in a muted Sun gold beside the Earth opening's Starlight Cream.
+
 ### Named Rules
 
 **The One Ember Rule.** Ember Clay marks what is chosen, focused, running, or the one primary action. It is never decoration, never a background block, never a second brand colour. If two things on a screen glow, one of them is wrong.
@@ -308,7 +324,7 @@ Quiet and exact: controls step back so readings lead.
 - **Primary:** Ember Clay fill, On Ember text. One per group at most.
 - **Secondary:** transparent with a Graticule border and Starlight Cream text; hover fills Horizon Haze and lightens the border to Zodiacal Gray.
 - **Ghost:** Ember Clay text with no border; hover fills Ember Wash.
-- **Danger:** Antares Red fill, On Ember text; only the confirming button of a destructive confirmation (`ConfirmButton` with `destructive`).
+- **Danger:** Antares Red fill, On Ember text, 85 % on hover; only the confirming button of a destructive confirmation (`ConfirmButton` with `destructive`).
 - **Disabled:** Horizon Haze fill, Zodiacal Gray text, no border, `not-allowed` cursor, and the reason in the tooltip. Unavailable actions stay visible.
 - **Focus:** a 2 px Ember Clay outline offset by 2 px on `:focus-visible`, for every interactive element.
 
@@ -320,6 +336,7 @@ Quiet and exact: controls step back so readings lead.
 
 - **Style:** Twilight Ash fill, Graticule border, 6 px corners, 33.25 px tall, 12.25 px text, Zodiacal Gray placeholder; units (`mm`, `°`, `s`) sit inside the field at the right edge in caption size.
 - **Label:** above the control, in the uppercase Label style in Moonlight.
+- **Hover:** the border lightens to Zodiacal Gray.
 - **Focus:** the border turns Ember Clay with a 2 px Ember Clay outline inset by 1 px.
 - **Disabled:** Horizon Haze fill, Faint Meridian border, Zodiacal Gray text.
 - **Segmented control:** joined segments sharing borders; the selected one is Ember Wash with an Ember Clay border and text.
@@ -328,6 +345,10 @@ Quiet and exact: controls step back so readings lead.
 ### Status Badges
 
 A pill 21 px tall with a one-pixel border tinted by its tone at 50–60 % opacity, caption text, and a 5.25 px dot: muted (dashed border, no dot), neutral, active (Ember Clay, pulsing dot), success, warning, danger. The word is always present.
+
+### Progress Bar
+
+A 3.5 px Horizon Haze track with full-pill ends; the fill is Ember Clay while running, Aurora Green when done, Antares Red when failed, and widens over 200 ms. Without a known fraction a third-width Ember Clay bar at 60 % pulses instead.
 
 ### Cards / Containers
 
@@ -338,7 +359,7 @@ A pill 21 px tall with a one-pixel border tinted by its tone at 50–60 % opacit
 
 ### Toasts
 
-Floating notices stacked above the status bar at the bottom right, beside the docked contextual panel: Twilight Ash, Float shadow, 10 px corners, and a one-pixel border, Faint Meridian for a success and the tone at 50 % for a warning or an error, never a thicker edge. The severity leads as an uppercase Label word in its tone, with a count when notifications that read the same merge, then a semibold title and a Moonlight caption message, both wrapping. A toast that opens its context is one button with the row hover and a Zodiacal Gray "View" cue, so a routine success never shows Ember. They fade in over 150 ms, and the close button reads "Hide".
+Floating notices stacked above the status bar at the bottom right, beside the docked contextual panel: Twilight Ash, Float shadow, 10 px corners, and a one-pixel border, Faint Meridian for information or a success and the tone at 50 % for a warning or an error, never a thicker edge. The severity leads as an uppercase Label word in its tone, with a count when notifications that read the same merge, then a semibold title and a Moonlight caption message, both wrapping. A toast that opens its context is one button with the row hover and a Zodiacal Gray "View" cue, so a routine success never shows Ember. They fade in over 150 ms, and the close button reads "Hide".
 
 ### Notification Panel
 

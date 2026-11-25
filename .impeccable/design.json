@@ -1,6 +1,6 @@
 {
 	"schemaVersion": 2,
-	"generatedAt": "2026-11-20T12:20:20.389Z",
+	"generatedAt": "2026-11-25T16:56:02.131Z",
 	"title": "Design System: Nebulosa",
 	"extensions": {
 		"colorMeta": {
@@ -177,6 +177,108 @@
 				"displayName": "Radiant Dusty Rose",
 				"canonical": "oklch(0.6 0.08 360)",
 				"tonalRamp": ["oklch(15% 0.048 360)", "oklch(25% 0.048 360)", "oklch(35% 0.080 360)", "oklch(45% 0.080 360)", "oklch(55% 0.080 360)", "oklch(65% 0.080 360)", "oklch(80% 0.048 360)", "oklch(95% 0.048 360)"]
+			},
+			"axis-1": {
+				"role": "measurement",
+				"displayName": "Axis Slate",
+				"canonical": "oklch(0.72 0.08 245)",
+				"tonalRamp": ["oklch(15% 0.048 245)", "oklch(25% 0.048 245)", "oklch(35% 0.080 245)", "oklch(45% 0.080 245)", "oklch(55% 0.080 245)", "oklch(65% 0.080 245)", "oklch(80% 0.048 245)", "oklch(95% 0.048 245)"]
+			},
+			"axis-2": {
+				"role": "measurement",
+				"displayName": "Axis Mauve",
+				"canonical": "oklch(0.72 0.08 330)",
+				"tonalRamp": ["oklch(15% 0.048 330)", "oklch(25% 0.048 330)", "oklch(35% 0.080 330)", "oklch(45% 0.080 330)", "oklch(55% 0.080 330)", "oklch(65% 0.080 330)", "oklch(80% 0.048 330)", "oklch(95% 0.048 330)"]
+			},
+			"channel-red": {
+				"role": "measurement",
+				"displayName": "Channel Red",
+				"canonical": "oklch(0.7 0.09 28)",
+				"tonalRamp": ["oklch(15% 0.054 28)", "oklch(25% 0.054 28)", "oklch(35% 0.090 28)", "oklch(45% 0.090 28)", "oklch(55% 0.090 28)", "oklch(65% 0.090 28)", "oklch(80% 0.054 28)", "oklch(95% 0.054 28)"]
+			},
+			"channel-green": {
+				"role": "measurement",
+				"displayName": "Channel Green",
+				"canonical": "oklch(0.74 0.09 150)",
+				"tonalRamp": ["oklch(15% 0.054 150)", "oklch(25% 0.054 150)", "oklch(35% 0.090 150)", "oklch(45% 0.090 150)", "oklch(55% 0.090 150)", "oklch(65% 0.090 150)", "oklch(80% 0.054 150)", "oklch(95% 0.054 150)"]
+			},
+			"channel-blue": {
+				"role": "measurement",
+				"displayName": "Channel Blue",
+				"canonical": "oklch(0.72 0.085 250)",
+				"tonalRamp": ["oklch(15% 0.051 250)", "oklch(25% 0.051 250)", "oklch(35% 0.085 250)", "oklch(45% 0.085 250)", "oklch(55% 0.085 250)", "oklch(65% 0.085 250)", "oklch(80% 0.051 250)", "oklch(95% 0.051 250)"]
+			},
+			"frame-1": {
+				"role": "framing",
+				"displayName": "Framing Rust",
+				"canonical": "oklch(0.72 0.085 35)",
+				"tonalRamp": ["oklch(15% 0.051 35)", "oklch(25% 0.051 35)", "oklch(35% 0.085 35)", "oklch(45% 0.085 35)", "oklch(55% 0.085 35)", "oklch(65% 0.085 35)", "oklch(80% 0.051 35)", "oklch(95% 0.051 35)"]
+			},
+			"frame-2": {
+				"role": "framing",
+				"displayName": "Framing Ochre",
+				"canonical": "oklch(0.74 0.085 85)",
+				"tonalRamp": ["oklch(15% 0.051 85)", "oklch(25% 0.051 85)", "oklch(35% 0.085 85)", "oklch(45% 0.085 85)", "oklch(55% 0.085 85)", "oklch(65% 0.085 85)", "oklch(80% 0.051 85)", "oklch(95% 0.051 85)"]
+			},
+			"frame-3": {
+				"role": "framing",
+				"displayName": "Framing Sage",
+				"canonical": "oklch(0.72 0.085 140)",
+				"tonalRamp": ["oklch(15% 0.051 140)", "oklch(25% 0.051 140)", "oklch(35% 0.085 140)", "oklch(45% 0.085 140)", "oklch(55% 0.085 140)", "oklch(65% 0.085 140)", "oklch(80% 0.051 140)", "oklch(95% 0.051 140)"]
+			},
+			"frame-4": {
+				"role": "framing",
+				"displayName": "Framing Gray-Teal",
+				"canonical": "oklch(0.72 0.07 195)",
+				"tonalRamp": ["oklch(15% 0.042 195)", "oklch(25% 0.042 195)", "oklch(35% 0.070 195)", "oklch(45% 0.070 195)", "oklch(55% 0.070 195)", "oklch(65% 0.070 195)", "oklch(80% 0.042 195)", "oklch(95% 0.042 195)"]
+			},
+			"frame-5": {
+				"role": "framing",
+				"displayName": "Framing Slate",
+				"canonical": "oklch(0.7 0.075 250)",
+				"tonalRamp": ["oklch(15% 0.045 250)", "oklch(25% 0.045 250)", "oklch(35% 0.075 250)", "oklch(45% 0.075 250)", "oklch(55% 0.075 250)", "oklch(65% 0.075 250)", "oklch(80% 0.045 250)", "oklch(95% 0.045 250)"]
+			},
+			"frame-6": {
+				"role": "framing",
+				"displayName": "Framing Rose",
+				"canonical": "oklch(0.72 0.085 345)",
+				"tonalRamp": ["oklch(15% 0.051 345)", "oklch(25% 0.051 345)", "oklch(35% 0.085 345)", "oklch(45% 0.085 345)", "oklch(55% 0.085 345)", "oklch(65% 0.085 345)", "oklch(80% 0.051 345)", "oklch(95% 0.051 345)"]
+			},
+			"orbit-1": {
+				"role": "orbit",
+				"displayName": "Orbit Ochre",
+				"canonical": "oklch(0.76 0.085 85)",
+				"tonalRamp": ["oklch(15% 0.051 85)", "oklch(25% 0.051 85)", "oklch(35% 0.085 85)", "oklch(45% 0.085 85)", "oklch(55% 0.085 85)", "oklch(65% 0.085 85)", "oklch(80% 0.051 85)", "oklch(95% 0.051 85)"]
+			},
+			"orbit-2": {
+				"role": "orbit",
+				"displayName": "Orbit Sage",
+				"canonical": "oklch(0.74 0.08 145)",
+				"tonalRamp": ["oklch(15% 0.048 145)", "oklch(25% 0.048 145)", "oklch(35% 0.080 145)", "oklch(45% 0.080 145)", "oklch(55% 0.080 145)", "oklch(65% 0.080 145)", "oklch(80% 0.048 145)", "oklch(95% 0.048 145)"]
+			},
+			"orbit-3": {
+				"role": "orbit",
+				"displayName": "Orbit Teal",
+				"canonical": "oklch(0.74 0.07 200)",
+				"tonalRamp": ["oklch(15% 0.042 200)", "oklch(25% 0.042 200)", "oklch(35% 0.070 200)", "oklch(45% 0.070 200)", "oklch(55% 0.070 200)", "oklch(65% 0.070 200)", "oklch(80% 0.042 200)", "oklch(95% 0.042 200)"]
+			},
+			"orbit-4": {
+				"role": "orbit",
+				"displayName": "Orbit Slate",
+				"canonical": "oklch(0.72 0.075 255)",
+				"tonalRamp": ["oklch(15% 0.045 255)", "oklch(25% 0.045 255)", "oklch(35% 0.075 255)", "oklch(45% 0.075 255)", "oklch(55% 0.075 255)", "oklch(65% 0.075 255)", "oklch(80% 0.045 255)", "oklch(95% 0.045 255)"]
+			},
+			"orbit-5": {
+				"role": "orbit",
+				"displayName": "Orbit Violet",
+				"canonical": "oklch(0.72 0.08 305)",
+				"tonalRamp": ["oklch(15% 0.048 305)", "oklch(25% 0.048 305)", "oklch(35% 0.080 305)", "oklch(45% 0.080 305)", "oklch(55% 0.080 305)", "oklch(65% 0.080 305)", "oklch(80% 0.048 305)", "oklch(95% 0.048 305)"]
+			},
+			"orbit-6": {
+				"role": "orbit",
+				"displayName": "Orbit Rose",
+				"canonical": "oklch(0.74 0.08 355)",
+				"tonalRamp": ["oklch(15% 0.048 355)", "oklch(25% 0.048 355)", "oklch(35% 0.080 355)", "oklch(45% 0.080 355)", "oklch(55% 0.080 355)", "oklch(65% 0.080 355)", "oklch(80% 0.048 355)", "oklch(95% 0.048 355)"]
 			}
 		},
 		"typographyMeta": {
@@ -327,6 +429,14 @@
 			"description": "A state in words, tinted by its tone.",
 			"html": "<span class=\"ds-badges\"><span class=\"ds-badge ds-badge--active\"><i></i>Exposing</span><span class=\"ds-badge ds-badge--success\"><i></i>Connected</span><span class=\"ds-badge ds-badge--warning\"><i></i>Flip soon</span><span class=\"ds-badge ds-badge--danger\"><i></i>Failed</span><span class=\"ds-badge ds-badge--muted\">Idle</span></span>",
 			"css": ".ds-badges { display: inline-flex; flex-wrap: wrap; gap: 7px; } .ds-badge { font-family: var(--font-mono, 'JetBrains Mono', ui-monospace, monospace); display: inline-flex; align-items: center; gap: 5.25px; height: 21px; padding: 0 8.75px; border: 1px solid var(--color-line-100); border-radius: 9999px; font-size: 10.5px; line-height: 1; white-space: nowrap; color: var(--color-ink-200); } .ds-badge i { width: 5.25px; height: 5.25px; border-radius: 9999px; background: currentColor; } .ds-badge--active { color: var(--color-accent); border-color: color-mix(in srgb, var(--color-accent) 50%, transparent); } .ds-badge--active i { animation: ds-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; } .ds-badge--success { color: var(--color-success); border-color: color-mix(in srgb, var(--color-success) 50%, transparent); } .ds-badge--warning { color: var(--color-warning); border-color: color-mix(in srgb, var(--color-warning) 60%, transparent); } .ds-badge--danger { color: var(--color-danger); border-color: color-mix(in srgb, var(--color-danger) 60%, transparent); } .ds-badge--muted { color: var(--color-ink-300); border-style: dashed; } .ds-badge--muted i { display: none; } @keyframes ds-pulse { 50% { opacity: 0.5; } } @media (prefers-reduced-motion: reduce) { .ds-badge--active i { animation: none; } }"
+		},
+		{
+			"name": "Progress Bar",
+			"kind": "custom",
+			"refersTo": "progress-bar",
+			"description": "A thin pill track whose fill is Ember Clay while running, Aurora Green when done, and Antares Red when failed.",
+			"html": "<div class=\"ds-progress-stack\"><div class=\"ds-progress\"><div class=\"ds-progress-fill\" style=\"width: 62%\"></div></div><div class=\"ds-progress\"><div class=\"ds-progress-fill ds-progress-success\" style=\"width: 100%\"></div></div><div class=\"ds-progress\"><div class=\"ds-progress-fill ds-progress-danger\" style=\"width: 40%\"></div></div><div class=\"ds-progress\"><div class=\"ds-progress-indeterminate\"></div></div></div>",
+			"css": ".ds-progress-stack { display: flex; flex-direction: column; gap: 10.5px; width: 240px; } .ds-progress { height: 3.5px; overflow: hidden; border-radius: 9999px; background: var(--color-base-300); } .ds-progress-fill { height: 100%; background: var(--color-accent); transition: width 200ms; } .ds-progress-success { background: var(--color-success); } .ds-progress-danger { background: var(--color-danger); } .ds-progress-indeterminate { width: 33%; height: 100%; background: color-mix(in srgb, var(--color-accent) 60%, transparent); animation: ds-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; } @keyframes ds-pulse { 50% { opacity: 0.5; } } @media (prefers-reduced-motion: reduce) { .ds-progress-fill { transition: none; } .ds-progress-indeterminate { animation: none; } }"
 		},
 		{
 			"name": "Tool Card",

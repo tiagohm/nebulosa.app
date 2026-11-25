@@ -36,6 +36,18 @@ colors:
     channel-red: 'oklch(0.7 0.09 28)'
     channel-green: 'oklch(0.74 0.09 150)'
     channel-blue: 'oklch(0.72 0.085 250)'
+    frame-1: 'oklch(0.72 0.085 35)'
+    frame-2: 'oklch(0.74 0.085 85)'
+    frame-3: 'oklch(0.72 0.085 140)'
+    frame-4: 'oklch(0.72 0.07 195)'
+    frame-5: 'oklch(0.7 0.075 250)'
+    frame-6: 'oklch(0.72 0.085 345)'
+    orbit-1: 'oklch(0.76 0.085 85)'
+    orbit-2: 'oklch(0.74 0.08 145)'
+    orbit-3: 'oklch(0.74 0.07 200)'
+    orbit-4: 'oklch(0.72 0.075 255)'
+    orbit-5: 'oklch(0.72 0.08 305)'
+    orbit-6: 'oklch(0.74 0.08 355)'
 typography:
     headline:
         fontFamily: "'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"
@@ -178,7 +190,7 @@ components:
 <!-- impeccable:design-map -->
 
 Name: Nebulosa
-Colors: primary: accent #d97757; neutral: base-000 #141413; signal: danger #e5675e; map: map-horizon oklch(0.6 0.08 40); primary: accent-hover #e3896b; primary: accent-subtle #3a2620 (+23 more in the sidecar)
+Colors: primary: accent #d97757; neutral: base-000 #141413; signal: danger #e5675e; map: map-horizon oklch(0.6 0.08 40); measurement: axis-1 oklch(0.72 0.08 245); framing: frame-1 oklch(0.72 0.085 35) (+40 more in the sidecar)
 Fonts: JetBrains Mono (headline, readout, wordmark, title, body, body-dense, label, caption)
 Spacing: xs 3.5px, sm 7px, md 10.5px, lg 14px, xl 21px
 Radius: sm 6px, md 10px, lg 16px, xl 24px, full 9999px

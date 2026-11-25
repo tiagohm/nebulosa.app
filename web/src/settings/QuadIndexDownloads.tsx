@@ -3,8 +3,7 @@ import { useEffect } from 'react'
 import { useSnapshot } from 'valtio'
 import { formatByteSize, formatCount } from '../format'
 import { formatFieldSize, missingText } from '../framing/OpticsFields'
-import { EQUIPMENT_FRAMING_ID, GUIDE_FRAMING_ID, missingCameraName, type ResolvedFraming, useFramingContext, useResolvedFramings } from '../framing/resolve'
-import { activeProfile, activeSetup, profileState } from '../profile/profile'
+import { isSetupFraming, missingCameraName, type ResolvedFraming, useResolvedFramings } from '../framing/resolve'
 import { PanelSection } from '../shell/ContextualPanel'
 import { Button } from '../ui/Button'
 import { ConfirmButton } from '../ui/ConfirmButton'
@@ -241,8 +240,6 @@ function Source({ source, bands, framings }: { readonly source: QuadIndexSource;
 export function QuadIndexDownloads({ indexDirectory, onUseDefault }: QuadIndexDownloadsProps) {
 	const { snapshot, loadError } = useSnapshot(quadIndexesState)
 	const framings = useResolvedFramings()
-	const context = useFramingContext()
-	const setup = activeSetup(activeProfile(useSnapshot(profileState)))
 
 	// The installed files are read again whenever the settings open, since files may be copied by hand.
 	useEffect(() => void refreshQuadIndexes(quadIndexesState), [])
@@ -255,11 +252,10 @@ export function QuadIndexDownloads({ indexDirectory, onUseDefault }: QuadIndexDo
 		)
 	}
 
-	// The Main Camera is listed even when its field of view is not known, so it says what is missing; the Guide Camera once
-	// the Equipment Setup has a guide camera or a guide telescope, so a rig that does not guide is not asked for one; a
-	// framing once its field of view is known.
-	const guides = setup.GUIDE_CAMERA !== undefined || context.telescopes.guideTelescope !== undefined
-	const fields = framings.filter((framing) => framing.id === EQUIPMENT_FRAMING_ID || (framing.id === GUIDE_FRAMING_ID ? guides : !('missing' in framing.field)))
+	// The cameras of the Equipment Setup are listed even when their field of view is not known, so they say what is missing
+	// (the Guide Camera only for a setup that guides, so a rig that does not guide is not asked for one); a framing once its
+	// field of view is known.
+	const fields = framings.filter((framing) => isSetupFraming(framing.id) || !('missing' in framing.field))
 
 	return (
 		<>

@@ -8,6 +8,7 @@ const CONTEXT: FramingContext = {
 	sensors: { MAIN_CAMERA: { width: 6248, height: 4176, pixelSize: 3.76, origin: 'reported' } },
 	catalogCameras: [{ id: 'cam', name: 'ASI2600', sensor: { width: 6248, height: 4176 } }],
 	catalogTelescopes: [{ id: 'tel', name: 'Esprit 100', focalLength: 550 }],
+	guides: true,
 }
 
 const MANUAL: FramingDocument = {
@@ -38,6 +39,11 @@ test('the Guide Camera is listed second, behind the guide telescope, and named w
 
 	const sensed = resolveAllFramings([], { ...CONTEXT, sensors: { ...CONTEXT.sensors, GUIDE_CAMERA: { width: 1936, height: 1096, pixelSize: 2.9, origin: 'reported' } } })[1]
 	expect(isFraming(sensed.field)).toBeTrue()
+})
+
+test('a setup that does not guide lists no Guide Camera', () => {
+	const framings = resolveAllFramings([{ ...MANUAL, id: 'm' }], { ...CONTEXT, guides: false })
+	expect(framings.map((framing) => framing.id)).toEqual([EQUIPMENT_FRAMING_ID, 'm'])
 })
 
 test('typed and model values are kept, with the rotation of the framing', () => {

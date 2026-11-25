@@ -3,7 +3,7 @@ import { useSnapshot } from 'valtio'
 import { type CatalogCamera, type CatalogTelescope, catalogState } from '../equipment/catalog'
 import { type CameraRole, roleDefinition } from '../equipment/roles'
 import { useProfileTelescopes } from '../equipment/telescopes'
-import { activeProfile, profileState } from '../profile/profile'
+import { activeProfile, activeSetup, profileState } from '../profile/profile'
 import type { RoleSensor } from '../sky/sensors'
 import { useRoleSensors } from '../sky/useSkyDevices'
 import { framingsState, type SavedFraming, sortedFramings } from './framings'
@@ -16,8 +16,8 @@ import type { FrameColor } from './palette'
 // profile of the tab: the telescope or guide telescope (resolved through the catalog, with the setup's reducer or Barlow)
 // and the sensor of a camera role (what its device reports, completed by the catalog: roleSensors). The two pseudo-framings
 // of the Equipment Setup, the Main Camera behind the telescope (EQUIPMENT_FRAMING_ID) and the Guide Camera behind the
-// guide telescope (GUIDE_FRAMING_ID), both without rotation, are offered first by every tool, so a profile plans with
-// its setup before any framing is created.
+// guide telescope (GUIDE_FRAMING_ID, only for a setup that guides), both without rotation, are offered first by every
+// tool, so a profile plans with its setup before any framing is created.
 
 // Id of the pseudo-framing of the Main Camera of the Equipment Setup, never saved; what a tool falls back to.
 export const EQUIPMENT_FRAMING_ID = 'equipment'
@@ -68,6 +68,8 @@ export interface FramingContext {
 	readonly catalogCameras: readonly Readonly<Pick<CatalogCamera, 'id' | 'name' | 'sensor'>>[]
 	// Telescopes of the Equipment Catalog, archived ones included.
 	readonly catalogTelescopes: readonly Readonly<Pick<CatalogTelescope, 'id' | 'name' | 'aperture' | 'focalLength'>>[]
+	// Whether the Equipment Setup guides: it has a Guide Camera or a guide telescope.
+	readonly guides: boolean
 }
 
 // Where the resolved values of a telescope or camera come from, for people.
@@ -164,10 +166,11 @@ export function resolveFramingOptics(id: string, framing: ResolvableFraming, con
 	return { id, name: framing.name, color: framing.color, optics, field: resolveFraming(optics), telescope: telescope.origin, camera: camera.origin }
 }
 
-// Resolves the pseudo-framings of the Main Camera and the Guide Camera of the Equipment Setup and every saved framing
-// (drafts applied), in the order every select lists them.
+// Resolves the pseudo-framings of the Main Camera and, for a setup that guides, the Guide Camera of the Equipment Setup,
+// and every saved framing (drafts applied), in the order every select lists them.
 export function resolveAllFramings(framings: readonly Pick<SavedFraming, 'id' | 'name' | 'optics' | 'rotation' | 'color'>[], context: FramingContext): ResolvedFraming[] {
-	return [resolveFramingOptics(EQUIPMENT_FRAMING_ID, EQUIPMENT_FRAMING, context), resolveFramingOptics(GUIDE_FRAMING_ID, GUIDE_FRAMING, context), ...framings.map((framing) => resolveFramingOptics(framing.id, framing, context))]
+	const guide = context.guides ? [resolveFramingOptics(GUIDE_FRAMING_ID, GUIDE_FRAMING, context)] : []
+	return [resolveFramingOptics(EQUIPMENT_FRAMING_ID, EQUIPMENT_FRAMING, context), ...guide, ...framings.map((framing) => resolveFramingOptics(framing.id, framing, context))]
 }
 
 // Returns what the framings of the tab resolve against, following the active profile's Equipment Setup, its cameras, and
@@ -177,7 +180,8 @@ export function useFramingContext(): FramingContext {
 	const telescopes = useProfileTelescopes(profile.settings)
 	const sensors = useRoleSensors()
 	const catalog = useSnapshot(catalogState)
-	return { telescopes, sensors, catalogCameras: catalog.cameras, catalogTelescopes: catalog.telescopes }
+	const guides = activeSetup(profile).GUIDE_CAMERA !== undefined || telescopes.guideTelescope !== undefined
+	return { telescopes, sensors, catalogCameras: catalog.cameras, catalogTelescopes: catalog.telescopes, guides }
 }
 
 // Returns the pseudo-framings of the Equipment Setup and every saved framing, resolved for the tab and followed.
@@ -187,7 +191,7 @@ export function useResolvedFramings(): ResolvedFraming[] {
 }
 
 // Returns the framing of an id resolved for the tab, the Main Camera's of the Equipment Setup for EQUIPMENT_FRAMING_ID,
-// an absent id, or a framing that no longer exists.
+// an absent id, a framing that no longer exists, or the Guide Camera's of a setup that no longer guides.
 export function useFraming(id: string | undefined): ResolvedFraming {
 	const framings = useResolvedFramings()
 	return framings.find((framing) => framing.id === id) ?? framings[0]

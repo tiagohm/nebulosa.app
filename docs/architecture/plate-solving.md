@@ -18,7 +18,7 @@ One service gives all of them the same solve, hints, and acceptance rules.
 - Its solutions feed [Annotation](annotation.md), [Streak Detection](streak-detection.md), the [Star Profile Inspector](star-profile-inspector.md), the celestial [Overlay](overlay.md), and Mount Nudge, whose pad moves by the orientation of the latest solved frame of the camera.
 - The folders of the solver are configured in [External Tools](external-tools.md); an image never leaves the server.
 - The built-in solver is the toolkit's native solver (`core/src/astrometry/solvers/native.ts`): it detects the stars of the image with the toolkit's detector, searches the quad index files of its index folder (Nebulosa `.nqi` tiles, written by `bun make:quads`, and Astrometry.net index files).
-- Its index folder defaults to a folder of the data directory, into which the settings of the built-in solver download bands of `.nqi` tiles built from a star database (ASTAP D20) and shared on Google Drive.
+- Its index folder defaults to a folder of the data directory, into which the settings of the built-in solver download bands of `.nqi` tiles built from a star database (ASTAP D20) and shared on Google Drive; they recommend the bands that suit the field of view of the Equipment Setup and of each [Framing](framing.md).
 - On a camera tab the settings belong to the physical camera and are shared with the operations of that camera.
 - The toolkit (`core`) parses and proves the WCS and does the spherical geometry.
 - Sync Mount syncs the mount of the active equipment setup on the solution shown, through the mount commands; Target Offset may take its target from the [Sky Map](sky-map.md) selection.

@@ -4,7 +4,7 @@ import { deg } from 'nebulosa/src/math/units/angle'
 import { proxy } from 'valtio'
 import { DEFAULT_DARV_SETTINGS, DEFAULT_EXPOSURE_SETTINGS } from '../profile/schema'
 import { cameraKey } from './capture'
-import { darvBlocker, darvComparable, darvProgress, darvFrameMeasurement, darvMeasurementRequest, darvMountSupport, type DarvRuntime, darvSlewRate, handleDarvEvent, refreshDarv, repeatDarv, startDarv } from './darv'
+import { darvAdvice, darvBlocker, darvDriftReading, darvProgress, darvFrameMeasurement, darvMeasurementRequest, darvMountSupport, type DarvRuntime, darvSlewRate, darvTrendText, handleDarvEvent, refreshDarv, repeatDarv, startDarv } from './darv'
 
 function newState() {
 	return proxy<DarvRuntime>({ sessions: {}, details: {}, pending: {}, errors: {} })
@@ -93,9 +93,12 @@ test('the progress follows the phase and the exposure elapsed, and stops at the 
 test('drifts are compared only between measurements of equal settings', () => {
 	const first = measurement({ generation: 1, state: 'ready', result: RESULT })
 	const second = measurement({ generation: 2, state: 'ready', result: { ...RESULT, driftMagnitude: 0.1 } })
-	expect(darvComparable([first, second])).toBe(first)
-	expect(darvComparable([first, { ...second, request: { ...second.request, legDuration: 30 } }])).toBeUndefined()
-	expect(darvComparable([first, measurement({ generation: 2, state: 'ready', result: { status: 'limited', trailCount: 1, usableCount: 0, confidence: 0, diagnostics: ['trailClipped'] } })])).toBeUndefined()
+	expect(darvDriftReading([first, second])).toEqual({ measurement: second, previous: first, trend: 'better' })
+	expect(darvDriftReading([first, { ...second, request: { ...second.request, legDuration: 30 } }])).toEqual({ measurement: { ...second, request: { ...second.request, legDuration: 30 } }, changed: first })
+	// A later measurement without a drift leaves the reading on the last measured one.
+	const limited = measurement({ generation: 3, state: 'ready', result: { status: 'limited', trailCount: 1, usableCount: 0, confidence: 0, diagnostics: ['trailClipped'] } })
+	expect(darvDriftReading([first, second, limited])?.measurement).toBe(second)
+	expect(darvDriftReading([measurement()])).toBeUndefined()
 	expect(darvFrameMeasurement(summary({ measurements: [first, second] }), { sessionId: 's1', generation: 2 })).toBe(second)
 	expect(darvFrameMeasurement(summary(), { sessionId: 'other', generation: 1 })).toBeUndefined()
 })
@@ -163,4 +166,31 @@ test('a start and a repetition carry a fresh token, and a refusal is kept as the
 	expect(requests[1].url).toBe('/api/darv/s1/measurements')
 	expect(state.errors[cameraKey('c', 'cam')]).toBe('A DARV measurement is running in this session')
 	expect(state.pending).toEqual({})
+})
+
+test('the knob loop reads the trend of comparable drifts', () => {
+	const drift = (generation: number, driftMagnitude: number) => measurement({ generation, state: 'ready', result: { ...RESULT, driftMagnitude } })
+	const one = drift(1, 0.4)
+
+	expect(darvAdvice(one, darvDriftReading([one]))).toContain('a little either way')
+	expect(darvDriftReading([one, drift(2, 0.2)])?.trend).toBe('better')
+	expect(darvDriftReading([one, drift(2, 0.6)])?.trend).toBe('worse')
+	// Within 10 % of the previous drift, the turn changed nothing measurable.
+	expect(darvDriftReading([one, drift(2, 0.42)])?.trend).toBe('unchanged')
+	// Growing right after falling: the last turn went past the best position.
+	const passed = [one, drift(2, 0.2), drift(3, 0.3)]
+	expect(darvDriftReading(passed)?.trend).toBe('passed')
+	expect(darvAdvice(passed[2], darvDriftReading(passed))).toContain('half as far')
+	const worse = drift(2, 0.6)
+	expect(darvAdvice(worse, darvDriftReading([one, worse]))).toContain('back the other way, past where it was for #1')
+	expect(darvTrendText('better', one)).toBe('Better than #1 (0.400 px/s)')
+	expect(darvTrendText('unchanged', one)).toBe('About the same as #1 (0.400 px/s)')
+})
+
+test('a frame without a measured drift gets a remedy, never the knob loop', () => {
+	const inconclusive = measurement({ state: 'ready', result: { status: 'inconclusive', trailCount: 0, usableCount: 0, confidence: 0, diagnostics: ['noStreaks'] } })
+	expect(darvAdvice(inconclusive, undefined)).toContain('lengthen the legs')
+	expect(darvAdvice(inconclusive, undefined)).not.toContain('knob')
+	expect(darvAdvice(measurement({ state: 'aborted' }), undefined)).toBeUndefined()
+	expect(darvAdvice(measurement({ state: 'outbound' }), undefined)).toBeUndefined()
 })

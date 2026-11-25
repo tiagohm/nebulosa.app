@@ -1,5 +1,4 @@
-import type { DarvMeasurement, DarvSessionSummary, DeviceSummary } from 'api'
-import { cn } from 'cn'
+import type { DarvMeasurement, DarvSessionSummary, DeviceSummary, MountState } from 'api'
 import { darvExposureTime } from 'nebulosa/src/observation/alignment/darv'
 import { useSnapshot } from 'valtio'
 import { controlRuntime, watchedDeviceState } from '../equipment-control/control'
@@ -12,9 +11,11 @@ import { operationsState } from '../operations'
 import { activeProfile, darvSettings, exposureSettings, profileState, setDarvSettings } from '../profile/profile'
 import { type CameraIdentity, DARV_MAXIMUM_LEG_DURATION, DARV_MINIMUM_LEG_DURATION, type DarvSettings } from '../profile/schema'
 import { CollapsibleSection } from '../shell/CollapsibleSection'
+import { navigate, routeState } from '../shell/route'
 import { Button } from '../ui/Button'
 import { Checkbox } from '../ui/Checkbox'
 import { DataList, DataRow } from '../ui/DataRow'
+import { LinkButton } from '../ui/LinkButton'
 import { Notice } from '../ui/Notice'
 import { NumberInput } from '../ui/NumberInput'
 import { ProgressBar } from '../ui/ProgressBar'
@@ -34,8 +35,11 @@ import {
 	DARV_PHASES,
 	DARV_STATE_LABELS,
 	DARV_STATUS_LABELS,
+	DARV_TREND_LABELS,
+	darvAdvice,
 	darvBlocker,
-	darvComparable,
+	type DarvDriftReading,
+	darvDriftReading,
 	darvMeasurementRequest,
 	darvMeasuring,
 	darvMountSupport,
@@ -43,6 +47,7 @@ import {
 	darvProgress,
 	darvRuntime,
 	darvSlewRate,
+	darvTrendText,
 	finishDarv,
 	formatDarvDrift,
 	repeatDarv,
@@ -50,16 +55,21 @@ import {
 } from './darv'
 import { SessionStateText } from './SessionStateText'
 
-// Contextual panel sections of DARV, a camera operation of the Images camera tabs: the equipment it uses, the
-// measurement settings (adjusted axis, RA direction, slew-rate preset of the mount, leg duration; the exposure is
-// derived from them and only shown), the phase and progress of the running measurement, the result of the latest one and the
-// history of the session, and the Start, Repeat, Abort, and Finish commands. Frames take the camera settings of
-// Camera Acquisition, but never its exposure time, which this panel does not change. The camera is the panel's target
-// and the mount the MOUNT of the active equipment setup; a missing or unsuitable mount says why. The form is the
-// camera's, kept in the profile, and is locked showing the values applied while a measurement runs; the session is the
-// server's, shown here whichever tab started it, and keeps running when the panel unmounts. Its frames are shown by the
-// latest frame of the camera with the trails drawn over them. The drift is in pixels per second: DARV never solves its
-// frames, so it is never converted into a polar error, and it is compared only between measurements of equal settings.
+// Contextual panel sections of DARV, a camera operation of the Images camera tabs. The session leads: its state, the
+// progress of the running measurement, the latest drift as the panel's one Readout with how it moved since the
+// previous comparable measurement in words, what to do with the knob next (the drift has no sign, so the loop reads its
+// trend: turn either way, keep going while it falls, turn back when it grows), the key of the trails drawn over the
+// frame, the commands, and why a start is blocked with the way to fix it; then the details of the latest result and
+// the history of the session; then the settings, collapsed with a summary (measurement, acquisition), and the
+// equipment last. Frames take the camera settings of Camera Acquisition, but never its exposure time, which is derived
+// from the leg duration. The camera is the panel's target and the mount the MOUNT of the active equipment setup; a
+// missing or unsuitable mount says why. The form is the camera's, kept in the profile, and is locked showing the values
+// applied while a measurement runs; the session is the server's, shown here whichever tab started it, and keeps
+// running when the panel unmounts. The drift is in pixels per second: DARV never solves its frames, so it is never
+// converted into a polar error, and it is compared only between measurements of equal settings.
+
+// Classes of the session commands: a touch target of 44 px on a coarse pointer, since they are pressed at the mount.
+const COMMAND_CLASS = 'pointer-coarse:min-h-[44px]'
 
 // Camera a DARV panel measures with and the forms it edits.
 export interface DarvTarget {
@@ -86,6 +96,7 @@ export function DarvSections({ device, availability, mount, settings: identity }
 	const key = device && cameraKey(device.connectionId, device.id)
 	const session = key ? runtime.sessions[key] : undefined
 	const latest = session?.measurements.at(-1)
+	const reading = session && darvDriftReading(session.measurements)
 	const capabilities = watchedDeviceState(control, 'camera', device)
 	const mountState = watchedDeviceState(control, 'mount', mount.device)
 	const measuring = darvMeasuring(session)
@@ -99,8 +110,14 @@ export function DarvSections({ device, availability, mount, settings: identity }
 	const mountAvailability = roleAvailability('MOUNT', mount, operations, darvMountSupport(mountState))
 	const blocker = measuring ? undefined : darvBlocker(availability, mountAvailability, mountState, slewRate)
 	const slewRates = mountState?.slewRates ?? []
+	const acquisition = measuring && latest ? latest.request.capture : exposure
+	const rate = slewRate !== undefined ? slewRateLabel(slewRate, mountState) : undefined
+	// Mount whose own page fixes the blocker (parked, no tracking), rather than the equipment setup.
+	const blockingMount = blocker !== undefined && availability.status === 'ready' && mountAvailability.status === 'ready' ? mount.device : undefined
 	// The mount of a session is fixed; another setup mount starts a new session.
 	const sameMount = open && session !== undefined && mount.device !== undefined && session.mount.connectionId === mount.device.connectionId && session.mount.deviceId === mount.device.id
+	const advice = open && !measuring ? darvAdvice(latest, reading) : undefined
+	const notes = open && latest?.state === 'ready' ? (latest.result?.diagnostics.flatMap((reason) => DARV_DIAGNOSTIC_LABELS[reason] ?? []) ?? []) : []
 
 	// Updates fields of the camera's DARV form.
 	function update(patch: Partial<DarvSettings>) {
@@ -116,7 +133,73 @@ export function DarvSections({ device, availability, mount, settings: identity }
 
 	return (
 		<>
-			<CollapsibleSection id="images.darv.equipment" title="Equipment">
+			<CollapsibleSection id="images.darv.session" title={measuring ? 'Current Measurement' : open ? 'Session' : session ? 'Last Session' : 'Session'} summary={session && sessionSummaryText(session, reading)}>
+				{session && <SessionState session={session} latest={latest} />}
+				{measuring && latest && <MeasurementProgress measurement={latest} />}
+				{reading && <DriftReadout reading={reading} ended={!open} />}
+				{notes.length > 0 && <Notice warning>{notes.join(' ')}</Notice>}
+				{advice && <Notice>{advice}</Notice>}
+				{reading && reading.measurement.result!.trailCount > 0 && <Notice>{trailKey(DARV_AXIS_LABELS[reading.measurement.request.axis])}</Notice>}
+				{!measuring && blocker === undefined && (
+					<Notice>
+						{!sameMount && `${DARV_AXIS_HINTS[shown.axis]} `}
+						{sameMount ? 'Repeat' : 'Start'} moves {mount.device?.name ?? 'the mount'} {DARV_DIRECTION_LABELS[shown.direction].toLowerCase()} in RA for {shown.legDuration} s and back{rate ? ` at ${rate}` : ''}; make sure it is clear to move.
+					</Notice>
+				)}
+				<div className="flex flex-wrap gap-2">
+					{measuring ? (
+						<Button variant="secondary" className={COMMAND_CLASS} title="Stop the mount and discard the frame" disabled={pending} onClick={() => void abortDarv(darvRuntime, session!)}>
+							Abort
+						</Button>
+					) : (
+						<>
+							<Button className={COMMAND_CLASS} title={blocker} disabled={blocker !== undefined || pending} onClick={measure}>
+								{sameMount ? 'Repeat Measurement' : 'Start Measurement'}
+							</Button>
+							{open && (
+								<Button variant="secondary" className={COMMAND_CLASS} title="End the session; the mount stays where it is" disabled={pending} onClick={() => void finishDarv(darvRuntime, session!, settings.stopTracking)}>
+									Finish Session
+								</Button>
+							)}
+						</>
+					)}
+				</div>
+				{open && session!.trackingStarted && <Checkbox label="Stop the tracking when finishing" checked={settings.stopTracking} disabled={pending} onChange={(stopTracking) => update({ stopTracking })} />}
+				{blocker && <Notice>{blocker}</Notice>}
+				{!measuring && (mountAvailability.status === 'notSelected' || mountAvailability.status === 'unsupported') && <EquipmentSetupButton />}
+				{blockingMount && (
+					<LinkButton className="self-start text-xs" onClick={() => navigate(routeState, { workspace: 'equipment', device: blockingMount.id })}>
+						Open {blockingMount.name} in Equipment Control
+					</LinkButton>
+				)}
+				{error && <Notice error>{error}</Notice>}
+				{session && <TrackingState session={session} />}
+			</CollapsibleSection>
+			{reading && <Result measurement={reading.measurement} />}
+			{session && session.measurements.length > 1 && <History measurements={session.measurements} mountState={mountState} />}
+			<CollapsibleSection id="images.darv.measurement" title="Measurement" summary={`${DARV_AXIS_LABELS[shown.axis]} · ${DARV_DIRECTION_LABELS[shown.direction]} · ${rate ?? 'no rate'} · ${shown.legDuration} s`} defaultOpen={false}>
+				<SegmentedControl label="Axis" options={DARV_AXES} value={shown.axis} format={(axis) => DARV_AXIS_LABELS[axis]} disabled={locked} onChange={(axis) => update({ axis })} />
+				<SegmentedControl label="First Motion" options={DARV_DIRECTIONS} value={shown.direction} format={(direction) => DARV_DIRECTION_LABELS[direction]} disabled={locked} onChange={(direction) => update({ direction })} />
+				{slewRates.length > 0 ? (
+					<Select label="Slew Rate" options={slewRates.map((rate) => rate.name)} value={slewRate ?? slewRates[0].name} format={(name) => slewRateLabel(name, mountState)} disabled={locked} onChange={(name) => update({ slewRate: name })} />
+				) : (
+					<Notice>Slew Rate: {measuring ? shown.slewRate : mountState ? 'the mount reports no preset yet.' : 'chosen once the mount is connected.'}</Notice>
+				)}
+				<NumberInput label="Leg Duration" value={shown.legDuration} min={DARV_MINIMUM_LEG_DURATION} max={DARV_MAXIMUM_LEG_DURATION} step={5} suffix="s" disabled={locked} onChange={(legDuration) => update({ legDuration })} />
+				<Notice>The mount moves in RA only, out and back; the slowest preset that draws a long enough trail works best.</Notice>
+			</CollapsibleSection>
+			<CameraAcquisitionSection
+				id="images.darv.acquisition"
+				device={device}
+				exposure={acquisition}
+				capabilities={capabilities}
+				defaultOpen={false}
+				summary={`${darvExposureTime(shown.legDuration)} s · ${acquisition.binX}×${acquisition.binY}`}
+				description="The frame is a LIGHT taken with the camera settings of Camera Acquisition; its exposure covers both legs and a few seconds of margin, and is shown as the latest frame of the camera, kept in memory only."
+			>
+				<DataRow label="Exposure">{`${darvExposureTime(shown.legDuration)} s`}</DataRow>
+			</CameraAcquisitionSection>
+			<CollapsibleSection id="images.darv.equipment" title="Equipment" summary={mount.device?.name ?? 'No mount'} defaultOpen={false}>
 				<DataList>
 					<DataRow label="Camera">
 						<DeviceLink device={device} />
@@ -125,107 +208,114 @@ export function DarvSections({ device, availability, mount, settings: identity }
 						<DeviceLink device={mount.device} fallback="Not assigned" />
 					</DataRow>
 				</DataList>
-				{!measuring && mountAvailability.status !== 'ready' && <Notice>{mountAvailability.message}</Notice>}
-				{!measuring && (mountAvailability.status === 'notSelected' || mountAvailability.status === 'unsupported') && <EquipmentSetupButton />}
-			</CollapsibleSection>
-			<CameraAcquisitionSection
-				id="images.darv.acquisition"
-				device={device}
-				exposure={exposure}
-				capabilities={capabilities}
-				description="The frame is a LIGHT taken with the camera settings of Camera Acquisition; its exposure covers both legs and a few seconds of margin, and is shown as the latest frame of the camera, kept in memory only."
-			>
-				<DataRow label="Exposure">{`${darvExposureTime(shown.legDuration)} s`}</DataRow>
-			</CameraAcquisitionSection>
-			<CollapsibleSection id="images.darv.measurement" title="Measurement">
-				<SegmentedControl label="Axis" options={DARV_AXES} value={shown.axis} format={(axis) => DARV_AXIS_LABELS[axis]} disabled={locked} onChange={(axis) => update({ axis })} />
-				<SegmentedControl label="First Motion" options={DARV_DIRECTIONS} value={shown.direction} format={(direction) => DARV_DIRECTION_LABELS[direction]} disabled={locked} onChange={(direction) => update({ direction })} />
-				{slewRates.length > 0 ? (
-					<Select label="Slew Rate" options={slewRates.map((rate) => rate.name)} value={slewRate ?? slewRates[0].name} format={(name) => slewRates.find((rate) => rate.name === name)?.label.trim() || name} disabled={locked} onChange={(name) => update({ slewRate: name })} />
-				) : (
-					<Notice>Slew Rate: {measuring ? shown.slewRate : 'the mount reports no preset yet.'}</Notice>
-				)}
-				<NumberInput label="Leg Duration" value={shown.legDuration} min={DARV_MINIMUM_LEG_DURATION} max={DARV_MAXIMUM_LEG_DURATION} step={5} suffix="s" disabled={locked} onChange={(legDuration) => update({ legDuration })} />
-				<Checkbox label="Stop the tracking when finishing" checked={settings.stopTracking} disabled={pending} onChange={(stopTracking) => update({ stopTracking })} />
-				<Notice>
-					{DARV_AXIS_HINTS[shown.axis]} The mount moves in RA only, {DARV_DIRECTION_LABELS[shown.direction].toLowerCase()} first and back; the slowest preset that draws a long enough trail works best.
-				</Notice>
-			</CollapsibleSection>
-			{latest && <Result session={session!} measurement={latest} />}
-			{session && session.measurements.length > 1 && <History measurements={session.measurements} />}
-			<CollapsibleSection id="images.darv.controls" title="Controls">
-				{latest && <MeasurementState measurement={latest} />}
-				{measuring && latest && <MeasurementProgress measurement={latest} />}
-				{measuring ? (
-					<Button variant="secondary" disabled={pending} onClick={() => void abortDarv(darvRuntime, session!)}>
-						Abort
-					</Button>
-				) : (
-					<>
-						<Button disabled={blocker !== undefined || pending} onClick={measure}>
-							{sameMount ? 'Repeat Measurement' : 'Start Measurement'}
-						</Button>
-						{open && (
-							<Button variant="secondary" disabled={pending} onClick={() => void finishDarv(darvRuntime, session!, settings.stopTracking)}>
-								Finish Session
-							</Button>
-						)}
-					</>
-				)}
-				{blocker && <Notice>{blocker}</Notice>}
-				{session && <TrackingState session={session} />}
-				{open && !measuring && latest?.state === 'ready' && <Notice>Adjust the {DARV_AXIS_LABELS[latest.request.axis].toLowerCase()} knob to bring the two trails together, then repeat the measurement.</Notice>}
-				{error && <Notice error>{error}</Notice>}
+				{!measuring && mountAvailability.status !== 'ready' && mountAvailability.message !== blocker && <Notice>{mountAvailability.message}</Notice>}
 			</CollapsibleSection>
 		</>
 	)
 }
 
-interface ResultProps {
-	// Session of the measurement.
-	readonly session: DarvSessionSummary
-	// Latest measurement.
-	readonly measurement: DarvMeasurement
+// Returns the label a mount gives a slew-rate preset, or its name when the mount gives none or is not known.
+function slewRateLabel(name: string, state: Pick<MountState, 'slewRates'> | undefined) {
+	return state?.slewRates.find((rate) => rate.name === name)?.label.trim() || name
 }
 
-// Outcome of the latest measurement: the drift between the trails, how many trails were paired, the fit quality, the
-// change since the previous comparable measurement, and the diagnostics.
-function Result({ session, measurement }: ResultProps) {
-	const { result } = measurement
-	const previous = darvComparable(session.measurements)
-	const notes = result?.diagnostics.flatMap((reason) => DARV_DIAGNOSTIC_LABELS[reason] ?? []) ?? []
+// Returns the one-line summary of a session: its state and its latest drift.
+function sessionSummaryText(session: DarvSessionSummary, reading: DarvDriftReading | undefined) {
+	const state = session.state === 'finished' ? 'Finished' : session.state === 'measuring' ? 'Measuring' : 'Idle'
+	return reading ? `${state} · ${formatDarvDrift(reading.measurement.result!.driftMagnitude!)}` : state
+}
+
+// Returns the key of the trails drawn over the frame, and how they look once the axis is aligned.
+function trailKey(axis: string) {
+	return `On the frame: ember, the outbound trail; green, the return; dashed, a trail left out of the drift. Trails that open into a V mean an ${axis.toLowerCase()} error; one straight line means it is aligned.`
+}
+
+interface SessionStateProps {
+	// Session shown.
+	readonly session: DarvSessionSummary
+	// Its latest measurement.
+	readonly latest?: DarvMeasurement
+}
+
+// Headline of the session: Finished once the operator finished it, else the phase of the running or last measurement,
+// its failure, and the slew rate restoration.
+function SessionState({ session, latest }: SessionStateProps) {
+	if (session.state === 'finished') return <SessionStateText failed={false}>Finished</SessionStateText>
+	if (!latest) return null
+	const failed = latest.state === 'failed'
 
 	return (
-		<CollapsibleSection id="images.darv.measurement" title={`Measurement #${measurement.generation}`}>
+		<>
+			<SessionStateText failed={failed}>{`${DARV_STATE_LABELS[latest.state]} · #${latest.generation}`}</SessionStateText>
+			{failed && latest.error && <Notice error>{latest.error}</Notice>}
+			{latest.slewRateRestored === false && latest.previousSlewRate && <Notice>The slew rate could not be restored to {latest.previousSlewRate}.</Notice>}
+		</>
+	)
+}
+
+interface DriftReadoutProps {
+	// Latest drift and how it moved.
+	readonly reading: DarvDriftReading
+	// Whether the session ended, so the drift is its last one.
+	readonly ended: boolean
+}
+
+// The latest drift as the panel's Readout, read from the mount: the separation rate, and how it moved since the
+// previous comparable measurement in words, or why it is not compared.
+function DriftReadout({ reading, ended }: DriftReadoutProps) {
+	const { measurement, previous, changed, trend } = reading
+	const label = `${ended ? 'Last drift' : 'Drift'} of #${measurement.generation}`
+	const comparison = previous && trend ? darvTrendText(trend, previous) : changed ? `not compared with #${changed.generation}, whose settings differ` : undefined
+
+	return (
+		<div className="flex flex-col gap-0.5">
+			<p className="m-0 text-3xl leading-9 font-semibold tracking-[-0.01em] text-ink-100 tabular-nums">{formatDarvDrift(measurement.result!.driftMagnitude!)}</p>
+			<p className="m-0 text-xs leading-4 text-ink-300 tabular-nums">{comparison ? `${label} · ${comparison}` : label}</p>
+		</div>
+	)
+}
+
+// Details of the latest measured measurement: its outcome, how many trails were paired, and the fit quality.
+function Result({ measurement }: { readonly measurement: DarvMeasurement }) {
+	const result = measurement.result!
+
+	return (
+		<CollapsibleSection id="images.darv.result" title={`Measurement #${measurement.generation}`} summary={`${DARV_STATUS_LABELS[result.status]} · ${result.usableCount} of ${result.trailCount} trails`} defaultOpen={false}>
 			<DataList>
-				<DataRow label="State">{DARV_STATE_LABELS[measurement.state]}</DataRow>
-				{result && <DataRow label="Result">{DARV_STATUS_LABELS[result.status]}</DataRow>}
-				{result?.driftMagnitude !== undefined && <DataRow label="Separation Drift">{formatDarvDrift(result.driftMagnitude)}</DataRow>}
-				{result && <DataRow label="Trails">{`${result.usableCount} of ${result.trailCount} usable`}</DataRow>}
-				{result && result.trailCount > 0 && <DataRow label="Fit Quality">{formatPercent(result.confidence)}</DataRow>}
-				{previous?.result?.driftMagnitude !== undefined && result?.driftMagnitude !== undefined && (
-					<DataRow label={`Since #${previous.generation}`}>
-						<span className={cn(result.driftMagnitude < previous.result.driftMagnitude && 'text-success')}>{`${formatDarvDrift(previous.result.driftMagnitude)} → ${formatDarvDrift(result.driftMagnitude)}`}</span>
-					</DataRow>
-				)}
+				<DataRow label="Result">{DARV_STATUS_LABELS[result.status]}</DataRow>
+				<DataRow label="Trails">{`${result.usableCount} of ${result.trailCount} usable`}</DataRow>
+				<DataRow label="Fit Quality" title="How well the trails fit straight legs; not how well the mount is aligned">
+					{formatPercent(result.confidence)}
+				</DataRow>
 			</DataList>
-			{result?.status === 'limited' && <Notice>The trails could not be measured fully; judge the separation on the frame.</Notice>}
-			{notes.length > 0 && <Notice>{notes.join(' ')}</Notice>}
-			<Notice>The drift is how fast the return trail separates from the outbound one, across the RA motion; it is not a polar error.</Notice>
+			<Notice>The drift is how fast the return trail separates from the outbound one, across the RA motion, in pixels per second; it is not a polar error, and it compares only between measurements of equal settings.</Notice>
 		</CollapsibleSection>
 	)
 }
 
-// Measurements of the session, latest first, with their settings and drift.
-function History({ measurements }: { readonly measurements: readonly DarvMeasurement[] }) {
+interface HistoryProps {
+	// Measurements of the session, oldest first.
+	readonly measurements: readonly DarvMeasurement[]
+	// State of the mount, for the labels of its slew-rate presets.
+	readonly mountState?: Pick<MountState, 'slewRates'>
+}
+
+// Measurements of the session, latest first, with their settings and drift, and how each drift moved since the one
+// before it.
+function History({ measurements, mountState }: HistoryProps) {
 	return (
 		<CollapsibleSection id="images.darv.history" title="History" summary={`${measurements.length} measurements`} defaultOpen={false}>
 			<DataList>
-				{measurements.toReversed().map((measurement) => (
-					<DataRow key={measurement.generation} label={`#${measurement.generation} ${DARV_AXIS_LABELS[measurement.request.axis]}, ${measurement.request.legDuration} s`}>
-						{measurement.result?.driftMagnitude !== undefined ? formatDarvDrift(measurement.result.driftMagnitude) : measurement.result ? DARV_STATUS_LABELS[measurement.result.status] : DARV_STATE_LABELS[measurement.state]}
-					</DataRow>
-				))}
+				{measurements.toReversed().map((measurement, index) => {
+					const { request, result } = measurement
+					const trend = result?.driftMagnitude !== undefined ? darvDriftReading(measurements.slice(0, measurements.length - index))?.trend : undefined
+					const value = result?.driftMagnitude !== undefined ? formatDarvDrift(result.driftMagnitude) : result ? DARV_STATUS_LABELS[result.status] : DARV_STATE_LABELS[measurement.state]
+					return (
+						<DataRow key={measurement.generation} label={`#${measurement.generation} ${DARV_AXIS_LABELS[request.axis]}, ${DARV_DIRECTION_LABELS[request.direction]}, ${slewRateLabel(request.slewRate, mountState)}, ${request.legDuration} s`}>
+							{trend ? `${value} · ${DARV_TREND_LABELS[trend]}` : value}
+						</DataRow>
+					)
+				})}
 			</DataList>
 		</CollapsibleSection>
 	)
@@ -243,19 +333,6 @@ function TrackingState({ session }: { readonly session: DarvSessionSummary }) {
 					? 'The tracking started for the session could not be stopped.'
 					: 'The tracking started for the session was left on.'
 	return <Notice>{message}</Notice>
-}
-
-// Phase of the running or last measurement, its failure, and the slew rate restoration.
-function MeasurementState({ measurement }: { readonly measurement: DarvMeasurement }) {
-	const failed = measurement.state === 'failed'
-
-	return (
-		<>
-			<SessionStateText failed={failed}>{DARV_STATE_LABELS[measurement.state]}</SessionStateText>
-			{failed && measurement.error && <Notice error>{measurement.error}</Notice>}
-			{measurement.slewRateRestored === false && measurement.previousSlewRate && <Notice>The slew rate could not be restored to {measurement.previousSlewRate}.</Notice>}
-		</>
-	)
 }
 
 // Interval between redraws of the progress while a measurement runs, in milliseconds.

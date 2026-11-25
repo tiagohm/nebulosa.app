@@ -15,7 +15,9 @@ import { applySession, type CameraSessionKind, type CameraSessionRecords, refres
 // snapshot; the complete record (the trails of the analyzed measurements) is fetched when a summary reports a new
 // result or an end. Summaries are ordered by their revision, so a late event never replaces a newer state. Cameras and
 // mounts are addressed by their exact connection and device ids, never by role. Every start carries a token, so a
-// retried request answers the measurement of the first one instead of starting another.
+// retried request answers the measurement of the first one instead of starting another. The drifts of a session are
+// read here too: how the latest one moved since the previous comparable one, and what that says about the last turn of
+// the knob, since the drift alone has no sign.
 
 // DARV state of the tab.
 export type DarvRuntime = CameraSessionRecords<DarvSessionSummary, DarvSession>
@@ -40,7 +42,7 @@ export const DARV_STATE_LABELS: Readonly<Record<DarvMeasurementState, string>> =
 	inbound: 'Moving back in RA',
 	finishing: 'Finishing the exposure',
 	analyzing: 'Analyzing the trails',
-	ready: 'Ready',
+	ready: 'Done',
 	failed: 'Failed',
 	aborted: 'Aborted',
 }
@@ -155,19 +157,110 @@ export function darvOpen(session: Pick<DarvSessionSummary, 'state'> | undefined)
 	return session !== undefined && session.state !== 'finished'
 }
 
-// Returns the analyzed measurement before the latest one when both ran with the same settings, so their drifts can
-// be compared; undefined otherwise (a different leg, rate, direction, or frame makes the numbers incomparable).
-export function darvComparable(measurements: readonly DarvMeasurement[]): DarvMeasurement | undefined {
-	const latest = measurements.at(-1)
-	if (latest?.result?.driftMagnitude === undefined) return undefined
+// Relative change of the separation drift within which two comparable measurements read as unchanged: 0.1 (10 %). A
+// margin of this panel, not a measured scatter, so a smaller change is never taken as evidence that a turn of the
+// knob helped or hurt.
+export const DARV_UNCHANGED_DRIFT = 0.1
 
-	for (let i = measurements.length - 2; i >= 0; i--) {
-		const previous = measurements[i]
-		if (previous.result?.driftMagnitude === undefined) continue
-		return JSON.stringify(previous.request) === JSON.stringify(latest.request) ? previous : undefined
+// How the drift of a measurement compares with the previous comparable one, as the knob loop reads it:
+// - better: it fell, so the last turn went the right way.
+// - worse: it grew, so the last turn went the wrong way.
+// - passed: it grew right after it fell, so the last turn went past the best position.
+// - unchanged: it moved by less than DARV_UNCHANGED_DRIFT.
+export type DarvTrend = 'better' | 'worse' | 'passed' | 'unchanged'
+
+// Words of each trend, as the history reads them.
+export const DARV_TREND_LABELS: Readonly<Record<DarvTrend, string>> = { better: 'better', worse: 'worse', passed: 'worse, past the best', unchanged: 'about the same' }
+
+// Returns how a drift moved since a previous measurement, in words, with the previous drift: "Better than #2
+// (0.200 px/s)", "Worse than #2 (0.200 px/s), past the best", "About the same as #2 (0.200 px/s)".
+export function darvTrendText(trend: DarvTrend, previous: Pick<DarvMeasurement, 'generation' | 'result'>): string {
+	const than = `#${previous.generation} (${formatDarvDrift(previous.result!.driftMagnitude!)})`
+	if (trend === 'unchanged') return `About the same as ${than}`
+	return trend === 'better' ? `Better than ${than}` : trend === 'worse' ? `Worse than ${than}` : `Worse than ${than}, past the best`
+}
+
+// The latest drift of a session and how it moved.
+export interface DarvDriftReading {
+	// Latest measured measurement, which may precede a later aborted, failed, or unmeasured one.
+	readonly measurement: DarvMeasurement
+	// Measured measurement before it, when both ran with the same settings.
+	readonly previous?: DarvMeasurement
+	// Measured measurement before it whose settings differ, so the drifts are not compared.
+	readonly changed?: DarvMeasurement
+	// How the drift moved since previous; absent without one.
+	readonly trend?: DarvTrend
+}
+
+// Returns the latest drift of a session's measurements (oldest first) and how it moved since the measured one before
+// it, which counts only when both ran with the same settings (a different leg, rate, direction, axis, or frame makes
+// the numbers incomparable); undefined before any measurement was measured.
+export function darvDriftReading(measurements: readonly DarvMeasurement[]): DarvDriftReading | undefined {
+	const index = measurements.findLastIndex(measured)
+	if (index < 0) return undefined
+
+	const measurement = measurements[index]
+	const previous = earlierMeasured(measurements, index)
+	if (previous === undefined) return { measurement }
+	if (!sameSettings(previous.measurement, measurement)) return { measurement, changed: previous.measurement }
+
+	const step = driftChange(previous.measurement, measurement)
+	if (step !== 'worse') return { measurement, previous: previous.measurement, trend: step }
+
+	const before = earlierMeasured(measurements, previous.index)
+	const passed = before !== undefined && sameSettings(before.measurement, measurement) && driftChange(before.measurement, previous.measurement) === 'better'
+	return { measurement, previous: previous.measurement, trend: passed ? 'passed' : 'worse' }
+}
+
+// Returns what the operator does next after the latest measurement of an open session, given its drift reading, or
+// undefined while it runs or when it ended without an analysis: the knob loop for a measured drift (turn either way
+// first, keep going while it falls, reverse when it grows, go back half way once it passed the best position), and
+// the remedy of a frame whose trails could not be measured.
+export function darvAdvice(latest: DarvMeasurement | undefined, reading: DarvDriftReading | undefined): string | undefined {
+	if (latest?.state !== 'ready' || !latest.result) return undefined
+	const knob = `the ${DARV_AXIS_LABELS[latest.request.axis].toLowerCase()} knob`
+
+	if (latest.result.status === 'inconclusive') return 'No drift to compare: lengthen the legs or use a faster slew rate, check the focus and that a star is in the frame, then repeat the measurement.'
+	if (latest.result.status === 'limited') return 'The trails could not be measured fully: judge the separation on the frame, or lengthen the legs and repeat the measurement.'
+	if (reading?.measurement !== latest) return undefined
+
+	switch (reading.trend) {
+		case 'better':
+			return `Keep turning ${knob} the same way, then repeat the measurement.`
+		case 'worse':
+			return `Turn ${knob} back the other way, past where it was for #${reading.previous!.generation}, then repeat the measurement.`
+		case 'passed':
+			return `The best position was passed: turn ${knob} back about half as far as the last turn, then repeat the measurement.`
+		case 'unchanged':
+			return `Turn ${knob} a little further the same way, then repeat the measurement.`
+		default:
+			return `Turn ${knob} a little either way, then repeat the measurement; the next drift tells whether to keep going or turn back.`
 	}
+}
 
+// Returns whether a measurement has a measured drift.
+function measured(measurement: DarvMeasurement) {
+	return measurement.result?.driftMagnitude !== undefined
+}
+
+// Returns the measured measurement nearest before index, with its index, or undefined.
+function earlierMeasured(measurements: readonly DarvMeasurement[], index: number) {
+	for (let i = index - 1; i >= 0; i--) if (measured(measurements[i])) return { measurement: measurements[i], index: i }
 	return undefined
+}
+
+// Returns whether two measurements ran with the same settings, so their drifts compare.
+function sameSettings(a: DarvMeasurement, b: DarvMeasurement) {
+	return JSON.stringify(a.request) === JSON.stringify(b.request)
+}
+
+// Returns how the drift of a measured measurement moved from an earlier measured one: better, worse, or unchanged
+// within DARV_UNCHANGED_DRIFT of the earlier drift.
+function driftChange(earlier: DarvMeasurement, later: DarvMeasurement): 'better' | 'worse' | 'unchanged' {
+	const before = earlier.result!.driftMagnitude!
+	const after = later.result!.driftMagnitude!
+	if (Math.abs(after - before) <= DARV_UNCHANGED_DRIFT * before) return 'unchanged'
+	return after < before ? 'better' : 'worse'
 }
 
 // Returns the measurement a frame of a session (by its session id and generation) belongs to, or undefined.

@@ -24,6 +24,7 @@ The operator measures, turns a knob, and measures again until the trails stop di
 - The runner owns the timing and the motions; nothing is timed in `api` or `web`.
 - The drift is a separation rate in pixels per second, never a polar error, and drifts are comparable only between measurements of equal settings.
 - With equal legs the drift has no sign, so it does not say which way to turn a knob.
+- The web tool guides the knob loop only from the trend of comparable drifts (keep turning while the drift falls, turn back when it grows); it never records the turns and never declares the axis aligned.
 - A measurement runs at a slew-rate preset, not at the guide rate.
 - The backend knows no obstacle or cable limit, so the direction is the operator's responsibility.
 - DARV runs only as a manual operation.

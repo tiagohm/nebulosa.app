@@ -202,7 +202,7 @@ export function VirtualSelect<T extends string>({ label, options, value, onChang
 
 			if (item?.kind === 'heading') {
 				rows.push(
-					<div key={`group:${row}`} style={{ top, height: OPTION_HEIGHT }} className={cn('absolute inset-x-1 box-border flex items-end truncate px-2 pb-1.5 text-xs font-medium tracking-wide text-ink-300 uppercase select-none', row > 0 && 'border-t border-line-100')}>
+					<div key={`group:${row}`} style={{ top, height: OPTION_HEIGHT }} className={cn('absolute inset-x-1 box-border flex items-end truncate px-2 pb-1.5 text-xs font-medium tracking-wide text-ink-300 uppercase select-none', row > 0 && 'mt-1 border-t border-line-100')}>
 						{item.text}
 					</div>,
 				)

@@ -18,7 +18,6 @@ import { useWorkspacePanel, WorkspaceLayout, type WorkspacePanelState } from '..
 import { mountPoint, mountRuntime, mountView } from '../../sky/mount'
 import { skyState } from '../../sky/sky'
 import { Button } from '../../ui/Button'
-import { Checkbox } from '../../ui/Checkbox'
 import { IconButton } from '../../ui/IconButton'
 import { moveIndex } from '../../ui/navigation'
 import { Notice } from '../../ui/Notice'
@@ -190,7 +189,6 @@ function ViewControls() {
 	const preview = useSnapshot(framingPreviewState)
 	const [surveys, setSurveys] = useState<readonly HipsSurvey[]>()
 	const [surveysError, setSurveysError] = useState<string>()
-	const [everyWavelength, setEveryWavelength] = useState(false)
 
 	// Loads the bundled survey catalog once the Survey background is chosen.
 	useEffect(() => {
@@ -198,8 +196,8 @@ function ViewControls() {
 		loadHipsSurveys(hipsSurveys).then(setSurveys, (failure: unknown) => setSurveysError(failure instanceof Error ? failure.message : String(failure)))
 	}, [preview.source, surveys])
 
-	// The optical surveys, with the one chosen; every survey once asked for.
-	const options = surveys?.filter((survey) => everyWavelength || survey.regime === OPTICAL || survey.id === preview.survey).map((survey) => survey.id) ?? []
+	// The optical surveys, with the one chosen.
+	const options = surveys?.map((survey) => survey.id) ?? []
 	const surveyOf = (id: string) => surveys?.find((survey) => survey.id === id)
 
 	return (
@@ -230,7 +228,6 @@ function ViewControls() {
 								return survey ? surveyRegime(survey) : 'Surveys'
 							}}
 						/>
-						<Checkbox label="Every wavelength" className="mb-0 pb-2" checked={everyWavelength} disabled={!surveys} onChange={setEveryWavelength} />
 					</>
 				))}
 			<SegmentedControl label="Fit" options={FITS} value={preview.fit} onChange={(fit) => (framingPreviewState.fit = fit)} format={(fit) => (fit === 'all' ? 'Every' : 'Selected')} />

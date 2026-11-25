@@ -3,7 +3,7 @@ import { useSnapshot } from 'valtio'
 import { catalogState } from '../../equipment/catalog'
 import { useProfileTelescopes } from '../../equipment/telescopes'
 import type { OpticalConfiguration } from '../../framing/geometry'
-import { EQUIPMENT_FRAMING_ID, useResolvedFramings } from '../../framing/resolve'
+import { isSetupFraming, useResolvedFramings } from '../../framing/resolve'
 import { activeProfile, profileState } from '../../profile/profile'
 import type { Profile } from '../../profile/schema'
 import { navigate, routeState } from '../../shell/route'
@@ -94,7 +94,7 @@ function CalculatorBody({ profile }: { readonly profile: Readonly<Pick<Profile, 
 	const [drafts, setDrafts] = useState(INITIAL_DRAFTS)
 	const sensors = useSnapshot(sensorRuntime)
 	const live = useRoleSensors()
-	const framings = useResolvedFramings().flatMap(({ id, name, optics }) => (id === EQUIPMENT_FRAMING_ID ? [] : [{ id, name, optics }]))
+	const framings = useResolvedFramings().flatMap(({ id, name, optics }) => (isSetupFraming(id) ? [] : [{ id, name, optics }]))
 	const { telescope, guideTelescope } = useProfileTelescopes(profile.settings)
 	const { cameras: catalogCameras, telescopes: catalogTelescopes } = useSnapshot(catalogState)
 	const context: SourceContext = { profileId: profile.id, settings: { telescope, guideTelescope, framings, catalogCameras, catalogTelescopes }, live, cameras: sensors.cameras }

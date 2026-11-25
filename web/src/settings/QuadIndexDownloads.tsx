@@ -3,7 +3,7 @@ import { useEffect } from 'react'
 import { useSnapshot } from 'valtio'
 import { formatByteSize, formatCount } from '../format'
 import { formatFieldSize, missingText } from '../framing/OpticsFields'
-import { EQUIPMENT_FRAMING, EQUIPMENT_FRAMING_ID, missingCameraName, type ResolvableFraming, type ResolvedFraming, resolveFramingOptics, useFramingContext, useResolvedFramings } from '../framing/resolve'
+import { EQUIPMENT_FRAMING_ID, GUIDE_FRAMING_ID, missingCameraName, type ResolvedFraming, useFramingContext, useResolvedFramings } from '../framing/resolve'
 import { activeProfile, activeSetup, profileState } from '../profile/profile'
 import { PanelSection } from '../shell/ContextualPanel'
 import { Button } from '../ui/Button'
@@ -20,20 +20,6 @@ import { bandsForField, changeQuadIndex, formatBandAngle, formatBandRange, quadI
 // source with where its stars come from, and each of its bands named by the shorter side of the fields it suits, with
 // its quad sizes, its sizes, the framings it suits, its state, and the action that downloads, cancels, or removes it. A
 // download runs on the server and outlives the tab; its progress arrives through the store.
-
-// Id of the field of view of the Guide Camera of the Equipment Setup, never a saved framing.
-const GUIDE_FRAMING_ID = 'equipment-guide'
-
-// Field of view of the Main Camera of the Equipment Setup: the pseudo-framing of the Equipment Setup under the name of
-// its camera, since For Your Fields lists the Guide Camera beside it.
-const MAIN_FRAMING: ResolvableFraming = { ...EQUIPMENT_FRAMING, name: 'Main Camera' }
-
-// Field of view of the Guide Camera of the Equipment Setup: the Guide Camera behind the guide telescope, without rotation.
-const GUIDE_FRAMING: ResolvableFraming = {
-	name: 'Guide Camera',
-	optics: { telescope: { source: 'setup', setupOptics: 'guideTelescope', focalLength: 0, aperture: 0, focalMultiplier: 1 }, camera: { source: 'setup', role: 'GUIDE_CAMERA', sensor: { kind: 'pixels', width: 0, height: 0, pixelSize: 0 } } },
-	rotation: 0,
-}
 
 export interface QuadIndexDownloadsProps {
 	// Index Folder of the draft of the settings.
@@ -273,10 +259,7 @@ export function QuadIndexDownloads({ indexDirectory, onUseDefault }: QuadIndexDo
 	// the Equipment Setup has a guide camera or a guide telescope, so a rig that does not guide is not asked for one; a
 	// framing once its field of view is known.
 	const guides = setup.GUIDE_CAMERA !== undefined || context.telescopes.guideTelescope !== undefined
-	const main = resolveFramingOptics(EQUIPMENT_FRAMING_ID, MAIN_FRAMING, context)
-	const guide = guides ? [resolveFramingOptics(GUIDE_FRAMING_ID, GUIDE_FRAMING, context)] : []
-	const saved = framings.filter((framing) => framing.id !== EQUIPMENT_FRAMING_ID && !('missing' in framing.field))
-	const fields = [main, ...guide, ...saved]
+	const fields = framings.filter((framing) => framing.id === EQUIPMENT_FRAMING_ID || (framing.id === GUIDE_FRAMING_ID ? guides : !('missing' in framing.field)))
 
 	return (
 		<>

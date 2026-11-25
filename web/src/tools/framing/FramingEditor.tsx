@@ -10,7 +10,7 @@ import { formatPixelSize, MISSING } from '../../format'
 import { copyName, deleteFraming, discardFramingDraft, duplicateFraming, editFraming, framingSaveStatus, framingsState, overwriteFraming } from '../../framing/framings'
 import { FieldRows, SensorInputs, TelescopeInputs } from '../../framing/OpticsFields'
 import { nextFrameColor } from '../../framing/palette'
-import { EQUIPMENT_FRAMING_ID, missingCameraName, type ResolvedFraming } from '../../framing/resolve'
+import { EQUIPMENT_FRAMING_ID, isSetupFraming, missingCameraName, type ResolvedFraming } from '../../framing/resolve'
 import { CollapsibleSection } from '../../shell/CollapsibleSection'
 import type { RoleSensor } from '../../sky/sensors'
 import { Actions } from '../../ui/Actions'
@@ -29,7 +29,8 @@ import { showFraming } from './framing'
 // Setup of the active profile, an item of the Equipment Catalog, a model of the AstroBin equipment database, or typed by
 // hand) with their values, and last its name, Duplicate, and Delete. Its save status is shown in the panel header
 // (SaveStatus). Every edit becomes a draft written a moment later (framings.ts); changing a source keeps the values shown
-// as the copy the framing falls back to. The Equipment Setup's pseudo-framing is shown, never edited.
+// as the copy the framing falls back to. The pseudo-framings of the Equipment Setup's Main Camera and Guide Camera are
+// shown, never edited.
 
 // Sources of a telescope or camera in menu order.
 const SOURCES: readonly FramingOpticsSource[] = ['setup', 'catalog', 'model', 'manual']
@@ -68,7 +69,7 @@ export interface FramingEditorProps {
 export function FramingEditor({ framing }: FramingEditorProps) {
 	const state = useSnapshot(framingsState)
 
-	if (framing.id === EQUIPMENT_FRAMING_ID) return <EquipmentFraming framing={framing} />
+	if (isSetupFraming(framing.id)) return <EquipmentFraming framing={framing} />
 
 	const document = state.drafts[framing.id]?.document ?? state.framings[framing.id]
 	if (!document) return null
@@ -122,8 +123,10 @@ function SaveNotices({ id }: { readonly id: string }) {
 	)
 }
 
-// Pseudo-framing of the Equipment Setup, shown with its field and never edited.
+// Pseudo-framing of the Main Camera or the Guide Camera of the Equipment Setup, shown with its field and never edited.
 function EquipmentFraming({ framing }: { readonly framing: ResolvedFraming }) {
+	const main = framing.id === EQUIPMENT_FRAMING_ID
+
 	return (
 		<>
 			<CollapsibleSection id="framing.equipment.field" title="Field">
@@ -131,7 +134,12 @@ function EquipmentFraming({ framing }: { readonly framing: ResolvedFraming }) {
 				<Notice>Without rotation: create a framing to turn the sensor.</Notice>
 			</CollapsibleSection>
 			<CollapsibleSection id="framing.equipment" title="Equipment Setup">
-				<Notice>Follows the Main Camera and the Telescope of the active profile&apos;s Equipment Setup, without rotation; it is what every tool uses until another framing is chosen. Change them in the Equipment Setup, or create a framing to plan with other optics.</Notice>
+				<Notice>
+					{main
+						? 'Follows the Main Camera and the Main Telescope of the active profile’s Equipment Setup, without rotation; it is what every tool uses until another framing is chosen.'
+						: 'Follows the Guide Camera and the Guide Telescope of the active profile’s Equipment Setup, without rotation; with an off-axis guider the Guide Telescope is the Telescope.'}{' '}
+					Change them in the Equipment Setup, or create a framing to plan with other optics.
+				</Notice>
 				<DataRow label="Telescope">{framing.telescope.label}</DataRow>
 				<DataRow label="Camera">{framing.camera.label}</DataRow>
 				<EquipmentSetupButton />

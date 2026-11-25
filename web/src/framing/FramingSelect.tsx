@@ -3,13 +3,13 @@ import { IconButton } from '../ui/IconButton'
 import { Select } from '../ui/Select'
 import { useResolvedFramings } from './resolve'
 
-// Choice of a framing by the tools that apply one: the Equipment Setup's pseudo-framing first, then every framing of the
-// Framing tool by name, with the way to open the one chosen there. A framing deleted elsewhere reads as the Equipment
-// Setup's until another is chosen.
+// Choice of a framing by the tools that apply one: the pseudo-framings of the Equipment Setup's Main Camera and Guide
+// Camera first, then every framing of the Framing tool by name, with the way to open the one chosen there. A framing
+// deleted elsewhere reads as the Main Camera's until another is chosen.
 
 // Props of the select.
 export interface FramingSelectProps {
-	// Id of the framing chosen; absent or unknown reads as the Equipment Setup's.
+	// Id of the framing chosen; absent or unknown reads as the Main Camera's of the Equipment Setup.
 	readonly value?: string
 	// Called with the id of the framing chosen.
 	readonly onChange: (id: string) => void

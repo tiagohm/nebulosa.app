@@ -2,7 +2,7 @@ import type { FramingField } from 'api'
 import { type KeyboardEvent, type PointerEvent, useEffect, useRef, useState } from 'react'
 import { type FramePoint, frameOutline, isFraming } from '../../framing/geometry'
 import { frameColor } from '../../framing/palette'
-import { EQUIPMENT_FRAMING_ID, type ResolvedFraming } from '../../framing/resolve'
+import { isSetupFraming, type ResolvedFraming } from '../../framing/resolve'
 import { aborted, ApiResponseError } from '../../http'
 import { skyMapPalette } from '../../sky/palette'
 import { createRequestGuard } from '../../sky/selection'
@@ -122,7 +122,7 @@ export function FramingPreview({ framings, selectedId, center, source, survey, f
 	// The view a background is asked for: its center, its scale, and its size, rounded so a small change asks nothing.
 	const viewKey = layout && `${center.rightAscension.toFixed(7)}:${center.declination.toFixed(7)}:${layout.fov.toPrecision(5)}:${Math.round(layout.width)}x${Math.round(layout.height)}`
 	const surveyKey = viewKey && `${survey}:${viewKey}`
-	const rotatable = onRotate !== undefined && selectedFrame !== undefined && selectedId !== EQUIPMENT_FRAMING_ID
+	const rotatable = onRotate !== undefined && selectedFrame !== undefined && !isSetupFraming(selectedId)
 	const image = source === 'survey' && cutout && cutout.key === surveyKey ? cutout.image : undefined
 	const readingField = !image && !fieldFailed && field?.key !== viewKey
 

@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test'
 import type { FramingDocument } from 'api'
 import { isFraming } from './geometry'
-import { EQUIPMENT_FRAMING, EQUIPMENT_FRAMING_ID, type FramingContext, resolveAllFramings, resolveFramingOptics } from './resolve'
+import { EQUIPMENT_FRAMING_ID, type FramingContext, GUIDE_FRAMING_ID, resolveAllFramings, resolveFramingOptics } from './resolve'
 
 const CONTEXT: FramingContext = {
 	telescopes: { telescope: { focalLength: 800, focalMultiplier: 0.8, aperture: 200 }, guideTelescope: { focalLength: 240, focalMultiplier: 1, aperture: 60 } },
@@ -20,17 +20,24 @@ const MANUAL: FramingDocument = {
 test('the Equipment Setup follows the Main Camera and the telescope with its reducer, without rotation', () => {
 	const [equipment] = resolveAllFramings([], CONTEXT)
 	expect(equipment.id).toBe(EQUIPMENT_FRAMING_ID)
+	expect(equipment.color).toBe('main')
 	expect(equipment.optics).toEqual({ focalLength: 800, focalMultiplier: 0.8, aperture: 200, sensor: { kind: 'pixels', width: 6248, height: 4176, pixelSize: 3.76 }, rotation: 0 })
-	expect(equipment.telescope.label).toBe('Telescope of the Equipment Setup')
+	expect(equipment.telescope.label).toBe('Main Telescope')
 	expect(isFraming(equipment.field) && equipment.field.effectiveFocalLength).toBeCloseTo(640, 9)
 })
 
-test('a role without a sensor is named as missing, and the guide telescope is followed', () => {
-	const document: FramingDocument = { ...EQUIPMENT_FRAMING, color: 0, optics: { telescope: { ...EQUIPMENT_FRAMING.optics.telescope, setupOptics: 'guideTelescope' }, camera: { source: 'setup', role: 'GUIDE_CAMERA', sensor: { kind: 'pixels', width: 1, height: 1, pixelSize: 1 } } } }
-	const resolved = resolveFramingOptics('g', document, CONTEXT)
-	expect(resolved.optics.focalLength).toBe(240)
-	expect(resolved.camera.missingCamera).toBe('GUIDE_CAMERA')
-	expect(isFraming(resolved.field)).toBeFalse()
+test('the Guide Camera is listed second, behind the guide telescope, and named when it has no sensor', () => {
+	const [, guide, saved] = resolveAllFramings([{ ...MANUAL, id: 'm' }], CONTEXT)
+	expect(guide.id).toBe(GUIDE_FRAMING_ID)
+	expect(guide.color).toBe('guide')
+	expect(guide.optics.focalLength).toBe(240)
+	expect(guide.telescope.label).toBe('Guide Telescope')
+	expect(guide.camera.missingCamera).toBe('GUIDE_CAMERA')
+	expect(isFraming(guide.field)).toBeFalse()
+	expect(saved.id).toBe('m')
+
+	const sensed = resolveAllFramings([], { ...CONTEXT, sensors: { ...CONTEXT.sensors, GUIDE_CAMERA: { width: 1936, height: 1096, pixelSize: 2.9, origin: 'reported' } } })[1]
+	expect(isFraming(sensed.field)).toBeTrue()
 })
 
 test('typed and model values are kept, with the rotation of the framing', () => {

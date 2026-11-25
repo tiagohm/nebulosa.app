@@ -9,7 +9,7 @@ import { createFraming, editFraming, framingsState } from '../../framing/framing
 import { isFraming } from '../../framing/geometry'
 import { fieldSummary } from '../../framing/OpticsFields'
 import { frameSwatch, nextFrameColor } from '../../framing/palette'
-import { EQUIPMENT_FRAMING_ID, missingCameraName, type ResolvedFraming, useResolvedFramings } from '../../framing/resolve'
+import { EQUIPMENT_FRAMING_ID, isSetupFraming, missingCameraName, type ResolvedFraming, useResolvedFramings } from '../../framing/resolve'
 import { DEFAULT_SURVEY, loadHipsSurveys, surveyName, surveyRegime } from '../../framing/surveys'
 import { catalogTarget } from '../../platesolving/measurement'
 import { AngleField } from '../../platesolving/PlateSolveControls'
@@ -58,7 +58,7 @@ export function FramingView() {
 	const [error, setError] = useState<string>()
 	const selectedId = (route.workspace === 'tools' && route.framing) || EQUIPMENT_FRAMING_ID
 	const selected = framings.find((framing) => framing.id === selectedId) ?? framings[0]
-	const editable = selected.id !== EQUIPMENT_FRAMING_ID
+	const editable = !isSetupFraming(selected.id)
 
 	// Creates a framing from the Equipment Setup when it gives a field, else from the default optics, and shows it.
 	async function create() {
@@ -112,7 +112,7 @@ export function FramingView() {
 							<SelectionStrip framing={selected} panel={panel} onRotate={rotate} />
 							<BackgroundNote />
 						</div>
-						<FramingLegend framings={framings} selectedId={selected.id} hidden={preview.hidden} empty={(loaded || Object.keys(saved).length > 0) && framings.length === 1} />
+						<FramingLegend framings={framings} selectedId={selected.id} hidden={preview.hidden} empty={(loaded || Object.keys(saved).length > 0) && framings.every((framing) => isSetupFraming(framing.id))} />
 					</div>
 				</div>
 			</div>
@@ -252,7 +252,7 @@ interface SelectionStripProps {
 // details, so a phone or tablet turns it while watching its outline.
 function SelectionStrip({ framing, panel, onRotate }: SelectionStripProps) {
 	if (panel.docked && panel.open) return null
-	const editable = framing.id !== EQUIPMENT_FRAMING_ID
+	const editable = !isSetupFraming(framing.id)
 
 	return (
 		<div className="flex flex-wrap items-end gap-3 rounded-sm border border-line-100 bg-base-100 p-3">
@@ -297,7 +297,7 @@ function BackgroundNote() {
 
 // Props of the legend.
 interface FramingLegendProps {
-	// Framings in list order, the Equipment Setup's first.
+	// Framings in list order, the Equipment Setup's Main Camera and Guide Camera first.
 	readonly framings: readonly ResolvedFraming[]
 	// Id of the framing shown.
 	readonly selectedId: string
@@ -345,7 +345,7 @@ function FramingLegend({ framings, selectedId, hidden, empty }: FramingLegendPro
 									<span className="text-xs leading-5 text-ink-300">
 										{off ? 'Hidden · ' : ''}
 										{fieldSummary(framing.field, missingCameraName(framing.camera))}
-										{isFraming(framing.field) && framing.id !== EQUIPMENT_FRAMING_ID ? ` · PA ${formatFixed(framing.optics.rotation, 1)}°` : ''}
+										{isFraming(framing.field) && !isSetupFraming(framing.id) ? ` · PA ${formatFixed(framing.optics.rotation, 1)}°` : ''}
 									</span>
 								</span>
 							</button>

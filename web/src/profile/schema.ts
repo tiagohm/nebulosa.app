@@ -127,8 +127,8 @@ export interface ProfileSettings {
 	// Preferences of the Close Approaches tool; absent until edited, and then DEFAULT_CLOSE_APPROACH_PREFERENCES holds. Tab
 	// memory, like the results, the selection, and the dates of a search.
 	closeApproaches?: CloseApproachPreferences
-	// Framing the Observing Planner judges how targets fit (a framing of the Framing tool, or EQUIPMENT_FRAMING_ID); absent
-	// means the Equipment Setup's. View state.
+	// Framing the Observing Planner judges how targets fit (a framing of the Framing tool, or EQUIPMENT_FRAMING_ID or
+	// GUIDE_FRAMING_ID); absent means the Main Camera's of the Equipment Setup. View state.
 	plannerFramingId?: string
 	// Preferences of the Astro Weather tool; absent until edited, and then DEFAULT_ASTRO_WEATHER_PREFERENCES holds. Tab
 	// memory, like the forecasts, the sites typed in, and the night shown.
@@ -341,7 +341,8 @@ export interface SkySettings {
 export interface SkyFramingSettings {
 	// Whether the fields of view are drawn on the map.
 	visible: boolean
-	// Ids of the framings not drawn (EQUIPMENT_FRAMING_ID for the Equipment Setup's); a new framing is drawn.
+	// Ids of the framings not drawn (EQUIPMENT_FRAMING_ID or GUIDE_FRAMING_ID for the Equipment Setup's); a new framing is
+	// drawn.
 	hidden?: readonly string[]
 }
 

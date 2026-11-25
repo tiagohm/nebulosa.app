@@ -682,7 +682,8 @@ export function setFramingVisible(state: ProfileState, visible: boolean) {
 	framing.visible = visible
 }
 
-// Returns whether the Sky of a profile draws a framing (by id, EQUIPMENT_FRAMING_ID for the Equipment Setup's).
+// Returns whether the Sky of a profile draws a framing (by id, EQUIPMENT_FRAMING_ID or GUIDE_FRAMING_ID for the Equipment
+// Setup's).
 export function framingShownInSky(settings: Pick<ProfileSettings, 'sky'>, id: string) {
 	return !settings.sky.framing?.hidden?.includes(id)
 }

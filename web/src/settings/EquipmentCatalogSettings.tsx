@@ -137,7 +137,7 @@ export function EquipmentCatalogSettings({ catalog = 'cameras', item }: Equipmen
 		if (creating) return <CatalogTelescopeEditor key="new" onDirtyChange={setDirty} onSaved={(entry) => saved(entry.id)} onClosed={closed} />
 		if (telescope) return <CatalogTelescopeEditor key={telescope.id} telescope={telescope} onDirtyChange={setDirty} onSaved={(entry) => saved(entry.id)} onClosed={closed} />
 		if (telescopes.length === 0)
-			return <EmptyState title="No telescopes in the catalog" description="Add the telescopes and lenses you use; the Telescope and Guide Telescope of the Equipment Setup then refer to one of them." action={<Button onClick={() => request({ kind: 'new', catalog })}>Add Telescope</Button>} />
+			return <EmptyState title="No telescopes in the catalog" description="Add the telescopes and lenses you use; the Main Telescope and Guide Telescope of the Equipment Setup then refer to one of them." action={<Button onClick={() => request({ kind: 'new', catalog })}>Add Telescope</Button>} />
 		return <EmptyState title="Telescope not found" description="It was deleted, or never saved." />
 	}
 

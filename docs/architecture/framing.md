@@ -25,7 +25,7 @@ It is the one source of fields of view for every tool that applies one, so a cam
 
 - A framing never holds a position on the sky; a tool that needs one asks for it itself, so [Target Centering](target-centering.md) never takes its target from a framing.
 - Consumers read the framings and never keep a copy; framings are created and edited only in the Framing tool.
-- The Equipment Setup's pseudo-framing comes first everywhere and is never saved.
+- The pseudo-framings of the Equipment Setup's Main Camera and Guide Camera come first everywhere and are never saved; a tool that has no framing chosen uses the Main Camera's.
 - Edits are written from the revision they were made on, and a conflict keeps the draft for the operator to resolve.
 - The Mini-Sky works offline; survey images need hips2fits and never block the preview.
 - Nothing here moves a device, changes the profile, or starts an operation.

@@ -8,30 +8,54 @@ import type { RoleSensor } from '../sky/sensors'
 import { useRoleSensors } from '../sky/useSkyDevices'
 import { framingsState, type SavedFraming, sortedFramings } from './framings'
 import { DEFAULT_TELESCOPE, type EquipmentTelescopes, type Framing, type MissingFraming, type OpticalConfiguration, resolveFraming, type SensorGeometry } from './geometry'
+import type { FrameColor } from './palette'
 
 // Resolution of a framing into the optical configuration a field of view is computed from, for the tab that shows it. A
 // typed or AstroBin telescope or camera keeps its values; one of the Equipment Catalog takes what the item declares and
 // keeps its last copy for what it does not declare or once it is deleted; one of the Equipment Setup follows the active
 // profile of the tab: the telescope or guide telescope (resolved through the catalog, with the setup's reducer or Barlow)
-// and the sensor of a camera role (what its device reports, completed by the catalog: roleSensors). The pseudo-framing
-// Equipment Setup (EQUIPMENT_FRAMING_ID), the Main Camera behind the telescope without rotation, is offered first by
-// every tool, so a profile plans with its setup before any framing is created.
+// and the sensor of a camera role (what its device reports, completed by the catalog: roleSensors). The two pseudo-framings
+// of the Equipment Setup, the Main Camera behind the telescope (EQUIPMENT_FRAMING_ID) and the Guide Camera behind the
+// guide telescope (GUIDE_FRAMING_ID), both without rotation, are offered first by every tool, so a profile plans with
+// its setup before any framing is created.
 
-// Id of the pseudo-framing of the Equipment Setup, never saved.
+// Id of the pseudo-framing of the Main Camera of the Equipment Setup, never saved; what a tool falls back to.
 export const EQUIPMENT_FRAMING_ID = 'equipment'
+
+// Id of the pseudo-framing of the Guide Camera of the Equipment Setup, never saved.
+export const GUIDE_FRAMING_ID = 'equipment-guide'
 
 // Zero sensor of a camera that reports none, which resolveFraming lists as missing.
 const NO_SENSOR: SensorGeometry = { kind: 'pixels', width: 0, height: 0, pixelSize: 0 }
 
-// Document of a framing as resolve reads it: a saved one has a colour, the Equipment Setup's pseudo-framing none.
-export type ResolvableFraming = Omit<FramingDocument, 'color'> & Partial<Pick<FramingDocument, 'color'>>
+// Document of a framing as resolve reads it: a saved one has the index of its colour, a pseudo-framing of the Equipment
+// Setup the colour of its camera.
+export interface ResolvableFraming extends Omit<FramingDocument, 'color'> {
+	// Colour of the framing.
+	readonly color: FrameColor
+}
 
-// Document of the pseudo-framing of the Equipment Setup: the Main Camera behind the telescope, without rotation, drawn in
-// the colour of the Equipment Setup (no `color`).
+// Document of the pseudo-framing of the Main Camera of the Equipment Setup: the Main Camera behind the telescope, without
+// rotation.
 export const EQUIPMENT_FRAMING: ResolvableFraming = {
-	name: 'Equipment Setup',
+	name: 'Main Camera',
+	color: 'main',
 	optics: { telescope: { source: 'setup', setupOptics: 'telescope', focalLength: 0, aperture: 0, focalMultiplier: 1 }, camera: { source: 'setup', role: 'MAIN_CAMERA', sensor: NO_SENSOR } },
 	rotation: 0,
+}
+
+// Document of the pseudo-framing of the Guide Camera of the Equipment Setup: the Guide Camera behind the guide
+// telescope, without rotation; with an off-axis guider the guide telescope repeats the telescope.
+export const GUIDE_FRAMING: ResolvableFraming = {
+	name: 'Guide Camera',
+	color: 'guide',
+	optics: { telescope: { source: 'setup', setupOptics: 'guideTelescope', focalLength: 0, aperture: 0, focalMultiplier: 1 }, camera: { source: 'setup', role: 'GUIDE_CAMERA', sensor: NO_SENSOR } },
+	rotation: 0,
+}
+
+// Returns whether a framing id is a pseudo-framing of the Equipment Setup, shown but never edited, turned, or saved.
+export function isSetupFraming(id: string) {
+	return id === EQUIPMENT_FRAMING_ID || id === GUIDE_FRAMING_ID
 }
 
 // What a framing resolves against: the active profile's Equipment Setup and the Equipment Catalog of the tab.
@@ -64,12 +88,12 @@ export interface CameraOrigin extends OpticsOrigin {
 
 // A framing resolved for the tab.
 export interface ResolvedFraming {
-	// Id of the framing, or EQUIPMENT_FRAMING_ID.
+	// Id of the framing, or EQUIPMENT_FRAMING_ID or GUIDE_FRAMING_ID.
 	readonly id: string
 	// Name of the framing.
 	readonly name: string
-	// Colour of the framing, an index of the `frame-*` tokens; absent for the Equipment Setup's, drawn in its own.
-	readonly color?: number
+	// Colour of the framing: an index of the `frame-*` tokens, or the colour of a camera of the Equipment Setup.
+	readonly color: FrameColor
 	// Optical configuration, with the rotation of the framing.
 	readonly optics: OpticalConfiguration
 	// Field of view, or what is missing to compute it.
@@ -94,7 +118,7 @@ function resolveTelescopeOf(telescope: FramingTelescope, context: FramingContext
 		case 'setup': {
 			const guide = telescope.setupOptics === 'guideTelescope'
 			const optics = (guide ? context.telescopes.guideTelescope : context.telescopes.telescope) ?? DEFAULT_TELESCOPE
-			return { values: { focalLength: optics.focalLength, aperture: optics.aperture, focalMultiplier: optics.focalMultiplier }, origin: { label: guide ? 'Guide Telescope of the Equipment Setup' : 'Telescope of the Equipment Setup' } }
+			return { values: { focalLength: optics.focalLength, aperture: optics.aperture, focalMultiplier: optics.focalMultiplier }, origin: { label: guide ? 'Guide Telescope' : 'Main Telescope' } }
 		}
 		case 'catalog': {
 			const item = context.catalogTelescopes.find((e) => e.id === telescope.telescopeId)
@@ -140,10 +164,10 @@ export function resolveFramingOptics(id: string, framing: ResolvableFraming, con
 	return { id, name: framing.name, color: framing.color, optics, field: resolveFraming(optics), telescope: telescope.origin, camera: camera.origin }
 }
 
-// Resolves the pseudo-framing of the Equipment Setup and every saved framing (drafts applied), in the order every select
-// lists them.
+// Resolves the pseudo-framings of the Main Camera and the Guide Camera of the Equipment Setup and every saved framing
+// (drafts applied), in the order every select lists them.
 export function resolveAllFramings(framings: readonly Pick<SavedFraming, 'id' | 'name' | 'optics' | 'rotation' | 'color'>[], context: FramingContext): ResolvedFraming[] {
-	return [resolveFramingOptics(EQUIPMENT_FRAMING_ID, EQUIPMENT_FRAMING, context), ...framings.map((framing) => resolveFramingOptics(framing.id, framing, context))]
+	return [resolveFramingOptics(EQUIPMENT_FRAMING_ID, EQUIPMENT_FRAMING, context), resolveFramingOptics(GUIDE_FRAMING_ID, GUIDE_FRAMING, context), ...framings.map((framing) => resolveFramingOptics(framing.id, framing, context))]
 }
 
 // Returns what the framings of the tab resolve against, following the active profile's Equipment Setup, its cameras, and
@@ -156,14 +180,14 @@ export function useFramingContext(): FramingContext {
 	return { telescopes, sensors, catalogCameras: catalog.cameras, catalogTelescopes: catalog.telescopes }
 }
 
-// Returns the pseudo-framing of the Equipment Setup and every saved framing, resolved for the tab and followed.
+// Returns the pseudo-framings of the Equipment Setup and every saved framing, resolved for the tab and followed.
 export function useResolvedFramings(): ResolvedFraming[] {
 	const context = useFramingContext()
 	return resolveAllFramings(sortedFramings(useSnapshot(framingsState)), context)
 }
 
-// Returns the framing of an id resolved for the tab, the Equipment Setup's for EQUIPMENT_FRAMING_ID, an absent id, or a
-// framing that no longer exists.
+// Returns the framing of an id resolved for the tab, the Main Camera's of the Equipment Setup for EQUIPMENT_FRAMING_ID,
+// an absent id, or a framing that no longer exists.
 export function useFraming(id: string | undefined): ResolvedFraming {
 	const framings = useResolvedFramings()
 	return framings.find((framing) => framing.id === id) ?? framings[0]

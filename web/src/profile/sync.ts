@@ -94,7 +94,7 @@ function skySetting(key: keyof Pick<SkySettings, 'display'>): PreferenceField {
 
 // Every preference the server keeps, and where it lives in the settings of a profile.
 const PREFERENCES: Readonly<Record<ProfilePreferenceKey, PreferenceField>> = {
-	telescope: setting('telescope'),
+	mainTelescope: setting('mainTelescope'),
 	guideTelescope: setting('guideTelescope'),
 	skyDisplay: skySetting('display'),
 	starDetection: setting('starDetection'),

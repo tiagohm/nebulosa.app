@@ -31,8 +31,8 @@ export interface SourceFraming {
 
 // Profile data the sources are read from.
 export interface SourceSettings {
-	// Telescope optics of the Equipment Setup, which the Main Camera looks through; absent until entered.
-	readonly telescope?: Readonly<TelescopeOptics>
+	// Main telescope optics of the Equipment Setup, which the Main Camera looks through; absent until entered.
+	readonly mainTelescope?: Readonly<TelescopeOptics>
 	// Guide telescope optics, which the Guide Camera looks through; absent until entered.
 	readonly guideTelescope?: Readonly<TelescopeOptics>
 	// Framings of the Framing tool, by name, without the Equipment Setup's pseudo-framing, which the camera roles give.
@@ -135,11 +135,11 @@ export function sourceGroup(source: OpticsSourceId) {
 	return source.startsWith(TELESCOPE_PREFIX) ? 'Catalog telescopes' : 'Equipment Setup'
 }
 
-// Optical configuration of a camera role of the Equipment Setup, or of a sensor behind the telescope: the optics it looks
-// through (the guide telescope for the Guide Camera, the telescope otherwise; zero when not entered) with the sensor
+// Optical configuration of a camera role of the Equipment Setup, or of a sensor behind the main telescope: the optics it
+// looks through (the guide telescope for the Guide Camera, the main telescope otherwise; zero when not entered) with the sensor
 // given or the role's own, else an empty sensor and the role that has none (missingCamera).
-function setupOptics({ telescope, guideTelescope }: EquipmentTelescopes, role: CameraRole, live: SourceContext['live'], sensor?: SensorGeometry): { readonly optics: OpticalConfiguration; readonly missingCamera?: CameraRole } {
-	const { focalLength, focalMultiplier, aperture } = (role === 'GUIDE_CAMERA' ? guideTelescope : telescope) ?? DEFAULT_TELESCOPE
+function setupOptics({ mainTelescope, guideTelescope }: EquipmentTelescopes, role: CameraRole, live: SourceContext['live'], sensor?: SensorGeometry): { readonly optics: OpticalConfiguration; readonly missingCamera?: CameraRole } {
+	const { focalLength, focalMultiplier, aperture } = (role === 'GUIDE_CAMERA' ? guideTelescope : mainTelescope) ?? DEFAULT_TELESCOPE
 	const base = { focalLength, focalMultiplier, aperture, rotation: 0 }
 	if (sensor) return { optics: { ...base, sensor } }
 	const reported = live[role]
@@ -148,7 +148,7 @@ function setupOptics({ telescope, guideTelescope }: EquipmentTelescopes, role: C
 }
 
 // Copies the optical configuration of a source. A camera role takes the optics it looks through and the sensor its
-// device reports, never another camera's; a camera of the Equipment Catalog takes the telescope with the sensor it
+// device reports, never another camera's; a camera of the Equipment Catalog takes the main telescope with the sensor it
 // declares (a pixel size it does not declare stays missing); a telescope of the Equipment Catalog takes its native optics
 // (no reducer or Barlow) with the sensor the Main Camera reports, missing when it reports none; a framing is copied as the
 // tab resolves it. Optics the profile has not entered are zero, so the draft shows them as missing.
@@ -169,7 +169,7 @@ export function importOptics(context: SourceContext, source: OpticsSourceId): Op
 		if (!camera.sensor) return { reason: `No sensor is declared for ${camera.name}: declare it in Settings → Equipment Catalog.` }
 		const { width, height, pixelSize } = camera.sensor
 		const { optics } = setupOptics(settings, 'MAIN_CAMERA', context.live, { kind: 'pixels', width, height, pixelSize: pixelSize ?? 0 })
-		return { optics, origin: { source, label: `${label} behind the telescope of the Equipment Setup`, profileId } }
+		return { optics, origin: { source, label: `${label} behind the Main Telescope of the Equipment Setup`, profileId } }
 	}
 
 	if (source.startsWith(TELESCOPE_PREFIX)) {

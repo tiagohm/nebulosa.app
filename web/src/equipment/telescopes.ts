@@ -2,7 +2,7 @@ import { useSnapshot } from 'valtio'
 import type { EquipmentTelescopes, TelescopeOptics } from '../framing/geometry'
 import { type CatalogTelescope, catalogState } from './catalog'
 
-// Telescopes of the Equipment Setup resolved through the Equipment Catalog. The Telescope and Guide Telescope of a profile
+// Telescopes of the Equipment Setup resolved through the Equipment Catalog. The Main Telescope and Guide Telescope of a profile
 // may refer to a telescope of the catalog (TelescopeOptics.telescopeId): the aperture and native focal length it declares
 // then replace the profile's, every value it does not declare is the profile's, and the reducer or Barlow is always the
 // profile's. Choosing a telescope copies what it declares into the profile, so a telescope deleted later leaves the
@@ -23,9 +23,9 @@ export function resolveTelescope(optics: Readonly<TelescopeOptics> | undefined, 
 	return { ...optics, focalLength: telescope.focalLength ?? optics.focalLength, aperture: telescope.aperture ?? optics.aperture }
 }
 
-// Returns the telescope and guide telescope of a profile resolved through the catalog (resolveTelescope).
-export function resolveTelescopes({ telescope, guideTelescope }: Readonly<EquipmentTelescopes>, telescopes: readonly Readonly<Pick<CatalogTelescope, 'id' | 'aperture' | 'focalLength'>>[]): EquipmentTelescopes {
-	return { telescope: resolveTelescope(telescope, telescopes), guideTelescope: resolveTelescope(guideTelescope, telescopes) }
+// Returns the main telescope and guide telescope of a profile resolved through the catalog (resolveTelescope).
+export function resolveTelescopes({ mainTelescope, guideTelescope }: Readonly<EquipmentTelescopes>, telescopes: readonly Readonly<Pick<CatalogTelescope, 'id' | 'aperture' | 'focalLength'>>[]): EquipmentTelescopes {
+	return { mainTelescope: resolveTelescope(mainTelescope, telescopes), guideTelescope: resolveTelescope(guideTelescope, telescopes) }
 }
 
 // Returns the optics of a profile that refer to a telescope of the catalog, with the values it declares copied in, the
@@ -36,9 +36,9 @@ export function referToTelescope(optics: Readonly<TelescopeOptics>, telescope: R
 	return { ...rest, focalLength: telescope.focalLength ?? optics.focalLength, aperture: telescope.aperture ?? optics.aperture, telescopeId: telescope.id }
 }
 
-// Returns how many profiles refer to a telescope of the catalog, as their telescope or guide telescope.
+// Returns how many profiles refer to a telescope of the catalog, as their main telescope or guide telescope.
 export function profilesUsingTelescope(profiles: readonly { readonly settings: Readonly<EquipmentTelescopes> }[], id: string) {
-	return profiles.filter(({ settings }) => settings.telescope?.telescopeId === id || settings.guideTelescope?.telescopeId === id).length
+	return profiles.filter(({ settings }) => settings.mainTelescope?.telescopeId === id || settings.guideTelescope?.telescopeId === id).length
 }
 
 // Says how many profiles use a telescope of the catalog.

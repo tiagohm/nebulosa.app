@@ -86,7 +86,7 @@ import {
 	setImageAstrometrySettings,
 	imageAstrometrySettings,
 	setGuideTelescopeOptics,
-	setTelescopeOptics,
+	setMainTelescopeOptics,
 	starDetectionSettings,
 	starProfileSettings,
 	setStarProfileSettings,
@@ -397,14 +397,14 @@ describe('sky settings', () => {
 
 	test('the telescope belongs to the active profile', () => {
 		const state = load()
-		setTelescopeOptics(state, { focalLength: 400, focalMultiplier: 1, aperture: 80 })
+		setMainTelescopeOptics(state, { focalLength: 400, focalMultiplier: 1, aperture: 80 })
 		const copy = duplicateProfile(state, state.profiles[0].id)!
 
 		selectProfile(state, copy.id)
-		setTelescopeOptics(state, { focalLength: 1000, focalMultiplier: 1, aperture: 200 })
+		setMainTelescopeOptics(state, { focalLength: 1000, focalMultiplier: 1, aperture: 200 })
 
-		expect(state.profiles[0].settings.telescope?.focalLength).toBe(400)
-		expect(copy.settings.telescope?.focalLength).toBe(1000)
+		expect(state.profiles[0].settings.mainTelescope?.focalLength).toBe(400)
+		expect(copy.settings.mainTelescope?.focalLength).toBe(1000)
 		expect(state.profiles[0].equipment).toEqual({})
 	})
 

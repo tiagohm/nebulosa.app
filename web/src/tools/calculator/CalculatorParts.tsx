@@ -239,7 +239,7 @@ export function DraftBar<D extends object>({ entry, onChange, context, example, 
 
 	const status =
 		entry.pristine && origin
-			? 'Values of your Equipment Setup: the Main Camera behind the telescope, followed until you edit, import, or reset.'
+			? 'Values of your Equipment Setup: the Main Camera behind the Main Telescope, followed until you edit, import, or reset.'
 			: origin
 				? `Imported from ${origin.label}${edited ? ' · edited' : ''}.${entry.partial ? ' Fields it does not give kept their values.' : ''} Later changes of the source are not followed.`
 				: entry.origin

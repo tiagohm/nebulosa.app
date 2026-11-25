@@ -16,7 +16,7 @@ test('a new framing gets the first free name, its colour, and the Equipment Setu
 	expect(newFramingDocument('Framing 2', 0, { focalLength: 800, focalMultiplier: 0.8, aperture: 200, sensor, rotation: 0 })).toEqual({
 		name: 'Framing 2',
 		color: 0,
-		optics: { telescope: { source: 'setup', setupOptics: 'telescope', focalLength: 800, aperture: 200, focalMultiplier: 0.8 }, camera: { source: 'setup', role: 'MAIN_CAMERA', sensor } },
+		optics: { telescope: { source: 'setup', setupOptics: 'mainTelescope', focalLength: 800, aperture: 200, focalMultiplier: 0.8 }, camera: { source: 'setup', role: 'MAIN_CAMERA', sensor } },
 		rotation: 0,
 	})
 })

@@ -12,8 +12,8 @@ import type { FieldObjects, FieldQuery } from './sky/catalog'
 // Camera role of an Equipment Setup a framing can follow.
 export type FramingCameraRole = 'MAIN_CAMERA' | 'GUIDE_CAMERA'
 
-// Optics of an Equipment Setup a framing can follow: the telescope or the guide telescope.
-export type FramingSetupOptics = 'telescope' | 'guideTelescope'
+// Optics of an Equipment Setup a framing can follow: the main telescope or the guide telescope.
+export type FramingSetupOptics = 'mainTelescope' | 'guideTelescope'
 
 // Where a telescope or camera of a framing comes from: typed by hand, copied from a model of the AstroBin equipment
 // database, the item of the Equipment Catalog it refers to, or the Equipment Setup of the active profile of the tab.

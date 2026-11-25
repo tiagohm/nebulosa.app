@@ -61,7 +61,7 @@ test('the workspace survives a restart', async () => {
 	await saveSimulator(first.routes)
 	await saveSite(first.routes)
 	await call(first.routes, '/api/profiles/:id', 'PUT', { id: first.profileId }, { name: 'Deep Sky', connectionId: 'sim', activeSiteId: 'home', sortOrder: 0, revision: 1 })
-	await call(first.routes, '/api/profiles/:id/preferences/:key', 'PUT', { id: first.profileId, key: 'telescope' }, { version: 1, value: { focalLength: 800, focalMultiplier: 1, aperture: 200 }, revision: 0 })
+	await call(first.routes, '/api/profiles/:id/preferences/:key', 'PUT', { id: first.profileId, key: 'mainTelescope' }, { version: 1, value: { focalLength: 800, focalMultiplier: 1, aperture: 200 }, revision: 0 })
 	const before = first.workspace.snapshot()
 	first.database.close()
 
@@ -142,7 +142,7 @@ test('deleting a saved connection drops what every profile keeps on it and publi
 	await call(routes, '/api/profiles/:id/equipment/:connectionId', 'PUT', { id: profileId, connectionId: 'sim' }, { setup: { MAIN_CAMERA: { id: 'camera', name: 'Camera Simulator' } } })
 	await call(routes, '/api/profiles/:id/cameras/:connectionId/:deviceId/:form', 'PUT', { id: profileId, connectionId: 'sim', deviceId: 'camera', form: 'exposure' }, { version: 1, value: {}, revision: 0 })
 	await call(routes, '/api/profiles/:id/mount-bindings/:connectionId/:deviceId/:protocol', 'PUT', { id: profileId, connectionId: 'sim', deviceId: 'mount', protocol: 'lx200' }, { host: '0.0.0.0', port: 10002 })
-	await call(routes, '/api/profiles/:id/preferences/:key', 'PUT', { id: profileId, key: 'telescope' }, { version: 1, value: { focalLength: 400 }, revision: 0 })
+	await call(routes, '/api/profiles/:id/preferences/:key', 'PUT', { id: profileId, key: 'mainTelescope' }, { version: 1, value: { focalLength: 400 }, revision: 0 })
 	expect(workspace.profile(profileId)).toMatchObject({ connectionId: 'sim', equipment: { sim: { MAIN_CAMERA: { id: 'camera' } } }, mountBindings: { sim: { mount: { lx200: { port: 10002 } } } } })
 
 	events.length = 0
@@ -150,7 +150,7 @@ test('deleting a saved connection drops what every profile keeps on it and publi
 
 	const profile = workspace.profile(profileId)!
 	expect(profile.connectionId).toBeUndefined()
-	expect(profile).toMatchObject({ equipment: {}, cameras: {}, mountBindings: {}, preferences: { telescope: { value: { focalLength: 400 } } } })
+	expect(profile).toMatchObject({ equipment: {}, cameras: {}, mountBindings: {}, preferences: { mainTelescope: { value: { focalLength: 400 } } } })
 	expect(events).toEqual([
 		{ type: 'savedConnection:removed', id: 'sim' },
 		{ type: 'profile:updated', profile },
@@ -286,7 +286,7 @@ test('deleting a profile deletes everything it keeps', async () => {
 	const { database, routes, profileId } = setup()
 	await saveSimulator(routes)
 	await call(routes, '/api/profiles/:id', 'PUT', { id: 'second' }, { name: 'Second', connectionId: 'sim', activeSiteId: null, sortOrder: 1, revision: 0 })
-	await call(routes, '/api/profiles/:id/preferences/:key', 'PUT', { id: 'second', key: 'telescope' }, { version: 1, value: {}, revision: 0 })
+	await call(routes, '/api/profiles/:id/preferences/:key', 'PUT', { id: 'second', key: 'mainTelescope' }, { version: 1, value: {}, revision: 0 })
 	await call(routes, '/api/profiles/:id/cameras/:connectionId/:deviceId/:form', 'PUT', { id: 'second', connectionId: 'sim', deviceId: 'camera', form: 'exposure' }, { version: 1, value: {}, revision: 0 })
 
 	await call(routes, '/api/profiles/:id', 'DELETE', { id: 'second' })

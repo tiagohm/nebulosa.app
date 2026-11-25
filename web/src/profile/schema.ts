@@ -87,9 +87,9 @@ export interface ProfileSettings {
 	imageDisplay?: DisplaySettings
 	// Preferences of the Sky workspace.
 	sky: SkySettings
-	// Telescope or lens of the profile's Equipment Setup, which no device reports; absent until entered.
-	// It is planning data only and never sent to any device.
-	telescope?: TelescopeOptics
+	// Main telescope or lens of the profile's Equipment Setup, which the Main Camera looks through and no device reports;
+	// absent until entered. It is planning data only and never sent to any device.
+	mainTelescope?: TelescopeOptics
 	// Guide telescope or lens of the profile's Equipment Setup, whose effective focal length gives guiding its pixel scale
 	// and calibration step; absent until entered. With an off-axis guider it holds the optics of the main telescope.
 	guideTelescope?: TelescopeOptics

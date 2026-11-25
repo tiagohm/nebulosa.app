@@ -117,13 +117,13 @@ export function openFramingAt({ center, name }: FramingCenter, state: FramingPre
 	navigate(route, { workspace: 'tools', tool: 'framing' }, history)
 }
 
-// Returns the document of a new framing named name in a colour, without rotation: the telescope and Main Camera of the
+// Returns the document of a new framing named name in a colour, without rotation: the Main Telescope and Main Camera of the
 // Equipment Setup, with the optics they resolve to (setup) kept as the copy it falls back to, when the setup gives a
 // field; otherwise a 600 mm telescope and an APS-C camera of 3.76 µm pixels, typed by hand.
 export function newFramingDocument(name: string, color: number, setup?: OpticalConfiguration): FramingDocument {
 	if (setup) {
 		const { focalLength, focalMultiplier, aperture, sensor } = setup
-		return { name, color, optics: { telescope: { source: 'setup', setupOptics: 'telescope', focalLength, aperture, focalMultiplier }, camera: { source: 'setup', role: 'MAIN_CAMERA', sensor } }, rotation: 0 }
+		return { name, color, optics: { telescope: { source: 'setup', setupOptics: 'mainTelescope', focalLength, aperture, focalMultiplier }, camera: { source: 'setup', role: 'MAIN_CAMERA', sensor } }, rotation: 0 }
 	}
 
 	const { focalLength, focalMultiplier, aperture, sensor } = DEFAULT_OPTICS

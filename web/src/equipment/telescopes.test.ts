@@ -19,7 +19,7 @@ test('optics entered by hand, absent, or of a deleted telescope resolve as they 
 })
 
 test('both telescopes of a profile resolve', () => {
-	expect(resolveTelescopes({ telescope: { focalLength: 0, focalMultiplier: 1, aperture: 0, telescopeId: 't1' } }, CATALOG)).toEqual({ telescope: { focalLength: 550, focalMultiplier: 1, aperture: 100, telescopeId: 't1' }, guideTelescope: undefined })
+	expect(resolveTelescopes({ mainTelescope: { focalLength: 0, focalMultiplier: 1, aperture: 0, telescopeId: 't1' } }, CATALOG)).toEqual({ mainTelescope: { focalLength: 550, focalMultiplier: 1, aperture: 100, telescopeId: 't1' }, guideTelescope: undefined })
 })
 
 test('referring to a telescope copies what it declares, and referring to none keeps the last copy', () => {

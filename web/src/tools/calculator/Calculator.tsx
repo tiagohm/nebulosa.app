@@ -95,9 +95,9 @@ function CalculatorBody({ profile }: { readonly profile: Readonly<Pick<Profile, 
 	const sensors = useSnapshot(sensorRuntime)
 	const live = useRoleSensors()
 	const framings = useResolvedFramings().flatMap(({ id, name, optics }) => (isSetupFraming(id) ? [] : [{ id, name, optics }]))
-	const { telescope, guideTelescope } = useProfileTelescopes(profile.settings)
+	const { mainTelescope, guideTelescope } = useProfileTelescopes(profile.settings)
 	const { cameras: catalogCameras, telescopes: catalogTelescopes } = useSnapshot(catalogState)
-	const context: SourceContext = { profileId: profile.id, settings: { telescope, guideTelescope, framings, catalogCameras, catalogTelescopes }, live, cameras: sensors.cameras }
+	const context: SourceContext = { profileId: profile.id, settings: { mainTelescope, guideTelescope, framings, catalogCameras, catalogTelescopes }, live, cameras: sensors.cameras }
 	const definition = calculatorDefinition(selected)
 
 	// Shows a calculator, naming it in the URL.

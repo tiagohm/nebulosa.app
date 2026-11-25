@@ -706,11 +706,11 @@ function copyTelescopeOptics({ focalLength, focalMultiplier, aperture, telescope
 	return { focalLength, focalMultiplier, aperture, ...(telescopeId !== undefined && { telescopeId }) }
 }
 
-// Replaces the telescope optics of the active profile's Equipment Setup, with the telescope of the Equipment Catalog they
-// refer to; planning data only, never sent to a device.
-export function setTelescopeOptics(state: ProfileState, optics: TelescopeOptics) {
+// Replaces the main telescope optics of the active profile's Equipment Setup, with the telescope of the Equipment Catalog
+// they refer to; planning data only, never sent to a device.
+export function setMainTelescopeOptics(state: ProfileState, optics: TelescopeOptics) {
 	const profile = activeProfile(state)
-	profile.settings.telescope = copyTelescopeOptics(optics)
+	profile.settings.mainTelescope = copyTelescopeOptics(optics)
 }
 
 // Replaces the guide telescope optics of the active profile's Equipment Setup, with the telescope of the Equipment Catalog

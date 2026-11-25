@@ -13,9 +13,9 @@ import type { FrameColor } from './palette'
 // Resolution of a framing into the optical configuration a field of view is computed from, for the tab that shows it. A
 // typed or AstroBin telescope or camera keeps its values; one of the Equipment Catalog takes what the item declares and
 // keeps its last copy for what it does not declare or once it is deleted; one of the Equipment Setup follows the active
-// profile of the tab: the telescope or guide telescope (resolved through the catalog, with the setup's reducer or Barlow)
+// profile of the tab: the main telescope or guide telescope (resolved through the catalog, with the setup's reducer or Barlow)
 // and the sensor of a camera role (what its device reports, completed by the catalog: roleSensors). The two pseudo-framings
-// of the Equipment Setup, the Main Camera behind the telescope (EQUIPMENT_FRAMING_ID) and the Guide Camera behind the
+// of the Equipment Setup, the Main Camera behind the main telescope (EQUIPMENT_FRAMING_ID) and the Guide Camera behind the
 // guide telescope (GUIDE_FRAMING_ID, only for a setup that guides), both without rotation, are offered first by every
 // tool, so a profile plans with its setup before any framing is created.
 
@@ -35,17 +35,17 @@ export interface ResolvableFraming extends Omit<FramingDocument, 'color'> {
 	readonly color: FrameColor
 }
 
-// Document of the pseudo-framing of the Main Camera of the Equipment Setup: the Main Camera behind the telescope, without
-// rotation.
+// Document of the pseudo-framing of the Main Camera of the Equipment Setup: the Main Camera behind the main telescope,
+// without rotation.
 export const EQUIPMENT_FRAMING: ResolvableFraming = {
 	name: 'Main Camera',
 	color: 'main',
-	optics: { telescope: { source: 'setup', setupOptics: 'telescope', focalLength: 0, aperture: 0, focalMultiplier: 1 }, camera: { source: 'setup', role: 'MAIN_CAMERA', sensor: NO_SENSOR } },
+	optics: { telescope: { source: 'setup', setupOptics: 'mainTelescope', focalLength: 0, aperture: 0, focalMultiplier: 1 }, camera: { source: 'setup', role: 'MAIN_CAMERA', sensor: NO_SENSOR } },
 	rotation: 0,
 }
 
 // Document of the pseudo-framing of the Guide Camera of the Equipment Setup: the Guide Camera behind the guide
-// telescope, without rotation; with an off-axis guider the guide telescope repeats the telescope.
+// telescope, without rotation; with an off-axis guider the guide telescope repeats the main telescope.
 export const GUIDE_FRAMING: ResolvableFraming = {
 	name: 'Guide Camera',
 	color: 'guide',
@@ -60,7 +60,7 @@ export function isSetupFraming(id: string) {
 
 // What a framing resolves against: the active profile's Equipment Setup and the Equipment Catalog of the tab.
 export interface FramingContext {
-	// Telescope and guide telescope of the Equipment Setup, resolved through the catalog.
+	// Main telescope and guide telescope of the Equipment Setup, resolved through the catalog.
 	readonly telescopes: EquipmentTelescopes
 	// Sensor of each camera role of the Equipment Setup; absent for a role whose camera has none.
 	readonly sensors: Readonly<Partial<Record<CameraRole, RoleSensor>>>
@@ -119,7 +119,7 @@ function resolveTelescopeOf(telescope: FramingTelescope, context: FramingContext
 	switch (telescope.source) {
 		case 'setup': {
 			const guide = telescope.setupOptics === 'guideTelescope'
-			const optics = (guide ? context.telescopes.guideTelescope : context.telescopes.telescope) ?? DEFAULT_TELESCOPE
+			const optics = (guide ? context.telescopes.guideTelescope : context.telescopes.mainTelescope) ?? DEFAULT_TELESCOPE
 			return { values: { focalLength: optics.focalLength, aperture: optics.aperture, focalMultiplier: optics.focalMultiplier }, origin: { label: guide ? 'Guide Telescope' : 'Main Telescope' } }
 		}
 		case 'catalog': {

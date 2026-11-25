@@ -7,7 +7,7 @@ const FRAMING: SourceFraming = { id: 'p1', name: 'Refractor', optics: { focalLen
 const CONTEXT: SourceContext = {
 	profileId: 'profile',
 	settings: {
-		telescope: { focalLength: 1000, focalMultiplier: 0.8, aperture: 200 },
+		mainTelescope: { focalLength: 1000, focalMultiplier: 0.8, aperture: 200 },
 		guideTelescope: { focalLength: 240, focalMultiplier: 1, aperture: 60 },
 		framings: [FRAMING],
 		catalogCameras: [
@@ -40,7 +40,7 @@ describe('sources', () => {
 		expect(sourceLabel(CONTEXT.settings, 'GUIDE_CAMERA')).toBe('Guide Camera')
 	})
 
-	test('the Main Camera takes the telescope and its own sensor', () => {
+	test('the Main Camera takes the main telescope and its own sensor', () => {
 		const result = importOptics(CONTEXT, 'MAIN_CAMERA')
 		expect(result).toEqual({
 			optics: { focalLength: 1000, focalMultiplier: 0.8, aperture: 200, sensor: { kind: 'pixels', width: 6248, height: 4176, pixelSize: 3.76 }, rotation: 0 },
@@ -63,10 +63,10 @@ describe('sources', () => {
 		expect('optics' in result && result.optics).toMatchObject({ focalLength: 0, focalMultiplier: 1, aperture: 0 })
 	})
 
-	test('a camera of the catalog takes the telescope and the sensor it declares, and one declaring none is refused', () => {
+	test('a camera of the catalog takes the main telescope and the sensor it declares, and one declaring none is refused', () => {
 		expect(importOptics(CONTEXT, 'catalog:c1')).toEqual({
 			optics: { focalLength: 1000, focalMultiplier: 0.8, aperture: 200, sensor: { kind: 'pixels', width: 8240, height: 5628, pixelSize: 2.32 }, rotation: 0 },
-			origin: { source: 'catalog:c1', label: 'ASI294MM behind the telescope of the Equipment Setup', profileId: 'profile' },
+			origin: { source: 'catalog:c1', label: 'ASI294MM behind the Main Telescope of the Equipment Setup', profileId: 'profile' },
 		})
 		// A pixel size the camera does not declare stays missing in the draft.
 		expect(importOptics(CONTEXT, 'catalog:c4')).toMatchObject({ optics: { sensor: { kind: 'pixels', width: 1920, height: 1080, pixelSize: 0 } } })
@@ -96,7 +96,7 @@ describe('sources', () => {
 	})
 
 	test('an import keeps each field the source does not give', () => {
-		const context = { ...CONTEXT, settings: { ...CONTEXT.settings, telescope: undefined } }
+		const context = { ...CONTEXT, settings: { ...CONTEXT.settings, mainTelescope: undefined } }
 		const entry = importDraft(IMAGING_SETUP_EXAMPLE, context, 'catalog:c1', imagingSetupFromOptics)
 		if ('reason' in entry) throw new Error('camera not imported')
 		expect(entry.partial).toBe(true)
@@ -111,7 +111,7 @@ describe('sources', () => {
 		const pristine = { draft: IMAGING_SETUP_EXAMPLE, pristine: true }
 		const shown = shownEntry(pristine, CONTEXT, imagingSetupFromOptics)
 		expect(shown).toMatchObject({ pristine: true, origin: { source: 'MAIN_CAMERA' }, draft: { focalLength: '1000', focalMultiplier: '0.8', width: '6248' } })
-		expect(shownEntry(pristine, { ...CONTEXT, settings: { ...CONTEXT.settings, telescope: undefined } }, imagingSetupFromOptics)).toBe(pristine)
+		expect(shownEntry(pristine, { ...CONTEXT, settings: { ...CONTEXT.settings, mainTelescope: undefined } }, imagingSetupFromOptics)).toBe(pristine)
 		expect(shownEntry(pristine, { ...CONTEXT, live: {} }, imagingSetupFromOptics)).toBe(pristine)
 		expect(shownEntry(pristine, CONTEXT)).toBe(pristine)
 		const edited = { draft: IMAGING_SETUP_EXAMPLE }

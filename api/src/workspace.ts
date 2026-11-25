@@ -16,7 +16,7 @@ import type { MountRemoteProtocol } from './mountremotecontrol'
 
 // Preference of a profile kept as one value (profile_preferences).
 export type ProfilePreferenceKey =
-	| 'telescope'
+	| 'mainTelescope'
 	| 'guideTelescope'
 	| 'skyDisplay'
 	| 'starDetection'

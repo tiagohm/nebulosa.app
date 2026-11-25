@@ -4,7 +4,7 @@ import { proxy, snapshot } from 'valtio'
 import { type ConnectionState, removeConnection, saveConnection } from '../connection/connection'
 import { type CatalogState, removeCatalogCamera, removeCatalogTelescope, saveCatalogCamera, saveCatalogTelescope } from '../equipment/catalog'
 import { forgetSite, removeSite, saveSite, selectSite, type SiteState } from '../location/site'
-import { assignDevice, createProfile, deleteProfile, forgetConnection, type ProfileState, selectConnection, setExposureSettings, setFramingShownInSky, setFramingVisible, setMountRemoteBinding, setPanelOpen, setPlannerFraming, setTelescopeOptics } from './profile'
+import { assignDevice, createProfile, deleteProfile, forgetConnection, type ProfileState, selectConnection, setExposureSettings, setFramingShownInSky, setFramingVisible, setMountRemoteBinding, setPanelOpen, setMainTelescopeOptics, setPlannerFraming } from './profile'
 import { PROFILE_SETTINGS_VERSION } from './schema'
 import { WorkspaceSync, type WorkspaceSyncState } from './sync'
 
@@ -76,7 +76,7 @@ describe('loading', () => {
 				record('p1', {
 					connectionId: 'c1',
 					equipment: { c1: { MAIN_CAMERA: { id: 'cam', name: 'Camera' } } },
-					preferences: { telescope: { version: PROFILE_SETTINGS_VERSION, value: { focalLength: 800, focalMultiplier: 1, aperture: 200 }, revision: 3 } },
+					preferences: { mainTelescope: { version: PROFILE_SETTINGS_VERSION, value: { focalLength: 800, focalMultiplier: 1, aperture: 200 }, revision: 3 } },
 					cameras: { c1: { cam: { exposure: { version: PROFILE_SETTINGS_VERSION, value: { exposureTime: 2 }, revision: 1 } } } },
 					mountBindings: { c1: { mount: { lx200: { host: '0.0.0.0', port: 4030 } } } },
 				}),
@@ -94,7 +94,7 @@ describe('loading', () => {
 		expect(snapshot(profiles).profiles[0]).toMatchObject({
 			connectionId: 'c1',
 			equipment: { c1: { MAIN_CAMERA: { id: 'cam', name: 'Camera' } } },
-			settings: { telescope: { focalLength: 800 }, cameras: { c1: { cam: { exposure: { exposureTime: 2 } } } }, mountRemoteControl: { c1: { mount: { lx200: { port: 4030 } } } } },
+			settings: { mainTelescope: { focalLength: 800 }, cameras: { c1: { cam: { exposure: { exposureTime: 2 } } } }, mountRemoteControl: { c1: { mount: { lx200: { port: 4030 } } } } },
 		})
 
 		await settle(sync)
@@ -102,9 +102,9 @@ describe('loading', () => {
 	})
 
 	test('a value of another version of its shape is read as absent', async () => {
-		const { profiles, sync } = setup({ connections: [], sites: [], cameras: [], telescopes: [], profiles: [record('p1', { preferences: { telescope: { version: PROFILE_SETTINGS_VERSION + 1, value: { focalLength: 1 }, revision: 4 } } })] })
+		const { profiles, sync } = setup({ connections: [], sites: [], cameras: [], telescopes: [], profiles: [record('p1', { preferences: { mainTelescope: { version: PROFILE_SETTINGS_VERSION + 1, value: { focalLength: 1 }, revision: 4 } } })] })
 		await sync.refresh()
-		expect(profiles.profiles[0].settings.telescope).toBeUndefined()
+		expect(profiles.profiles[0].settings.mainTelescope).toBeUndefined()
 	})
 })
 
@@ -153,13 +153,13 @@ describe('writes', () => {
 		const { profiles, sync, sent } = setup()
 		await sync.refresh()
 
-		setTelescopeOptics(profiles, { focalLength: 400, focalMultiplier: 1, aperture: 80 })
-		setTelescopeOptics(profiles, { focalLength: 500, focalMultiplier: 1, aperture: 80 })
+		setMainTelescopeOptics(profiles, { focalLength: 400, focalMultiplier: 1, aperture: 80 })
+		setMainTelescopeOptics(profiles, { focalLength: 500, focalMultiplier: 1, aperture: 80 })
 		await settle(sync)
 
-		expect(sent).toEqual([{ method: 'PUT', path: '/api/profiles/p1/preferences/telescope', body: { version: PROFILE_SETTINGS_VERSION, value: { focalLength: 500, focalMultiplier: 1, aperture: 80 }, revision: 0 } }])
+		expect(sent).toEqual([{ method: 'PUT', path: '/api/profiles/p1/preferences/mainTelescope', body: { version: PROFILE_SETTINGS_VERSION, value: { focalLength: 500, focalMultiplier: 1, aperture: 80 }, revision: 0 } }])
 
-		setTelescopeOptics(profiles, { focalLength: 600, focalMultiplier: 1, aperture: 80 })
+		setMainTelescopeOptics(profiles, { focalLength: 600, focalMultiplier: 1, aperture: 80 })
 		await settle(sync)
 		expect(sent.at(-1)?.body).toMatchObject({ value: { focalLength: 600 }, revision: 1 })
 	})
@@ -282,7 +282,7 @@ describe('writes', () => {
 		})
 		await sync.refresh()
 
-		setTelescopeOptics(profiles, { focalLength: 400, focalMultiplier: 1, aperture: 80 })
+		setMainTelescopeOptics(profiles, { focalLength: 400, focalMultiplier: 1, aperture: 80 })
 		await settle(sync)
 		expect(sent).toHaveLength(1)
 
@@ -295,14 +295,14 @@ describe('writes', () => {
 describe('other tabs', () => {
 	test('a conflict shows what the server kept and says so', async () => {
 		const { profiles, status, sync } = setup(undefined, ({ path }) =>
-			path.endsWith('/preferences/telescope') ? Response.json({ error: 'It was changed by another tab', code: 'conflict', value: { version: PROFILE_SETTINGS_VERSION, value: { focalLength: 900, focalMultiplier: 1, aperture: 100 }, revision: 5 } }, { status: 409 }) : undefined,
+			path.endsWith('/preferences/mainTelescope') ? Response.json({ error: 'It was changed by another tab', code: 'conflict', value: { version: PROFILE_SETTINGS_VERSION, value: { focalLength: 900, focalMultiplier: 1, aperture: 100 }, revision: 5 } }, { status: 409 }) : undefined,
 		)
 		await sync.refresh()
 
-		setTelescopeOptics(profiles, { focalLength: 400, focalMultiplier: 1, aperture: 80 })
+		setMainTelescopeOptics(profiles, { focalLength: 400, focalMultiplier: 1, aperture: 80 })
 		await settle(sync)
 
-		expect(profiles.profiles[0].settings.telescope).toEqual({ focalLength: 900, focalMultiplier: 1, aperture: 100 })
+		expect(profiles.profiles[0].settings.mainTelescope).toEqual({ focalLength: 900, focalMultiplier: 1, aperture: 100 })
 		expect(status.message).toContain('Another tab changed this first')
 	})
 
@@ -310,9 +310,9 @@ describe('other tabs', () => {
 		const { profiles, sync, sent } = setup()
 		await sync.refresh()
 
-		const updated = record('p1', { name: 'Renamed', revision: 3, preferences: { telescope: { version: PROFILE_SETTINGS_VERSION, value: { focalLength: 300, focalMultiplier: 1, aperture: 60 }, revision: 2 } } })
+		const updated = record('p1', { name: 'Renamed', revision: 3, preferences: { mainTelescope: { version: PROFILE_SETTINGS_VERSION, value: { focalLength: 300, focalMultiplier: 1, aperture: 60 }, revision: 2 } } })
 		sync.handle({ type: 'profile:updated', profile: updated })
-		expect(snapshot(profiles).profiles[0]).toMatchObject({ name: 'Renamed', settings: { telescope: { focalLength: 300 } } })
+		expect(snapshot(profiles).profiles[0]).toMatchObject({ name: 'Renamed', settings: { mainTelescope: { focalLength: 300 } } })
 
 		sync.handle({ type: 'profile:updated', profile: record('p1', { name: 'Older', revision: 2 }) })
 		expect(profiles.profiles[0].name).toBe('Renamed')
@@ -338,10 +338,10 @@ describe('other tabs', () => {
 		const { profiles, sync, sent } = setup()
 		await sync.refresh()
 
-		setTelescopeOptics(profiles, { focalLength: 400, focalMultiplier: 1, aperture: 80 })
+		setMainTelescopeOptics(profiles, { focalLength: 400, focalMultiplier: 1, aperture: 80 })
 		await Bun.sleep(0)
-		sync.handle({ type: 'profile:updated', profile: record('p1', { name: 'Default', preferences: { telescope: { version: PROFILE_SETTINGS_VERSION, value: { focalLength: 300, focalMultiplier: 1, aperture: 60 }, revision: 1 } } }) })
-		expect(profiles.profiles[0].settings.telescope?.focalLength).toBe(400)
+		sync.handle({ type: 'profile:updated', profile: record('p1', { name: 'Default', preferences: { mainTelescope: { version: PROFILE_SETTINGS_VERSION, value: { focalLength: 300, focalMultiplier: 1, aperture: 60 }, revision: 1 } } }) })
+		expect(profiles.profiles[0].settings.mainTelescope?.focalLength).toBe(400)
 
 		await sync.flush()
 		expect(sent[0].body).toMatchObject({ value: { focalLength: 400 }, revision: 0 })
@@ -497,19 +497,19 @@ describe('events of the tab own writes', () => {
 			if (method !== 'PUT' || !body) return undefined
 			const revision = (body.revision as number) + 1
 			// The server publishes a committed change before it answers the request that made it.
-			if (path === '/api/profiles/p1/preferences/telescope') tab.sync!.handle({ type: 'profile:updated', profile: record('p1', { name: 'Default', preferences: { telescope: { version: PROFILE_SETTINGS_VERSION, value: body.value, revision } } }) })
+			if (path === '/api/profiles/p1/preferences/mainTelescope') tab.sync!.handle({ type: 'profile:updated', profile: record('p1', { name: 'Default', preferences: { mainTelescope: { version: PROFILE_SETTINGS_VERSION, value: body.value, revision } } }) })
 			if (path.startsWith('/api/observing-sites/')) tab.sync!.handle({ type: 'observingSite:updated', site: { id: path.split('/').at(-1)!, ...(body as typeof HOME), revision } })
 			return Response.json({ revision })
 		})
 		tab.sync = sync
 		await sync.refresh()
 
-		setTelescopeOptics(profiles, { focalLength: 400, focalMultiplier: 1, aperture: 80 })
+		setMainTelescopeOptics(profiles, { focalLength: 400, focalMultiplier: 1, aperture: 80 })
 		const site = saveSite(sites, HOME)!
 		await settle(sync)
 		await sync.flush()
 
-		expect(sent.map(({ path }) => path)).toEqual([`/api/observing-sites/${site.id}`, '/api/profiles/p1/preferences/telescope'])
+		expect(sent.map(({ path }) => path)).toEqual([`/api/observing-sites/${site.id}`, '/api/profiles/p1/preferences/mainTelescope'])
 	})
 
 	test('an event published before the answer of a deletion never deletes it again', async () => {
@@ -534,13 +534,13 @@ describe('events of the tab own writes', () => {
 		const { profiles, sync, sent } = setup(undefined, ({ method, body }) => {
 			if (method !== 'PUT' || !body || changed) return undefined
 			changed = true
-			setTelescopeOptics(tab.sync!.profiles, { focalLength: 500, focalMultiplier: 1, aperture: 80 })
+			setMainTelescopeOptics(tab.sync!.profiles, { focalLength: 500, focalMultiplier: 1, aperture: 80 })
 			return Response.json({ revision: (body.revision as number) + 1 })
 		})
 		tab.sync = sync
 		await sync.refresh()
 
-		setTelescopeOptics(profiles, { focalLength: 400, focalMultiplier: 1, aperture: 80 })
+		setMainTelescopeOptics(profiles, { focalLength: 400, focalMultiplier: 1, aperture: 80 })
 		await settle(sync)
 		await settle(sync)
 

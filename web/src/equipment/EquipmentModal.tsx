@@ -3,7 +3,7 @@ import { type ReactNode, useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { connect, connectionState, serverOf } from '../connection/connection'
 import { DEFAULT_TELESCOPE, type TelescopeOptics } from '../framing/geometry'
-import { activeProfile, activeSetup, assignDevice, profileState, setGuideTelescopeOptics, setTelescopeOptics } from '../profile/profile'
+import { activeProfile, activeSetup, assignDevice, profileState, setGuideTelescopeOptics, setMainTelescopeOptics } from '../profile/profile'
 import { navigate, routeState } from '../shell/route'
 import { Button } from '../ui/Button'
 import { ConfirmButton } from '../ui/ConfirmButton'
@@ -28,7 +28,7 @@ import { useWatchedDevices } from './useEquipment'
 // unassigned is pointed out with its Disconnect. While the server of the connection is not connected, the assignments
 // are shown offline and cannot be changed. A camera role also binds its device to a camera of the Equipment Catalog
 // (CatalogBinding), which holds for every profile and is shown read-only while the device is not on an open connection.
-// It also holds the profile's telescope and guide telescope optics, which no device reports, each a telescope of the
+// It also holds the profile's main telescope and guide telescope optics, which no device reports, each a telescope of the
 // Equipment Catalog or entered by hand and shown beside the role group that looks through it: the Sky's Equipment Setup
 // field of view of a camera uses the optics it looks through, and Guiding the second.
 
@@ -51,7 +51,7 @@ const ROLE_TONES: Readonly<Record<RoleStatus, StatusTone>> = {
 }
 
 // Optics of the profile shown after the roles of a group, by the group of the camera that looks through them.
-const GROUP_OPTICS: Partial<Record<RoleGroup, 'telescope' | 'guideTelescope'>> = { IMAGING: 'telescope', TELESCOPE: 'guideTelescope' }
+const GROUP_OPTICS: Partial<Record<RoleGroup, 'mainTelescope' | 'guideTelescope'>> = { IMAGING: 'mainTelescope', TELESCOPE: 'guideTelescope' }
 
 // Classes of one entry of a group: a role row or the optics of the group.
 const ENTRY_CLASS_NAME = 'rounded-md border border-line-100 bg-base-100 px-3 py-2.5'
@@ -150,14 +150,14 @@ export function EquipmentModal() {
 												)
 											})}
 										</ul>
-										{optics === 'telescope' && (
-											<TelescopeSection title="Main Telescope" telescope={profile.settings.telescope} missing="Without a focal length, the Sky draws no field of view for the Main Camera." onChange={(value) => setTelescopeOptics(profileState, value)}>
+										{optics === 'mainTelescope' && (
+											<TelescopeSection title="Main Telescope" telescope={profile.settings.mainTelescope} missing="Without a focal length, the Sky draws no field of view for the Main Camera." onChange={(value) => setMainTelescopeOptics(profileState, value)}>
 												Gives the Sky the field of view of the Main Camera and of a manual sensor.
 											</TelescopeSection>
 										)}
 										{optics === 'guideTelescope' && (
 											<TelescopeSection title="Guide Telescope" telescope={profile.settings.guideTelescope} missing="Without a focal length, Guiding reports the RMS in pixels." onChange={(value) => setGuideTelescopeOptics(profileState, value)}>
-												Gives Guiding its arcsecond scale and calibration step, and the Sky the Guide Camera&apos;s field of view. With an off-axis guider, enter the main telescope.
+												Gives Guiding its arcsecond scale and calibration step, and the Sky the Guide Camera&apos;s field of view. With an off-axis guider, enter the Main Telescope.
 											</TelescopeSection>
 										)}
 									</section>

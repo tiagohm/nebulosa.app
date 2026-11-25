@@ -61,7 +61,7 @@ const CHECKED_FIELDS: readonly CheckedField[] = ['name', 'aperture', 'focalLengt
 const UNDECLARED = 'Not declared'
 
 // Role of the Equipment Setup that refers to a telescope, in the words the profiles list uses.
-type TelescopeRole = 'Telescope' | 'Guide Telescope' | 'Telescope and Guide Telescope'
+type TelescopeRole = 'Main Telescope' | 'Guide Telescope' | 'Main Telescope and Guide Telescope'
 
 // Returns the text of an optional number of a field: empty when absent.
 function numberText(value: number | undefined) {
@@ -144,12 +144,12 @@ export function CatalogTelescopeEditor({ telescope, onDirtyChange, onSaved, onCl
 	// An editor that goes away, such as one whose record another tab deleted, leaves no unsaved changes behind.
 	useEffect(() => () => onDirtyChange(false), [onDirtyChange])
 
-	// Profiles whose Telescope or Guide Telescope refer to this telescope, with the role that does.
+	// Profiles whose Main Telescope or Guide Telescope refer to this telescope, with the role that does.
 	const users = telescope
 		? profiles.flatMap(({ id, name, settings }) => {
-				const main = settings.telescope?.telescopeId === telescope.id
+				const main = settings.mainTelescope?.telescopeId === telescope.id
 				const guide = settings.guideTelescope?.telescopeId === telescope.id
-				const role: TelescopeRole | undefined = main && guide ? 'Telescope and Guide Telescope' : main ? 'Telescope' : guide ? 'Guide Telescope' : undefined
+				const role: TelescopeRole | undefined = main && guide ? 'Main Telescope and Guide Telescope' : main ? 'Main Telescope' : guide ? 'Guide Telescope' : undefined
 				return role ? [{ id, name, role }] : []
 			})
 		: []

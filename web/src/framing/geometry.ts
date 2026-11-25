@@ -83,11 +83,11 @@ export interface TelescopeOptics {
 // Telescope optics of a profile that has not entered any.
 export const DEFAULT_TELESCOPE: TelescopeOptics = { focalLength: 0, focalMultiplier: 1, aperture: 0 }
 
-// Telescope and guide telescope optics of a profile's Equipment Setup; each absent until entered.
+// Main telescope and guide telescope optics of a profile's Equipment Setup; each absent until entered.
 export interface EquipmentTelescopes {
 	// Optics of the Main Camera.
-	readonly telescope?: TelescopeOptics
-	// Optics of the Guide Camera; with an off-axis guider they repeat the telescope's.
+	readonly mainTelescope?: TelescopeOptics
+	// Optics of the Guide Camera; with an off-axis guider they repeat the main telescope's.
 	readonly guideTelescope?: TelescopeOptics
 }
 

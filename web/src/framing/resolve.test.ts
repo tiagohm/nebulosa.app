@@ -4,7 +4,7 @@ import { isFraming } from './geometry'
 import { EQUIPMENT_FRAMING_ID, type FramingContext, GUIDE_FRAMING_ID, resolveAllFramings, resolveFramingOptics } from './resolve'
 
 const CONTEXT: FramingContext = {
-	telescopes: { telescope: { focalLength: 800, focalMultiplier: 0.8, aperture: 200 }, guideTelescope: { focalLength: 240, focalMultiplier: 1, aperture: 60 } },
+	telescopes: { mainTelescope: { focalLength: 800, focalMultiplier: 0.8, aperture: 200 }, guideTelescope: { focalLength: 240, focalMultiplier: 1, aperture: 60 } },
 	sensors: { MAIN_CAMERA: { width: 6248, height: 4176, pixelSize: 3.76, origin: 'reported' } },
 	catalogCameras: [{ id: 'cam', name: 'ASI2600', sensor: { width: 6248, height: 4176 } }],
 	catalogTelescopes: [{ id: 'tel', name: 'Esprit 100', focalLength: 550 }],
@@ -18,7 +18,7 @@ const MANUAL: FramingDocument = {
 	color: 1,
 }
 
-test('the Equipment Setup follows the Main Camera and the telescope with its reducer, without rotation', () => {
+test('the Equipment Setup follows the Main Camera and the main telescope with its reducer, without rotation', () => {
 	const [equipment] = resolveAllFramings([], CONTEXT)
 	expect(equipment.id).toBe(EQUIPMENT_FRAMING_ID)
 	expect(equipment.color).toBe('main')

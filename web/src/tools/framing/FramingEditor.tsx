@@ -36,7 +36,7 @@ import { showFraming } from './framing'
 const SOURCES: readonly FramingOpticsSource[] = ['setup', 'catalog', 'model', 'manual']
 
 // Optics of the Equipment Setup in menu order.
-const SETUP_OPTICS: readonly FramingSetupOptics[] = ['telescope', 'guideTelescope']
+const SETUP_OPTICS: readonly FramingSetupOptics[] = ['mainTelescope', 'guideTelescope']
 
 // Display name of a source.
 function sourceName(source: FramingOpticsSource) {
@@ -137,7 +137,7 @@ function EquipmentFraming({ framing }: { readonly framing: ResolvedFraming }) {
 				<Notice>
 					{main
 						? 'Follows the Main Camera and the Main Telescope of the active profile’s Equipment Setup, without rotation; it is what every tool uses until another framing is chosen.'
-						: 'Follows the Guide Camera and the Guide Telescope of the active profile’s Equipment Setup, without rotation; with an off-axis guider the Guide Telescope is the Telescope.'}{' '}
+						: 'Follows the Guide Camera and the Guide Telescope of the active profile’s Equipment Setup, without rotation; with an off-axis guider the Guide Telescope is the Main Telescope.'}{' '}
 					Change them in the Equipment Setup, or create a framing to plan with other optics.
 				</Notice>
 				<DataRow label="Telescope">{framing.telescope.label}</DataRow>
@@ -243,7 +243,7 @@ function TelescopeSection({ telescope, resolved, onChange }: TelescopeSectionPro
 	// Changes the source, keeping the values shown.
 	function changeSource(source: FramingOpticsSource) {
 		const { telescopeId: _, setupOptics: __, model: ___, ...values } = shown
-		if (source === 'setup') onChange({ ...values, source, setupOptics: 'telescope' })
+		if (source === 'setup') onChange({ ...values, source, setupOptics: 'mainTelescope' })
 		else if (source === 'catalog') onChange({ ...values, source, ...(offered[0] && { telescopeId: offered[0].id }) })
 		else onChange({ ...values, source, ...(source === 'model' && telescope.model && { model: telescope.model }) })
 	}
@@ -251,7 +251,7 @@ function TelescopeSection({ telescope, resolved, onChange }: TelescopeSectionPro
 	return (
 		<CollapsibleSection id="framing.telescope" title="Telescope" summary={resolved.telescope.label}>
 			<Select label="Source" options={SOURCES} value={telescope.source} onChange={changeSource} format={sourceName} />
-			{telescope.source === 'setup' && <Select label="Optics" options={SETUP_OPTICS} value={telescope.setupOptics ?? 'telescope'} onChange={(setupOptics) => onChange({ ...telescope, setupOptics })} format={(value) => (value === 'guideTelescope' ? 'Guide Telescope' : 'Telescope')} />}
+			{telescope.source === 'setup' && <Select label="Optics" options={SETUP_OPTICS} value={telescope.setupOptics ?? 'mainTelescope'} onChange={(setupOptics) => onChange({ ...telescope, setupOptics })} format={(value) => (value === 'guideTelescope' ? 'Guide Telescope' : 'Main Telescope')} />}
 			{telescope.source === 'catalog' &&
 				(offered.length > 0 ? (
 					<Select

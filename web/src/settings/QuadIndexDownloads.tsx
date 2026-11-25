@@ -144,7 +144,7 @@ function Band({ band, suits }: { readonly band: QuadIndexBandItem; readonly suit
 }
 
 // One field of view: the framing, its size, the bands that suit it, whether they are installed, and the action that
-// downloads the missing ones.
+// downloads the missing ones. One installed band solves the field, so it is Ready; the others add speed and margin.
 function FieldBands({ framing, bands }: { readonly framing: ResolvedFraming; readonly bands: readonly QuadIndexBandItem[] }) {
 	const { pending } = useSnapshot(quadIndexesState)
 	const { field } = framing
@@ -162,7 +162,10 @@ function FieldBands({ framing, bands }: { readonly framing: ResolvedFraming; rea
 	const missing = suited.filter((band) => band.installed !== 'installed' && !isDownloading(band))
 	const downloadable = missing.filter((band) => band.published)
 	const downloading = suited.some(isDownloading)
-	const state: { readonly label: string; readonly tone: StatusTone } = suited.length === 0 ? { label: 'No Band', tone: 'muted' } : downloading ? { label: 'Downloading', tone: 'active' } : missing.length === 0 ? { label: 'Ready', tone: 'success' } : { label: `${missing.length} Missing`, tone: 'warning' }
+	const installed = suited.filter((band) => band.installed === 'installed')
+	const state: { readonly label: string; readonly tone: StatusTone } = suited.length === 0 ? { label: 'No Band', tone: 'muted' } : installed.length > 0 ? { label: 'Ready', tone: 'success' } : downloading ? { label: 'Downloading', tone: 'active' } : { label: 'No Band Installed', tone: 'warning' }
+	const ranges = (list: readonly QuadIndexBandItem[]) => joinNames(list.map((band) => formatBandRange(band.bestShortSide[0], band.bestShortSide[1])))
+	const others = suited.filter((band) => band.installed !== 'installed')
 	const shortest = bands[0]?.bestShortSide[0]
 	const longest = bands.at(-1)?.bestShortSide[1]
 
@@ -181,11 +184,17 @@ function FieldBands({ framing, bands }: { readonly framing: ResolvedFraming; rea
 						<StatusBadge tone={state.tone} label={state.label} />
 					</div>
 					<span className="text-xs text-ink-300">
-						{suited.length > 0
-							? `Bands for fields ${joinNames(suited.map((band) => formatBandRange(band.bestShortSide[0], band.bestShortSide[1])))}.`
-							: shortest !== undefined && longest !== undefined
-								? `No band suits its shorter side: the bands serve fields from ${formatBandAngle(shortest)} to ${formatBandAngle(longest)}.`
-								: 'No band is offered.'}
+						{suited.length === 1
+							? `The band for fields ${ranges(suited)} solves it.`
+							: suited.length > 1 && installed.length === 0
+								? `Either band, for fields ${ranges(suited)}, solves it; both make solves faster and more reliable.`
+								: suited.length > 1 && others.length > 0
+									? `The band for fields ${ranges(installed)} solves it; the one for fields ${ranges(others)} makes solves faster and more reliable.`
+									: suited.length > 1
+										? `The bands for fields ${ranges(suited)} solve it.`
+										: shortest !== undefined && longest !== undefined
+											? `No band suits its shorter side: the bands serve fields from ${formatBandAngle(shortest)} to ${formatBandAngle(longest)}.`
+											: 'No band is offered.'}
 					</span>
 				</div>
 				<div className="flex items-center gap-2">
@@ -204,7 +213,7 @@ function FieldBands({ framing, bands }: { readonly framing: ResolvedFraming; rea
 function YourFields({ framings, bands }: { readonly framings: readonly ResolvedFraming[]; readonly bands: readonly QuadIndexBandItem[] }) {
 	return (
 		<PanelSection title="For Your Fields">
-			<Notice>The bands that suit the field of view of the cameras of the Equipment Setup and of each framing. Two bands suit a field in general; a solve also searches the other installed bands that fit it.</Notice>
+			<Notice>The bands that suit the field of view of the cameras of the Equipment Setup and of each framing. One installed band solves a field. Two bands suit most fields, and the second makes solves faster and more reliable with few stars, clouds, or a cropped frame.</Notice>
 			<ul className="m-0 flex list-none flex-col divide-y divide-line-100 p-0">
 				{framings.map((framing) => (
 					<FieldBands key={framing.id} framing={framing} bands={bands} />

@@ -53,8 +53,10 @@ export interface MountPointingRuntime {
 	activationSequence: number
 	// Latest session of each camera, by camera key (cameraKey).
 	sessions: Record<string, MountPointingSessionSummary>
-	// Plan a camera previewed last, by camera key.
+	// Plan a camera previewed last, by camera key; discarded when its form changes the sky it samples.
 	plans: Record<string, PointingPlan>
+	// Why the last preview of a camera's plan failed, by camera key; cleared by its next preview or a change of the sky.
+	planErrors: Record<string, string>
 	// Model the Tools page shows, which Images can hand over.
 	selectedModelId?: string
 	// Sequence of the latest event applied.
@@ -66,7 +68,7 @@ export interface MountPointingRuntime {
 }
 
 // Mount pointing state of the tab.
-export const mountPointingRuntime = proxy<MountPointingRuntime>({ models: {}, fits: {}, details: {}, activations: {}, activationSequence: 0, sessions: {}, plans: {}, sequence: 0, pending: {}, errors: {} })
+export const mountPointingRuntime = proxy<MountPointingRuntime>({ models: {}, fits: {}, details: {}, activations: {}, activationSequence: 0, sessions: {}, plans: {}, planErrors: {}, sequence: 0, pending: {}, errors: {} })
 
 // Refreshes of the models, ordered against the events applied meanwhile.
 const refreshes = new SnapshotRefreshes()
@@ -88,6 +90,22 @@ export const MOUNT_POINTING_STATE_LABELS: Readonly<Record<MountPointingState, st
 
 // Label of each step of a waypoint.
 export const MOUNT_POINTING_STEP_LABELS: Readonly<Record<MountPointingStep, string>> = { checking: 'Checking', slewing: 'Slewing', settling: 'Settling', exposing: 'Exposing', solving: 'Solving' }
+
+// Returns the one-line summary of a session beside its collapsed section: its state, and the point being sampled while
+// it runs or the samples accepted once it ended.
+export function mountPointingSummaryText(session: Pick<MountPointingSessionSummary, 'state' | 'waypoint' | 'plannedCount' | 'acceptedCount' | 'endedAt'>): string {
+	const state = MOUNT_POINTING_STATE_LABELS[session.state]
+	if (mountPointingRunning(session)) return session.waypoint !== undefined ? `${state} · point ${session.waypoint + 1}/${session.plannedCount}` : state
+	return `${state} · ${session.acceptedCount}/${session.plannedCount} accepted`
+}
+
+// Form fields that change the sky a plan samples, so a change of any of them makes a previewed plan stale.
+const PLAN_FIELDS = ['pattern', 'count', 'minimumAltitude', 'meridianAvoidance'] as const satisfies readonly (keyof PointingModelSettings)[]
+
+// Returns whether a change of a form changes the sky its plan samples.
+export function changesMountPointingPlan(patch: Partial<PointingModelSettings>): boolean {
+	return PLAN_FIELDS.some((field) => patch[field] !== undefined)
+}
 
 // Returns why the mount can never be sampled, from the state the server reports, or undefined when it can (or its state
 // is not known yet): an alt-az mount, no GoTo, or no abort. A mount that does not report its type asks the operator.
@@ -351,17 +369,28 @@ export function verifyMountPointing(state: MountPointingRuntime, modelId: string
 	return command(state, cameraKey(body.camera.connectionId, body.camera.deviceId), modelUrl(modelId, 'verify'), jsonInit('POST', { ...body, token: nanoid() } satisfies MountPointingVerifyRequest), request)
 }
 
-// Asks the server for the plan a form would sample, which commands nothing, and keeps it for its camera.
+// Asks the server for the plan a form would sample, which commands nothing, and keeps it for its camera, or why it was
+// refused in planErrors, apart from the errors of the commands.
 export async function previewMountPointingPlan(state: MountPointingRuntime, key: string, mount: { readonly connectionId: string; readonly deviceId: string }, settings: Readonly<PointingModelSettings>, request: ApiFetch = browserFetch) {
-	delete state.errors[key]
+	delete state.planErrors[key]
 
 	try {
 		const response = await request('/api/mount-pointing/plan', jsonInit('POST', { mount, plan: planRequest(settings) }))
 		if (response.ok) state.plans[key] = (await response.json()) as PointingPlan
-		else state.errors[key] = await responseError(response)
+		else {
+			delete state.plans[key]
+			state.planErrors[key] = await responseError(response)
+		}
 	} catch {
-		state.errors[key] = 'Unable to reach the server.'
+		delete state.plans[key]
+		state.planErrors[key] = 'Unable to reach the server.'
 	}
+}
+
+// Forgets the plan a camera previewed and why its preview failed, once its form samples another sky.
+export function discardMountPointingPlan(state: MountPointingRuntime, key: string) {
+	delete state.plans[key]
+	delete state.planErrors[key]
 }
 
 // Shows a model in the Tools page and fetches its record; absent shows none.

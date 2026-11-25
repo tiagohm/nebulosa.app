@@ -15,6 +15,9 @@ import {
 	type MountPointingRuntime,
 	patchPointingModel,
 	previewMountPointingPlan,
+	changesMountPointingPlan,
+	discardMountPointingPlan,
+	mountPointingSummaryText,
 	refreshMountPointing,
 	resumeMountPointing,
 	selectPointingModel,
@@ -22,7 +25,7 @@ import {
 } from './mountpointing'
 
 function runtime(): MountPointingRuntime {
-	return proxy<MountPointingRuntime>({ models: {}, fits: {}, details: {}, activations: {}, activationSequence: 0, sessions: {}, plans: {}, sequence: 0, pending: {}, errors: {} })
+	return proxy<MountPointingRuntime>({ models: {}, fits: {}, details: {}, activations: {}, activationSequence: 0, sessions: {}, plans: {}, planErrors: {}, sequence: 0, pending: {}, errors: {} })
 }
 
 function summary(patch: Partial<PointingModelSummary> = {}): PointingModelSummary {
@@ -280,5 +283,24 @@ test('a preview keeps the plan of its camera and reports a refusal', async () =>
 	expect(state.plans['c:cam'].requestedCount).toBe(30)
 
 	await previewMountPointingPlan(state, 'c:cam', mount, DEFAULT_POINTING_MODEL_SETTINGS, () => json({ error: 'no site' }, 422))
-	expect(state.errors['c:cam']).toBe('no site')
+	expect(state.planErrors['c:cam']).toBe('no site')
+	expect(state.plans['c:cam']).toBeUndefined()
+	expect(state.errors['c:cam']).toBeUndefined()
+})
+
+test('a change of the sky discards the previewed plan, other fields keep it', async () => {
+	const state = runtime()
+	await previewMountPointingPlan(state, 'c:cam', { connectionId: 'c', deviceId: 'm' }, DEFAULT_POINTING_MODEL_SETTINGS, () => json({ requestedCount: 30, waypoints: [] }))
+
+	expect(changesMountPointingPlan({ settleDelay: 5, stopTracking: false, exposureTime: 2 })).toBe(false)
+	expect(changesMountPointingPlan({ count: 13 })).toBe(true)
+	expect(changesMountPointingPlan({ minimumAltitude: 30 })).toBe(true)
+
+	discardMountPointingPlan(state, 'c:cam')
+	expect(state.plans['c:cam']).toBeUndefined()
+})
+
+test('the summary of a session tells the point while running and the accepted samples once ended', () => {
+	expect(mountPointingSummaryText({ state: 'running', waypoint: 4, plannedCount: 30, acceptedCount: 4 })).toBe('Running · point 5/30')
+	expect(mountPointingSummaryText({ state: 'completed', plannedCount: 30, acceptedCount: 28, endedAt: 1 })).toBe('Completed · 28/30 accepted')
 })

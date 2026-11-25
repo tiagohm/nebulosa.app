@@ -1,7 +1,7 @@
 import type { DeviceSummary, MountPointingSessionSummary, MountState, PointingGate, PointingModelSummary } from 'api'
 import { toDeg } from 'nebulosa/src/math/units/angle'
 import type { PointingPlan } from 'nebulosa/src/observation/mount/pointing.plan'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { controlRuntime, watchedDeviceState } from '../equipment-control/control'
 import { DeviceLink } from '../equipment-control/DeviceLink'
@@ -60,6 +60,10 @@ import { SessionStateText } from './SessionStateText'
 // The forms are the camera's, kept in the profile, and stay locked showing the values applied while a session runs; the
 // session is the server's, shown here whichever tab started it, and keeps running when the panel unmounts. Links only
 // change what the tab shows: nothing here commands a device but Start, Pause, Resume, Stop, and Verify.
+
+// Wait after the last change of the sky of the form before its plan is previewed again, in milliseconds, so the steppers
+// of a held field ask for one plan instead of one per step.
+const PLAN_PREVIEW_DELAY = 400
 
 // Classes of the session commands: a touch target of 44 px on a coarse pointer, since they are pressed at the mount.
 const COMMAND_CLASS = 'pointer-coarse:min-h-[44px]'
@@ -152,10 +156,19 @@ export function PointingModelBuilderSections({ device, availability, role, mount
 		void verifyMountPointing(mountPointingRuntime, modelId, mountPointingVerifyRequest(revisionId, { connectionId: device.connectionId, deviceId: device.id }, settings, exposure, solving, mountDevice, capabilities))
 	}
 
-	function preview() {
-		if (!key || !mountDevice) return
-		void previewMountPointingPlan(mountPointingRuntime, key, mountDevice, settings)
-	}
+	// The plan is previewed when the panel opens, when the sky of the form or the site of the mount changes, and when a
+	// session ends; never while one runs, which keeps the plan it applied.
+	const { pattern, count, minimumAltitude, meridianAvoidance } = settings
+	const mountConnectionId = mount.device?.connectionId
+	const mountDeviceId = mount.device?.id
+	const latitude = mountState?.site.latitude
+	const longitude = mountState?.site.longitude
+
+	useEffect(() => {
+		if (!key || running || !mountConnectionId || !mountDeviceId || latitude === undefined || longitude === undefined) return
+		const timer = setTimeout(() => void previewMountPointingPlan(mountPointingRuntime, key, { connectionId: mountConnectionId, deviceId: mountDeviceId }, { pattern, count, minimumAltitude, meridianAvoidance }), PLAN_PREVIEW_DELAY)
+		return () => clearTimeout(timer)
+	}, [key, running, mountConnectionId, mountDeviceId, latitude, longitude, pattern, count, minimumAltitude, meridianAvoidance])
 
 	return (
 		<>
@@ -238,13 +251,8 @@ export function PointingModelBuilderSections({ device, availability, role, mount
 				<NumberInput label="Meridian Avoidance" value={shown.meridianAvoidance} min={0} max={30} step={1} suffix="°" disabled={locked} onChange={(meridianAvoidance) => update({ meridianAvoidance })} />
 				<NumberInput label="Settle Time" value={shown.settleDelay} min={0} max={120} step={0.5} suffix="s" disabled={locked} onChange={(settleDelay) => update({ settleDelay })} />
 				<Checkbox label="Stop the tracking when the session ends" checked={shown.stopTracking} disabled={locked} onChange={(stopTracking) => update({ stopTracking })} />
-				{!running && (
-					<Button variant="secondary" className="self-start" title={blocker} disabled={!mountDevice || blocker !== undefined} onClick={preview}>
-						Preview Plan
-					</Button>
-				)}
-				{!running && planError && <Notice error>{sentence(planError)}</Notice>}
-				{plan ? <PlanSummary plan={plan} /> : !planError && <Notice>Preview Plan tells how many points fit the sky above these limits and on which side of the meridian; a model needs points on both sides.</Notice>}
+				{!running && <PlanState plan={plan} error={blocker === undefined ? planError : undefined} refused={planError !== undefined} connected={mountDevice !== undefined && mountState !== undefined} />}
+				{running && plan && <PlanSummary plan={plan} />}
 			</CollapsibleSection>
 			<CameraAcquisitionSection
 				id="images.pointing-model-builder.acquisition"
@@ -314,6 +322,26 @@ function formatSite(state: MountState | undefined) {
 function sentence(text: string) {
 	const capitalized = text.charAt(0).toUpperCase() + text.slice(1)
 	return capitalized.endsWith('.') ? capitalized : `${capitalized}.`
+}
+
+interface PlanStateProps {
+	// Plan of the form, once the server answered.
+	readonly plan?: Readonly<PointingPlan>
+	// Why the server refused to plan, shown unless the session's blocker already says it.
+	readonly error?: string
+	// Whether the server refused to plan, even when the refusal is not shown.
+	readonly refused: boolean
+	// Whether the mount is connected and reports its state, so the plan is asked for.
+	readonly connected: boolean
+}
+
+// The plan of the form while no session runs: its summary, why it was refused, that it is on its way, or that it waits
+// for the mount. A refusal the blocker already explains shows nothing.
+function PlanState({ plan, error, refused, connected }: PlanStateProps) {
+	if (plan) return <PlanSummary plan={plan} />
+	if (error) return <Notice error>{sentence(error)}</Notice>
+	if (refused) return null
+	return <Notice>{connected ? 'Planning the points…' : 'The plan shows once the mount is connected.'}</Notice>
 }
 
 // What a previewed plan holds: the points that fit the allowed sky, per pier side, and those withheld to test the fit,

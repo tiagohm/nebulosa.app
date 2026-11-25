@@ -102,6 +102,9 @@ export function mountPointingSummaryText(session: Pick<MountPointingSessionSumma
 // Form fields that change the sky a plan samples, so a change of any of them makes a previewed plan stale.
 const PLAN_FIELDS = ['pattern', 'count', 'minimumAltitude', 'meridianAvoidance'] as const satisfies readonly (keyof PointingModelSettings)[]
 
+// Fields of a form that define the sky its plan samples.
+export type MountPointingPlanSettings = Pick<PointingModelSettings, (typeof PLAN_FIELDS)[number]>
+
 // Returns whether a change of a form changes the sky its plan samples.
 export function changesMountPointingPlan(patch: Partial<PointingModelSettings>): boolean {
 	return PLAN_FIELDS.some((field) => patch[field] !== undefined)
@@ -134,7 +137,7 @@ export function mountPointingBlocker(camera: RoleAvailability, mount: RoleAvaila
 }
 
 // Returns the sky of a form, with angles in radians.
-function planRequest({ pattern, count, minimumAltitude, meridianAvoidance }: Readonly<PointingModelSettings>): MountPointingRequest['plan'] {
+function planRequest({ pattern, count, minimumAltitude, meridianAvoidance }: Readonly<MountPointingPlanSettings>): MountPointingRequest['plan'] {
 	return { pattern, count, minimumAltitude: minimumAltitude * DEG2RAD, meridianAvoidance: meridianAvoidance * DEG2RAD }
 }
 
@@ -369,26 +372,41 @@ export function verifyMountPointing(state: MountPointingRuntime, modelId: string
 	return command(state, cameraKey(body.camera.connectionId, body.camera.deviceId), modelUrl(modelId, 'verify'), jsonInit('POST', { ...body, token: nanoid() } satisfies MountPointingVerifyRequest), request)
 }
 
+// Latest preview asked for by each camera key, so an answer that arrives after a later preview was asked, or after the
+// plan was discarded, is dropped instead of showing the plan of a form that no longer exists.
+const planPreviews = new Map<string, number>()
+
+// Sequence of the previews asked for, which numbers them.
+let planPreviewSequence = 0
+
 // Asks the server for the plan a form would sample, which commands nothing, and keeps it for its camera, or why it was
-// refused in planErrors, apart from the errors of the commands.
-export async function previewMountPointingPlan(state: MountPointingRuntime, key: string, mount: { readonly connectionId: string; readonly deviceId: string }, settings: Readonly<PointingModelSettings>, request: ApiFetch = browserFetch) {
-	delete state.planErrors[key]
+// refused in planErrors, apart from the errors of the commands. Only the answer of the latest preview of a camera is kept.
+export async function previewMountPointingPlan(state: MountPointingRuntime, key: string, mount: { readonly connectionId: string; readonly deviceId: string }, settings: Readonly<MountPointingPlanSettings>, request: ApiFetch = browserFetch) {
+	const id = ++planPreviewSequence
+	planPreviews.set(key, id)
 
 	try {
 		const response = await request('/api/mount-pointing/plan', jsonInit('POST', { mount, plan: planRequest(settings) }))
-		if (response.ok) state.plans[key] = (await response.json()) as PointingPlan
-		else {
+		const answer = response.ok ? ((await response.json()) as PointingPlan) : await responseError(response)
+		if (planPreviews.get(key) !== id) return
+		if (typeof answer === 'string') {
 			delete state.plans[key]
-			state.planErrors[key] = await responseError(response)
+			state.planErrors[key] = answer
+		} else {
+			delete state.planErrors[key]
+			state.plans[key] = answer
 		}
 	} catch {
+		if (planPreviews.get(key) !== id) return
 		delete state.plans[key]
 		state.planErrors[key] = 'Unable to reach the server.'
 	}
 }
 
-// Forgets the plan a camera previewed and why its preview failed, once its form samples another sky.
+// Forgets the plan a camera previewed and why its preview failed, once its form samples another sky, and drops the
+// answer of a preview still on its way.
 export function discardMountPointingPlan(state: MountPointingRuntime, key: string) {
+	planPreviews.delete(key)
 	delete state.plans[key]
 	delete state.planErrors[key]
 }

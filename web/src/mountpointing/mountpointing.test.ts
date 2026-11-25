@@ -300,6 +300,25 @@ test('a change of the sky discards the previewed plan, other fields keep it', as
 	expect(state.plans['c:cam']).toBeUndefined()
 })
 
+test('only the answer of the latest preview of a camera is kept', async () => {
+	const state = runtime()
+	const mount = { connectionId: 'c', deviceId: 'm' }
+	const answerFirst = Promise.withResolvers<Response>()
+	const first = previewMountPointingPlan(state, 'c:cam', mount, DEFAULT_POINTING_MODEL_SETTINGS, () => answerFirst.promise)
+	await previewMountPointingPlan(state, 'c:cam', mount, { ...DEFAULT_POINTING_MODEL_SETTINGS, count: 20 }, () => json({ requestedCount: 20, waypoints: [] }))
+
+	answerFirst.resolve(Response.json({ requestedCount: 30, waypoints: [] }))
+	await first
+	expect(state.plans['c:cam'].requestedCount).toBe(20)
+
+	const answerLate = Promise.withResolvers<Response>()
+	const late = previewMountPointingPlan(state, 'c:cam', mount, DEFAULT_POINTING_MODEL_SETTINGS, () => answerLate.promise)
+	discardMountPointingPlan(state, 'c:cam')
+	answerLate.resolve(Response.json({ requestedCount: 30, waypoints: [] }))
+	await late
+	expect(state.plans['c:cam']).toBeUndefined()
+})
+
 test('the summary of a session tells the point while running and the accepted samples once ended', () => {
 	expect(mountPointingSummaryText({ state: 'running', waypoint: 4, plannedCount: 30, acceptedCount: 4 })).toBe('Running · point 5/30')
 	expect(mountPointingSummaryText({ state: 'completed', plannedCount: 30, acceptedCount: 28, endedAt: 1 })).toBe('Completed · 28/30 accepted')

@@ -71,6 +71,9 @@ async function connectMount(manager: ConnectionManager, client: NonNullable<Retu
 	const mount = manager.devices.mount(client, mountId)!
 	await waitUntil(() => mount.connected && mount.canGoTo)
 	manager.devices.mounts.slewRate(mount, 'SPEED_7')
+	// The simulator starts at the pole, where right ascension is degenerate; the equator gives every motion a measurable effect.
+	manager.devices.mounts.syncTo(mount, mount.equatorialCoordinate.rightAscension, 0)
+	await waitUntil(() => Math.abs(mount.equatorialCoordinate.declination) < deg(0.1))
 	return mount
 }
 

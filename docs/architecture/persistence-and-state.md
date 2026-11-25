@@ -16,6 +16,7 @@ Where each kind of state lives, and why.
 - **Browser storage**: only the view state of the tab (`ViewPersistence` of `web/src/profile/view.ts`): the active profile, the fields the profile schema marks as view state, and a few view entries such as the expanded panel sections, kept for the tab across its reloads or for every tab of the browser.
 - **Files under the data directory**: scientific files stay files (captured frames, the products of the Calibration Library, Image Stacking, and Live Stacking, SPK kernels, the IERS tables, the downloaded quad index files of the built-in plate solver), and the database holds their identities and metadata.
   A product directory without a row is never adopted, but moved aside, never deleted.
+  The simulated devices keep the configuration their CONFIG switch saves as files of their own (`api/src/connection.ts`), as an INDI driver keeps its configuration file: device state outside the database, read again when a simulated device connects.
 - **Bundled assets**: the catalogs the `bin` scripts generate are read-only assets embedded or bundled with the application, not operational state.
 - **The URL path**: the route.
 

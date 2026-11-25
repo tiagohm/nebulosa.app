@@ -1,3 +1,5 @@
+import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'fs'
+import { join } from 'path'
 import { AlpacaClient } from 'nebulosa/src/devices/alpaca/client'
 import { IndiClient, type IndiClientHandler, IndiClientHandlerSet } from 'nebulosa/src/devices/indi/client'
 import type { Client } from 'nebulosa/src/devices/indi/device'
@@ -9,7 +11,9 @@ import { FlatPanelSimulator } from 'nebulosa/src/devices/indi/simulator/flatpane
 import { FocuserSimulator } from 'nebulosa/src/devices/indi/simulator/focuser'
 import { MountSimulator } from 'nebulosa/src/devices/indi/simulator/mount'
 import { RotatorSimulator } from 'nebulosa/src/devices/indi/simulator/rotator'
+import type { DeviceSimulatorOptions, SimulatorProperty } from 'nebulosa/src/devices/indi/simulator/types'
 import { WheelSimulator } from 'nebulosa/src/devices/indi/simulator/wheel'
+import { DEFAULT_DATA_DIRECTORY } from './database'
 import { type DeviceEvent, DeviceRegistry } from './devices'
 import { errorResponse } from './http'
 import { skyStarSource } from './sky'
@@ -17,7 +21,7 @@ import { skyStarSource } from './sky'
 // Application-wide registry of open device connections (INDI, Alpaca, and the in-process simulator).
 // Each endpoint is opened at most once, concurrent requests for it share the same attempt, and every
 // open/close, along with the device events of every open connection, is published to the registered
-// listeners.
+// listeners. The simulated devices keep their saved configuration as files of their own, as an INDI driver does.
 
 // Backend of a connection.
 export type ConnectionType = 'INDI' | 'ALPACA' | 'SIMULATOR'
@@ -74,10 +78,47 @@ export function connectionId(request: ConnectRequest): string {
 	return Bun.MD5.hash(key, 'hex')
 }
 
-// Opens the client for a request, attaching it to the device registry before it delivers any property.
+// Directory of the saved configuration of the simulated devices, one JSON file per device, in the data directory.
+export const DEFAULT_SIMULATOR_DIRECTORY = join(DEFAULT_DATA_DIRECTORY, 'simulators')
+
+// Returns the file that holds the saved configuration of the simulated device named name, inside directory.
+function simulatorFile(directory: string, name: string) {
+	return join(directory, `${name}.json`)
+}
+
+// Builds the persistence hooks of the simulated devices over directory. Saving writes the savable properties of a
+// device at once and atomically (a temporary file renamed over the previous one), creating the directory, and throws
+// when the file cannot be written, which the device reports on its CONFIG switch; BLOB vectors are never written.
+// Loading reads the properties saved last, or none when the device was never saved. It reads synchronously so a device
+// applies them in the same task that connected it, before any later command can race with the restored values, which
+// loading writes into the vectors directly.
+export function simulatorPersistence(directory: string): DeviceSimulatorOptions {
+	return {
+		save: (name: string, properties: readonly SimulatorProperty[]) => {
+			const file = simulatorFile(directory, name)
+			const temporary = `${file}.${Bun.randomUUIDv7()}.tmp`
+			mkdirSync(directory, { recursive: true })
+
+			try {
+				writeFileSync(temporary, JSON.stringify(properties.filter((property) => property.type !== 'BLOB')))
+				renameSync(temporary, file)
+			} catch (error) {
+				rmSync(temporary, { force: true })
+				throw error
+			}
+		},
+		load: (name: string) => {
+			const file = simulatorFile(directory, name)
+			return existsSync(file) ? (JSON.parse(readFileSync(file, 'utf-8')) as SimulatorProperty[]) : []
+		},
+	}
+}
+
+// Opens the client for a request, attaching it to the device registry before it delivers any property. The simulated
+// devices save and load their configuration in simulatorDirectory.
 // Throws an Error when the endpoint cannot be reached; the handler's close callback reports later closes
 // initiated by the server.
-async function openClient(id: string, request: ConnectRequest, handler: IndiClientHandler, devices: DeviceRegistry): Promise<Client> {
+async function openClient(id: string, request: ConnectRequest, handler: IndiClientHandler, devices: DeviceRegistry, simulatorDirectory: string): Promise<Client> {
 	switch (request.type) {
 		case 'INDI': {
 			const client = new IndiClient({ handler })
@@ -117,14 +158,16 @@ async function openClient(id: string, request: ConnectRequest, handler: IndiClie
 			const client = new ClientSimulator(id, handler)
 			devices.attach(client, id)
 			const catalogSources = { SKY: skyStarSource } as const
+			const persistence = simulatorPersistence(simulatorDirectory)
 			// Each simulator registers itself with the client, which disposes them all when it is disposed.
 			void [
-				new MountSimulator('Mount Simulator', client),
+				new MountSimulator('Mount Simulator', client, persistence),
 				// The camera reads the mount, focuser, filter wheel and rotator a capture snoops, and renders the stars of
 				// the sky catalog around the mount, so its frames can be plate solved. The catalog goes down to
 				// magnitude 8, about one star per square degree, so the optics are a 50 mm f/2 lens whose 7.6° × 6.1°
 				// field holds dozens of them.
 				new CameraSimulator('Camera Simulator', client, {
+					...persistence,
 					mountManager: devices.mounts,
 					focuserManager: devices.focusers,
 					wheelManager: devices.wheels,
@@ -137,6 +180,7 @@ async function openClient(id: string, request: ConnectRequest, handler: IndiClie
 					noiseExposureTime: 3,
 				}),
 				new CameraSimulator('Guide Camera Simulator', client, {
+					...persistence,
 					mountManager: devices.mounts,
 					guideOutputManager: devices.guideOutputs,
 					catalogSources,
@@ -145,13 +189,13 @@ async function openClient(id: string, request: ConnectRequest, handler: IndiClie
 					aperture: 25,
 					noiseExposureTime: 2,
 				}),
-				new FocuserSimulator('Focuser Simulator', client),
-				new WheelSimulator('Filter Wheel Simulator', client),
-				new RotatorSimulator('Rotator Simulator', client),
-				new FlatPanelSimulator('Flat Panel Simulator', client),
-				new CoverSimulator('Dust Cap Simulator', client),
+				new FocuserSimulator('Focuser Simulator', client, persistence),
+				new WheelSimulator('Filter Wheel Simulator', client, persistence),
+				new RotatorSimulator('Rotator Simulator', client, persistence),
+				new FlatPanelSimulator('Flat Panel Simulator', client, persistence),
+				new CoverSimulator('Dust Cap Simulator', client, persistence),
 				// The dome follows the simulated mount through the shared mount manager when slaving is on.
-				new DomeSimulator('Dome Simulator', client, { mountManager: devices.mounts }),
+				new DomeSimulator('Dome Simulator', client, { ...persistence, mountManager: devices.mounts }),
 			]
 			return client
 		}
@@ -176,6 +220,9 @@ export class ConnectionManager implements Disposable {
 	readonly #listeners = new Set<ConnectionListener>()
 	// Devices of every open connection, publishing their events to the same listeners.
 	readonly devices = new DeviceRegistry((event) => this.#emit(event))
+
+	// simulatorDirectory: directory where the simulated devices save and load their configuration.
+	constructor(readonly simulatorDirectory: string = DEFAULT_SIMULATOR_DIRECTORY) {}
 
 	// Opens the endpoint addressed by request, or returns the existing connection when it is already open
 	// or opening. Publishes connection:open once per actual open. Rejects with an Error when unreachable.
@@ -202,7 +249,7 @@ export class ConnectionManager implements Disposable {
 	// client that opened.
 	async #connect(id: string, request: ConnectRequest): Promise<ConnectionStatus> {
 		const handler = new IndiClientHandlerSet([this.devices.handler, { close: (client: Client) => this.#closed(id, client) }])
-		const client = await openClient(id, request, handler, this.devices)
+		const client = await openClient(id, request, handler, this.devices, this.simulatorDirectory)
 
 		if (this.#disposed || this.#cancelled.delete(id)) {
 			client[Symbol.dispose]()

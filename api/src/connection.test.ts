@@ -1,7 +1,11 @@
 import { afterEach, describe, expect, spyOn, test } from 'bun:test'
+import { mkdtempSync, readdirSync, rmSync } from 'fs'
+import { tmpdir } from 'os'
+import { join } from 'path'
 import type { Focuser, Mount, Rotator, Wheel } from 'nebulosa/src/devices/indi/device'
 import type { CameraSimulator } from 'nebulosa/src/devices/indi/simulator/camera'
 import type { ClientSimulator } from 'nebulosa/src/devices/indi/simulator/client'
+import type { FocuserSimulator } from 'nebulosa/src/devices/indi/simulator/focuser'
 import { ConnectionCancelledError, type ConnectionEvent, ConnectionManager, connectionId, createConnectionRoutes } from './connection'
 import type { DeviceEvent, DeviceSummary } from './devices'
 import { routes, websocket } from './index'
@@ -13,8 +17,8 @@ afterEach(() => {
 	for (const disposable of disposables.splice(0)) disposable[Symbol.dispose]()
 })
 
-function newManager() {
-	const manager = new ConnectionManager()
+function newManager(simulatorDirectory?: string) {
+	const manager = new ConnectionManager(simulatorDirectory)
 	const events: ConnectionEvent[] = []
 	const deviceEvents: DeviceEvent[] = []
 	manager.listen((event) => (event.type.startsWith('connection:') ? events.push(event as ConnectionEvent) : deviceEvents.push(event as DeviceEvent)))
@@ -125,6 +129,32 @@ describe('simulator devices', () => {
 		const second = await manager.connect({ type: 'SIMULATOR' })
 
 		expect(manager.devices.list(manager.client(second.id)!).map((d) => d.id)).toEqual(before)
+	})
+
+	test('save their configuration and load it when connected again', async () => {
+		const directory = mkdtempSync(join(tmpdir(), 'nebulosa-simulators-'))
+		disposables.push({ [Symbol.dispose]: () => rmSync(directory, { recursive: true, force: true }) })
+
+		const first = newManager(directory).manager
+		const { id } = await first.connect({ type: 'SIMULATOR' })
+		const client = first.client(id) as ClientSimulator
+		const focuser = first.devices.list(client).find((d) => d.type === 'focuser')!
+		first.devices.switch(client, focuser.id, true)
+		await Bun.sleep(50)
+
+		client.sendNumber({ device: focuser.name, name: 'SIMULATOR_BACKLASH', elements: { BACKLASH: 42 } })
+		client.sendSwitch({ device: focuser.name, name: 'CONFIG', elements: { SAVE: true } })
+		expect(readdirSync(directory)).toEqual([`${focuser.name}.json`])
+		first[Symbol.dispose]()
+
+		const second = newManager(directory).manager
+		const reopened = await second.connect({ type: 'SIMULATOR' })
+		const secondClient = second.client(reopened.id) as ClientSimulator
+		expect((secondClient.get(focuser.name) as FocuserSimulator).backlash).toBe(0)
+		second.devices.switch(secondClient, focuser.id, true)
+		await Bun.sleep(50)
+
+		expect((secondClient.get(focuser.name) as FocuserSimulator).backlash).toBe(42)
 	})
 
 	test('are removed when the connection closes', async () => {

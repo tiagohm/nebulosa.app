@@ -164,7 +164,7 @@ async function setup(mountPatch: Partial<Mount> = {}) {
 				calls.push(`center:${request.mode}`)
 				centered.push({ mode: request.mode, invocation })
 				const orientation = flipped ? deg(190) : deg(10)
-				const blocked = recenterBlocks && request.mode === 'recenter'
+				const blocked = recenterBlocks && request.mode === 'center'
 				const summary = { sessionId: `center-${centered.length}`, state: blocked ? 'blocked' : 'completed', attempts: solutionsFound ? [{ attempt: 1, outcome: 'solved' }] : [], positionVerified: solutionsFound && !blocked, readyForImaging: solutionsFound && !blocked } as unknown as TargetCenteringSessionSummary
 				solutions.set(summary.sessionId, { orientation, parity: 'NORMAL' })
 				return Promise.resolve({ ok: true, sessionId: summary.sessionId, operationId: 'center', repeated: false, ended: blocked ? Promise.withResolvers<TargetCenteringSessionSummary>().promise : Promise.resolve(summary), settled: Promise.resolve(summary) })
@@ -243,7 +243,7 @@ test('a verified flip pauses the capture, suspends guiding into the reservation,
 
 	expect(execution).toMatchObject({ state: 'completed', strategy: 'forcedGoto', verificationMode: 'driverPierSide', captureSessionId: 'capture', target: { source: 'derivedFromMount' } })
 	expect(execution.outcome).toMatchObject({ verification: 'verified', pierSideBefore: 'WEST', pierSideAfter: 'EAST', recentering: 'completed', autofocus: 'skipped', guidingRestoration: 'restored', captureRestoration: 'resumed', readyForImaging: 'ready' })
-	expect(context.calls).toEqual(['guiding:hold', 'capture:suspend', 'guiding:suspend:reservation', 'flip:forcedGoto:reserved', 'center:recenter', 'capture:reclaim', 'guiding:restore', 'guiding:unhold', 'capture:resume'])
+	expect(context.calls).toEqual(['guiding:hold', 'capture:suspend', 'guiding:suspend:reservation', 'flip:forcedGoto:reserved', 'center:center', 'capture:reclaim', 'guiding:restore', 'guiding:unhold', 'capture:resume'])
 	// The recentering ran under the reservation, which is released at the end.
 	expect(context.centered[0].invocation?.reservation.ownerId).toBe(execution.sessionId)
 	expect(context.operations.arbiter.reservationOwnerOf(resourceKey(context.mount))).toBeUndefined()
@@ -256,7 +256,7 @@ test('Auto Focus runs after the recentering under the same reservation when aske
 
 	expect(execution.outcome).toMatchObject({ autofocus: 'completed', readyForImaging: 'ready' })
 	expect(context.calls).toContain('autofocus:reserved')
-	expect(context.calls.indexOf('autofocus:reserved')).toBeGreaterThan(context.calls.indexOf('center:recenter'))
+	expect(context.calls.indexOf('autofocus:reserved')).toBeGreaterThan(context.calls.indexOf('center:center'))
 })
 
 test('a flip without movement or side change is never retried and leaves the capture paused', async () => {
@@ -267,7 +267,7 @@ test('a flip without movement or side change is never retried and leaves the cap
 	expect(execution).toMatchObject({ state: 'failed', code: 'noFlipEvidence' })
 	expect(execution.outcome).toMatchObject({ verification: 'unverified', captureRestoration: 'leftSuspended', recentering: 'skipped', readyForImaging: 'notReady' })
 	expect(context.calls.filter((call) => call.startsWith('flip:'))).toHaveLength(1)
-	expect(context.calls).not.toContain('center:recenter')
+	expect(context.calls).not.toContain('center:center')
 	expect(context.calls).not.toContain('guiding:restore')
 	expect(context.calls).toContain('capture:release')
 })

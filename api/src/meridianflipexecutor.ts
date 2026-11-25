@@ -32,7 +32,7 @@ import {
 } from './meridianflipexecutor.policy'
 import type { MountCommands } from './mounts'
 import type { OperationDevice, OperationRegistry } from './operations'
-import type { TargetCenteringRequest, TargetCenteringSessions, TargetCenteringSessionSummary } from './targetcentering'
+import type { TargetCenteringMode, TargetCenteringRequest, TargetCenteringSessions, TargetCenteringSessionSummary } from './targetcentering'
 import type { ServerEvent } from './websocket'
 
 // Meridian Flip Executor: the server-owned workflow that flips a German equatorial mount at its meridian passage and gives
@@ -49,7 +49,7 @@ import type { ServerEvent } from './websocket'
 // solution of the frozen target before the flip (Target Centering in Verify Only); flips the mount by the driver's own flip
 // or a forced GoTo (MountCommands.admitMeridianFlip), always sent and never corrected; classifies the evidence (verified by
 // the driver's pier side, inferred from the plate solutions around the motion, or unverified); and only when the flip is
-// accepted by the policy, recenters the target (Target Centering in Recenter) and refocuses (Auto Focus). Then it drains the
+// accepted by the policy, recenters the target (Target Centering in Center) and refocuses (Auto Focus). Then it drains the
 // reservation, gives the camera back to the capture, restores guiding, and lets the capture go on only when the flip was
 // accepted and every step it asked for succeeded; otherwise the capture stays paused for the operator. A flip never repeats:
 // an uncertain motion stays uncertain, and a passage already flipped is never flipped again.
@@ -816,7 +816,7 @@ export class MeridianFlipExecutor implements DeviceContext, Disposable {
 			// Recenters and refocuses, only once the flip is accepted.
 			if (!outcomeOf.failure && !signal.aborted && policy.recenterAfterFlip && setup.camera && request.centering) {
 				this.#step(session, 'recentering')
-				const centered = await this.#center(session, 'recenter', invocation)
+				const centered = await this.#center(session, 'center', invocation)
 				if (centered.blocked) fail('blocked', 'unknownResult', centered.error ?? 'Target Centering blocked')
 				targetPositionConfirmed = centered.positionVerified
 				recentering = centered.positionVerified ? 'completed' : 'failed'
@@ -902,7 +902,7 @@ export class MeridianFlipExecutor implements DeviceContext, Disposable {
 	// Runs one Target Centering session of the frozen target under the reservation and waits for its end, or for its block (a
 	// mount it could not confirm stopped), which ends only once the operator dismissed it. Resolves the first solution it took,
 	// as the WCS of the field, whether a solution after its last motion lies within tolerance, why not, and whether it blocked.
-	async #center(session: Session, mode: 'verifyOnly' | 'recenter', invocation: { readonly reservation: ResourceReservation }): Promise<{ readonly measurement?: WcsMeasurement; readonly positionVerified: boolean; readonly error?: string; readonly blocked?: boolean }> {
+	async #center(session: Session, mode: TargetCenteringMode, invocation: { readonly reservation: ResourceReservation }): Promise<{ readonly measurement?: WcsMeasurement; readonly positionVerified: boolean; readonly error?: string; readonly blocked?: boolean }> {
 		const { setup, centering } = session.request
 		if (!setup.camera || !centering) return { positionVerified: false, error: 'No camera or Target Centering settings' }
 

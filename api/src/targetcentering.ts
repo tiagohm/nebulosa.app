@@ -30,7 +30,7 @@ import type { SkyObserver } from './sky/ephemeris'
 
 // Target Centering: brings a fixed J2000 target to the center of a camera, or measures how far it is, inside one
 // mount.targetCentering operation. Center slews first, through the same refusals and the single correction of the goto
-// route (MountCommands.goToWithin); Recenter slews only when the mount stands farther than a correction may go; Verify Only
+// route (MountCommands.goToWithin), but only when the mount stands farther than a correction may go; Verify Only
 // never commands the mount. Then the toolkit's centerTarget exposes, solves, and corrects with the residual it measured,
 // which never passes through a pointing model, so a model in force is applied once, by the first slew, and later changes of
 // it cannot reach the session. Success is only ever a solution taken after the last motion, within the tolerance.
@@ -49,10 +49,10 @@ import type { SkyObserver } from './sky/ephemeris'
 // Unix milliseconds.
 
 // What a session does:
-// - center: slews to a new target, then corrects until a solution verifies it.
-// - recenter: recovers a target it should stand near, slewing only when it does not.
+// - center: slews to the target when the mount stands farther than a correction may go, then corrects until a solution
+//   verifies it.
 // - verifyOnly: measures the distance to a target; nothing commands the mount.
-export type TargetCenteringMode = 'center' | 'recenter' | 'verifyOnly'
+export type TargetCenteringMode = 'center' | 'verifyOnly'
 
 // Fixed target of a session. J2000 means ICRS, and a time-dependent target has no place here.
 export interface TargetCenteringTarget extends CenteringTarget {
@@ -88,7 +88,7 @@ export interface TargetCenteringRequest extends CommandRequest {
 	readonly maximumFrames: number
 	// Wait after each motion and before the next exposure, in seconds.
 	readonly settleDelay: number
-	// Largest correction a session makes by itself, in radians; a larger one ends it, and it is also how far a Recenter stands
+	// Largest correction a session makes by itself, in radians; a larger one ends it, and it is also how far a Center stands
 	// from its target before it slews.
 	readonly maximumCorrection: Angle
 	// Whether a frame an assisted solve left without a solution is searched again over the whole sky, with the same solver settings.
@@ -607,10 +607,10 @@ export class TargetCenteringSessions {
 		}
 	}
 
-	// Returns whether a session starts with a slew. A Recenter skips it when the mount says it stands within what a correction
+	// Returns whether a session starts with a slew. A Center skips it when the mount says it stands within what a correction
 	// may reach; what it says is only a reason not to slew, since the position is measured next.
 	#slews({ mount, summary: { request } }: Session) {
-		if (request.mode !== 'recenter') return request.mode === 'center'
+		if (request.mode === 'verifyOnly') return false
 		if (!mount.hasEquatorialCoordinate) return true
 
 		const { rightAscension, declination } = mount.equatorialCoordinate

@@ -1,11 +1,17 @@
-import type { CameraCapabilities, MountState, OperationDevice, ServerEvent, TargetCenteringGuidingRestoration, TargetCenteringMode, TargetCenteringRequest, TargetCenteringSession, TargetCenteringSessionSummary, TargetCenteringState, TargetCenteringStep } from 'api'
+import type { CameraCapabilities, MountState, OperationDevice, ServerEvent, TargetCenteringGuidingRestoration, TargetCenteringMode, TargetCenteringOutcome, TargetCenteringRequest, TargetCenteringSession, TargetCenteringSessionSummary, TargetCenteringState, TargetCenteringStep } from 'api'
 import { nanoid } from 'nanoid'
+import { equatorialFromJ2000 } from 'nebulosa/src/astronomy/coordinates/coordinate'
+import { timeUnix } from 'nebulosa/src/astronomy/time/time'
 import { ASEC2RAD, DEG2RAD } from 'nebulosa/src/core/constants'
+import { sphericalSeparation } from 'nebulosa/src/math/numerical/geometry'
+import { toDeg } from 'nebulosa/src/math/units/angle'
 import { proxy } from 'valtio'
 import type { RoleAvailability } from '../equipment/availability'
+import { formatAngularSize, formatFixed } from '../format'
 import { type ApiFetch, browserFetch, deviceUrl, jsonInit } from '../http'
 import type { CameraExposureSettings, CameraPlateSolvingSettings, TargetCenteringSettings } from '../profile/schema'
 import { SnapshotRefreshes } from '../refresh'
+import { horizontalOf } from '../sky/mount'
 import { cameraKey, fitExposure } from './capture'
 import { applySession, type CameraSessionKind, type CameraSessionRecords, refreshSessionRecords, sendSessionCommand } from './sessions'
 
@@ -16,7 +22,9 @@ import { applySession, type CameraSessionKind, type CameraSessionRecords, refres
 // revision, and a snapshot leaves what an event changed during its fetch. Cameras and mounts are addressed by their exact
 // connection and device ids, never by role. A start carries a token, so a retried request answers the session of the first
 // one instead of starting another. The target being edited is kept for the tab across its reloads (centeringTargetsEntry of
-// profile/view.ts).
+// profile/view.ts). Where that target stands for the mount, its altitude and its distance, is computed here from what the
+// mount reports, so a Center is refused below the horizon and its confirmation says whether it slews, before the server
+// judges again; a session's state reads as a verdict once it ended.
 
 // J2000 target being edited for a camera, in radians.
 export interface TargetCenteringDraft {
@@ -68,25 +76,102 @@ export function targetCenteringMountSupport(state: Pick<MountState, 'canGoTo' | 
 	return undefined
 }
 
-// Returns why a mode cannot start now, or undefined when it can, from the availability of the camera and of the setup's
-// mount, the mount's reported state (undefined while unknown), and the target. A mount that is not tracking is accepted when it can switch tracking, which the server starts for the session. The server
-// checks again.
-export function targetCenteringBlocker(mode: TargetCenteringMode, camera: RoleAvailability, mount: RoleAvailability, state: MountState | undefined, draft: TargetCenteringDraft | undefined): string | undefined {
-	if (camera.status !== 'ready') return camera.message
+// Returns why the setup's mount keeps a mode from starting now, or undefined when it does not, from its availability and
+// its reported state (undefined while unknown). A mount that is not tracking is accepted when it can switch tracking,
+// which the server starts for the session.
+export function targetCenteringMountBlocker(mode: TargetCenteringMode, mount: RoleAvailability, state: MountState | undefined): string | undefined {
 	if (mount.status !== 'ready') return mount.message
 	if (!state) return 'The mount state is not known yet.'
+	if (mode === 'verifyOnly') return undefined
 
-	if (mode !== 'verifyOnly') {
-		const unsupported = targetCenteringMountSupport(state)
-		if (unsupported) return unsupported
-		if (state.site.latitude === 0 && state.site.longitude === 0) return 'The mount reports no site; send it from Equipment Control.'
-		if (state.parked || state.parking) return 'The mount is parked.'
-		if (!state.tracking && !state.canTracking) return 'The mount is not tracking and cannot start tracking.'
-	}
-
-	if (draft?.rightAscension === undefined || draft.declination === undefined) return 'Enter the coordinates of the target.'
+	const unsupported = targetCenteringMountSupport(state)
+	if (unsupported) return unsupported
+	if (state.site.latitude === 0 && state.site.longitude === 0) return 'The mount reports no site; send it from Equipment Control.'
+	if (state.parked || state.parking) return 'The mount is parked.'
+	if (!state.tracking && !state.canTracking) return 'The mount is not tracking and cannot start tracking.'
 	return undefined
 }
+
+// Returns why a mode cannot start now, or undefined when it can, from the availability of the camera and of the setup's
+// mount, the mount's reported state (undefined while unknown), the target, and where the target stands for the mount
+// (targetCenteringPosition; absent while unknown). A Center refuses a target below the horizon of the mount's site, as
+// the server does. The server checks again.
+export function targetCenteringBlocker(mode: TargetCenteringMode, camera: RoleAvailability, mount: RoleAvailability, state: MountState | undefined, draft: TargetCenteringDraft | undefined, position?: TargetCenteringPosition): string | undefined {
+	if (camera.status !== 'ready') return camera.message
+	const mounted = targetCenteringMountBlocker(mode, mount, state)
+	if (mounted) return mounted
+	if (draft?.rightAscension === undefined || draft.declination === undefined) return 'Enter the coordinates of the target.'
+	if (mode === 'center' && position && position.altitude < 0) return `${draft.label ?? 'The target'} is ${formatFixed(toDeg(-position.altitude), 1)}° below the horizon of the mount's site.`
+	return undefined
+}
+
+// Where a target stands for a mount now.
+export interface TargetCenteringPosition {
+	// Geometric altitude of the target at the mount's site, in radians; negative below the horizon.
+	readonly altitude: number
+	// Great-circle distance from where the mount reports it points to the target, in radians, [0, π].
+	readonly distance: number
+}
+
+// Returns where a J2000 target stands for a mount at a Unix time in milliseconds: its geometric altitude at the site the
+// mount reports and its distance from the position of date the mount reports. Undefined without a target, without a
+// state, or while the mount reports no site; the server judges again with its own clock.
+export function targetCenteringPosition(state: Pick<MountState, 'rightAscension' | 'declination' | 'site'> | undefined, draft: TargetCenteringDraft | undefined, time: number): TargetCenteringPosition | undefined {
+	if (!state || draft?.rightAscension === undefined || draft.declination === undefined) return undefined
+	if (state.site.latitude === 0 && state.site.longitude === 0) return undefined
+
+	const [rightAscension, declination] = equatorialFromJ2000(draft.rightAscension, draft.declination, timeUnix(time / 1000, true))
+	const { altitude } = horizontalOf({ rightAscension, declination }, time, { latitude: toDeg(state.site.latitude), longitude: toDeg(state.site.longitude) })
+	return { altitude, distance: sphericalSeparation(state.rightAscension, state.declination, rightAscension, declination) }
+}
+
+// Returns whether a Center starting at a position slews first: when the mount stands farther from the target than the
+// largest correction, in radians, or when where it stands is not known. Otherwise it is corrected from plate solved frames
+// only, as the server decides with what the mount reports then.
+export function targetCenteringSlews(position: TargetCenteringPosition | undefined, maximumCorrection: number): boolean {
+	return position === undefined || position.distance > maximumCorrection
+}
+
+// Returns the one-line state of a session for its heading and its collapsed section: what it is doing while it runs, and
+// how it ended, which a completed one states as a verdict with the distance it measured.
+export function targetCenteringStateText(session: Pick<TargetCenteringSessionSummary, 'state' | 'step' | 'request' | 'finalSeparation' | 'positionVerified' | 'readyForImaging'>): string {
+	const { state, step, request, finalSeparation, positionVerified, readyForImaging } = session
+	const distance = finalSeparation === undefined ? undefined : formatAngularSize(finalSeparation)
+	const label = request.target.label
+
+	switch (state) {
+		case 'preparing':
+		case 'running':
+			return `${request.mode === 'verifyOnly' ? 'Verifying' : 'Centering'} · ${step ? TARGET_CENTERING_STEP_LABELS[step] : 'Preparing'}`
+		case 'completed':
+			if (!positionVerified) return distance ? `Off target · ${distance}` : 'Off target'
+			return [`${request.mode === 'verifyOnly' ? 'On target' : 'Centered'}${label ? ` on ${label}` : ''}`, distance, !readyForImaging && 'guiding not restored'].filter(Boolean).join(' · ')
+		case 'failed':
+			return distance ? `Failed · ${distance} off` : 'Failed'
+		default:
+			return TARGET_CENTERING_STATE_LABELS[state]
+	}
+}
+
+// Returns whether a session that ended measured another target than the one being edited, so its result no longer speaks
+// for the form.
+export function targetCenteringStale(session: Pick<TargetCenteringSessionSummary, 'endedAt' | 'request'>, draft: TargetCenteringDraft | undefined): boolean {
+	if (targetCenteringRunning(session) || draft?.rightAscension === undefined || draft.declination === undefined) return false
+	const { rightAscension, declination } = session.request.target
+	return Math.abs(rightAscension - draft.rightAscension) > TARGET_EPSILON || Math.abs(declination - draft.declination) > TARGET_EPSILON
+}
+
+// Largest difference of right ascension or declination, in radians, between two targets taken as the same: far below a
+// milliarcsecond, so only an unchanged target matches.
+const TARGET_EPSILON = 1e-12
+
+// Returns the frames of a session: the one exposing counts while it runs; once it ended, only those whose solve ended.
+export function targetCenteringFrameCount({ attempts, endedAt }: Pick<TargetCenteringSessionSummary, 'attempts' | 'endedAt'>): number {
+	return endedAt === undefined ? attempts.length : attempts.filter(({ outcome }) => outcome !== undefined).length
+}
+
+// Label of what became of a frame.
+export const TARGET_CENTERING_OUTCOME_LABELS: Readonly<Record<TargetCenteringOutcome, string>> = { solved: 'Solved', noSolution: 'No solution', invalid: 'Rejected', timeout: 'Timed out', failed: 'Solver failed' }
 
 // Builds the start request of a mode from the form of a camera, for the mount of the Equipment Setup and the guide output
 // that drives it (its GUIDE_OUTPUT, absent when it has none), whose guiding the session coordinates. The frames take the exposure time of the form
@@ -129,12 +214,6 @@ export const TARGET_CENTERING_GUIDING_LABELS: Readonly<Record<Exclude<TargetCent
 // Returns whether a session has not ended; a blocked one has not, until it is dismissed.
 export function targetCenteringRunning(session: Pick<TargetCenteringSessionSummary, 'endedAt'> | undefined): boolean {
 	return session !== undefined && session.endedAt === undefined
-}
-
-// Returns what a session measured at its latest solution against its tolerance: within, outside, or undefined before one.
-export function targetCenteringVerdict({ finalSeparation, request: { tolerance } }: Pick<TargetCenteringSessionSummary, 'finalSeparation' | 'request'>): 'within' | 'outside' | undefined {
-	if (finalSeparation === undefined) return undefined
-	return finalSeparation <= tolerance ? 'within' : 'outside'
 }
 
 // Steps of the radial scale of the bullseye, in arcseconds: each ring is one step, and the largest step that keeps every

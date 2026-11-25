@@ -188,13 +188,13 @@ async function setup(corrections?: Pick<MountCorrections, 'plan' | 'suspend' | '
 		return { frame: 'J2000' as const, ...target }
 	}
 
-	// A session over tiny frames.
+	// A session over tiny frames, of a target farther than a correction may go, so Center slews first.
 	const request = (patch: Partial<TargetCenteringRequest> = {}): TargetCenteringRequest => ({
 		token: `token-${tokens++}`,
 		mount: { connectionId: id, deviceId: mountId },
 		guideOutput: { connectionId: id, deviceId: 'st4' },
 		mode: 'center',
-		target: offsetTarget(deg(1)),
+		target: offsetTarget(deg(2)),
 		capture: { exposureTime: 0.02, gain: 0, offset: 0, binX: 1, binY: 1, subframe: true, x: 0, y: 0, width: 64, height: 64, frameFormat: '' },
 		solving: { strategy: 'assisted' },
 		tolerance: arcsec(30),
@@ -295,10 +295,10 @@ describe('target centering sessions', () => {
 		expect(goTo).not.toHaveBeenCalled()
 	})
 
-	test('recenter near its target measures first and only corrects', async () => {
+	test('center near its target measures first and only corrects', async () => {
 		const { start, request, ended, summary, offsetTarget, mounts, solving } = await setup()
 		const within = spyOn(mounts, 'goToWithin')
-		await start(request({ mode: 'recenter', target: offsetTarget(arcmin(10)) }))
+		await start(request({ mode: 'center', target: offsetTarget(arcmin(10)) }))
 
 		await ended()
 		expect(within).not.toHaveBeenCalled()
@@ -306,10 +306,10 @@ describe('target centering sessions', () => {
 		expect(solving.requests[0].hints).toBeUndefined()
 	})
 
-	test('recenter far from its target slews like center', async () => {
+	test('center far from its target slews first', async () => {
 		const { start, request, ended, summary, offsetTarget, mounts } = await setup()
 		const within = spyOn(mounts, 'goToWithin')
-		await start(request({ mode: 'recenter', target: offsetTarget(deg(2)) }))
+		await start(request({ mode: 'center', target: offsetTarget(deg(2)) }))
 
 		await ended()
 		expect(within).toHaveBeenCalledTimes(1)

@@ -99,7 +99,7 @@ export function MeridianFlipExecutorView({ mount, monitor }: { readonly mount: R
 				target: _target,
 				guiding: _guiding,
 				...settings
-			} = targetCenteringRequest('recenter', { rightAscension: 0, declination: 0 }, targetCenteringSettings(profile.settings, cameraIdentity), exposure, cameraPlateSolving(profile.settings, cameraIdentity), { mount: mountDevice }, capabilities)
+			} = targetCenteringRequest('center', { rightAscension: 0, declination: 0 }, targetCenteringSettings(profile.settings, cameraIdentity), exposure, cameraPlateSolving(profile.settings, cameraIdentity), { mount: mountDevice }, capabilities)
 			centering = settings
 
 			if (focuserDevice && focuser.device) {

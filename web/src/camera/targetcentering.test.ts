@@ -5,7 +5,24 @@ import type { RoleAvailability } from '../equipment/availability'
 import type { ImageDocument } from '../images/images'
 import { DEFAULT_CAMERA_PLATE_SOLVING, DEFAULT_EXPOSURE_SETTINGS, DEFAULT_TARGET_CENTERING_SETTINGS } from '../profile/schema'
 import { cameraKey } from './capture'
-import { bullseyeRing, BULLSEYE_RINGS, handleTargetCenteringEvent, refreshTargetCentering, startTargetCentering, stopTargetCentering, targetCenteringBlocker, targetCenteringMountSupport, targetCenteringRequest, targetCenteringRunning, type TargetCenteringRuntime, targetCenteringVerdict } from './targetcentering'
+import {
+	bullseyeRing,
+	BULLSEYE_RINGS,
+	handleTargetCenteringEvent,
+	refreshTargetCentering,
+	startTargetCentering,
+	stopTargetCentering,
+	targetCenteringBlocker,
+	targetCenteringFrameCount,
+	targetCenteringMountSupport,
+	targetCenteringPosition,
+	targetCenteringRequest,
+	targetCenteringRunning,
+	type TargetCenteringRuntime,
+	targetCenteringSlews,
+	targetCenteringStale,
+	targetCenteringStateText,
+} from './targetcentering'
 import { targetCenteringOverlay } from './targetcentering.overlay'
 
 const camera = { connectionId: 'c', deviceId: 'cam' }
@@ -73,9 +90,11 @@ describe('target centering blockers', () => {
 		expect(blocker('center', { ...MOUNT, tracking: false })).toBeUndefined()
 	})
 
-	test('recenter needs only the target, like center', () => {
-		expect(blocker('recenter')).toBeUndefined()
-		expect(blocker('recenter', MOUNT, {})).toBe('Enter the coordinates of the target.')
+	test('a center refuses a target below the horizon, which a measurement does not', () => {
+		const below = { altitude: -0.1, distance: 1 }
+		expect(targetCenteringBlocker('center', READY, READY, MOUNT, { ...TARGET, label: 'M 42' }, below)).toBe("M 42 is 5.7° below the horizon of the mount's site.")
+		expect(targetCenteringBlocker('center', READY, READY, MOUNT, TARGET, { altitude: 0.1, distance: 1 })).toBeUndefined()
+		expect(targetCenteringBlocker('verifyOnly', READY, READY, MOUNT, TARGET, below)).toBeUndefined()
 	})
 
 	test('verify only asks nothing of a mount it never commands', () => {
@@ -98,9 +117,9 @@ describe('target centering blockers', () => {
 describe('target centering request', () => {
 	test('sends radians and the form, copying the target', () => {
 		const settings = { ...DEFAULT_TARGET_CENTERING_SETTINGS, tolerance: 3600, maximumCorrection: 180 }
-		const request = targetCenteringRequest('recenter', { ...TARGET, label: 'M 42' }, settings, DEFAULT_EXPOSURE_SETTINGS, DEFAULT_CAMERA_PLATE_SOLVING, { mount, guideOutput: { connectionId: 'c', deviceId: 'st4' } })
+		const request = targetCenteringRequest('center', { ...TARGET, label: 'M 42' }, settings, DEFAULT_EXPOSURE_SETTINGS, DEFAULT_CAMERA_PLATE_SOLVING, { mount, guideOutput: { connectionId: 'c', deviceId: 'st4' } })
 
-		expect(request).toMatchObject({ mode: 'recenter', mount, guideOutput: { connectionId: 'c', deviceId: 'st4' }, target: { frame: 'J2000', ...TARGET, label: 'M 42' }, maximumCorrections: 4, noSolutionRetries: 1, maximumFrames: 10, blindRetry: false })
+		expect(request).toMatchObject({ mode: 'center', mount, guideOutput: { connectionId: 'c', deviceId: 'st4' }, target: { frame: 'J2000', ...TARGET, label: 'M 42' }, maximumCorrections: 4, noSolutionRetries: 1, maximumFrames: 10, blindRetry: false })
 		expect(request.tolerance).toBeCloseTo(Math.PI / 180, 9)
 		expect(request.maximumCorrection).toBeCloseTo(Math.PI, 9)
 		expect(request.capture.exposureTime).toBe(DEFAULT_TARGET_CENTERING_SETTINGS.exposureTime)
@@ -117,10 +136,43 @@ describe('target centering outcome', () => {
 		expect(targetCenteringRunning(summary({ endedAt: 2 }))).toBeFalse()
 	})
 
-	test('the verdict compares the latest solution with the tolerance', () => {
-		expect(targetCenteringVerdict(summary())).toBeUndefined()
-		expect(targetCenteringVerdict(summary({ finalSeparation: 1e-5 }))).toBe('within')
-		expect(targetCenteringVerdict(summary({ finalSeparation: 1e-3 }))).toBe('outside')
+	test('the state reads as what runs, then as a verdict with the distance', () => {
+		expect(targetCenteringStateText(summary({ step: 'slewing' }))).toBe('Centering · Slewing')
+		expect(targetCenteringStateText(summary({ state: 'preparing', request: { ...summary().request, mode: 'verifyOnly' } }))).toBe('Verifying · Preparing')
+		const labelled = { ...summary().request, target: { ...summary().request.target, label: 'M 42' } }
+		expect(targetCenteringStateText(summary({ state: 'completed', request: labelled, positionVerified: true, readyForImaging: true, finalSeparation: 1e-5 }))).toBe('Centered on M 42 · 2.06″')
+		expect(targetCenteringStateText(summary({ state: 'completed', positionVerified: true, readyForImaging: false, finalSeparation: 1e-5 }))).toBe('Centered · 2.06″ · guiding not restored')
+		expect(targetCenteringStateText(summary({ state: 'completed', request: { ...summary().request, mode: 'verifyOnly' }, finalSeparation: 1e-2 }))).toBe('Off target · 34.38′')
+		expect(targetCenteringStateText(summary({ state: 'cancelled' }))).toBe('Stopped')
+	})
+
+	test('an ended session speaks only for the target it measured', () => {
+		expect(targetCenteringStale(summary({ endedAt: 2 }), TARGET)).toBeFalse()
+		expect(targetCenteringStale(summary({ endedAt: 2 }), { ...TARGET, declination: 0.6 })).toBeTrue()
+		expect(targetCenteringStale(summary(), { ...TARGET, declination: 0.6 })).toBeFalse()
+		expect(targetCenteringStale(summary({ endedAt: 2 }), {})).toBeFalse()
+	})
+
+	test('an ended session counts only the frames whose solve ended', () => {
+		const attempts = [{ attempt: 1, outcome: 'solved' as const }, { attempt: 2 }]
+		expect(targetCenteringFrameCount(summary({ attempts }))).toBe(2)
+		expect(targetCenteringFrameCount(summary({ attempts, endedAt: 2 }))).toBe(1)
+	})
+
+	test('the position of a target is its altitude and its distance from the mount', () => {
+		// A mount at the north pole pointing at the celestial pole sees every northern target at its declination.
+		const state = { rightAscension: 0, declination: Math.PI / 2, site: { latitude: Math.PI / 2, longitude: 0.1 } } as MountState
+		const position = targetCenteringPosition(state, { rightAscension: 1, declination: 1.4 }, Date.UTC(2026, 0, 1))!
+		expect(position.altitude).toBeCloseTo(1.4, 1)
+		expect(position.distance).toBeCloseTo(Math.PI / 2 - 1.4, 1)
+		expect(targetCenteringPosition({ ...state, site: { latitude: 0, longitude: 0 } } as MountState, TARGET, 0)).toBeUndefined()
+		expect(targetCenteringPosition(state, {}, 0)).toBeUndefined()
+	})
+
+	test('a center slews only when the mount stands farther than a correction may go', () => {
+		expect(targetCenteringSlews({ altitude: 1, distance: 0.01 }, 0.02)).toBeFalse()
+		expect(targetCenteringSlews({ altitude: 1, distance: 0.03 }, 0.02)).toBeTrue()
+		expect(targetCenteringSlews(undefined, 0.02)).toBeTrue()
 	})
 
 	test('the rings of the bullseye hold the distance on a scale it states', () => {

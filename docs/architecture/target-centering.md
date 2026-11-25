@@ -4,7 +4,7 @@ Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
 
 Target Centering brings a fixed J2000 target to the center of one camera, or only measures how far it is, by exposing, plate solving, and correcting the mount until a frame taken after the last motion proves the position.
 The session lives in `api/src/targetcentering.ts` and runs the toolkit's centering loop (`core/src/observation/mount/centering.ts`).
-The web tool is a camera operation of the Images camera tabs (`web/src/images/TargetCenteringTool.tsx`, `web/src/camera/TargetCenteringPanel.tsx`), with Center, Recenter, and Verify Only as actions of one tool.
+The web tool is a camera operation of the Images camera tabs (`web/src/images/TargetCenteringTool.tsx`, `web/src/camera/TargetCenteringPanel.tsx`), with Center and Verify Only as actions of one tool.
 
 ## Purpose
 
@@ -14,7 +14,7 @@ Target Centering gives the operator and the automations a verified position, and
 ## Relations
 
 - Holds the camera and the setup's mount in one operation until the end, so nothing comes between an exposure and its correction (see [Operation Lifecycle Rules](operation-lifecycle-rules.md)).
-- The first slew goes through the mount commands' GoTo, applying the [Mount Pointing Model](mount-pointing-model.md) in force once; later corrections are the residuals measured on the sky.
+- A slew goes through the mount commands' GoTo, applying the [Mount Pointing Model](mount-pointing-model.md) in force once; later corrections are the residuals measured on the sky.
 - Takes its frames through the shared camera capturer with the camera settings of Camera Acquisition and its own exposure time; frames are auxiliary and recorded in the [Capture Frames](capture-frames.md) registry.
 - Solves each frame with [Plate Solving](plate-solving.md), whose settings are fixed when the session starts.
 - Suspends the [Guiding](guiding.md) through the setup's guide output, which drives its mount, before moving it, keeps it from starting meanwhile, and restores it afterwards.
@@ -25,6 +25,7 @@ Target Centering gives the operator and the automations a verified position, and
 ## Rules and Limitations
 
 - A position is verified only by the solution of a frame taken after the last motion; an accepted slew or an earlier solve never proves it.
+- Center slews first only when the mount stands farther from the target than the largest correction, so a mount already near it is corrected from the sky alone; the tool tells which before the operator confirms.
 - Verify Only commands the mount nothing; a correction too large, below the horizon, or across a pier-side change is refused, and Sync is never used.
 - A caller inside the process can admit a session under a reservation that holds the camera and the mount; the session still suspends and restores guiding itself.
 - Guiding the operator paused, or that is calibrating, is never taken over.

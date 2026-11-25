@@ -178,7 +178,7 @@ async function setup(mountPatch: Partial<Mount> = {}) {
 		autoFocus: {
 			admit: (_, __, request, invocation) => {
 				calls.push(`autofocus:${invocation ? 'reserved' : 'manual'}`)
-				return Promise.resolve({ ok: true, sessionId: 'focus', operationId: 'focus', repeated: false, ended: Promise.resolve({ state: 'completed' } as AutoFocusSessionSummary) })
+				return { ok: true, sessionId: 'focus', operationId: 'focus', repeated: false, ended: Promise.resolve({ state: 'completed' } as AutoFocusSessionSummary) }
 			},
 			interrupt: () => Promise.resolve(true),
 		},

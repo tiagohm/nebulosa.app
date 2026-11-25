@@ -45,7 +45,6 @@ function summary(patch: Partial<TppaSessionSummary> = {}): TppaSessionSummary {
 		mount: MOUNT,
 		mountName: 'Mount',
 		request: tppaRequest(DEFAULT_TPPA_SETTINGS, DEFAULT_EXPOSURE_SETTINGS, DEFAULT_CAMERA_PLATE_SOLVING, MOUNT, 'SPEED_4'),
-		provider: 'astap',
 		state: 'capturing',
 		frameCount: 1,
 		pointCount: 0,
@@ -72,9 +71,9 @@ function fakeFetch(handler: (url: string, init?: RequestInit) => Response | Prom
 }
 
 test('the request sends the rotation in radians and the exposure time of the form, and the slew rate only when announced', () => {
-	const request = tppaRequest({ ...DEFAULT_TPPA_SETTINGS, exposureTime: 7, rotation: 10 }, DEFAULT_EXPOSURE_SETTINGS, { provider: 'nova', strategy: 'blind', downsample: 2, scaleTolerance: 0.3 }, MOUNT, 'SPEED_4')
+	const request = tppaRequest({ ...DEFAULT_TPPA_SETTINGS, exposureTime: 7, rotation: 10 }, DEFAULT_EXPOSURE_SETTINGS, { strategy: 'blind', scaleTolerance: 0.3 }, MOUNT, 'SPEED_4')
 	expect(request.rotation).toBeCloseTo(deg(10), 12)
-	expect(request.solving).toEqual({ provider: 'nova', strategy: 'blind', downsample: 2, scaleTolerance: 0.3 })
+	expect(request.solving).toEqual({ strategy: 'blind', scaleTolerance: 0.3 })
 	expect(request.capture.exposureTime).toBe(7)
 
 	expect(tppaSlewRate({ slewRate: 'SPEED_4' }, mountState())).toBe('SPEED_4')
@@ -83,7 +82,7 @@ test('the request sends the rotation in radians and the exposure time of the for
 	expect(tppaSlewRate({ slewRate: 'SPEED_4' }, undefined)).toBeUndefined()
 })
 
-test('a mount that can never align is unsupported, and a start needs a ready, tracking, located mount and a solver', () => {
+test('a mount that can never align is unsupported, and a start needs a ready, tracking, located mount', () => {
 	expect(tppaMountSupport(mountState({ mountType: 'ALTAZ' }))).toContain('not equatorial')
 	expect(tppaMountSupport(mountState({ canMoveWE: false }))).toContain('west-east')
 	expect(tppaMountSupport(mountState({ canAbort: false }))).toContain('abort')
@@ -92,16 +91,15 @@ test('a mount that can never align is unsupported, and a start needs a ready, tr
 	expect(tppaMountSupport(undefined)).toBeUndefined()
 
 	const state = mountState()
-	expect(tppaBlocker(READY, READY, state, 'SPEED_4', true)).toBeUndefined()
-	expect(tppaBlocker({ status: 'busy', operations: [], message: 'The camera is busy.' }, READY, state, 'SPEED_4', true)).toBe('The camera is busy.')
-	expect(tppaBlocker(READY, { status: 'unsupported', message: 'No.' }, state, 'SPEED_4', true)).toBe('No.')
-	expect(tppaBlocker(READY, READY, undefined, 'SPEED_4', true)).toContain('not known')
-	expect(tppaBlocker(READY, READY, state, undefined, true)).toContain('slew rate')
-	expect(tppaBlocker(READY, READY, mountState({ site: { latitude: 0, longitude: 0, elevation: 0 } }), 'SPEED_4', true)).toContain('site')
-	expect(tppaBlocker(READY, READY, mountState({ tracking: false, canTracking: false }), 'SPEED_4', true)).toContain('tracking')
+	expect(tppaBlocker(READY, READY, state, 'SPEED_4')).toBeUndefined()
+	expect(tppaBlocker({ status: 'busy', operations: [], message: 'The camera is busy.' }, READY, state, 'SPEED_4')).toBe('The camera is busy.')
+	expect(tppaBlocker(READY, { status: 'unsupported', message: 'No.' }, state, 'SPEED_4')).toBe('No.')
+	expect(tppaBlocker(READY, READY, undefined, 'SPEED_4')).toContain('not known')
+	expect(tppaBlocker(READY, READY, state, undefined)).toContain('slew rate')
+	expect(tppaBlocker(READY, READY, mountState({ site: { latitude: 0, longitude: 0, elevation: 0 } }), 'SPEED_4')).toContain('site')
+	expect(tppaBlocker(READY, READY, mountState({ tracking: false, canTracking: false }), 'SPEED_4')).toContain('tracking')
 	// The server starts the tracking of a mount that can switch it.
-	expect(tppaBlocker(READY, READY, mountState({ tracking: false, canTracking: true }), 'SPEED_4', true)).toBeUndefined()
-	expect(tppaBlocker(READY, READY, state, 'SPEED_4', false)).toContain('not configured')
+	expect(tppaBlocker(READY, READY, mountState({ tracking: false, canTracking: true }), 'SPEED_4')).toBeUndefined()
 })
 
 test('events are ordered by revision and fetch the record on a new frame, pose, or estimate', async () => {

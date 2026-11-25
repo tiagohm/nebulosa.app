@@ -152,7 +152,7 @@ function centerError(rightAscension: number, declination: number) {
 	return Math.acos(Math.min(1, truth[0] * solved[0] + truth[1] * solved[1] + truth[2] * solved[2])) / ASEC2RAD
 }
 
-const BLIND: PlateSolveRequest = { provider: 'nebulosa', strategy: 'blind' }
+const BLIND: PlateSolveRequest = { strategy: 'blind' }
 
 describe('files', () => {
 	test('finds the .nqi tiles and Astrometry.net index files of the subfolders', async () => {

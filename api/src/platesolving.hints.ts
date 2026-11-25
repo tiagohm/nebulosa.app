@@ -53,10 +53,6 @@ export interface ResolvedPlateSolveHints {
 // Search radius around a position given without one: 10°, wide enough for a pointing error of a few degrees.
 export const DEFAULT_SEARCH_RADIUS = deg(10)
 
-// Header keywords holding the pointing of an image, left out of the copy a blind solve reads, so a solver that
-// looks at the header (ASTAP) does not search around them.
-export const POINTING_KEYWORDS: readonly string[] = ['RA', 'DEC', 'OBJCTRA', 'OBJCTDEC', 'RA_OBJ', 'DEC_OBJ', 'CRVAL1', 'CRVAL2']
-
 // Returns the hints a plate solve of an image uses: the operator's hints first, then the pointing and the optics
 // of the header, for the given strategy (see the module description).
 export function resolvePlateSolveHints(strategy: PlateSolveStrategy, header: FitsHeader, acquisition: ImageAcquisition, hints: PlateSolveHints = {}): ResolvedPlateSolveHints {

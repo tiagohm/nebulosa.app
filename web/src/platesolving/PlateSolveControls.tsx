@@ -1,4 +1,4 @@
-import type { PlateSolveHints, PlateSolveRequest, PlateSolverProvider, PlateSolveStrategy, ResolvedPlateSolveHints } from 'api'
+import type { PlateSolveHints, PlateSolveRequest, PlateSolveStrategy, ResolvedPlateSolveHints } from 'api'
 import { arcsec, deg, parseAngle, toArcsec, toDeg } from 'nebulosa/src/math/units/angle'
 import { useEffect, useState } from 'react'
 import { useSnapshot } from 'valtio'
@@ -11,14 +11,13 @@ import { LinkButton } from '../ui/LinkButton'
 import { Notice } from '../ui/Notice'
 import { NumberInput } from '../ui/NumberInput'
 import { SegmentedControl } from '../ui/SegmentedControl'
-import { Select } from '../ui/Select'
 import { TextInput } from '../ui/TextInput'
 import { formatPixelScale } from './coordinates'
-import { PROVIDER_LABELS, PROVIDER_TOOLS, PROVIDERS, STRATEGY_LABELS } from './platesolving'
+import { STRATEGY_LABELS } from './platesolving'
 
-// Controls of a plate solving request of the Plate Solver tool of the Images workspace: the solver with its availability
-// in External Tools, the strategy, the hints, and the advanced settings the chosen solver takes, with the one-line
-// summary of each a collapsed section shows. They edit a request through onChange and solve nothing. Hints left empty
+// Controls of a plate solving request of the Plate Solver tool of the Images workspace: the state of the solver in
+// External Tools, the strategy, the hints, and the scale tolerance, with the one-line summary of each a collapsed section
+// shows. They edit a request through onChange and solve nothing. Hints left empty
 // are taken from the image on the server; the values the image offers are shown as placeholders when known. A position
 // is used only when both of its coordinates are typed. Right ascension is typed in hours and declination in degrees
 // (sexagesimal or decimal), the radius in degrees and the scale in arcseconds per pixel; the request holds radians.
@@ -34,68 +33,38 @@ export interface PlateSolveControlsProps {
 	readonly disabled?: boolean
 }
 
-// Scale tolerance of nova and the built-in solver when the request leaves it out, as a fraction of the pixel scale.
+// Scale tolerance of the solver when the request leaves it out, as a fraction of the pixel scale.
 const DEFAULT_SCALE_TOLERANCE = 0.2
+
+// External Tools entry of the solver, for its state and its settings link.
+const SOLVER_TOOL = 'nebulosa'
 
 // Strategies, in selector order.
 const STRATEGIES: readonly PlateSolveStrategy[] = ['assisted', 'blind']
 
-// Whether the External Tools entry of a solver is configured (nova: signed in), from the server's settings.
-export function useSolverConfigured(provider: PlateSolverProvider): boolean {
-	return useSolverBlocker(provider) === undefined
-}
-
-// Why a solver cannot solve, in the words External Tools shows for its state ("ASTAP cannot solve: Not Set Up."), or
-// undefined when its entry is configured (nova: signed in).
-export function useSolverBlocker(provider: PlateSolverProvider): string | undefined {
+// Returns the state of the solver as External Tools shows it ("Available", "No Indexes"), or Loading… before the
+// settings arrive.
+export function useSolverState(): string {
 	const { tools } = useSnapshot(externalToolsState)
-	const tool = tools.find((t) => t.id === PROVIDER_TOOLS[provider])
-	if (tool?.status === 'configured') return undefined
-	return `${tool?.name ?? PROVIDER_LABELS[provider]} cannot solve: ${tool ? summaryOf(tool).label : 'Loading…'}.`
-}
-
-// Returns the state of a solver as External Tools shows it ("Available", "Signed Out"), or Loading… before the settings
-// arrive.
-export function useSolverState(provider: PlateSolverProvider): string {
-	const { tools } = useSnapshot(externalToolsState)
-	const tool = tools.find((t) => t.id === PROVIDER_TOOLS[provider])
+	const tool = tools.find((t) => t.id === SOLVER_TOOL)
 	return tool ? summaryOf(tool).label : 'Loading…'
 }
 
-// Returns the one-line summary of the solver and strategy of a request: "ASTAP · Assisted".
-export function settingsSummary({ provider, strategy }: Pick<PlateSolveRequest, 'provider' | 'strategy'>): string {
-	return `${PROVIDER_LABELS[provider]} · ${STRATEGY_LABELS[strategy]}`
-}
-
-// Choice of the solver, with its availability; the list puts the solvers ready to solve before the others.
-export function SolverControls({ request, onChange, disabled }: PlateSolveControlsProps) {
+// State of the solver, as the server's External Tools settings report it for its index files and star database, with a
+// link to them.
+export function SolverAvailability() {
 	const { tools } = useSnapshot(externalToolsState)
-	const ready = (provider: PlateSolverProvider) => tools.find((tool) => tool.id === PROVIDER_TOOLS[provider])?.status === 'configured'
-	const options = [...PROVIDERS.filter(ready), ...PROVIDERS.filter((provider) => !ready(provider))]
-
-	return (
-		<>
-			<Select options={options} value={request.provider} format={(provider) => PROVIDER_LABELS[provider]} group={(provider) => (ready(provider) ? 'Ready' : 'Needs setup')} disabled={disabled} onChange={(provider) => onChange({ ...request, provider })} />
-			<SolverAvailability provider={request.provider} />
-			{request.provider === 'nova' && <Notice>This provider uploads the scientific image to an external service.</Notice>}
-		</>
-	)
-}
-
-// Whether a solver can be used, as the server's External Tools settings report it, with a link to them.
-function SolverAvailability({ provider }: { readonly provider: PlateSolverProvider }) {
-	const { tools } = useSnapshot(externalToolsState)
-	const tool = tools.find((t) => t.id === PROVIDER_TOOLS[provider])
+	const tool = tools.find((t) => t.id === SOLVER_TOOL)
 	const summary = tool && summaryOf(tool)
 
 	return (
 		<Notice>
-			{tool?.name ?? PROVIDER_LABELS[provider]}:{' '}
+			{tool?.name ?? 'Nebulosa'}:{' '}
 			<span className={summary?.className} title={summary?.hint}>
 				{summary?.label ?? 'Loading…'}
 			</span>
 			{tool?.lastCheck && tool.lastCheck.code !== 'ok' && ` — ${tool.lastCheck.message}`}.{' '}
-			<LinkButton title="Settings → External Tools" onClick={() => navigate(routeState, { workspace: 'settings', tool: PROVIDER_TOOLS[provider] })}>
+			<LinkButton title="Settings → External Tools" onClick={() => navigate(routeState, { workspace: 'settings', tool: SOLVER_TOOL })}>
 				Open its settings
 			</LinkButton>
 		</Notice>
@@ -122,13 +91,9 @@ export function hintsSummary({ strategy, hints = {} }: Pick<PlateSolveRequest, '
 	return parts.length > 0 ? parts.join(' · ') : 'From the image'
 }
 
-// Returns the one-line summary of the advanced settings of a request for its solver: the scale tolerance of nova and the
-// built-in solver, and the downsampling of the others.
-export function advancedSummary({ provider, downsample, scaleTolerance }: Pick<PlateSolveRequest, 'provider' | 'downsample' | 'scaleTolerance'>): string {
-	const tolerance = `Tolerance ${Math.round((scaleTolerance ?? DEFAULT_SCALE_TOLERANCE) * 100)} %`
-	const sampling = `Downsample ${downsample ?? 'auto'}`
-	if (provider === 'nebulosa') return tolerance
-	return provider === 'nova' ? `${sampling} · ${tolerance}` : sampling
+// Returns the one-line summary of the advanced settings of a request: its scale tolerance.
+export function advancedSummary({ scaleTolerance }: Pick<PlateSolveRequest, 'scaleTolerance'>): string {
+	return `Tolerance ${Math.round((scaleTolerance ?? DEFAULT_SCALE_TOLERANCE) * 100)} %`
 }
 
 // Hints of the request: the position (assisted only), the search radius, and the image scale.
@@ -161,16 +126,12 @@ export function HintControls({ request, onChange, offered, disabled }: PlateSolv
 	)
 }
 
-// Advanced settings the chosen solver takes: downsampling, except for the built-in solver, which detects stars at full
-// resolution, and the scale tolerance of nova and the built-in solver.
+// Advanced settings of a request: the scale tolerance.
 export function AdvancedControls({ request, onChange, disabled }: PlateSolveControlsProps) {
-	const builtin = request.provider === 'nebulosa'
-
 	return (
 		<>
-			{!builtin && <NumberInput label="Downsample" min={0} max={16} step={1} value={request.downsample ?? 0} disabled={disabled} onChange={(downsample) => onChange({ ...request, downsample: downsample > 0 ? Math.trunc(downsample) : undefined })} />}
-			{(builtin || request.provider === 'nova') && <NumberInput label="Scale Tolerance" suffix="%" min={1} max={90} step={1} value={(request.scaleTolerance ?? DEFAULT_SCALE_TOLERANCE) * 100} disabled={disabled} onChange={(percent) => onChange({ ...request, scaleTolerance: percent / 100 })} />}
-			<Notice>{builtin ? 'The scale is searched within the tolerance around the pixel scale, when one is known.' : 'Downsample 0 lets the solver choose. The solution is always given for the full-size image.'}</Notice>
+			<NumberInput label="Scale Tolerance" suffix="%" min={1} max={90} step={1} value={(request.scaleTolerance ?? DEFAULT_SCALE_TOLERANCE) * 100} disabled={disabled} onChange={(percent) => onChange({ ...request, scaleTolerance: percent / 100 })} />
+			<Notice>The scale is searched within the tolerance around the pixel scale, when one is known.</Notice>
 		</>
 	)
 }

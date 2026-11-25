@@ -113,8 +113,7 @@ function originAgreement(frame: Pick<HeaderMetadata, 'originX' | 'originY'>, dar
 	return 'unknown'
 }
 
-// Job of the dark worker: a frame file, the master to subtract from it, and the header keywords to leave out of the
-// calibrated FITS (the pointing keywords of a blind plate solve).
+// Job of the dark worker: a frame file and the master to subtract from it.
 export interface DarkWorkerRequest {
 	readonly jobId: number
 	// Path of the frame's FITS file.
@@ -125,8 +124,6 @@ export interface DarkWorkerRequest {
 	readonly fullScale: number
 	// Identity of the master, `<masterId>:<digest>`: the worker reads a master again when it changes.
 	readonly masterKey: string
-	// Header keywords left out of the calibrated FITS.
-	readonly omit: readonly string[]
 }
 
 // Answer of the dark worker: the calibrated FITS, transferred, or why there is none.

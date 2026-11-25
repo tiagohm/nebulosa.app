@@ -54,7 +54,7 @@ function request(mount: { connectionId: string; deviceId: string }, patch: Parti
 		token: `token-${tokens++}`,
 		mount,
 		capture: { exposureTime: 0.02, gain: 0, offset: 0, binX: 1, binY: 1, subframe: true, x: 0, y: 0, width: 64, height: 64, frameFormat: '' },
-		solving: { provider: 'astap', strategy: 'assisted' },
+		solving: { strategy: 'assisted' },
 		plan: { pattern: 'goldenSpiral', count: 6, minimumAltitude: deg(30), meridianAvoidance: 0 },
 		settleDelay: 0,
 		stopTracking: true,
@@ -69,7 +69,7 @@ function tanSolution(rightAscension: number, declination: number, scale = 1e-3):
 	return plateSolutionFrom(header)!
 }
 
-// Plate solver standing for ASTAP: solves a frame at the J2000 center the camera simulator stamps from the mount it snoops,
+// Plate solver standing for the built-in one: solves a frame at the J2000 center the camera simulator stamps from the mount it snoops,
 // plus a constant north offset that stands for the pointing error of the mount. Can leave frames without a solution,
 // stall until it is aborted, or hand out another scale.
 function fakeSolver(images: ImageStore) {
@@ -78,7 +78,7 @@ function fakeSolver(images: ImageStore) {
 	const control = { unsolved: 0, stall: false, scale: 1e-3 }
 
 	const solver = {
-		prepare: (solving: PlateSolveRequest) => Promise.resolve({ request: solving, tool: { executable: 'astap', timeout: 60000 } } as PlateSolvePreparation),
+		prepare: (solving: PlateSolveRequest) => Promise.resolve({ request: solving, tool: { executable: '', timeout: 60000, indexDirectory: '', catalogDirectory: '' } } as PlateSolvePreparation),
 		solve: async (imageId: string, preparation: PlateSolvePreparation, signal?: AbortSignal, origin?: PlateSolveOrigin) => {
 			if (origin) origins.push(origin)
 			hints.push(preparation.request.hints)
@@ -472,7 +472,7 @@ describe('mount pointing sessions', () => {
 		expect({ gate: revision.gate, strategy: revision.fitted.strategy, usable: revision.fitted.usable, offline: revision.offline }).toMatchObject({ gate: 'passed' })
 
 		const capture = request(mountDevice).capture
-		const body = { token: `token-${tokens++}`, revisionId: revision.revisionId, camera: { connectionId: id, deviceId: camera.id }, mount: mountDevice, capture, solving: { provider: 'astap', strategy: 'assisted' }, settleDelay: 0, count: 4 } as const
+		const body = { token: `token-${tokens++}`, revisionId: revision.revisionId, camera: { connectionId: id, deviceId: camera.id }, mount: mountDevice, capture, solving: { strategy: 'assisted' }, settleDelay: 0, count: 4 } as const
 		const response = await sessions.verify(modelId, body)
 		expect(response.status).toBe(202)
 		const { sessionId } = (await response.json()) as MountPointingStartResponse
@@ -536,7 +536,7 @@ describe('mount pointing sessions', () => {
 		const revision = { revisionId: 'r', createdAt: 1, request: 'auto', sampleIds: [], heldOutIds: [], fitted: {}, residuals: [], offline: { heldOutCount: 0, perSide: { EAST: 0, WEST: 0, NEITHER: 0 } }, gate: 'failed', verifications: [] } as never
 		await store.update(modelId, (model) => ({ ...model, revisions: [revision] }))
 
-		const body = { token: `token-${tokens++}`, revisionId: 'r', camera: { connectionId: id, deviceId: camera.id }, mount: mountDevice, capture: request(mountDevice).capture, solving: { provider: 'astap', strategy: 'assisted' }, settleDelay: 0, count: 4 } as const
+		const body = { token: `token-${tokens++}`, revisionId: 'r', camera: { connectionId: id, deviceId: camera.id }, mount: mountDevice, capture: request(mountDevice).capture, solving: { strategy: 'assisted' }, settleDelay: 0, count: 4 } as const
 		expect((await sessions.verify(modelId, body)).status).toBe(422)
 		expect((await sessions.verify(modelId, { ...body, revisionId: 'gone' })).status).toBe(404)
 		expect((await sessions.verify('gone', body)).status).toBe(404)

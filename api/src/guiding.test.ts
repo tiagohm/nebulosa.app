@@ -76,8 +76,6 @@ async function setup(calibrations = new GuidingCalibrationStore(AppDatabase.memo
 		commander,
 		images,
 		frames,
-		// A settings file of its own, where ASTAP is not configured.
-		new ExternalToolsStore(AppDatabase.memory()),
 		calibrations,
 		library,
 		(event) => events.push(event),
@@ -157,7 +155,7 @@ function eastOfMeridian({ mount }: Setup): Angle {
 
 // Starts a session and waits until it loops; returns its ids.
 async function start(context: Setup, patch: Partial<GuidingStartRequest> = {}) {
-	const response = await context.guiding.start(context.id, context.cameraId, request(context, patch))
+	const response = context.guiding.start(context.id, context.cameraId, request(context, patch))
 	expect(response.status).toBe(202)
 	const accepted = (await response.json()) as { sessionId: string; operationId: string }
 	await waitUntil(() => context.summary()?.active === true)
@@ -181,23 +179,16 @@ describe('calibration progress', () => {
 describe('start', () => {
 	test('refuses an unknown camera or guide output and a busy camera', async () => {
 		const context = await setup()
-		expect((await context.guiding.start(context.id, 'nope', request(context))).status).toBe(404)
-		expect((await context.guiding.start(context.id, context.cameraId, request(context, { guideOutput: { connectionId: context.id, deviceId: 'nope' } }))).status).toBe(404)
+		expect(context.guiding.start(context.id, 'nope', request(context)).status).toBe(404)
+		expect(context.guiding.start(context.id, context.cameraId, request(context, { guideOutput: { connectionId: context.id, deviceId: 'nope' } })).status).toBe(404)
 
 		await start(context)
-		expect((await context.guiding.start(context.id, context.cameraId, request(context))).status).toBe(409)
+		expect(context.guiding.start(context.id, context.cameraId, request(context)).status).toBe(409)
 	})
 
-	test('refuses ASTAP while it is not configured', async () => {
+	test('detects the stars with the settings of the request', async () => {
 		const context = await setup()
-		const response = await context.guiding.start(context.id, context.cameraId, request(context, { detection: { provider: 'astap', maxStars: 0, minSNR: 10 } }))
-		expect(response.status).toBe(422)
-		expect(context.operations.available(context.camera)).toBeTrue()
-	})
-
-	test('detects the stars with the built-in settings of the request', async () => {
-		const context = await setup()
-		const { sessionId } = await start(context, { detection: { provider: 'nebulosa', maxStars: 3, minSNR: 0, searchRegion: 0 } })
+		const { sessionId } = await start(context, { detection: { maxStars: 3, minSNR: 0, searchRegion: 0 } })
 		await waitUntil(() => context.events.some((event) => event.type === 'guiding:frame'))
 		const frame = context.events.find((event): event is Extract<GuidingServerEvent, { type: 'guiding:frame' }> => event.type === 'guiding:frame')!
 		expect(frame.overlay.stars.length).toBeLessThanOrEqual(3)
@@ -236,9 +227,9 @@ describe('start', () => {
 	test('loops under one camera.guiding operation, snoops the devices of the request, and previews the frames as guiding frames of the camera', async () => {
 		const context = await setup()
 		const body = request(context, { snoop: { mount: context.mountId } })
-		const first = (await (await context.guiding.start(context.id, context.cameraId, body)).json()) as { sessionId: string; operationId: string }
+		const first = (await context.guiding.start(context.id, context.cameraId, body).json()) as { sessionId: string; operationId: string }
 		// A repeated token answers its first session.
-		expect(await (await context.guiding.start(context.id, context.cameraId, body)).json()).toEqual(first)
+		expect(await context.guiding.start(context.id, context.cameraId, body).json()).toEqual(first)
 
 		await waitUntil(() => context.events.some((event) => event.type === 'guiding:frame'))
 		const frame = context.events.find((event) => event.type === 'guiding:frame')!
@@ -773,7 +764,7 @@ describe('detection regions', () => {
 	const held = { guideOutputHeld: true, lockPosition: [201, 151] } as unknown as GuidingSessionSummary
 
 	test('are the measured star, the lock, and the brightest accepted stars while the guide output is held', () => {
-		const regions = guidingRegions({ builtin: true, tracker: tracker(true), summary: held })!
+		const regions = guidingRegions({ tracker: tracker(true), summary: held })!
 		expect(regions.radius).toBe(GUIDING_REGION_RADIUS)
 		// Only detections the tracker could accept by SNR are kept.
 		expect(regions.minSNR).toBe(5)
@@ -786,10 +777,9 @@ describe('detection regions', () => {
 		expect(regions.centers[2]).toEqual([290, 580])
 	})
 
-	test('cover the whole frame while looping, after a lost frame, or with ASTAP', () => {
-		expect(guidingRegions({ builtin: true, tracker: tracker(true), summary: { ...held, guideOutputHeld: false } })).toBeUndefined()
-		expect(guidingRegions({ builtin: true, tracker: tracker(false), summary: held })).toBeUndefined()
-		expect(guidingRegions({ builtin: false, tracker: tracker(true), summary: held })).toBeUndefined()
+	test('cover the whole frame while looping or after a lost frame', () => {
+		expect(guidingRegions({ tracker: tracker(true), summary: { ...held, guideOutputHeld: false } })).toBeUndefined()
+		expect(guidingRegions({ tracker: tracker(false), summary: held })).toBeUndefined()
 	})
 })
 
@@ -881,7 +871,7 @@ describe('composition', () => {
 
 	// Admits a session under an invocation and waits until it loops.
 	async function admit(context: Setup, invocation: ToolInvocation) {
-		const admitted = await context.guiding.admit(context.id, context.cameraId, request(context), invocation)
+		const admitted = context.guiding.admit(context.id, context.cameraId, request(context), invocation)
 		if (!admitted.ok) throw new Error(admitted.error)
 		await waitUntil(() => context.summary()?.active === true)
 		return admitted
@@ -891,7 +881,7 @@ describe('composition', () => {
 		const context = await setup()
 		const { invocation } = reserve(context)
 
-		expect((await context.guiding.start(context.id, context.cameraId, request(context))).status).toBe(409)
+		expect(context.guiding.start(context.id, context.cameraId, request(context)).status).toBe(409)
 		const { sessionId } = await admit(context, invocation)
 		expect(context.guiding.selectTarget(sessionId, { position: [128, 128] }).status).toBe(200)
 

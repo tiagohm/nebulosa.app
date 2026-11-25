@@ -1,7 +1,4 @@
-import { mkdtemp, rm } from 'fs/promises'
-import { tmpdir } from 'os'
 import { join } from 'path'
-import { AstapError, astapDetectStars } from 'nebulosa/src/astrometry/solvers/astap'
 import type { GuideOutputCommander } from 'nebulosa/src/devices/commanders/guideoutput'
 import type { Camera, GuideOutput, Mount, PierSide } from 'nebulosa/src/devices/indi/device'
 import type { DeviceHandler } from 'nebulosa/src/devices/indi/manager/device'
@@ -20,7 +17,7 @@ import type { DitherAmount } from 'nebulosa/src/observation/guiding/ditherer'
 import type { GuiderState, GuidingEvent } from 'nebulosa/src/observation/guiding/events'
 import type { GuidingSettle } from 'nebulosa/src/observation/guiding/session'
 import { InteractiveGuidingSession, type GuidingPauseMode } from 'nebulosa/src/observation/guiding/session.interactive'
-import { enrichGuideStars, type GuideStar, type GuidingMode, StarTracker, starTrackingOf } from 'nebulosa/src/observation/guiding/tracker.star'
+import { type GuideStar, type GuidingMode, StarTracker, starTrackingOf } from 'nebulosa/src/observation/guiding/tracker.star'
 import type { CalibrationLibrary } from './calibrationlibrary'
 import type { HeaderMetadata } from './calibrationlibrary.compatibility'
 import { CameraSessionRegistry } from './camerasessions'
@@ -29,7 +26,6 @@ import type { CaptureFrame, CaptureSettings, CaptureSnoop } from './captures'
 import { type ClientResolver, type CommandRefusal, type CommandRequest, failureResponse, notFound, refusal, refusalResponse, resolveConnected } from './commands'
 import type { DeviceRegistry } from './devices'
 import { type CameraBindings, NO_CAMERA_BINDINGS } from './equipmentcatalog'
-import type { ExternalToolsStore, ResolvedExternalTool } from './externaltools'
 import type { GuideRegions } from './guideregions'
 import { equipmentKeyOf, evidenceRejections, type GuidingCalibrationCandidate, type GuidingCalibrationEvidence, type GuidingDeviceIdentity, selectGuidingCalibration } from './guidingcalibration'
 import type { GuidingCalibrationHeader, GuidingCalibrationStore } from './guidingcalibration.store'
@@ -38,7 +34,7 @@ import { errorResponse } from './http'
 import type { ImageStore } from './images'
 import { frameTarget } from './livestacking.groups'
 import type { OperationDevice, OperationRegistry, ToolInvocation } from './operations'
-import type { NebulosaStarDetectionSettings, StarDetectionSettings } from './stars'
+import type { StarDetectionSettings } from './stars'
 
 // Guiding service: one native guiding session per guide camera, from its first looped exposure to its stop, built on the
 // toolkit's InteractiveGuidingSession over a GuiderClient of its own. The session's root operation holds the guide
@@ -50,9 +46,8 @@ import type { NebulosaStarDetectionSettings, StarDetectionSettings } from './sta
 // events and its per-frame telemetry, and previews its frames.
 //
 // Each guide BLOB is decoded on a worker thread of the session (guiding.worker.ts), which also takes the grayscale copy,
-// detects its stars with the built-in detector and the settings of the request (while guiding, only in the regions
-// around the stars the guider uses; see guidingRegions), and answers both with the FITS/XISF bytes; a session that
-// detects with ASTAP has the worker decode only and runs ASTAP on the frame file here.
+// detects its stars with the toolkit detector and the settings of the request (while guiding, only in the regions
+// around the stars the guider uses; see guidingRegions), and answers both with the FITS/XISF bytes.
 // The stars feed the tracker synchronously, and the guide star of each frame is profiled on its grayscale copy
 // (guidingprofile.ts) into the record, with the progress of the exposure the camera counts down. The bytes of
 // the newest frame are opened as a capture document of the image store and recorded in the capture frame registry as
@@ -85,7 +80,7 @@ import type { NebulosaStarDetectionSettings, StarDetectionSettings } from './sta
 // (restoreAfterMotion), the calibration in use is derived again for where the mount points instead of being solved again.
 //
 // A session asked to (dark) subtracts a master dark of the Calibration Library from its guide frames before their stars
-// are detected, by the built-in detector or ASTAP: from the header of each frame the service builds its calibration
+// are detected: from the header of each frame the service builds its calibration
 // target, and whenever it changes (another exposure, gain, offset, binning, temperature) chooses again among the darks the
 // library matches (matchesTarget) the one exposed exactly as long, closest in temperature, newest, or the one the
 // operator pinned, which must match the same way; it reads it through pinnedMaster and leases it until another one is
@@ -146,8 +141,8 @@ export interface GuidingStartRequest extends CommandRequest {
 	// Devices of the camera's connection snooped into the guide frame headers, set once when the session starts; absent
 	// snoops none. A simulated camera renders its star field from the pointing of the snooped mount.
 	readonly snoop?: CaptureSnoop
-	// Star detector of the guide frames and its settings, as the Star Detection of the profile edits them; absent uses
-	// the built-in detector with its defaults. The tracker filters the detected stars by its own thresholds.
+	// Settings of the detector of the guide frames, as the Star Detection of the profile edits them; absent uses its
+	// defaults. The tracker filters the detected stars by its own thresholds.
 	readonly detection?: StarDetectionSettings
 }
 
@@ -620,9 +615,9 @@ export interface GuidingWorkerRequest {
 	readonly jobId: number
 	readonly bytes: Uint8Array<ArrayBuffer>
 	readonly encoding: BlobEncoding
-	// Settings of the built-in detector the worker detects the stars with; absent decodes only, for ASTAP.
-	readonly detection?: Partial<Omit<NebulosaStarDetectionSettings, 'provider'>>
-	// Regions the built-in detector is limited to; absent detects the whole frame.
+	// Settings of the detector the worker detects the stars with; an absent one takes its default.
+	readonly detection: Partial<StarDetectionSettings>
+	// Regions the detector is limited to; absent detects the whole frame.
 	readonly regions?: GuideRegions
 	// Master dark subtracted from the frame before its stars are detected; absent subtracts none.
 	readonly dark?: GuidingWorkerDark
@@ -642,8 +637,6 @@ export type GuidingWorkerResponse =
 			readonly metadata: HeaderMetadata
 			// Whether the dark of the job applied; absent without one.
 			readonly dark?: GuidingWorkerDarkOutcome
-			// The calibrated frame as FITS, for ASTAP; present when the dark applied and the worker detected no stars.
-			readonly detectionBytes?: Uint8Array<ArrayBuffer>
 	  }
 	| { readonly jobId: number; readonly status: 'unsupported' }
 	| { readonly jobId: number; readonly status: 'failed'; readonly error: string }
@@ -686,7 +679,7 @@ function guideOutputKey({ connectionId, deviceId }: OperationDevice) {
 // Guide steps the RMS is computed over.
 export const GUIDING_RMS_WINDOW = 50
 
-// Accepted stars of the previous frame, by decreasing SNR, whose regions the built-in detection is limited to while
+// Accepted stars of the previous frame, by decreasing SNR, whose regions the detection is limited to while
 // guiding; with the measured position and the lock they are the reference stars of the next frame. PHD2 guides on up to
 // 9 secondary stars; 16 keep the field measurement averaged over many stars at a fraction of the frame.
 export const GUIDING_REGION_STARS = 16
@@ -712,7 +705,7 @@ class GuideFrameDecoder implements Disposable {
 	#jobs = 0
 	readonly #pending = new Map<number, PromiseWithResolvers<GuidingWorkerResponse>>()
 
-	// Decodes one BLOB on the worker, and detects its stars with the built-in detection given. Rejects when the worker
+	// Decodes one BLOB on the worker, and detects its stars with the detection given. Rejects when the worker
 	// crashes or was disposed.
 	decode(data: Buffer, encoding: BlobEncoding, detection: GuidingWorkerRequest['detection'], regions: GuideRegions | undefined, dark: GuidingWorkerDark | undefined): Promise<GuidingWorkerResponse> {
 		const jobId = ++this.#jobs
@@ -813,17 +806,8 @@ interface Session {
 	// Whether the session is ending or ended.
 	ending: boolean
 	calibrations: number
-	// Star detector of the frames and its settings, as requested; absent uses the built-in detector's defaults.
-	readonly detection?: StarDetectionSettings
-	// ASTAP settings and the directory of its input file, when ASTAP detects the stars; the directory is created on the
-	// first frame and removed at the end.
-	readonly astap?: { readonly tool: Readonly<ResolvedExternalTool>; directory?: Promise<string> }
-	// Aborted at the end, so an ASTAP run in flight is killed.
-	readonly abort: AbortController
-	// Tracker of the guide stars, whose previous result places the regions of the built-in detection.
+	// Tracker of the guide stars, whose previous result places the regions of the detection.
 	readonly tracker: StarTracker
-	// Whether the worker detects the stars with the built-in detector.
-	readonly builtin: boolean
 	// Follows the exposure countdown of the guide camera until the end.
 	readonly progress: DeviceHandler<Camera>
 	// Calibration settings of the request over the toolkit defaults, whose limits the calibration progress shows.
@@ -848,15 +832,15 @@ interface SessionCalibration {
 	declinationScale: number
 }
 
-// Returns the regions the built-in detection of a session's next frame is limited to, or undefined for the whole frame:
+// Returns the regions the detection of a session's next frame is limited to, or undefined for the whole frame:
 // only while its run holds the guide output (calibrating, guiding, settling, paused) and the previous frame was measured,
 // around the measured position, the lock, and the GUIDING_REGION_STARS accepted stars of highest SNR. While looping or
 // selecting, and after a frame without measurement, the whole frame is detected, so any star can be chosen or found
-// again. A session whose stars ASTAP detects always runs on the whole file. The regions keep only detections from the
+// again. The regions keep only detections from the
 // tracker's minimum SNR: the frame quality the guider gates on is the accepted fraction of the detections, and the noise
 // peaks of a crop, which the whole frame's brightest-first cap cuts, would otherwise bring every frame under it.
-export function guidingRegions(session: Pick<Session, 'builtin' | 'tracker' | 'summary'>): GuideRegions | undefined {
-	if (!session.builtin || !session.summary.guideOutputHeld) return undefined
+export function guidingRegions(session: Pick<Session, 'tracker' | 'summary'>): GuideRegions | undefined {
+	if (!session.summary.guideOutputHeld) return undefined
 	const result = starTrackingOf(session.tracker.lastResult)
 	const measurement = result?.measurement
 	if (!result || !measurement) return undefined
@@ -877,8 +861,7 @@ export class GuidingSessions implements Disposable {
 
 	// Creates the service. client resolves an open connection id to its client, operations holds and publishes every
 	// session, guideOutputs is the commander the pulses are dispatched through, images receives the previewed frames,
-	// frames records them as the latest frame of their camera, tools resolves ASTAP for the sessions that detect their stars
-	// with it, calibrations keeps the completed calibrations, library resolves, pins and leases the master darks of the
+	// frames records them as the latest frame of their camera, calibrations keeps the completed calibrations, library resolves, pins and leases the master darks of the
 	// frames, listener receives every notification synchronously, and catalog resolves the camera of the Equipment Catalog
 	// a guide camera is bound to, whose darks alone a session chooses.
 	constructor(
@@ -888,7 +871,6 @@ export class GuidingSessions implements Disposable {
 		readonly guideOutputs: GuideOutputCommander,
 		readonly images: ImageStore,
 		readonly frames: CaptureFrameRegistry,
-		readonly tools: ExternalToolsStore,
 		readonly calibrations: GuidingCalibrationStore,
 		readonly library: GuidingDarkLibrary,
 		readonly listener: GuidingListener,
@@ -923,21 +905,18 @@ export class GuidingSessions implements Disposable {
 	// Starts a session looping on a guide camera. Responds 202 with GuidingStartResponse once accepted (a repeated token
 	// answers its first session); its progress arrives as guiding and operation:updated events. Responds 404 for an
 	// unknown camera or guide output, 409 when either is disconnected or the camera is held by another operation, and
-	// 422 when the guide output cannot pulse guide or the request detects the stars with ASTAP while it is not configured.
-	async start(connectionId: string, deviceId: string, request: GuidingStartRequest): Promise<Response> {
-		const admitted = await this.admit(connectionId, deviceId, request)
+	// 422 when the guide output cannot pulse guide.
+	start(connectionId: string, deviceId: string, request: GuidingStartRequest): Response {
+		const admitted = this.admit(connectionId, deviceId, request)
 		return admitted.ok ? Response.json({ sessionId: admitted.sessionId, operationId: admitted.operationId } satisfies GuidingStartResponse, { status: 202 }) : refusalResponse(admitted)
 	}
 
 	// Admits a session, under the reservation of invocation when given (which must then hold the guide camera and the
 	// guide output), and returns its identity and end, or why it was refused, as start answers it. A repeated token
 	// answers the session it started, while it is remembered.
-	async admit(connectionId: string, deviceId: string, request: GuidingStartRequest, invocation?: ToolInvocation): Promise<GuidingAdmission> {
-		const detection = request.detection
-		const tool = detection?.provider === 'astap' ? await this.tools.resolve('astap') : undefined
-		if (detection?.provider === 'astap' && !tool) return refusal('ASTAP is not configured, so it cannot detect the guide stars', 422, 'unsupported')
-		// The built-in detection the worker runs; ASTAP runs here, on the decoded file.
-		const builtin = detection?.provider === 'astap' ? undefined : detection === undefined ? {} : { maxStars: detection.maxStars, minSNR: detection.minSNR, searchRegion: detection.searchRegion, ...(detection.maximumRadius !== undefined && { maximumRadius: detection.maximumRadius }) }
+	admit(connectionId: string, deviceId: string, request: GuidingStartRequest, invocation?: ToolInvocation): GuidingAdmission {
+		// The detection the worker runs.
+		const detection: Partial<StarDetectionSettings> = request.detection ?? {}
 
 		const repeated = this.#sessions.repeated(request.token)
 		if (repeated) return admitted(repeated, true)
@@ -963,11 +942,11 @@ export class GuidingSessions implements Disposable {
 		const client = new GuiderClient(this.devices.cameras, this.devices.guideOutputs, tracker, {
 			decodeImage: async (data, encoding) => {
 				const dark = session.dark && { masterId: session.dark.masterId, path: session.dark.path, fullScale: session.dark.fullScale, exposure: session.dark.exposure }
-				const decoded = await decoder.decode(data, encoding, builtin, guidingRegions(session), dark)
+				const decoded = await decoder.decode(data, encoding, detection, guidingRegions(session), dark)
 				if (decoded.status === 'unsupported') return undefined
 				if (decoded.status === 'failed') throw new Error(decoded.error)
 				this.#darkFrame(session, decoded.metadata, decoded.dark)
-				detections.set(decoded.image, session.astap ? await this.#astapStars(session, session.astap, decoded.image, decoded.detectionBytes ?? decoded.bytes) : decoded.stars)
+				detections.set(decoded.image, decoded.stars)
 				files.set(decoded.image, decoded.bytes)
 				return decoded.image
 			},
@@ -1037,11 +1016,7 @@ export class GuidingSessions implements Disposable {
 			preview: { decoding: false },
 			ending: false,
 			calibrations: 0,
-			...(detection && { detection }),
-			...(tool && { astap: { tool } }),
-			abort: new AbortController(),
 			tracker,
-			builtin: builtin !== undefined,
 			calibrator: { ...DEFAULT_GUIDING_CALIBRATOR_CONFIG, ...request.calibration },
 			progress: {
 				added: () => {},
@@ -1927,36 +1902,12 @@ export class GuidingSessions implements Disposable {
 		if (session.motion) this.devices.mounts.removeHandler(session.motion)
 		session.decoder[Symbol.dispose]()
 		this.#dropDark(session)
-		session.abort.abort()
-		if (session.astap?.directory)
-			void session.astap.directory.then(
-				(directory) => rm(directory, { recursive: true, force: true }),
-				() => undefined,
-			)
 		session.preview.next = undefined
 		session.run?.ended.resolve(result)
 		session.run = undefined
 		this.#update(session, { active: false, guideOutputHeld: false, pulsesAdmitted: false, runOperationId: undefined, exposureProgress: undefined, ...(failure && { failure }), endedAt: Date.now() })
 		session.ended.resolve(result)
 		session.closed.resolve(session.summary)
-	}
-
-	// Detects the stars of a decoded guide frame with ASTAP, from its FITS file written to the session directory, and
-	// samples their peaks on the grayscale image for the saturation filter. Positions are 0-based pixels of the frame.
-	// A run killed by the end of the session answers no star; any other failure of ASTAP throws, and the frame is lost.
-	async #astapStars(session: Session, astap: NonNullable<Session['astap']>, image: Image, bytes: Uint8Array<ArrayBuffer>): Promise<readonly GuideStar[]> {
-		astap.directory ??= mkdtemp(join(tmpdir(), 'nebulosa-guiding-'))
-		const input = join(await astap.directory, 'frame.fits')
-		await Bun.write(input, bytes)
-
-		try {
-			const { executable, timeout } = astap.tool
-			const settings = session.detection
-			return enrichGuideStars(await astapDetectStars(input, { executable, timeout, ...(settings && { minSNR: settings.minSNR, maxStars: settings.maxStars }) }, session.abort.signal), image)
-		} catch (error) {
-			if (error instanceof AstapError && error.code === 'aborted') return []
-			throw error
-		}
 	}
 
 	// Returns the latest session with this id that still lives, or the response refusing it.

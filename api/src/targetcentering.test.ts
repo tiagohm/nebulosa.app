@@ -52,16 +52,16 @@ function tanSolution(rightAscension: number, declination: number): PlateSolution
 	return plateSolutionFrom(header)!
 }
 
-// Plate solver standing for ASTAP: solves a frame at the J2000 center the camera simulator stamps from the mount it snoops,
+// Plate solver standing for the built-in one: solves a frame at the J2000 center the camera simulator stamps from the mount it snoops,
 // plus an east and north offset that stands for the pointing error of the mount. Can leave frames without a solution, throw,
 // or stall until it is aborted.
 function fakeSolver(images: ImageStore) {
 	const origins: PlateSolveOrigin[] = []
 	const requests: PlateSolveRequest[] = []
-	const control = { unsolved: 0, stall: false, error: undefined as Error | undefined, dx: arcmin(5), dy: arcmin(-3), configured: true, onSolve: undefined as VoidFunction | undefined }
+	const control = { unsolved: 0, stall: false, error: undefined as Error | undefined, dx: arcmin(5), dy: arcmin(-3), onSolve: undefined as VoidFunction | undefined }
 
 	const solver = {
-		prepare: (solving: PlateSolveRequest) => Promise.resolve(control.configured ? { request: solving, tool: { executable: 'astap', timeout: 60000 } } : undefined),
+		prepare: (solving: PlateSolveRequest) => Promise.resolve({ request: solving, tool: { executable: '', timeout: 60000, indexDirectory: '', catalogDirectory: '' } }),
 		solve: async (imageId: string, preparation: PlateSolvePreparation, signal?: AbortSignal, origin?: PlateSolveOrigin) => {
 			if (origin) origins.push(origin)
 			requests.push(preparation.request)
@@ -196,7 +196,7 @@ async function setup(corrections?: Pick<MountCorrections, 'plan' | 'suspend' | '
 		mode: 'center',
 		target: offsetTarget(deg(1)),
 		capture: { exposureTime: 0.02, gain: 0, offset: 0, binX: 1, binY: 1, subframe: true, x: 0, y: 0, width: 64, height: 64, frameFormat: '' },
-		solving: { provider: 'astap', strategy: 'assisted' },
+		solving: { strategy: 'assisted' },
 		tolerance: arcsec(30),
 		maximumCorrections: 4,
 		noSolutionRetries: 1,
@@ -361,15 +361,15 @@ describe('target centering sessions', () => {
 		expect(goTo).toHaveBeenCalledTimes(1)
 	})
 
-	test('a blind retry stays with the provider of the session', async () => {
+	test('a blind retry searches the whole sky once, then the session goes on assisted', async () => {
 		const { start, request, ended, summary, solving } = await setup()
 		solving.control.unsolved = 1
-		await start(request({ blindRetry: true, solving: { provider: 'astap', strategy: 'assisted' } }))
+		await start(request({ blindRetry: true, solving: { strategy: 'assisted' } }))
 
 		await ended()
 		expect(summary().state).toBe('completed')
-		expect(solving.requests[1]).toMatchObject({ provider: 'astap', strategy: 'blind' })
-		expect(solving.requests.slice(2).every(({ provider, strategy }) => provider === 'astap' && strategy === 'assisted')).toBeTrue()
+		expect(solving.requests[1]).toMatchObject({ strategy: 'blind' })
+		expect(solving.requests.slice(2).every(({ strategy }) => strategy === 'assisted')).toBeTrue()
 	})
 
 	test('a solver that fails is told apart from a frame without a solution', async () => {
@@ -428,12 +428,6 @@ describe('target centering sessions', () => {
 		expect(response.status).toBe(422)
 		expect(((await response.json()) as { code: string }).code).toBe('invalidParameter')
 		expect(events).toBeEmpty()
-	})
-
-	test('a plate solver that is not configured is refused', async () => {
-		const { sessions, id, cameraId, request, solving } = await setup()
-		solving.control.configured = false
-		expect((await sessions.start(id, cameraId, request())).status).toBe(422)
 	})
 
 	const GUIDING = { sessionId: 'g1', state: 'guiding' } as GuidingSessionSummary

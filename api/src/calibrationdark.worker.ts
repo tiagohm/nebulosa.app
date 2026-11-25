@@ -8,7 +8,7 @@ import { calibrateLight, readDigitalFrom } from './imagestacking.analysis'
 // debayering; calibrate refuses a master of another geometry, CFA, binning, gain, offset, or subframe origin), and answers
 // a FITS of the calibrated frame in the frame's own integer scale and header, negative values clipped to 0 by the writer,
 // transferred, so the decoding and the subtraction never block the server event loop. The pixel grid, the orientation,
-// and every header keyword but those the job leaves out are the frame's. The worker keeps the latest master a job named,
+// and every header keyword are the frame's. The worker keeps the latest master a job named,
 // read once per master id and digest. A job that fails answers why, never a partial image.
 
 declare const self: Worker
@@ -17,14 +17,12 @@ declare const self: Worker
 const master = new LatestMasterDark()
 
 // Subtracts the master of a job from its frame and encodes the result as FITS, with the header of the frame (BITPIX
-// included) but the keywords the job leaves out.
+// included).
 async function calibrated(request: DarkWorkerRequest): Promise<Uint8Array<ArrayBuffer>> {
 	const bytes = Buffer.from(await Bun.file(request.framePath).arrayBuffer())
 	const light = await readDigitalFrom(bufferSource(bytes), false)
 	const image = calibrateLight(light, { dark: await master.image(request.masterKey, request.darkPath, request.fullScale) })
-	const omitted = new Set(request.omit)
-	const header = Object.fromEntries(Object.entries(image.header).filter(([key]) => !omitted.has(key)))
-	return await calibratedFits({ ...image, header }, bytes.byteLength)
+	return await calibratedFits(image, bytes.byteLength)
 }
 
 self.addEventListener('message', async (event: MessageEvent<DarkWorkerRequest>) => {

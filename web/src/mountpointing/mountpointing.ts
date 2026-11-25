@@ -101,9 +101,9 @@ export function mountPointingMountSupport(state: Pick<MountState, 'mountType' | 
 
 // Returns why no session can start now, or undefined when one can, from the availability of the camera and of the setup's
 // mount (unsupported per mountPointingMountSupport), the role of the camera, the mount's reported state (undefined while
-// unknown), whether the plate solver is configured, and whether the geometry of the mount is known or confirmed. A mount
+// unknown), and whether the geometry of the mount is known or confirmed. A mount
 // that is not tracking is accepted when it can switch tracking, which the server starts. The server checks again.
-export function mountPointingBlocker(camera: RoleAvailability, mount: RoleAvailability, role: CameraRole | undefined, state: MountState | undefined, solverConfigured: boolean, equatorial: boolean): string | undefined {
+export function mountPointingBlocker(camera: RoleAvailability, mount: RoleAvailability, role: CameraRole | undefined, state: MountState | undefined, equatorial: boolean): string | undefined {
 	if (role !== 'MAIN_CAMERA') return 'Assign this camera as the Main Camera, so the model belongs to one optical train.'
 	if (camera.status !== 'ready') return camera.message
 	if (mount.status !== 'ready') return mount.message
@@ -111,7 +111,6 @@ export function mountPointingBlocker(camera: RoleAvailability, mount: RoleAvaila
 	if (state.site.latitude === 0 && state.site.longitude === 0) return 'The mount reports no site; send it from Equipment Control.'
 	if (state.parked || state.parking) return 'The mount is parked.'
 	if (!state.tracking && !state.canTracking) return 'The mount is not tracking and cannot start tracking.'
-	if (!solverConfigured) return 'The plate solver is not configured.'
 	if (!equatorial) return 'The mount does not report its type; confirm that it is equatorial.'
 	return undefined
 }

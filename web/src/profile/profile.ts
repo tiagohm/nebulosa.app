@@ -1,4 +1,4 @@
-import type { AnnotationBodies, DisplaySettings, MeridianFlipExecutorPolicy, MeridianFlipSettings, MountRemoteProtocol, StarDetectionRequest, StarDetectorProvider, StreakDetectorSettings } from 'api'
+import type { AnnotationBodies, DisplaySettings, MeridianFlipExecutorPolicy, MeridianFlipSettings, MountRemoteProtocol, StarDetectionRequest, StreakDetectorSettings } from 'api'
 import { nanoid } from 'nanoid'
 import { proxy, snapshot } from 'valtio'
 import { conflictingRole, type DeviceAssignment, type EquipmentRole, type EquipmentSetup, isEquipmentRole } from '../equipment/roles'
@@ -9,7 +9,7 @@ import type { WorkspaceId } from '../shell/route'
 import { MAP_STAR_MAGNITUDE_LIMIT, MIN_MAGNITUDE_LIMIT, type SkyLayerId } from '../sky/display'
 import { refKey } from '../sky/objects'
 import { DEFAULT_STAR_PROFILE_SETTINGS, type StarProfileSettings } from '../stars/starprofile.settings'
-import { defaultSettings as defaultDetectorSettings, DEFAULT_STAR_REQUEST } from '../stars/stars'
+import { DEFAULT_STAR_REQUEST } from '../stars/stars'
 import { DEFAULT_STREAK_SETTINGS } from '../streaks/streaks'
 import {
 	type AstronomicalClockPreferences,
@@ -32,7 +32,6 @@ import {
 	defaultSettings,
 	type Profile,
 	type ProfileSettings,
-	type StarDetectionPreference,
 	type AstroWeatherPreferences,
 	type CloseApproachPreferences,
 	type DateTimePreferences,
@@ -492,30 +491,16 @@ export function setImageDisplaySettings(state: ProfileState, camera: CameraIdent
 	profile.settings.imageDisplay = JSON.parse(JSON.stringify(settings)) as DisplaySettings
 }
 
-// Returns the star detection request of a profile: the one edited last, or the defaults, without the settings kept for
-// the detectors it does not use.
+// Returns the star detection request of a profile: the one edited last, or the defaults.
 export function starDetectionSettings(settings: Pick<ProfileSettings, 'starDetection'>): Readonly<StarDetectionRequest> {
-	const stored = settings.starDetection
-	return stored ? { detector: stored.detector, acceptance: stored.acceptance } : DEFAULT_STAR_REQUEST
+	return settings.starDetection ?? DEFAULT_STAR_REQUEST
 }
 
 // Replaces the star detection request of the active profile with a plain copy, which the next detection of any
-// document and the next Auto Focus or Guiding session use, and keeps its detector settings as that detector's; a
-// running session keeps the request it started with.
+// document and the next Auto Focus or Guiding session use; a running session keeps the request it started with.
 export function setStarDetectionSettings(state: ProfileState, request: StarDetectionRequest) {
 	const profile = activeProfile(state)
-	const detectors = { ...profile.settings.starDetection?.detectors, [request.detector.provider]: request.detector }
-	profile.settings.starDetection = JSON.parse(JSON.stringify({ ...request, detectors })) as StarDetectionPreference
-}
-
-// Chooses the detector of the star detection request of the active profile with the settings it had when it was last
-// edited, or else its defaults; the acceptance criteria stay. Choosing the detector in use changes nothing.
-export function setStarDetector(state: ProfileState, provider: StarDetectorProvider) {
-	const profile = activeProfile(state)
-	const request = starDetectionSettings(profile.settings)
-	if (request.detector.provider === provider) return
-	const kept = profile.settings.starDetection?.detectors?.[provider]
-	setStarDetectionSettings(state, { ...request, detector: kept ?? defaultDetectorSettings(provider) })
+	profile.settings.starDetection = JSON.parse(JSON.stringify(request)) as StarDetectionRequest
 }
 
 // Returns the streak detector settings of a profile: the ones edited last, or the defaults.

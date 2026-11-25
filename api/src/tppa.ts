@@ -27,7 +27,7 @@ import type { DeviceRegistry } from './devices'
 import { errorResponse } from './http'
 import type { ImageStore } from './images'
 import { type OperationDevice, type OperationRegistry, settledResult } from './operations'
-import type { PlateSolvePreparation, PlateSolveRequest, PlateSolverProvider, PlateSolvingService } from './platesolving'
+import type { PlateSolvePreparation, PlateSolveRequest, PlateSolvingService } from './platesolving'
 
 // TPPA service: runs the toolkit's automatic three-point polar alignment for one camera and one mount inside a
 // single operation of the process-wide registry, which holds both devices from the first frame until the session
@@ -35,7 +35,7 @@ import type { PlateSolvePreparation, PlateSolveRequest, PlateSolverProvider, Pla
 // RA motions at the requested slew-rate preset, the acceptance of each pose from its solve, the geometry check, and
 // the alignment; this service adapts the shared services to it: the mount commander of the mount commands, the
 // camera capturer of the capture service (auxiliary FITS frames in a temporary directory, deleted after each solve,
-// never saved as captures), and the plate solving service, whose provider settings are resolved once when the session
+// never saved as captures), and the plate solving service, whose solver settings are resolved once when the session
 // starts. Each frame is decoded into the image store and recorded in the capture frame registry as the latest frame
 // of its camera (origin tppa) before it is solved; the registry owns its closing.
 //
@@ -175,8 +175,6 @@ export interface TppaSessionSummary {
 	readonly mountName: string
 	// Request the session runs with.
 	readonly request: Omit<TppaRequest, 'token'>
-	// Plate solver of every frame.
-	readonly provider: PlateSolverProvider
 	// What the session is doing.
 	readonly state: TppaState
 	// Pose being acquired, during acquisition.
@@ -250,7 +248,7 @@ export type TppaEvent = { readonly type: 'tppa:updated'; readonly session: TppaS
 // Receiver of TPPA events.
 export type TppaListener = (event: TppaEvent) => void
 
-// Longest wait for one solve, queue included, in seconds; the provider's own timeout normally ends it first.
+// Longest wait for one solve, queue included, in seconds; the solver's own timeout normally ends it first.
 const SOLVE_TIMEOUT = 600
 
 // Watchdog after an aborted solve before it is reported unresponsive, in seconds.
@@ -342,9 +340,8 @@ export class TppaSessions {
 		const repeated = this.#sessions.repeated(request.token)
 		if (repeated) return accepted(repeated)
 
-		// The provider settings are resolved first, so nothing can take the devices between the checks below and the start.
+		// The settings of the solver are resolved first, so nothing can take the devices between the checks below and the start.
 		const preparation = await this.plateSolving.prepare(request.solving)
-		if (!preparation) return unsupported('The plate solver is not configured; set it up in Settings → External Tools')
 
 		// The same request, sent twice, may have started its session while this one was prepared.
 		const raced = this.#sessions.repeated(request.token)
@@ -369,7 +366,6 @@ export class TppaSessions {
 				mount: request.mount,
 				mountName: mount.name,
 				request: settings,
-				provider: request.solving.provider,
 				state: 'preparing',
 				frameCount: 0,
 				pointCount: 0,
@@ -526,7 +522,7 @@ export class TppaSessions {
 	}
 
 	// Decodes a frame file into the image store, records it as the latest frame of the camera in the capture frame
-	// registry, and solves it with the prepared provider, whose job retains the document until it ends. Resolves the
+	// registry, and solves it with the prepared solver settings, whose job retains the document until it ends. Resolves the
 	// solution, or undefined when the search found none; any other failure is recorded as a warning and rejects, so
 	// the runner counts the frame as unsolved, while a cancellation ends the session.
 	async #solve(session: Session, frame: ThreePointPolarAlignmentFrame, preparation: PlateSolvePreparation, signal: AbortSignal): Promise<PlateSolution | undefined> {

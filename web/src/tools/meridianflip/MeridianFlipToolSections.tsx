@@ -11,7 +11,7 @@ import { openCameraTool } from '../../images/opencameratool'
 import { CameraPlateSolvingSection } from '../../platesolving/CameraPlateSolvingSection'
 import { activeProfile, autoFocusSettings, cameraPlateSolving, exposureSettings, profileCamera, profileState, starDetectionSettings, targetCenteringSettings } from '../../profile/profile'
 import { CollapsibleSection } from '../../shell/CollapsibleSection'
-import { PROVIDER_LABELS as DETECTOR_LABELS } from '../../stars/stars'
+import { detectionSummary } from '../../stars/StarRequestControls'
 import { Button } from '../../ui/Button'
 import { DataList, DataRow } from '../../ui/DataRow'
 import { Notice } from '../../ui/Notice'
@@ -49,7 +49,7 @@ export function MeridianFlipToolSections({ camera, focuser, policy }: MeridianFl
 	const solving = cameraPlateSolving(profile.settings, identity)
 	const centering = targetCenteringSettings(profile.settings, identity)
 	const focus = autoFocusSettings(profile.settings, identity)
-	const detector = starDetectionSettings(profile.settings).detector.provider
+	const detection = starDetectionSettings(profile.settings)
 	const focuserState = focuser.device && deviceStateOf(control.states, 'focuser', focuser.device.id)
 	const stepSize = focus.stepSize ?? (focuserState ? defaultStepSize(focuserState.position.min, focuserState.position.max) : undefined)
 
@@ -107,7 +107,7 @@ export function MeridianFlipToolSections({ camera, focuser, policy }: MeridianFl
 						<DataRow label="Positions per Side">{focus.initialOffsetSteps}</DataRow>
 						<DataRow label="Settle Time">{formatExposureTime(focus.settleDelay)}</DataRow>
 						<DataRow label="Max RMSD / HFD">{focus.rmsdThreshold === 0 ? 'Any fit' : formatFixed(focus.rmsdThreshold, 2)}</DataRow>
-						<DataRow label="Star Detection">{DETECTOR_LABELS[detector]}</DataRow>
+						<DataRow label="Star Detection">{detectionSummary(detection)}</DataRow>
 					</DataList>
 					<Notice>The settings of Auto Focus for the main camera and the Star Detection settings of the profile, measured through the current filter.</Notice>
 					{tab && (

@@ -22,7 +22,7 @@ import { type MeridianFlipExecution, MeridianFlipExecutor } from './meridianflip
 import { DEFAULT_MERIDIAN_FLIP_EXECUTOR_POLICY } from './meridianflipexecutor.policy'
 import { MountCommands } from './mounts'
 import { OperationRegistry, type ToolInvocation } from './operations'
-import { DEFAULT_NEBULOSA_SETTINGS, DEFAULT_STAR_ACCEPTANCE, StarDetectionService } from './stars'
+import { DEFAULT_STAR_DETECTION_SETTINGS, DEFAULT_STAR_ACCEPTANCE, StarDetectionService } from './stars'
 import { WheelCommands } from './wheels'
 
 // Tools composed by direct calls of their services under one reservation, as a caller inside the process (a future
@@ -67,7 +67,7 @@ async function setup() {
 	disposables.push(focusers)
 	const wheels = new WheelCommands(manager.devices, resolve, operations)
 	disposables.push(wheels)
-	const stars = new StarDetectionService(images, new ExternalToolsStore(AppDatabase.memory()), () => {})
+	const stars = new StarDetectionService(images, () => {})
 	const autoFocus = new AutoFocusSessions(manager.devices, resolve, operations, captures.capturer, focusers.mover, images, frames, stars, () => {}, mkdtempSync(join(root, 'auxiliary-')))
 
 	const devices = manager.devices.list(client)
@@ -188,7 +188,7 @@ test.skipIf(SKIP)('capture, Auto Focus, filter change, and capture compose under
 		token: `token-${tokens++}`,
 		focuser: { connectionId: id, deviceId: focuserId },
 		capture: { exposureTime: 0.2, gain: 0, offset: 0, binX: 1, binY: 1, subframe: true, x: 0, y: 0, width: 512, height: 512, frameFormat: '' },
-		detection: { detector: { ...DEFAULT_NEBULOSA_SETTINGS, maxStars: 20, maximumRadius: 32 }, acceptance: DEFAULT_STAR_ACCEPTANCE },
+		detection: { detector: { ...DEFAULT_STAR_DETECTION_SETTINGS, maxStars: 20, maximumRadius: 32 }, acceptance: DEFAULT_STAR_ACCEPTANCE },
 		fittingMode: 'HYPERBOLIC',
 		initialOffsetSteps: 4,
 		stepSize: 3000,
@@ -200,7 +200,7 @@ test.skipIf(SKIP)('capture, Auto Focus, filter change, and capture compose under
 	}
 
 	expect(await capture(context, invocation, directory)).toMatchObject({ phase: 'completed', saved: 1 })
-	const focused = await autoFocus.admit(id, cameraId, focus, invocation)
+	const focused = autoFocus.admit(id, cameraId, focus, invocation)
 	if (!focused.ok) throw new Error(focused.error)
 	expect(await focused.ended).toMatchObject({ state: 'completed', verification: 'measured' })
 	expect(await select(context, invocation, (wheel.position + 1) % wheel.count)).toMatchObject({ state: 'succeeded' })
@@ -263,7 +263,12 @@ test('a meridian flip pauses a real capture at a frame boundary, flips the simul
 			captures,
 			guiding: { runsOn: () => guidingRuns, hold: () => ({ [Symbol.dispose]: () => {} }), suspendForMotion: none, restoreAfterMotion: none },
 			targetCentering: { admit: none, interrupt: () => false, solutionsOf: () => undefined },
-			autoFocus: { admit: none, interrupt: () => Promise.resolve(false) },
+			autoFocus: {
+				admit: () => {
+					throw new Error('not used')
+				},
+				interrupt: () => Promise.resolve(false),
+			},
 		},
 		() => {},
 	)

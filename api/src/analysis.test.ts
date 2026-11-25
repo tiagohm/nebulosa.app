@@ -142,12 +142,12 @@ describe('results', () => {
 		images.close(id)
 
 		expect(images.name(id)).toBeUndefined()
-		expect(await images.detectionFile(id)).toBeDefined()
+		expect(await images.detectionImage(id)).toBeDefined()
 
 		running.get('f1')!.finish('result')
 		await tick()
 
-		expect(await images.detectionFile(id)).toBeUndefined()
+		expect(await images.detectionImage(id)).toBeUndefined()
 		expect(scheduler.result(job.jobId)).toBeUndefined()
 	})
 })

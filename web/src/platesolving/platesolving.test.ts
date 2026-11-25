@@ -26,13 +26,13 @@ import {
 
 test('a camera tab solves with the settings of its camera and the hints of its document', () => {
 	const hints = { rightAscension: 1, declination: 0.5 }
-	const camera = { provider: 'nova', strategy: 'blind', downsample: 2, scaleTolerance: 0.3 } as const
-	expect(effectivePlateSolveRequest({ provider: 'astap', strategy: 'assisted', downsample: 4, hints }, camera)).toEqual({ ...camera, hints })
-	expect(effectivePlateSolveRequest({ provider: 'astap', strategy: 'assisted' }, camera)).toEqual(camera)
+	const camera = { strategy: 'blind', scaleTolerance: 0.3 } as const
+	expect(effectivePlateSolveRequest({ strategy: 'assisted', scaleTolerance: 0.1, hints }, camera)).toEqual({ ...camera, hints })
+	expect(effectivePlateSolveRequest({ strategy: 'assisted' }, camera)).toEqual(camera)
 })
 
 test('the settings of a request leave its hints out', () => {
-	expect(plateSolveSettings({ provider: 'nova', strategy: 'blind', scaleTolerance: 0.3, hints: { rightAscension: 1 } })).toEqual({ provider: 'nova', strategy: 'blind', scaleTolerance: 0.3 })
+	expect(plateSolveSettings({ strategy: 'blind', scaleTolerance: 0.3, hints: { rightAscension: 1 } })).toEqual({ strategy: 'blind', scaleTolerance: 0.3 })
 })
 
 function state(): PlateSolvingState {
@@ -40,13 +40,13 @@ function state(): PlateSolvingState {
 }
 
 function job(patch: Partial<PlateSolveJob> = {}): PlateSolveJob {
-	return { jobId: 'j1', imageId: 'i1', origin: { kind: 'manual' }, request: { provider: 'astap', strategy: 'assisted' }, hints: {}, state: 'queued', queuedAt: 1000, ...patch }
+	return { jobId: 'j1', imageId: 'i1', origin: { kind: 'manual' }, request: { strategy: 'assisted' }, hints: {}, state: 'queued', queuedAt: 1000, ...patch }
 }
 
 const SOLUTION = { CTYPE1: 'RA---TAN', rightAscension: 1, declination: 0.5, scale: 1e-5 } as unknown as PlateSolution
 
 function result(patch: Partial<PlateSolveResult> = {}): PlateSolveResult {
-	return { jobId: 'j1', imageId: 'i1', request: { provider: 'astap', strategy: 'assisted' }, hints: {}, tool: { executable: 'astap', timeout: 1000 }, outcome: 'solved', solution: SOLUTION, widthInPixels: 100, heightInPixels: 50, elapsed: 10, queueTime: 0, warnings: [], ...patch }
+	return { jobId: 'j1', imageId: 'i1', request: { strategy: 'assisted' }, hints: {}, tool: { executable: '', timeout: 1000, indexDirectory: '', catalogDirectory: '' }, outcome: 'solved', solution: SOLUTION, widthInPixels: 100, heightInPixels: 50, elapsed: 10, queueTime: 0, warnings: [], ...patch }
 }
 
 // Fetch fake mapping each URL to a status and a body, recording the URLs requested.
@@ -76,7 +76,7 @@ describe('jobs', () => {
 		handlePlateSolvingEvent(s, { type: 'plateSolving:updated', job: job({ jobId: 'j2', queuedAt: 2000 }) })
 		const { request } = fetcher({ '/api/images/i1/plate-solving': [200, job({ state: 'completed' })] })
 
-		const submitted = await runPlateSolve(s, 'i1', { provider: 'astap', strategy: 'assisted' }, request)
+		const submitted = await runPlateSolve(s, 'i1', { strategy: 'assisted' }, request)
 
 		expect(submitted?.jobId).toBe('j1')
 		expect(latestJob(s, 'i1')?.jobId).toBe('j1')
@@ -95,8 +95,8 @@ describe('jobs', () => {
 
 	test('a refused submission is kept per image', async () => {
 		const s = state()
-		await runPlateSolve(s, 'i1', { provider: 'nova', strategy: 'blind' }, fetcher({ '/api/images/i1/plate-solving': [422, { error: 'Not configured' }] }).request)
-		expect(s.submitErrors.i1).toBe('Not configured')
+		await runPlateSolve(s, 'i1', { strategy: 'blind' }, fetcher({ '/api/images/i1/plate-solving': [503, { error: 'Too many plate solves are waiting' }] }).request)
+		expect(s.submitErrors.i1).toBe('Too many plate solves are waiting')
 	})
 
 	test('the snapshot fills the store', async () => {

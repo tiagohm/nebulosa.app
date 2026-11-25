@@ -34,8 +34,7 @@ import { type CameraBindings, NO_CAMERA_BINDINGS } from './equipmentcatalog'
 import { errorResponse } from './http'
 import type { ImageStore } from './images'
 import { type OperationDevice, type OperationRegistry, settledResult } from './operations'
-import type { PlateSolvePixels, PlateSolvePreparation, PlateSolveRequest, PlateSolverProvider, PlateSolvingService } from './platesolving'
-import { POINTING_KEYWORDS } from './platesolving.hints'
+import type { PlateSolvePixels, PlateSolvePreparation, PlateSolveRequest, PlateSolvingService } from './platesolving'
 import { solarSystemSource } from './sky/ephemeris'
 
 // iPolar service: runs the toolkit's camera-based polar alignment (calibration of the mechanical RA axis from two
@@ -49,7 +48,7 @@ import { solarSystemSource } from './sky/ephemeris'
 // is fitted here. The site and atmosphere come from the request (the profile's active observing site), never from the
 // driver; a mount reporting another site only adds a warning. Frames are auxiliary LIGHT FITS files in a temporary
 // directory, decoded into the image store and recorded as the latest frame of the camera (origin ipolar) before they
-// are solved with the plate solving service, whose provider is resolved once when the session starts. The overlay of
+// are solved with the plate solving service, whose solver settings are resolved once when the session starts. The overlay of
 // the latest accepted measurement is bound to the document of its frame. A session belongs to the server: it survives
 // reloads and tab changes and ends only by its finish or stop route, an Equipment Control stop of its devices, or a
 // disconnection. When it ends, the slew-rate preset an automatic rotation replaced is restored if the mount is free; the
@@ -162,7 +161,7 @@ export type IPolarState = 'preparing' | 'capturing' | 'solving' | 'waitingForRot
 // - notFound: no such camera, mount, or running session.
 // - busy: a device is held by another operation.
 // - disconnected: a device is not connected.
-// - unsupported: the plate solver is not configured, or the automatic rotation cannot run (no mount, or a mount that cannot
+// - unsupported: the automatic rotation cannot run (no mount, or a mount that cannot
 //   move in RA).
 // - notInStage: the session is not in the stage the command needs.
 export type IPolarErrorCode = 'notFound' | 'busy' | 'disconnected' | 'unsupported' | 'notInStage'
@@ -272,8 +271,6 @@ export interface IPolarSessionSummary {
 	readonly mountName?: string
 	// Request the session runs with.
 	readonly request: Omit<IPolarRequest, 'token'>
-	// Plate solver of every frame.
-	readonly provider: PlateSolverProvider
 	// What the session is doing.
 	readonly state: IPolarState
 	// Frames taken so far.
@@ -351,7 +348,7 @@ export type IPolarEvent = { readonly type: 'ipolar:updated'; readonly session: I
 // Receiver of iPolar events.
 export type IPolarListener = (event: IPolarEvent) => void
 
-// Longest wait for one solve, queue included, in seconds; the provider's own timeout normally ends it first.
+// Longest wait for one solve, queue included, in seconds; the solver's own timeout normally ends it first.
 const SOLVE_TIMEOUT = 600
 
 // Watchdog after an aborted solve before it is reported unresponsive, in seconds.
@@ -470,9 +467,8 @@ export class IPolarSessions {
 		const repeated = this.#sessions.repeated(request.token)
 		if (repeated) return accepted(repeated)
 
-		// The provider settings are resolved first, so nothing can take the devices between the checks below and the start.
+		// The settings of the solver are resolved first, so nothing can take the devices between the checks below and the start.
 		const preparation = await this.plateSolving.prepare(request.solving)
-		if (!preparation) return unsupported('The plate solver is not configured; set it up in Settings → External Tools')
 
 		// The pinned dark is checked before anything starts, which must be of the camera of the Equipment Catalog the camera
 		// is bound to; every frame checks it again against its own header.
@@ -512,7 +508,6 @@ export class IPolarSessions {
 				cameraName: camera.name,
 				...(mount && request.mount && { mount: request.mount, mountName: mount.name }),
 				request: settings,
-				provider: request.solving.provider,
 				state: 'preparing',
 				frameCount: 0,
 				attemptCount: 0,
@@ -724,7 +719,7 @@ export class IPolarSessions {
 	}
 
 	// Decodes a frame file into the image store, records it as the latest frame of the camera in the capture frame
-	// registry, and solves it with the prepared provider, whose job retains the document until it ends. Resolves the
+	// registry, and solves it with the prepared solver settings, whose job retains the document until it ends. Resolves the
 	// solution, or undefined when the search found none; any other failure is recorded as a warning and rejects, so the
 	// runner counts the frame as unsolved, while a cancellation ends the session.
 	async #solve(session: Session, frame: IPolarRunnerFrame, preparation: PlateSolvePreparation, signal: AbortSignal): Promise<PlateSolution | undefined> {
@@ -773,8 +768,7 @@ export class IPolarSessions {
 		let outcome: IPolarDarkStatus
 
 		if (master && assessment.eligible) {
-			const omit = preparation.request.strategy === 'blind' ? POINTING_KEYWORDS : []
-			const calibrated = await calibrator.calibrate({ framePath: frame.path, darkPath: master.path, fullScale: master.units === 'dimensionless' ? 1 : master.fullScaleDn, masterKey: `${masterId}:${digest}`, omit })
+			const calibrated = await calibrator.calibrate({ framePath: frame.path, darkPath: master.path, fullScale: master.units === 'dimensionless' ? 1 : master.fullScaleDn, masterKey: `${masterId}:${digest}` })
 
 			if ('bytes' in calibrated) {
 				this.#darkStatus(session, { frame: number, state: 'applied', masterId, unverified: assessment.unverified })

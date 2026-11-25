@@ -16,7 +16,7 @@ import { FocuserBacklashStore } from './focuserbacklash'
 import { FocuserCommands } from './focusers'
 import { ImageStore } from './images'
 import { type OperationEvent, OperationRegistry } from './operations'
-import { DEFAULT_NEBULOSA_SETTINGS, DEFAULT_STAR_ACCEPTANCE, StarDetectionService } from './stars'
+import { DEFAULT_STAR_DETECTION_SETTINGS, DEFAULT_STAR_ACCEPTANCE, StarDetectionService } from './stars'
 
 const SKIP = process.env.RUN_ALL_TESTS !== 'true'
 
@@ -53,7 +53,7 @@ function request(focuser: { connectionId: string; deviceId: string }, patch: Par
 		token: `token-${tokens++}`,
 		focuser,
 		capture: { exposureTime: 0.2, gain: 0, offset: 0, binX: 1, binY: 1, subframe: true, x: 0, y: 0, width: 512, height: 512, frameFormat: '' },
-		detection: { detector: { ...DEFAULT_NEBULOSA_SETTINGS, maxStars: 20, maximumRadius: 32 }, acceptance: DEFAULT_STAR_ACCEPTANCE },
+		detection: { detector: { ...DEFAULT_STAR_DETECTION_SETTINGS, maxStars: 20, maximumRadius: 32 }, acceptance: DEFAULT_STAR_ACCEPTANCE },
 		fittingMode: 'HYPERBOLIC',
 		initialOffsetSteps: 4,
 		stepSize: 3000,
@@ -86,8 +86,7 @@ async function setup() {
 	const operations = new OperationRegistry(manager.devices, (event) => operationEvents.push(event))
 	disposables.push(operations)
 	const images = new ImageStore()
-	const tools = new ExternalToolsStore(AppDatabase.memory())
-	const stars = new StarDetectionService(images, tools, () => {})
+	const stars = new StarDetectionService(images, () => {})
 	const capturesDir = mkdtempSync(join(root, 'captures-'))
 	const frameEvents: CaptureFrameEvent[] = []
 	const frames = new CaptureFrameRegistry(images, (event) => frameEvents.push(event), { database: AppDatabase.memory() })
@@ -143,7 +142,7 @@ async function setup() {
 
 // Starts a session and returns its ids.
 async function start(autoFocus: AutoFocusSessions, connectionId: string, cameraId: string, body: AutoFocusRequest) {
-	const response = await autoFocus.start(connectionId, cameraId, body)
+	const response = autoFocus.start(connectionId, cameraId, body)
 	expect(response.status).toBe(202)
 	return (await response.json()) as { sessionId: string; operationId: string }
 }
@@ -327,7 +326,7 @@ describe('sessions', () => {
 
 		const capture = captures.admit(id, cameraId, captureRequest({ exposureMode: 'loop', exposureTime: 0.5 }))
 		if (!capture.ok) throw new Error(capture.error)
-		const busy = await autoFocus.start(id, cameraId, request(focuserDevice))
+		const busy = autoFocus.start(id, cameraId, request(focuserDevice))
 		expect(busy.status).toBe(409)
 		expect(await busy.json()).toMatchObject({ code: 'busy' })
 		await captures.abortSession(capture.sessionId)
@@ -344,7 +343,7 @@ describe('sessions', () => {
 				}),
 		)
 
-		expect((await autoFocus.start(id, cameraId, request(focuserDevice))).status).toBe(409)
+		expect(autoFocus.start(id, cameraId, request(focuserDevice)).status).toBe(409)
 		expect(events).toEqual([])
 		await hold.cancel()
 	})
@@ -362,10 +361,10 @@ describe('sessions', () => {
 		expect(summary()!.state).toBe('cancelled')
 	})
 
-	test('a repeated token answers the same session, even while the first request is prepared, and summaries count their revisions', async () => {
+	test('a repeated token answers the same session, and summaries count their revisions', async () => {
 		const { id, cameraId, autoFocus, focuserDevice, ended, summary, events } = await setup()
 		const body = slow(focuserDevice)
-		const [first, second] = await Promise.all([autoFocus.start(id, cameraId, body), autoFocus.start(id, cameraId, body)])
+		const [first, second] = [autoFocus.start(id, cameraId, body), autoFocus.start(id, cameraId, body)]
 
 		expect([first.status, second.status]).toEqual([202, 202])
 		const started = (await first.json()) as { sessionId: string }
@@ -376,14 +375,6 @@ describe('sessions', () => {
 		const revisions = events.map((event) => event.session.revision)
 		expect(revisions).toEqual(revisions.toSorted((a, b) => a - b))
 		expect(summary()!.revision).toBe(revisions.at(-1)!)
-	})
-
-	test('ASTAP without its executable configured is refused before anything starts', async () => {
-		const { id, cameraId, autoFocus, focuserDevice, events } = await setup()
-		const response = await autoFocus.start(id, cameraId, request(focuserDevice, { detection: { detector: { provider: 'astap', maxStars: 0, minSNR: 10 }, acceptance: DEFAULT_STAR_ACCEPTANCE } }))
-
-		expect(response.status).toBe(422)
-		expect(events).toEqual([])
 	})
 
 	test('the snapshot lists the latest session of the camera without its measurements, and an unknown session is 404', async () => {
@@ -417,8 +408,8 @@ describe('composition', () => {
 		const invocation = reserve(operations, camera, focuser)
 		const body = { ...slow(focuserDevice), restoreOnStop: true }
 
-		expect((await autoFocus.start(id, cameraId, request(focuserDevice))).status).toBe(409)
-		const admitted = await autoFocus.admit(id, cameraId, body, invocation)
+		expect(autoFocus.start(id, cameraId, request(focuserDevice)).status).toBe(409)
+		const admitted = autoFocus.admit(id, cameraId, body, invocation)
 		if (!admitted.ok) throw new Error(admitted.error)
 		await waitUntil(() => summary()?.state === 'exposing' && summary()?.exposure !== undefined)
 		expect(focuser.position.value).not.toBe(START)
@@ -435,15 +426,15 @@ describe('composition', () => {
 		const { id, cameraId, autoFocus, focuserDevice, summary } = await setup()
 		const first = slow(focuserDevice)
 
-		const a = await autoFocus.admit(id, cameraId, first)
+		const a = autoFocus.admit(id, cameraId, first)
 		if (!a.ok) throw new Error(a.error)
 		await autoFocus.interrupt(a.sessionId)
 		await a.ended
 
-		const b = await autoFocus.admit(id, cameraId, slow(focuserDevice))
+		const b = autoFocus.admit(id, cameraId, slow(focuserDevice))
 		if (!b.ok) throw new Error(b.error)
-		expect(await autoFocus.admit(id, cameraId, first)).toMatchObject({ ok: true, sessionId: a.sessionId, operationId: a.operationId, repeated: true })
-		expect((await autoFocus.start(id, cameraId, first)).status).toBe(202)
+		expect(autoFocus.admit(id, cameraId, first)).toMatchObject({ ok: true, sessionId: a.sessionId, operationId: a.operationId, repeated: true })
+		expect(autoFocus.start(id, cameraId, first).status).toBe(202)
 		expect(summary()?.sessionId).toBe(b.sessionId)
 
 		await autoFocus.interrupt(b.sessionId)
@@ -456,7 +447,7 @@ describe('composition', () => {
 			const { id, cameraId, autoFocus, focuserDevice, focuser, camera, operations } = await setup()
 			const invocation = reserve(operations, camera, focuser)
 
-			const admitted = await autoFocus.admit(id, cameraId, request(focuserDevice), invocation)
+			const admitted = autoFocus.admit(id, cameraId, request(focuserDevice), invocation)
 			if (!admitted.ok) throw new Error(admitted.error)
 			const ended = await admitted.ended
 			expect(ended).toMatchObject({ state: 'completed', verification: 'measured' })

@@ -936,7 +936,7 @@ export class MeridianFlipExecutor implements DeviceContext, Disposable {
 		const { setup, autoFocus } = session.request
 		if (!setup.camera || !setup.focuser || !autoFocus) return false
 
-		const admitted = await this.services.autoFocus.admit(setup.camera.connectionId, setup.camera.deviceId, { ...autoFocus, token: `${session.execution.sessionId}:autofocus`, focuser: setup.focuser }, invocation)
+		const admitted = this.services.autoFocus.admit(setup.camera.connectionId, setup.camera.deviceId, { ...autoFocus, token: `${session.execution.sessionId}:autofocus`, focuser: setup.focuser }, invocation)
 		if (!admitted.ok) return false
 
 		session.tool = { interrupt: () => this.services.autoFocus.interrupt(admitted.sessionId) }

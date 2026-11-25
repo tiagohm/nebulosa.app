@@ -10,7 +10,7 @@ import { ExternalToolDetail } from './ExternalToolDetail'
 import { externalToolsState, refreshExternalTools } from './externaltools'
 import { ExternalToolsSelect, ExternalToolsSidebar } from './ExternalToolsSidebar'
 
-// External Tools section of the Settings page: the external programs the server supports, such as ASTAP, and the
+// External Tools section of the Settings page: the external programs the server supports, such as MediaMTX, and the
 // settings of the one shown. The program shown is part of the URL; without one, the first program is shown.
 // Leaving a program with unsaved changes, for another program, another section, or another workspace, asks before
 // discarding them. Opening the section or selecting a program never runs or saves anything.

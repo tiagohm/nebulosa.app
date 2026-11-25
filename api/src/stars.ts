@@ -1,12 +1,7 @@
-import { mkdtemp, rm } from 'fs/promises'
-import { tmpdir } from 'os'
-import { join } from 'path'
-import { AstapError, astapDetectStars } from 'nebulosa/src/astrometry/solvers/astap'
 import type { Image } from 'nebulosa/src/imaging/model/types'
 import type { DetectedStar, DetectStarOptions } from 'nebulosa/src/imaging/stars/detector'
 import { medianOf } from 'nebulosa/src/math/numerical/statistics'
 import { type AnalysisCompletion, type AnalysisEntry, type AnalysisJob, type AnalysisJobState, AnalysisScheduler } from './analysis'
-import type { ExternalToolConfig, ExternalToolsStore } from './externaltools'
 import { errorResponse } from './http'
 import type { DocumentSize, ImageStore } from './images'
 import { runPooledWorkerJob, WorkerPool } from './workerjob'
@@ -14,28 +9,21 @@ import { runPooledWorkerJob, WorkerPool } from './workerjob'
 // Star detection service shared by every consumer: manual runs of the Images workspace and the measurements of
 // Auto Focus. A detection measures an image
 // document of the image store, addressed by its id (a document never changes, so the id is its scientific
-// identity), with one of two providers: the toolkit's detectStars on a worker thread of its own
-// (stars.worker.ts), fed a grayscale copy of the decoded pixels, or ASTAP, run on a FITS copy of the
-// document written into a directory of its own, with the executable and timeout of the External Tools
-// settings resolved once per job (or once per Auto Focus session). Both give the toolkit's DetectedStar, in
-// 0-based pixel coordinates of the image (origin at the upper-left sample, +X right, +Y down, integers at
-// pixel centres); their HFDs, in pixels, are computed differently and are not comparable with each other.
+// identity), with the toolkit's detectStars on a worker thread of its own (stars.worker.ts), fed a grayscale copy
+// of the decoded pixels. It gives the toolkit's DetectedStar, in 0-based pixel coordinates of the image (origin at
+// the upper-left sample, +X right, +Y down, integers at pixel centres), with HFDs in pixels.
 //
-// Jobs run in memory under the shared analysis scheduling (analysis.ts): one built-in detection and one ASTAP
-// process at a time, at most MAX_QUEUED jobs waiting, in arrival order. A job retains its image until it ends, so
+// Jobs run in memory under the shared analysis scheduling (analysis.ts): one detection at a time, at most
+// MAX_QUEUED jobs waiting, in arrival order. A job retains its image until it ends, so
 // closing the document never
 // pulls the pixels from under it. Results are kept only in memory, keyed by job and grouped by image, until
 // their image is released or the bounded store evicts them; they never survive a restart. Every change of
 // a job is published as a compact stars:updated event without the stars, which are fetched on demand. No
 // device is held: a detection only reads pixels.
 
-// Star detector of a job.
-export type StarDetectorProvider = 'nebulosa' | 'astap'
-
-// Settings of the built-in detector (the toolkit's detectStars).
-export interface NebulosaStarDetectionSettings {
-	readonly provider: 'nebulosa'
-	// Maximum number of stars kept, brightest first; the detector returns at most NEBULOSA_STAR_LIMIT.
+// Settings of the detector (the toolkit's detectStars).
+export interface StarDetectionSettings {
+	// Maximum number of stars kept, brightest first; the detector returns at most STAR_DETECTION_LIMIT.
 	readonly maxStars: number
 	// SNR a detection must exceed to be kept; above 7 it also raises the detection level to that many sky deviations.
 	readonly minSNR: number
@@ -47,18 +35,6 @@ export interface NebulosaStarDetectionSettings {
 	// the fixed aperture.
 	readonly maximumRadius?: number
 }
-
-// Settings of ASTAP's star extraction.
-export interface AstapStarDetectionSettings {
-	readonly provider: 'astap'
-	// Maximum number of stars kept, highest SNR first; 0 keeps all.
-	readonly maxStars: number
-	// Minimum SNR passed to ASTAP's -extract.
-	readonly minSNR: number
-}
-
-// Settings of the detector of a job, by provider.
-export type StarDetectionSettings = NebulosaStarDetectionSettings | AstapStarDetectionSettings
 
 // Criteria a detected star must meet to enter the aggregate HFD. Saturation is not checked: a DetectedStar
 // carries nothing that tells a saturated star apart.
@@ -75,7 +51,7 @@ export interface StarAcceptance {
 
 // What a job measures and how.
 export interface StarDetectionRequest {
-	// Detector and its settings.
+	// Settings of the detector.
 	readonly detector: StarDetectionSettings
 	// Criteria of the accepted stars.
 	readonly acceptance: StarAcceptance
@@ -98,20 +74,17 @@ export type StarDetectionOrigin =
 			readonly capture: number
 	  }
 
-// State of a job: waiting for its detector, running, or ended (completed, failed, or cancelled).
+// State of a job: waiting for the detector, running, or ended (completed, failed, or cancelled).
 export type StarDetectionJobState = AnalysisJobState
 
 // Why a job did not complete:
 // - queueFull: too many jobs were waiting when it was submitted.
-// - workerFailed: the built-in detector failed or its worker died.
-// - astapUnavailable: ASTAP is not configured, or its executable could not be started.
-// - astapTimeout: ASTAP ran longer than its timeout and was killed.
-// - astapFailed: ASTAP ended without a readable star list.
-// - timeout: the built-in detection ran longer than NEBULOSA_TIMEOUT.
+// - workerFailed: the detector failed or its worker died.
+// - timeout: the detection ran longer than DETECTION_TIMEOUT.
 // - invalidImage: the image could not be prepared for the detector.
 // - cancelled: the job was cancelled.
 // - expired: the image was released before the job could read it, or the result is no longer kept.
-export type StarDetectionErrorCode = 'queueFull' | 'workerFailed' | 'astapUnavailable' | 'astapTimeout' | 'astapFailed' | 'timeout' | 'invalidImage' | 'cancelled' | 'expired'
+export type StarDetectionErrorCode = 'queueFull' | 'workerFailed' | 'timeout' | 'invalidImage' | 'cancelled' | 'expired'
 
 // Outcome of the aggregate HFD of a completed job: measured, no star detected at all, or too few stars
 // accepted for a median (fewer than MIN_AGGREGATE_STARS), which is never reported as an HFD of 0.
@@ -165,13 +138,11 @@ export interface StarDetectionResult extends StarDetectionSummary {
 	readonly imageId: string
 	// What was measured and how.
 	readonly request: StarDetectionRequest
-	// Settings ASTAP ran with, for an ASTAP job.
-	readonly tool?: Readonly<ExternalToolConfig>
 	// Width of the image, in pixels.
 	readonly width: number
 	// Height of the image, in pixels.
 	readonly height: number
-	// Stars in the order of the detector (brightest first for the built-in one).
+	// Stars in the order of the detector, brightest first.
 	readonly stars: readonly DetectedStar[]
 	// Whether each star, by index in stars, meets the acceptance criteria.
 	readonly accepted: readonly boolean[]
@@ -197,7 +168,7 @@ export interface StarDetectionEvent {
 // Receiver of star detection events.
 export type StarDetectionListener = (event: StarDetectionEvent) => void
 
-// Request to the built-in detector worker: the grayscale image it owns from now on.
+// Request to the detector worker: the grayscale image it owns from now on.
 export interface StarWorkerRequest {
 	// Id of the job, echoed by the response.
 	readonly jobId: string
@@ -207,21 +178,12 @@ export interface StarWorkerRequest {
 	readonly options: Partial<DetectStarOptions>
 }
 
-// Response of the built-in detector worker.
+// Response of the detector worker.
 export type StarWorkerResponse = { readonly jobId: string; readonly status: 'detected'; readonly stars: DetectedStar[] } | { readonly jobId: string; readonly status: 'failed'; readonly error: string }
-
-// Request whose provider settings were resolved, ready to be submitted: ASTAP's settings are a snapshot
-// taken when it was prepared, so a later save of the External Tools settings applies to later preparations.
-export interface StarDetectionPreparation {
-	// What to measure and how.
-	readonly request: StarDetectionRequest
-	// Settings ASTAP runs with, for an ASTAP request.
-	readonly tool?: Readonly<ExternalToolConfig>
-}
 
 // Outcome of a manual submission: a new job, the completed job of an equivalent earlier request of the
 // same image (cached), or why there is none.
-export type StarDetectionSubmitOutcome = { readonly status: 'accepted'; readonly job: StarDetectionJob } | { readonly status: 'cached'; readonly job: StarDetectionJob } | { readonly status: 'missing' } | { readonly status: 'astapUnavailable' } | { readonly status: 'queueFull' }
+export type StarDetectionSubmitOutcome = { readonly status: 'accepted'; readonly job: StarDetectionJob } | { readonly status: 'cached'; readonly job: StarDetectionJob } | { readonly status: 'missing' } | { readonly status: 'queueFull' }
 
 // Error of a job that did not complete, with its reason.
 export class StarDetectionError extends Error {
@@ -234,11 +196,8 @@ export class StarDetectionError extends Error {
 	}
 }
 
-// Defaults of the built-in detector: the 500 brightest stars, any SNR, no uniqueness filter.
-export const DEFAULT_NEBULOSA_SETTINGS: NebulosaStarDetectionSettings = { provider: 'nebulosa', maxStars: 500, minSNR: 0, searchRegion: 0 }
-
-// Defaults of ASTAP: every star of SNR 10 or more, ASTAP's own default extraction threshold.
-export const DEFAULT_ASTAP_SETTINGS: AstapStarDetectionSettings = { provider: 'astap', maxStars: 0, minSNR: 10 }
+// Defaults of the detector: the 500 brightest stars, any SNR, no uniqueness filter.
+export const DEFAULT_STAR_DETECTION_SETTINGS: StarDetectionSettings = { maxStars: 500, minSNR: 0, searchRegion: 0 }
 
 // Acceptance of every star with finite, positive measurements inside the image.
 export const DEFAULT_STAR_ACCEPTANCE: StarAcceptance = { minSNR: 0, minHfd: 0, maxHfd: 0, edgeMargin: 0 }
@@ -248,22 +207,19 @@ const MANUAL_ORIGIN: StarDetectionOrigin = { kind: 'manual' }
 
 export { MAX_QUEUED } from './analysis'
 
-// Most stars the built-in detector returns, whatever maxStars asks for: STAR_DETECTION_LIMIT of the toolkit detector,
-// copied so this module imports only its types.
-export const NEBULOSA_STAR_LIMIT = 2000
+// Most stars the detector returns, whatever maxStars asks for: STAR_DETECTION_LIMIT of the toolkit detector, copied so
+// this module imports only its types.
+export const STAR_DETECTION_LIMIT = 2000
 
 // Fewest accepted stars an aggregate HFD is computed from: below three, a median is one or two stars.
 export const MIN_AGGREGATE_STARS = 3
 
-// Built-in detections running at once, one worker each: a detection holds two copies of the image plus
-// integral images of 16 bytes per pixel, so a large frame costs hundreds of megabytes while it runs.
-const NEBULOSA_CONCURRENCY = 1
+// Detections running at once, one worker each: a detection holds two copies of the image plus integral images of 16
+// bytes per pixel, so a large frame costs hundreds of megabytes while it runs.
+const CONCURRENCY = 1
 
-// ASTAP processes running at once; each one is a full multithreaded process with a FITS copy on disk.
-const ASTAP_CONCURRENCY = 1
-
-// Time a built-in detection may run, in milliseconds, before its worker is terminated.
-const NEBULOSA_TIMEOUT = 120000
+// Time a detection may run, in milliseconds, before its worker is terminated.
+const DETECTION_TIMEOUT = 120000
 
 // Whether a star meets the acceptance criteria inside an image of width × height pixels: finite
 // coordinates within the pixel area of the image less the edge margin ([-0.5, width - 0.5) since pixel
@@ -293,36 +249,34 @@ export function aggregateHfd(stars: readonly DetectedStar[], accepted: readonly 
 	return medianOf(hfds)
 }
 
-// Returns the key of an equivalent detection: the same image, detector settings, acceptance criteria, and
-// ASTAP executable. The timeout is left out, since it does not change a result.
-export function cacheKey(imageId: string, { detector, acceptance }: StarDetectionRequest, tool?: Readonly<ExternalToolConfig>): string {
-	const settings = detector.provider === 'nebulosa' ? [detector.provider, detector.maxStars, detector.minSNR, detector.searchRegion, detector.maximumRadius] : [detector.provider, detector.maxStars, detector.minSNR, tool?.executable]
+// Returns the key of an equivalent detection: the same image, detector settings, and acceptance criteria.
+export function cacheKey(imageId: string, { detector, acceptance }: StarDetectionRequest): string {
+	const settings = [detector.maxStars, detector.minSNR, detector.searchRegion, detector.maximumRadius]
 	return JSON.stringify([imageId, settings, acceptance.minSNR, acceptance.minHfd, acceptance.maxHfd, acceptance.edgeMargin])
 }
 
-// Worker thread of the built-in detector. `unref` is a Bun extension that the DOM Worker type lacks.
+// Worker thread of the detector. `unref` is a Bun extension that the DOM Worker type lacks.
 type StarWorker = Worker & Pick<Bun.Worker, 'unref'>
 
 // A job of the service while it waits or runs, with its scheduling state.
-type JobEntry = AnalysisEntry<StarDetectionJob, StarDetectionPreparation>
+type JobEntry = AnalysisEntry<StarDetectionJob, StarDetectionRequest>
 
 // Star detection jobs of the server, their scheduling (see analysis.ts), and their results.
 export class StarDetectionService implements Disposable {
 	// Queue, limits, reservations, and kept results.
-	readonly #scheduler: AnalysisScheduler<StarDetectionJob, StarDetectionResult, StarDetectionPreparation, StarDetectorProvider>
-	// Built-in detector workers kept between jobs.
+	readonly #scheduler: AnalysisScheduler<StarDetectionJob, StarDetectionResult, StarDetectionRequest, 'builtin'>
+	// Detector workers kept between jobs.
 	readonly #workers = new WorkerPool(() => this.#startWorker())
 
-	// Creates the service over the image store and the External Tools settings, publishing every job change
-	// to listener. The results of an image are dropped when the store releases it.
+	// Creates the service over the image store, publishing every job change to listener. The results of an image are
+	// dropped when the store releases it.
 	constructor(
 		readonly images: ImageStore,
-		readonly tools: ExternalToolsStore,
 		readonly listener: StarDetectionListener,
 	) {
-		this.#scheduler = new AnalysisScheduler<StarDetectionJob, StarDetectionResult, StarDetectionPreparation, StarDetectorProvider>(images, {
-			limits: { nebulosa: NEBULOSA_CONCURRENCY, astap: ASTAP_CONCURRENCY },
-			provider: (preparation) => preparation.request.detector.provider,
+		this.#scheduler = new AnalysisScheduler<StarDetectionJob, StarDetectionResult, StarDetectionRequest, 'builtin'>(images, {
+			limits: { builtin: CONCURRENCY },
+			provider: () => 'builtin',
 			execute: (entry) => this.#execute(entry),
 			failed: (entry, error) => {
 				if (entry.controller.signal.aborted) return { state: 'cancelled', code: 'cancelled', error: 'The star detection was cancelled' }
@@ -334,40 +288,27 @@ export class StarDetectionService implements Disposable {
 		})
 	}
 
-	// Resolves the provider settings of a request: ASTAP's executable and timeout are read once, here. Resolves
-	// to undefined when the request uses ASTAP and it is not configured.
-	async prepare(request: StarDetectionRequest): Promise<StarDetectionPreparation | undefined> {
-		if (request.detector.provider === 'nebulosa') return { request }
-		const tool = await this.tools.resolve('astap')
-		return tool && { request, tool }
-	}
-
 	// Submits a detection of an open image, queued in arrival order, as origin (manual by default). An
 	// equivalent completed detection of the same image is answered instead of running again (cached).
-	// A preparation, resolved earlier by prepare, keeps the ASTAP settings it captured instead of reading them again.
-	async submit(imageId: string, request: StarDetectionRequest | StarDetectionPreparation, origin: StarDetectionOrigin = MANUAL_ORIGIN): Promise<StarDetectionSubmitOutcome> {
-		const preparation = 'detector' in request ? await this.prepare(request) : request
-		if (!preparation) return { status: 'astapUnavailable' }
+	submit(imageId: string, request: StarDetectionRequest, origin: StarDetectionOrigin = MANUAL_ORIGIN): StarDetectionSubmitOutcome {
 		if (this.images.name(imageId) === undefined) return { status: 'missing' }
 
-		const key = cacheKey(imageId, preparation.request, preparation.tool)
+		const key = cacheKey(imageId, request)
 		const cached = this.#scheduler.cached(imageId, key)
 		if (cached) return { status: 'cached', job: cached.job }
 		if (this.#scheduler.full()) return { status: 'queueFull' }
 
-		const job = this.#scheduler.enqueue(imageId, preparation, key, { origin, request: preparation.request })
+		const job = this.#scheduler.enqueue(imageId, request, key, { origin, request })
 		return job ? { status: 'accepted', job } : { status: 'missing' }
 	}
 
 	// Detects the stars of an open image and resolves to the result once the job completed, for a consumer
 	// that needs the measurement of one specific image, such as an Auto Focus step: the job is bound to that
 	// image and is never replaced by a newer frame. Aborting signal cancels the job. Throws
-	// StarDetectionError when the job does not complete. origin names the requester, manual by default; a
-	// preparation keeps the ASTAP settings of a whole session, as submit does.
-	async measure(imageId: string, request: StarDetectionRequest | StarDetectionPreparation, signal?: AbortSignal, origin?: StarDetectionOrigin): Promise<StarDetectionResult> {
-		const outcome = await this.submit(imageId, request, origin)
+	// StarDetectionError when the job does not complete. origin names the requester, manual by default.
+	async measure(imageId: string, request: StarDetectionRequest, signal?: AbortSignal, origin?: StarDetectionOrigin): Promise<StarDetectionResult> {
+		const outcome = this.submit(imageId, request, origin)
 		if (outcome.status === 'missing') throw new StarDetectionError('expired', 'The image is not open')
-		if (outcome.status === 'astapUnavailable') throw new StarDetectionError('astapUnavailable', 'ASTAP is not configured')
 		if (outcome.status === 'queueFull') throw new StarDetectionError('queueFull', 'Too many star detections are waiting')
 
 		const { jobId } = outcome.job
@@ -393,8 +334,7 @@ export class StarDetectionService implements Disposable {
 		}
 	}
 
-	// Cancels a job: a waiting one ends at once, a running one is interrupted (the built-in worker is
-	// terminated, ASTAP is killed). Returns false when the job is not waiting or running.
+	// Cancels a job: a waiting one ends at once, a running one is interrupted (its worker is terminated). Returns false when the job is not waiting or running.
 	cancel(jobId: string): boolean {
 		return this.#scheduler.cancel(jobId)
 	}
@@ -419,15 +359,14 @@ export class StarDetectionService implements Disposable {
 		return { jobs: this.#scheduler.snapshot() }
 	}
 
-	// Runs a job with its provider and measures the stars it found.
+	// Runs a job and measures the stars it found.
 	async #execute(entry: JobEntry): Promise<AnalysisCompletion<StarDetectionJob, StarDetectionResult>> {
-		const stars = entry.preparation.request.detector.provider === 'nebulosa' ? await this.#detectNebulosa(entry) : await this.#detectAstap(entry)
-		return this.#complete(entry, stars)
+		return this.#complete(entry, await this.#detect(entry))
 	}
 
-	// Detects the stars of a job with the built-in detector on a worker. Throws StarDetectionError.
-	async #detectNebulosa(entry: JobEntry): Promise<DetectedStar[]> {
-		const detector = entry.preparation.request.detector as NebulosaStarDetectionSettings
+	// Detects the stars of a job on a worker. Throws StarDetectionError.
+	async #detect(entry: JobEntry): Promise<DetectedStar[]> {
+		const { detector } = entry.preparation
 		const image = await this.images.detectionImage(entry.job.imageId)
 		if (!image) throw new StarDetectionError('expired', 'The image was released before it could be measured')
 		if (entry.controller.signal.aborted) throw new StarDetectionError('cancelled', 'The star detection was cancelled')
@@ -440,15 +379,15 @@ export class StarDetectionService implements Disposable {
 			request: { jobId, image, options } satisfies StarWorkerRequest,
 			transfer: [image.raw.buffer],
 			signal: entry.controller.signal,
-			timeout: NEBULOSA_TIMEOUT,
-			timedOut: () => new StarDetectionError('timeout', `The Nebulosa detection did not finish within ${NEBULOSA_TIMEOUT / 1000} s`),
-			crashed: (event) => new StarDetectionError('workerFailed', `The Nebulosa detector worker died: ${event.message}`),
+			timeout: DETECTION_TIMEOUT,
+			timedOut: () => new StarDetectionError('timeout', `The detection did not finish within ${DETECTION_TIMEOUT / 1000} s`),
+			crashed: (event) => new StarDetectionError('workerFailed', `The detector worker died: ${event.message}`),
 			cancelled: () => new StarDetectionError('cancelled', 'The star detection was cancelled'),
 			receive: (response, settle) => {
 				if (response.jobId !== jobId) return
 				// A detection that threw leaves the worker usable; only a crash, a timeout, or a cancel does not.
 				if (response.status === 'detected') settle.resolve(response.stars)
-				else settle.reject(new StarDetectionError('workerFailed', `The Nebulosa detector failed: ${response.error}`))
+				else settle.reject(new StarDetectionError('workerFailed', `The detector failed: ${response.error}`))
 			},
 		})
 	}
@@ -460,7 +399,7 @@ export class StarDetectionService implements Disposable {
 		this.#workers[Symbol.dispose]()
 	}
 
-	// Starts a built-in detector worker.
+	// Starts a detector worker.
 	#startWorker(): StarWorker {
 		// The compiled executable defines the embedded path of the worker (see app/build.ts); elsewhere it is
 		// resolved next to this module.
@@ -470,34 +409,9 @@ export class StarDetectionService implements Disposable {
 		return worker
 	}
 
-	// Detects the stars of a job with ASTAP on a FITS copy of the image, in a directory of its own removed
-	// afterwards. Throws StarDetectionError.
-	async #detectAstap(entry: JobEntry): Promise<DetectedStar[]> {
-		const detector = entry.preparation.request.detector as AstapStarDetectionSettings
-		const tool = entry.preparation.tool!
-		const bytes = await this.images.detectionFile(entry.job.imageId)
-		if (!bytes) throw new StarDetectionError('expired', 'The image was released before it could be measured')
-
-		const directory = await mkdtemp(join(tmpdir(), 'nebulosa-stars-'))
-
-		try {
-			const input = join(directory, 'image.fits')
-			await Bun.write(input, bytes)
-			return await astapDetectStars(input, { executable: tool.executable, timeout: tool.timeout, minSNR: detector.minSNR, maxStars: detector.maxStars }, entry.controller.signal)
-		} catch (error) {
-			if (!(error instanceof AstapError)) throw error
-			if (error.code === 'unavailable') throw new StarDetectionError('astapUnavailable', error.message)
-			if (error.code === 'timeout') throw new StarDetectionError('astapTimeout', error.message)
-			if (error.code === 'aborted') throw new StarDetectionError('cancelled', error.message)
-			throw new StarDetectionError('astapFailed', error.message)
-		} finally {
-			await rm(directory, { recursive: true, force: true })
-		}
-	}
-
 	// Measures the stars of a completed job into its summary and full result.
 	#complete(entry: JobEntry, stars: readonly DetectedStar[]): AnalysisCompletion<StarDetectionJob, StarDetectionResult> {
-		const { request, tool } = entry.preparation
+		const request = entry.preparation
 		const { width, height } = entry.size
 		const accepted = acceptStars(stars, width, height, request.acceptance)
 		let acceptedCount = 0
@@ -508,13 +422,13 @@ export class StarDetectionService implements Disposable {
 		const queueTime = entry.job.startedAt! - entry.job.queuedAt
 		const warnings: string[] = []
 
-		if (request.detector.provider === 'nebulosa' && request.detector.maxStars > NEBULOSA_STAR_LIMIT) warnings.push(`The Nebulosa detector returns at most ${NEBULOSA_STAR_LIMIT} stars.`)
-		const limit = request.detector.provider === 'nebulosa' ? Math.min(request.detector.maxStars, NEBULOSA_STAR_LIMIT) : request.detector.maxStars
+		if (request.detector.maxStars > STAR_DETECTION_LIMIT) warnings.push(`The detector returns at most ${STAR_DETECTION_LIMIT} stars.`)
+		const limit = Math.min(request.detector.maxStars, STAR_DETECTION_LIMIT)
 		if (limit > 0 && stars.length >= limit) warnings.push('The star limit was reached: fainter stars were not measured.')
 		if (measurement === 'unavailable') warnings.push(`Fewer than ${MIN_AGGREGATE_STARS} stars were accepted: no aggregate HFD.`)
 
 		const summary: StarDetectionSummary = { detectedCount: stars.length, acceptedCount, ...(hfd !== undefined && { aggregateHfd: hfd }), measurement, elapsed }
-		const result: StarDetectionResult = { ...summary, jobId: entry.job.jobId, imageId: entry.job.imageId, request, ...(tool && { tool }), width, height, stars, accepted, queueTime, warnings }
+		const result: StarDetectionResult = { ...summary, jobId: entry.job.jobId, imageId: entry.job.imageId, request, width, height, stars, accepted, queueTime, warnings }
 		return { patch: { summary }, result }
 	}
 }
@@ -526,12 +440,12 @@ export function createStarDetectionRoutes(service: StarDetectionService) {
 			// Completed jobs of an image whose results are kept, oldest first.
 			GET: (req) => Response.json(service.results(req.params.id)),
 			// Submits a manual detection (StarDetectionRequest) of an open image. Responds 202 with the queued job,
-			// 200 with the completed job of an equivalent earlier detection, 404 when the image is not open, 422
-			// when ASTAP is not configured, and 503 when too many jobs are waiting.
+			// 200 with the completed job of an equivalent earlier detection, 404 when the image is not open, and 503 when
+			// too many jobs are waiting.
 			POST: async (req) => {
-				const outcome = await service.submit(req.params.id, (await req.json()) as StarDetectionRequest)
+				const outcome = service.submit(req.params.id, (await req.json()) as StarDetectionRequest)
 				if (outcome.status === 'missing') return errorResponse('Image not found', 404, 'notFound')
-				if (outcome.status === 'astapUnavailable') return errorResponse('ASTAP is not configured; set it up in Settings → External Tools', 422, 'astapUnavailable')
+
 				if (outcome.status === 'queueFull') return errorResponse('Too many star detections are waiting; try again later', 503, 'queueFull')
 				return Response.json(outcome.job, { status: outcome.status === 'accepted' ? 202 : 200 })
 			},

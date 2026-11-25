@@ -294,20 +294,18 @@ class MemorySink implements Sink {
 	}
 }
 
-// Encodes a document as a FITS or XISF file in the scale of its source (sourceScale), leaving out the header
-// keywords named in omit (the document keeps its own header), or as a JPEG file of its rendering with settings: the
+// Encodes a document as a FITS or XISF file in the scale of its source (sourceScale), or as a JPEG file of its rendering with settings: the
 // bytes a rendering with them sends, computed outside the render queue so that no rendering supersedes it. Throws
 // DisplayError for a JPEG without settings or with settings that cannot be applied to the image.
-async function encodeDocument(entry: DocumentEntry, format: SaveFormat, settings?: DisplaySettings, omit?: readonly string[]): Promise<Uint8Array<ArrayBuffer>> {
+async function encodeDocument(entry: DocumentEntry, format: SaveFormat, settings?: DisplaySettings): Promise<Uint8Array<ArrayBuffer>> {
 	if (format === 'jpeg') {
 		if (!settings) throw new DisplayError('A JPEG file needs the display settings to render it with')
 		return renderImage(entry, { settings }).jpeg
 	}
 
 	const sink = new MemorySink()
-	const image = omit ? { ...entry.image, header: Object.fromEntries(Object.entries(entry.image.header).filter(([key]) => !omit.includes(key))) } : entry.image
-	if (format === 'fits') await writeImageToFits(image, sink, { sourceScale: true })
-	else await writeImageToXisf(image, sink, undefined, { sourceScale: true })
+	if (format === 'fits') await writeImageToFits(entry.image, sink, { sourceScale: true })
+	else await writeImageToXisf(entry.image, sink, undefined, { sourceScale: true })
 	return sink.bytes()
 }
 
@@ -498,7 +496,7 @@ async function handle(request: ImageWorkerRequest): Promise<void> {
 				const image = fullCopy(entry)
 				reply({ id: request.id, status: 'fullCopy', image }, [image.raw.buffer])
 			} else {
-				const bytes = await encodeDocument(entry, request.format, request.settings, request.omit)
+				const bytes = await encodeDocument(entry, request.format, request.settings)
 				reply({ id: request.id, status: 'encoded', bytes }, [bytes.buffer])
 			}
 		} catch (error) {

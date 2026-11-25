@@ -66,7 +66,7 @@ function request(patch: Partial<IPolarRequest> = {}): IPolarRequest {
 		site: SITE,
 		refraction: false,
 		capture: { exposureTime: 0.05, gain: 0, offset: 0, binX: 1, binY: 1, subframe: true, x: 0, y: 0, width: 64, height: 64, frameFormat: '' },
-		solving: { provider: 'astap', strategy: 'blind' },
+		solving: { strategy: 'blind' },
 		direction: 'WEST',
 		rotation: deg(25),
 		settleDelay: 0,
@@ -114,15 +114,14 @@ class Rig {
 	}
 }
 
-// Plate solver standing for ASTAP over the rig; configured unless told otherwise.
+// Plate solver standing for the built-in one over the rig.
 function fakeSolver(rig: Rig) {
 	const origins: PlateSolveOrigin[] = []
 	// What each solve read: the fingerprint of its private pixels, or 'raw' for the image itself.
 	const pixels: string[] = []
-	let configured = true
 
 	const solver = {
-		prepare: (solving: PlateSolveRequest) => Promise.resolve(configured ? { request: solving, tool: { executable: 'astap', timeout: 60000 } } : undefined),
+		prepare: (solving: PlateSolveRequest) => Promise.resolve({ request: solving, tool: { executable: '', timeout: 60000, indexDirectory: '', catalogDirectory: '' } }),
 		solve: (_imageId: string, _preparation: PlateSolvePreparation, _signal?: AbortSignal, origin?: PlateSolveOrigin, calibrated?: PlateSolvePixels) => {
 			if (origin) origins.push(origin)
 			pixels.push(calibrated?.fingerprint ?? 'raw')
@@ -130,7 +129,7 @@ function fakeSolver(rig: Rig) {
 		},
 	}
 
-	return { solver, origins, pixels, unconfigure: () => (configured = false) }
+	return { solver, origins, pixels }
 }
 
 // A Calibration Library without any master.
@@ -314,14 +313,12 @@ describe('iPolar sessions', () => {
 		expect((await ipolar.stop(sessionId)).status).toBe(404)
 	})
 
-	test('an automatic rotation is refused without the mount or its preset, and without a solver', async () => {
-		const { id, cameraId, ipolar, mountDevice, solving, events } = await setup()
+	test('an automatic rotation is refused without the mount or its preset', async () => {
+		const { id, cameraId, ipolar, mountDevice, events } = await setup()
 
 		expect((await ipolar.start(id, cameraId, request({ mode: 'automatic', slewRate: 'SPEED_4' }))).status).toBe(422)
 		expect((await ipolar.start(id, cameraId, request({ mode: 'automatic', mount: mountDevice, slewRate: 'WARP' }))).status).toBe(422)
 		expect((await ipolar.start(id, cameraId, request({ mount: { connectionId: id, deviceId: 'unknown' } }))).status).toBe(404)
-		solving.unconfigure()
-		expect((await ipolar.start(id, cameraId, request())).status).toBe(422)
 		expect(events).toEqual([])
 	})
 

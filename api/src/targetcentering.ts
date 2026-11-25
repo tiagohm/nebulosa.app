@@ -25,7 +25,7 @@ import type { GuidingRestoration, GuidingSessions, GuidingSuspension } from './g
 import type { ImageStore } from './images'
 import type { MountCommands } from './mounts'
 import { type OperationDevice, type OperationRegistry, type ToolInvocation, settledResult } from './operations'
-import { type PlateSolvePreparation, type PlateSolveRequest, PlateSolvingError, type PlateSolverProvider, type PlateSolvingService } from './platesolving'
+import { type PlateSolvePreparation, type PlateSolveRequest, PlateSolvingError, type PlateSolvingService } from './platesolving'
 import type { SkyObserver } from './sky/ephemeris'
 
 // Target Centering: brings a fixed J2000 target to the center of a camera, or measures how far it is, inside one
@@ -91,7 +91,7 @@ export interface TargetCenteringRequest extends CommandRequest {
 	// Largest correction a session makes by itself, in radians; a larger one ends it, and it is also how far a Recenter stands
 	// from its target before it slews.
 	readonly maximumCorrection: Angle
-	// Whether a frame an assisted solve left without a solution is searched again over the whole sky, with the same provider.
+	// Whether a frame an assisted solve left without a solution is searched again over the whole sky, with the same solver settings.
 	readonly blindRetry: boolean
 	// What to do with guiding: stop it for the session and restore it after, or refuse to start while it may pulse the mount.
 	// Verify Only never stops it, since it moves nothing.
@@ -169,8 +169,6 @@ export interface TargetCenteringSessionSummary {
 	readonly mountName: string
 	// Request the session runs with.
 	readonly request: Omit<TargetCenteringRequest, 'token'>
-	// Plate solver of every frame.
-	readonly provider: PlateSolverProvider
 	// What the session is doing.
 	readonly state: TargetCenteringState
 	// Step while running.
@@ -243,7 +241,7 @@ const SLEW_TIMEOUT = 300000
 // of arcseconds might never show, so this one must not hold the session for minutes.
 const CORRECTION_TIMEOUT = 60000
 
-// Longest wait for one solve, queue included, in seconds; the provider's own timeout normally ends it first.
+// Longest wait for one solve, queue included, in seconds; the solver's own timeout normally ends it first.
 const SOLVE_TIMEOUT = 600
 
 // Watchdog after an aborted solve before it is reported unresponsive, in seconds.
@@ -404,7 +402,7 @@ export class TargetCenteringSessions {
 	// Starts a session. Responds 202 with TargetCenteringStartResponse once accepted (a repeated token answers its first
 	// session); its progress and outcome arrive as targetCentering:updated and operation:updated events. Responds 404 for an
 	// unknown camera or mount; 409 when either device is disconnected or held, the camera has a session that did not end, or
-	// guiding may pulse the mount; and 422 when the plate solver is not configured, the mount cannot serve the mode, or the
+	// guiding may pulse the mount; and 422 when the mount cannot serve the mode or the
 	// target is below the horizon of the site the mount reports.
 	async start(connectionId: string, deviceId: string, request: TargetCenteringRequest): Promise<Response> {
 		const admitted = await this.admit(connectionId, deviceId, request)
@@ -418,9 +416,8 @@ export class TargetCenteringSessions {
 		const repeated = this.#sessions.repeated(request.token)
 		if (repeated) return admitted(repeated, true)
 
-		// The provider settings are resolved first, so nothing can take the devices between the checks below and the start.
+		// The settings of the solver are resolved first, so nothing can take the devices between the checks below and the start.
 		const preparation = await this.plateSolving.prepare(request.solving)
-		if (!preparation) return refusal('The plate solver is not configured; set it up in Settings → External Tools', 422, 'unsupported')
 
 		const raced = this.#sessions.repeated(request.token)
 		if (raced) return admitted(raced, true)
@@ -466,7 +463,6 @@ export class TargetCenteringSessions {
 				mount: request.mount,
 				mountName: mount.name,
 				request: settings,
-				provider: request.solving.provider,
 				state: 'preparing',
 				attempts: [],
 				positionVerified: false,

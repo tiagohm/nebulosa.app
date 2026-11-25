@@ -1,6 +1,5 @@
 import type {
 	AnnotationBodies,
-	AstapStarDetectionSettings,
 	AutoFocusRequest,
 	CaptureDither,
 	CaptureRequest,
@@ -18,7 +17,6 @@ import type {
 	MountRemoteProtocol,
 	MountRemoteStartRequest,
 	PlateSolveRequest,
-	NebulosaStarDetectionSettings,
 	PulseCaptureDither,
 	SkyObjectCategory,
 	SkyObjectRef,
@@ -40,7 +38,7 @@ import type { StarProfileSettings } from '../stars/starprofile.settings'
 // Version of the shape of the preferences and camera forms the server keeps (sync.ts). A value of any other version is
 // read as absent, never migrated, so a change to the shape of what is kept only raises this number; an added optional
 // field, which reads as its default, does not.
-export const PROFILE_SETTINGS_VERSION = 11
+export const PROFILE_SETTINGS_VERSION = 12
 
 // Application preferences that belong to a profile. Each preference is added here, with its default in
 // defaultSettings when it is not optional, and either kept by the server (PREFERENCES and the camera forms of sync.ts) or
@@ -68,7 +66,7 @@ export interface ProfileSettings {
 	cameras: Record<string, Record<string, CameraSettings>>
 	// Star detection request edited in Images → Star Detection, shared by every document and by the frames of Auto
 	// Focus and Guiding, with the settings of each detector; absent until edited, and then DEFAULT_STAR_REQUEST holds.
-	starDetection?: StarDetectionPreference
+	starDetection?: StarDetectionRequest
 	// Settings of the Star Profile Inspector, shared by every document; absent until edited, and then
 	// DEFAULT_STAR_PROFILE_SETTINGS holds. The stars it measured are never stored.
 	starProfile?: StarProfileSettings
@@ -135,13 +133,6 @@ export interface ProfileSettings {
 	// Preferences of the Astro Weather tool; absent until edited, and then DEFAULT_ASTRO_WEATHER_PREFERENCES holds. Tab
 	// memory, like the forecasts, the sites typed in, and the night shown.
 	astroWeather?: AstroWeatherPreferences
-}
-
-// Star detection request of a profile, with the settings each detector had when it was last edited, so choosing a
-// detector again restores them instead of its defaults.
-export interface StarDetectionPreference extends StarDetectionRequest {
-	// Last settings of each detector, by detector; absent until one is edited, and then its defaults hold.
-	readonly detectors?: { readonly nebulosa?: NebulosaStarDetectionSettings; readonly astap?: AstapStarDetectionSettings }
 }
 
 // How Annotation draws its results and what its next runs ask for.
@@ -433,11 +424,11 @@ export const DEFAULT_ACQUISITION_SETTINGS: CameraAcquisitionSettings = { exposur
 
 // Plate solving settings of one physical camera, shared by Images → Plate Solver on its camera tab and by the operations
 // that solve its frames. They hold how to solve, never where: positional hints stay with each image or come from the
-// operation. Scale tolerance is a fraction of the scale, which only nova takes.
-export type CameraPlateSolvingSettings = Pick<PlateSolveRequest, 'provider' | 'strategy' | 'downsample' | 'scaleTolerance'>
+// operation. Scale tolerance is a fraction of the scale.
+export type CameraPlateSolvingSettings = Pick<PlateSolveRequest, 'strategy' | 'scaleTolerance'>
 
-// Plate solving settings of a camera that has none yet: ASTAP around the header pointing.
-export const DEFAULT_CAMERA_PLATE_SOLVING: CameraPlateSolvingSettings = { provider: 'astap', strategy: 'assisted' }
+// Plate solving settings of a camera that has none yet: a search around the header pointing.
+export const DEFAULT_CAMERA_PLATE_SOLVING: CameraPlateSolvingSettings = { strategy: 'assisted' }
 
 // Forms of one physical camera; a form not edited yet is absent and its defaults apply.
 export interface CameraSettings {
@@ -669,7 +660,7 @@ export interface TargetCenteringSettings {
 	settleDelay: number
 	// Largest correction a session makes by itself, in degrees.
 	maximumCorrection: number
-	// Whether a frame an assisted solve left without a solution is searched again over the whole sky, with the same provider.
+	// Whether a frame an assisted solve left without a solution is searched again over the whole sky.
 	blindRetry: boolean
 	// Whether guiding that is correcting the mount is stopped for the session and restored after, recalibrating; otherwise it
 	// refuses the start.

@@ -341,15 +341,13 @@ export function guidingDitherRequest(settings: Readonly<GuidingSettings>): Omit<
 }
 
 // Returns why no session can start now, or undefined when one can, from the availability of the camera and of the
-// guide output of the setup (absent when the camera is not the Guide Camera), and whether the star detector is ASTAP
-// while ASTAP is not configured. A busy guide output does not block the start, since looping never pulses; Start
+// guide output of the setup (absent when the camera is not the Guide Camera), and the exposure. A busy guide output does not block the start, since looping never pulses; Start
 // Guiding is refused while it stays busy. The server checks again.
-export function guidingBlocker(camera: RoleAvailability, guideOutput: RoleAvailability | undefined, settings: Readonly<GuidingSettings>, astapMissing: boolean): string | undefined {
+export function guidingBlocker(camera: RoleAvailability, guideOutput: RoleAvailability | undefined, settings: Readonly<GuidingSettings>): string | undefined {
 	if (camera.status !== 'ready') return camera.message
 	if (!guideOutput) return 'Only the Guide Camera of the Equipment Setup guides.'
 	if (guideOutput.status !== 'ready' && guideOutput.status !== 'busy') return guideOutput.message
 	if (!(settings.exposureTime > 0)) return 'Set a guide exposure.'
-	if (astapMissing) return 'ASTAP is not configured.'
 	return undefined
 }
 

@@ -87,8 +87,8 @@ describe('parse', () => {
 	test('reads the Settings page, its section, and its external program', () => {
 		expect(parseRoute('/settings')).toEqual({ workspace: 'settings', section: 'external-tools' })
 		expect(parseRoute('/settings/external-tools')).toEqual({ workspace: 'settings', section: 'external-tools' })
-		expect(parseRoute('/settings/external-tools/astap/extra')).toEqual({ workspace: 'settings', section: 'external-tools', tool: 'astap' })
-		expect(parseRoute('/settings/other/astap')).toEqual({ workspace: 'settings', section: 'external-tools' })
+		expect(parseRoute('/settings/external-tools/mediamtx/extra')).toEqual({ workspace: 'settings', section: 'external-tools', tool: 'mediamtx' })
+		expect(parseRoute('/settings/other/mediamtx')).toEqual({ workspace: 'settings', section: 'external-tools' })
 		expect(parseRoute('/settings/ephemeris-sources')).toEqual({ workspace: 'settings', section: 'ephemeris-sources' })
 		expect(parseRoute('/settings/status-bar')).toEqual({ workspace: 'settings', section: 'status-bar' })
 		expect(parseRoute('/settings/status-bar/extra')).toEqual({ workspace: 'settings', section: 'status-bar' })
@@ -97,7 +97,7 @@ describe('parse', () => {
 		expect(routePath({ workspace: 'tools', tool: 'astronomical-time-converter' })).toBe('/tools/astronomical-time-converter')
 		expect(routePath({ workspace: 'settings' })).toBe('/settings/external-tools')
 		expect(routePath({ workspace: 'settings', section: 'external-tools' })).toBe('/settings/external-tools')
-		expect(routePath({ workspace: 'settings', tool: 'astap' })).toBe('/settings/external-tools/astap')
+		expect(routePath({ workspace: 'settings', tool: 'mediamtx' })).toBe('/settings/external-tools/mediamtx')
 	})
 
 	test('reads the Equipment Catalog, the kind of equipment it lists, and the item shown', () => {

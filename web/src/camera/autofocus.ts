@@ -83,9 +83,8 @@ export function autoFocusSweep(position: number, settings: Pick<AutoFocusSetting
 
 // Returns why no session can start now, or undefined when one can, from the availability of the camera and of its
 // focuser (undefined when the camera has no focuser associated with it), the focuser's reported state (undefined
-// while unknown), whether the detector is ASTAP while ASTAP is not configured, and the first pass of the sweep, which
-// must stay within the travel the focuser reports. The server checks again.
-export function autoFocusBlocker(camera: RoleAvailability, focuser: RoleAvailability | undefined, focuserState: { readonly canAbsoluteMove: boolean; readonly position?: { readonly min: number; readonly max: number } } | undefined, astapMissing: boolean, sweep?: AutoFocusSweep): string | undefined {
+// while unknown), and the first pass of the sweep, which must stay within the travel the focuser reports. The server checks again.
+export function autoFocusBlocker(camera: RoleAvailability, focuser: RoleAvailability | undefined, focuserState: { readonly canAbsoluteMove: boolean; readonly position?: { readonly min: number; readonly max: number } } | undefined, sweep?: AutoFocusSweep): string | undefined {
 	if (camera.status !== 'ready') return camera.message
 	if (!focuser) return NO_FOCUSER
 	if (focuser.status !== 'ready') return focuser.message
@@ -98,7 +97,6 @@ export function autoFocusBlocker(camera: RoleAvailability, focuser: RoleAvailabi
 		if (beyond !== undefined) return `The sweep would move the focuser to ${beyond} steps, outside its travel of ${min} to ${max} steps. Lower Step Size or Positions per Side.`
 	}
 
-	if (astapMissing) return 'ASTAP is not configured.'
 	return undefined
 }
 
@@ -214,8 +212,8 @@ export function autoFocusRequest(
 		focuser,
 		capture: fitExposure({ ...exposure, exposureTime: settings.exposureTime }, capabilities),
 		snoop: { mount: snoop.mount, wheel: snoop.wheel, rotator: snoop.rotator },
-		// The built-in detector always measures with a grown aperture, the profile's or the default one.
-		detection: { acceptance: { ...acceptance }, detector: detector.provider === 'nebulosa' ? { ...detector, maximumRadius: detector.maximumRadius ?? DEFAULT_APERTURE_RADIUS } : { ...detector } },
+		// The detector always measures with a grown aperture, the profile's or the default one.
+		detection: { acceptance: { ...acceptance }, detector: { ...detector, maximumRadius: detector.maximumRadius ?? DEFAULT_APERTURE_RADIUS } },
 		fittingMode: settings.fittingMode,
 		initialOffsetSteps: settings.initialOffsetSteps,
 		stepSize,

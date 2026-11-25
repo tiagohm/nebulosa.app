@@ -104,12 +104,12 @@ describe('subtraction', () => {
 	// Hot pixel at x 5, y 7 of the 32-pixel rows.
 	const HOT = 7 * 32 + 5
 
-	test('subtracts the master from the raw samples on the same grid and leaves the asked keywords out', async () => {
+	test('subtracts the master from the raw samples on the same grid and keeps the header of the frame', async () => {
 		using calibrator = new DarkCalibrator()
 		const framePath = await fits(2000, { [HOT]: 30000 }, { RA: 10, DEC: -80, OBJECT: 'POLE' })
 		const darkPath = await fits(1000, { [HOT]: 28500 })
 
-		const outcome = await calibrator.calibrate({ framePath, darkPath, fullScale: 65535, masterKey: '7:digest', omit: ['RA', 'DEC'] })
+		const outcome = await calibrator.calibrate({ framePath, darkPath, fullScale: 65535, masterKey: '7:digest' })
 		if (!('bytes' in outcome)) throw new Error(outcome.failed)
 		const calibrated = await readDigitalFrom(bufferSource(Buffer.from(outcome.bytes)), false)
 
@@ -118,15 +118,15 @@ describe('subtraction', () => {
 		expect(calibrated.raw[HOT]).toBeCloseTo(1500, 0)
 		expect(calibrated.header.OBJECT).toBe('POLE')
 		expect(calibrated.header.EXPTIME).toBe(2)
-		expect(calibrated.header.RA).toBeUndefined()
-		expect(calibrated.header.DEC).toBeUndefined()
+		expect(calibrated.header.RA).toBe(10)
+		expect(calibrated.header.DEC).toBe(-80)
 		// The frame file itself is left untouched.
 		expect((await readDigitalFrom(bufferSource(Buffer.from(await Bun.file(framePath).arrayBuffer())), false)).raw[HOT]).toBeCloseTo(30000, 0)
 	})
 
 	test('clips a negative residual to 0 in the integer scale of the frame', async () => {
 		using calibrator = new DarkCalibrator()
-		const outcome = await calibrator.calibrate({ framePath: await fits(500, {}), darkPath: await fits(1000, {}), fullScale: 65535, masterKey: '8:digest', omit: [] })
+		const outcome = await calibrator.calibrate({ framePath: await fits(500, {}), darkPath: await fits(1000, {}), fullScale: 65535, masterKey: '8:digest' })
 		if (!('bytes' in outcome)) throw new Error(outcome.failed)
 		expect((await readDigitalFrom(bufferSource(Buffer.from(outcome.bytes)), false)).raw[0]).toBe(0)
 	})
@@ -135,14 +135,14 @@ describe('subtraction', () => {
 		using calibrator = new DarkCalibrator()
 		const framePath = await fits(2000, {})
 
-		expect(await calibrator.calibrate({ framePath, darkPath: await fits(1000, {}, {}, 16, 16), fullScale: 65535, masterKey: '9:digest', omit: [] })).toMatchObject({ failed: expect.any(String) })
-		expect(await calibrator.calibrate({ framePath, darkPath: join(root, 'missing.fit'), fullScale: 65535, masterKey: '10:digest', omit: [] })).toMatchObject({ failed: expect.any(String) })
-		expect(await calibrator.calibrate({ framePath, darkPath: await fits(1000, {}), fullScale: 65535, masterKey: '11:digest', omit: [] })).toHaveProperty('bytes')
+		expect(await calibrator.calibrate({ framePath, darkPath: await fits(1000, {}, {}, 16, 16), fullScale: 65535, masterKey: '9:digest' })).toMatchObject({ failed: expect.any(String) })
+		expect(await calibrator.calibrate({ framePath, darkPath: join(root, 'missing.fit'), fullScale: 65535, masterKey: '10:digest' })).toMatchObject({ failed: expect.any(String) })
+		expect(await calibrator.calibrate({ framePath, darkPath: await fits(1000, {}), fullScale: 65535, masterKey: '11:digest' })).toHaveProperty('bytes')
 	})
 
 	test('a stopped calibrator fails the job in progress', async () => {
 		const calibrator = new DarkCalibrator()
-		const job = calibrator.calibrate({ framePath: await fits(2000, {}), darkPath: await fits(1000, {}), fullScale: 65535, masterKey: '12:digest', omit: [] })
+		const job = calibrator.calibrate({ framePath: await fits(2000, {}), darkPath: await fits(1000, {}), fullScale: 65535, masterKey: '12:digest' })
 		calibrator[Symbol.dispose]()
 		expect(await job).toEqual({ failed: 'The dark worker was stopped' })
 	})

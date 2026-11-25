@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import type { GuidingEventRecord, GuidingSessionSummary, GuidingTelemetrySample } from 'api'
 import { proxy } from 'valtio'
 import { DEFAULT_EXPOSURE_SETTINGS, DEFAULT_GUIDING_SETTINGS, GUIDING_MAXIMUM_PULSE as GUIDING_MAXIMUM_PULSE_CLAMP } from '../profile/schema'
-import { DEFAULT_NEBULOSA_SETTINGS } from '../stars/stars'
+import { DEFAULT_STAR_DETECTION_SETTINGS } from '../stars/stars'
 import { cameraKey } from './capture'
 import {
 	formatCalibrationAdaptation,
@@ -92,7 +92,7 @@ const NO_FETCH = fakeFetch(() => new Response(null, { status: 500 })).request
 describe('requests', () => {
 	test('the start takes the camera settings without their exposure, the guide exposure in ms, and the controller of the form', () => {
 		const exposure = { ...DEFAULT_EXPOSURE_SETTINGS, exposureTime: 30, gain: 120, binX: 2, binY: 2 }
-		const request = guidingRequest({ ...DEFAULT_GUIDING_SETTINGS, exposureTime: 1.5, trackingMode: 'multiStar', aggressivenessRA: 0.4 }, exposure, { guideOutput: OUTPUT }, {}, DEFAULT_NEBULOSA_SETTINGS, undefined)
+		const request = guidingRequest({ ...DEFAULT_GUIDING_SETTINGS, exposureTime: 1.5, trackingMode: 'multiStar', aggressivenessRA: 0.4 }, exposure, { guideOutput: OUTPUT }, {}, DEFAULT_STAR_DETECTION_SETTINGS, undefined)
 		expect('exposureTime' in request.camera).toBeFalse()
 		expect(request).toMatchObject({ guideOutput: OUTPUT, exposure: 1500, trackingMode: 'multiStar', camera: { gain: 120, binX: 2, binY: 2 }, calibration: { raPulse: 650, decPulse: 650 }, guider: { aggressivenessRA: 0.4, aggressivenessDEC: 0.65, maxPulseMsRA: 2000, maxPulseMsDEC: 2500 } })
 		expect('optics' in request).toBeFalse()
@@ -100,19 +100,18 @@ describe('requests', () => {
 		expect(request.calibrationPolicy).toEqual({ autoRestore: true, recalibrateOnEveryStart: false })
 		expect(request.stopGuidingOnSlew).toBeTrue()
 		expect(request.guider?.decBacklashCompensation).toEqual({ mode: 'off' })
-		const backlash = guidingRequest({ ...DEFAULT_GUIDING_SETTINGS, decBacklash: { enabled: true, initialMs: 900, maximumMs: 600, adaptationRate: 0.2 } }, exposure, { guideOutput: OUTPUT }, {}, DEFAULT_NEBULOSA_SETTINGS, undefined)
+		const backlash = guidingRequest({ ...DEFAULT_GUIDING_SETTINGS, decBacklash: { enabled: true, initialMs: 900, maximumMs: 600, adaptationRate: 0.2 } }, exposure, { guideOutput: OUTPUT }, {}, DEFAULT_STAR_DETECTION_SETTINGS, undefined)
 		expect(backlash.guider?.decBacklashCompensation).toEqual({ mode: 'adaptive', initialMs: 600, maxCompensationMs: 600, adaptationRate: 0.2 })
 		expect(request.dark).toEqual({})
-		expect('dark' in guidingRequest({ ...DEFAULT_GUIDING_SETTINGS, useCalibrationLibraryDark: false }, exposure, { guideOutput: OUTPUT }, {}, DEFAULT_NEBULOSA_SETTINGS, undefined)).toBeFalse()
+		expect('dark' in guidingRequest({ ...DEFAULT_GUIDING_SETTINGS, useCalibrationLibraryDark: false }, exposure, { guideOutput: OUTPUT }, {}, DEFAULT_STAR_DETECTION_SETTINGS, undefined)).toBeFalse()
 		expect(request.calibration).toEqual({ raPulse: 650, decPulse: 650, assumeDecOrthogonalToRa: false })
-		expect(guidingRequest(DEFAULT_GUIDING_SETTINGS, exposure, { guideOutput: OUTPUT }, {}, DEFAULT_NEBULOSA_SETTINGS, 240).optics).toEqual({ focalLength: 240 })
+		expect(guidingRequest(DEFAULT_GUIDING_SETTINGS, exposure, { guideOutput: OUTPUT }, {}, DEFAULT_STAR_DETECTION_SETTINGS, 240).optics).toEqual({ focalLength: 240 })
 	})
 
-	test('the start sends the star detector of the profile, without its acceptance', () => {
-		const astap = { provider: 'astap', maxStars: 50, minSNR: 10 } as const
-		expect(guidingRequest(DEFAULT_GUIDING_SETTINGS, DEFAULT_EXPOSURE_SETTINGS, { guideOutput: OUTPUT }, {}, astap, undefined).detection).toEqual(astap)
-		expect(guidingRequest(DEFAULT_GUIDING_SETTINGS, DEFAULT_EXPOSURE_SETTINGS, { guideOutput: OUTPUT }, {}, DEFAULT_NEBULOSA_SETTINGS, undefined).detection).toEqual(DEFAULT_NEBULOSA_SETTINGS)
-		expect(guidingBlocker(READY, READY, DEFAULT_GUIDING_SETTINGS, true)).toBe('ASTAP is not configured.')
+	test('the start sends the star detector settings of the profile, without its acceptance', () => {
+		const detector = { maxStars: 50, minSNR: 10, searchRegion: 4 } as const
+		expect(guidingRequest(DEFAULT_GUIDING_SETTINGS, DEFAULT_EXPOSURE_SETTINGS, { guideOutput: OUTPUT }, {}, detector, undefined).detection).toEqual(detector)
+		expect(guidingRequest(DEFAULT_GUIDING_SETTINGS, DEFAULT_EXPOSURE_SETTINGS, { guideOutput: OUTPUT }, {}, DEFAULT_STAR_DETECTION_SETTINGS, undefined).detection).toEqual(DEFAULT_STAR_DETECTION_SETTINGS)
 	})
 
 	test('the guide exposure range is that of the form, within the range the camera reports', () => {
@@ -122,10 +121,10 @@ describe('requests', () => {
 	})
 
 	test('the start snoops the devices it is given', () => {
-		expect(guidingRequest(DEFAULT_GUIDING_SETTINGS, DEFAULT_EXPOSURE_SETTINGS, { guideOutput: OUTPUT }, { mount: 'm' }, DEFAULT_NEBULOSA_SETTINGS, undefined).snoop).toEqual({ mount: 'm' })
+		expect(guidingRequest(DEFAULT_GUIDING_SETTINGS, DEFAULT_EXPOSURE_SETTINGS, { guideOutput: OUTPUT }, { mount: 'm' }, DEFAULT_STAR_DETECTION_SETTINGS, undefined).snoop).toEqual({ mount: 'm' })
 		// The mount the guide output drives is held while guiding, and none is sent without one in the setup.
-		expect(guidingRequest(DEFAULT_GUIDING_SETTINGS, DEFAULT_EXPOSURE_SETTINGS, { guideOutput: OUTPUT, mount: { connectionId: 'c', deviceId: 'm' } }, {}, DEFAULT_NEBULOSA_SETTINGS, undefined).mount).toEqual({ connectionId: 'c', deviceId: 'm' })
-		expect('mount' in guidingRequest(DEFAULT_GUIDING_SETTINGS, DEFAULT_EXPOSURE_SETTINGS, { guideOutput: OUTPUT }, {}, DEFAULT_NEBULOSA_SETTINGS, undefined)).toBeFalse()
+		expect(guidingRequest(DEFAULT_GUIDING_SETTINGS, DEFAULT_EXPOSURE_SETTINGS, { guideOutput: OUTPUT, mount: { connectionId: 'c', deviceId: 'm' } }, {}, DEFAULT_STAR_DETECTION_SETTINGS, undefined).mount).toEqual({ connectionId: 'c', deviceId: 'm' })
+		expect('mount' in guidingRequest(DEFAULT_GUIDING_SETTINGS, DEFAULT_EXPOSURE_SETTINGS, { guideOutput: OUTPUT }, {}, DEFAULT_STAR_DETECTION_SETTINGS, undefined)).toBeFalse()
 	})
 
 	test('the guide focal length is the focal length of the guide telescope times its reducer or Barlow, unknown while not set', () => {
@@ -189,11 +188,11 @@ describe('requests', () => {
 
 	test('only the Guide Camera with a connected guide output can start, even while the output is busy', () => {
 		const busy = { status: 'busy', operations: [], message: 'The mount is slewing.' } as const
-		expect(guidingBlocker(READY, READY, DEFAULT_GUIDING_SETTINGS, false)).toBeUndefined()
-		expect(guidingBlocker(READY, busy, DEFAULT_GUIDING_SETTINGS, false)).toBeUndefined()
-		expect(guidingBlocker(READY, undefined, DEFAULT_GUIDING_SETTINGS, false)).toContain('Guide Camera')
-		expect(guidingBlocker(READY, { status: 'disconnected', message: 'The guide output is disconnected.' }, DEFAULT_GUIDING_SETTINGS, false)).toBe('The guide output is disconnected.')
-		expect(guidingBlocker({ ...busy, message: 'The camera is capturing.' }, READY, DEFAULT_GUIDING_SETTINGS, false)).toBe('The camera is capturing.')
+		expect(guidingBlocker(READY, READY, DEFAULT_GUIDING_SETTINGS)).toBeUndefined()
+		expect(guidingBlocker(READY, busy, DEFAULT_GUIDING_SETTINGS)).toBeUndefined()
+		expect(guidingBlocker(READY, undefined, DEFAULT_GUIDING_SETTINGS)).toContain('Guide Camera')
+		expect(guidingBlocker(READY, { status: 'disconnected', message: 'The guide output is disconnected.' }, DEFAULT_GUIDING_SETTINGS)).toBe('The guide output is disconnected.')
+		expect(guidingBlocker({ ...busy, message: 'The camera is capturing.' }, READY, DEFAULT_GUIDING_SETTINGS)).toBe('The camera is capturing.')
 	})
 })
 
@@ -307,7 +306,7 @@ describe('refresh', () => {
 describe('commands', () => {
 	test('a start posts a tokened request to the camera route; a failure is recorded per camera', async () => {
 		const state = newState()
-		const body = guidingRequest(DEFAULT_GUIDING_SETTINGS, DEFAULT_EXPOSURE_SETTINGS, { guideOutput: OUTPUT }, {}, DEFAULT_NEBULOSA_SETTINGS, undefined)
+		const body = guidingRequest(DEFAULT_GUIDING_SETTINGS, DEFAULT_EXPOSURE_SETTINGS, { guideOutput: OUTPUT }, {}, DEFAULT_STAR_DETECTION_SETTINGS, undefined)
 		const accepted = fakeFetch(() => Response.json({ sessionId: 's1', operationId: 'o1' }, { status: 202 }))
 		expect(await startGuidingSession(state, 'c', 'guide', body, accepted.request)).toEqual({ sessionId: 's1', operationId: 'o1' })
 		expect(accepted.requests[0].url).toBe('/api/connections/c/cameras/guide/guiding')

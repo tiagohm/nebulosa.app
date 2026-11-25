@@ -18,7 +18,6 @@ import { activeProfile, exposureSettings, guidingSettings, profileState, setGuid
 import { type CameraIdentity, GUIDING_MAXIMUM_PULSE, GUIDING_MAXIMUM_SEARCH_REGION, GUIDING_MINIMUM_PULSE, GUIDING_MINIMUM_SEARCH_REGION, type GuidingDitherMode, type GuidingSettings } from '../profile/schema'
 import { CollapsibleSection } from '../shell/CollapsibleSection'
 import { CameraStarDetectionSection } from '../stars/CameraStarDetectionSection'
-import { useAstapConfigured } from '../stars/StarRequestControls'
 import { Button } from '../ui/Button'
 import { Checkbox } from '../ui/Checkbox'
 import { ConfirmButton } from '../ui/ConfirmButton'
@@ -91,7 +90,7 @@ import { SessionStateText } from './SessionStateText'
 // and while it runs a master can be pinned among those matching its frames. The camera is the panel's target and the
 // guide output the GUIDE_OUTPUT of the setup, which only the Guide Camera has; a missing or unsuitable one says why. The
 // frames take the camera settings of Camera Acquisition without its exposure time, shown under the guide exposure, and
-// their stars are detected with the detector of the profile's Star Detection (built-in or ASTAP) and its settings, as
+// their stars are detected with the settings of the profile's Star Detection, as
 // Auto Focus does; the guide telescope of the Equipment Setup gives the pixel scale and the calibration step. The form is
 // the camera's, kept in the profile; while a session runs, only its exposure, its dark, and the settle and dither of its
 // commands change it, and the other settings are locked showing the form. The session is the server's, shown here
@@ -137,7 +136,6 @@ export function GuidingSections({ device, availability, guideOutput, mount, sett
 	const settings = guidingSettings(profile.settings, identity)
 	const exposure = exposureSettings(profile.settings, identity)
 	const detection = starDetectionSettings(profile.settings).detector
-	const astapConfigured = useAstapConfigured()
 	const key = device && cameraKey(device.connectionId, device.id)
 	const session = key ? runtime.sessions[key] : undefined
 	const running = guidingRunning(session)
@@ -149,7 +147,7 @@ export function GuidingSections({ device, availability, guideOutput, mount, sett
 	const outputState = watchedDeviceState(control, 'guideOutput', guideOutput?.device)
 	const mountState = watchedDeviceState(control, 'mount', mount.device)
 	const outputAvailability = guideOutput && roleAvailability('GUIDE_OUTPUT', guideOutput, operations, outputState && !outputState.canPulseGuide ? 'The guide output cannot pulse guide.' : undefined)
-	const blocker = running ? undefined : guidingBlocker(availability, outputAvailability, settings, detection.provider === 'astap' && !astapConfigured)
+	const blocker = running ? undefined : guidingBlocker(availability, outputAvailability, settings)
 	const focalLength = guideFocalLength(useProfileTelescopes(profile.settings).guideTelescope)
 	const calibrationInputs = { focalLength, pixelSize: capabilities?.sensor?.pixelSize, guideRate: outputState?.hasGuideRate ? outputState.guideRate.rightAscension : undefined, declination: mountState?.declination }
 	const calculateBlocker = guidingCalibrationBlocker(calibrationInputs, exposure.binX)
@@ -218,18 +216,7 @@ export function GuidingSections({ device, availability, guideOutput, mount, sett
 				<ExposureTimeInput value={settings.exposureTime} exposure={guidingExposureRange(capabilities?.exposure)} disabled={pending} onChange={changeExposure} />
 			</CameraAcquisitionSection>
 			<DarkSection device={device} session={running ? session : undefined} enabled={settings.useCalibrationLibraryDark} disabled={pending} onEnabled={(useCalibrationLibraryDark) => update({ useCalibrationLibraryDark })} />
-			<CameraStarDetectionSection
-				id="images.guiding.star-detection"
-				device={device}
-				provider={detection.provider}
-				defaultOpen={false}
-				description={(detector) => (
-					<>
-						Stars are detected with the Star Detection settings ({detector} detector), chosen when looping starts; the guider accepts those of 5 sigma or more.
-						{detection.provider === 'astap' && ' ASTAP runs as a separate program on every frame.'}
-					</>
-				)}
-			/>
+			<CameraStarDetectionSection id="images.guiding.star-detection" device={device} defaultOpen={false} description={(detector) => <>Stars are detected with the Star Detection settings ({detector} detector), chosen when looping starts; the guider accepts those of 5 sigma or more.</>} />
 			<CollapsibleSection id="images.guiding.tracking" title="Tracking" summary={`${TRACKING_LABELS[settings.trackingMode]} · ${settings.searchRegion} px${settings.stickyLockPosition ? ' · sticky' : ''}`} defaultOpen={false}>
 				<SegmentedControl label="Tracking" options={['singleStar', 'multiStar'] as const} value={settings.trackingMode} format={(mode) => TRACKING_LABELS[mode]} disabled={running || pending} onChange={(trackingMode) => update({ trackingMode })} />
 				<NumberInput label="Search Region" value={settings.searchRegion} min={GUIDING_MINIMUM_SEARCH_REGION} max={GUIDING_MAXIMUM_SEARCH_REGION} step={4} suffix="px" disabled={running || pending} onChange={(searchRegion) => update({ searchRegion: Math.round(searchRegion) })} />

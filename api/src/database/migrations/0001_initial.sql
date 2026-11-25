@@ -17,24 +17,20 @@ CREATE TABLE schema_migrations (
 	applied_at INTEGER NOT NULL
 ) STRICT;
 
--- Settings of the external programs and services of the server (ExternalToolsStore). A program without a row has
--- never been saved and runs with the defaults. The session of a web service is never stored.
+-- Settings of the external programs and data of the server (ExternalToolsStore). A program without a row has never
+-- been saved and runs with the defaults.
 CREATE TABLE external_tool_settings (
 	-- Supported program.
-	tool_id TEXT PRIMARY KEY CHECK (tool_id IN ('astap', 'astrometryLocal', 'nova', 'nebulosa', 'mediamtx')),
+	tool_id TEXT PRIMARY KEY CHECK (tool_id IN ('nebulosa', 'mediamtx')),
 	-- Path or PATH name of the executable on the server; empty when not configured or not taken.
 	executable TEXT NOT NULL,
 	-- Default time limit of a run, in milliseconds.
 	timeout INTEGER NOT NULL CHECK (timeout > 0),
-	-- Path of the configuration file passed to the program; NULL when the program takes none.
-	config TEXT,
-	-- Base URL of a web service; NULL when the program is not one.
-	endpoint TEXT,
 	-- Folder of the quad index files of the built-in solver; NULL for another program.
 	index_directory TEXT,
 	-- Folder of the star database of the built-in solver; NULL for another program.
 	catalog_directory TEXT,
-	-- Revision of the settings, increased by every save, sign-in, and sign-out; >= 1.
+	-- Revision of the settings, increased by every save; >= 1.
 	revision INTEGER NOT NULL CHECK (revision > 0),
 	-- When the settings last changed, Unix milliseconds (UTC).
 	updated_at INTEGER NOT NULL

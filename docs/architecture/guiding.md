@@ -16,7 +16,7 @@ Guiding is what keeps every long light frame sharp, and the capture, centering, 
 
 - The guide camera is held for the whole session; while guiding, a run also holds the guide output and the mount it drives (the setup's mount), so no GoTo, nudge, or manual pulse moves the mount between two corrections (see [Operation Lifecycle Rules](operation-lifecycle-rules.md)).
 - Pulses go through the guide output commander, so ending a run waits for the observed end of every pulse.
-- Detects the stars of its frames with the toolkit detector, or with ASTAP through [External Tools](external-tools.md) (see [Star Detection](star-detection.md)).
+- Detects the stars of its frames with the toolkit detector and the settings of [Star Detection](star-detection.md).
 - Can subtract a master dark of the [Calibration Library](calibration-library.md), chosen among those of the guide camera's [Equipment Catalog](equipment-catalog.md) camera or pinned by the operator, and leased while used.
 - Saves every completed calibration in the database and restores a matching one at Start Guiding, derived for where the mount points now (see [Persistence and State](persistence-and-state.md)).
 - Records the newest frame in the [Capture Frames](capture-frames.md) registry so the camera tab shows it, never saved.

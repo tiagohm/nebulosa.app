@@ -176,24 +176,23 @@ test('an alt-az mount, one without GoTo, and one without abort can never be samp
 	expect(mountPointingMountSupport(mountState({ canAbort: false }))).toContain('abort')
 })
 
-test('a start needs the Main Camera, a located mount free to move, a solver, and a known geometry', () => {
-	const blocker = (state?: MountState, role: 'MAIN_CAMERA' | 'GUIDE_CAMERA' | undefined = 'MAIN_CAMERA', configured = true, equatorial = true) => mountPointingBlocker(READY, READY, role, state, configured, equatorial)
+test('a start needs the Main Camera, a located mount free to move, and a known geometry', () => {
+	const blocker = (state?: MountState, role: 'MAIN_CAMERA' | 'GUIDE_CAMERA' | undefined = 'MAIN_CAMERA', equatorial = true) => mountPointingBlocker(READY, READY, role, state, equatorial)
 
 	expect(blocker(mountState())).toBeUndefined()
 	expect(blocker(mountState(), 'GUIDE_CAMERA')).toContain('Main Camera')
-	expect(mountPointingBlocker(READY, READY, undefined, mountState(), true, true)).toContain('Main Camera')
+	expect(mountPointingBlocker(READY, READY, undefined, mountState(), true)).toContain('Main Camera')
 	expect(blocker(undefined)).toContain('not known')
 	expect(blocker(mountState({ site: { latitude: 0, longitude: 0, elevation: 0 } }))).toContain('no site')
 	expect(blocker(mountState({ parked: true }))).toContain('parked')
 	expect(blocker(mountState({ tracking: false, canTracking: false }))).toContain('tracking')
 	expect(blocker(mountState({ tracking: false }))).toBeUndefined()
-	expect(blocker(mountState(), 'MAIN_CAMERA', false)).toContain('plate solver')
-	expect(blocker(mountState(), 'MAIN_CAMERA', true, false)).toContain('confirm')
+	expect(blocker(mountState(), 'MAIN_CAMERA', false)).toContain('confirm')
 })
 
 test('the request takes the exposure time of the form, the camera settings, the solver of the camera, and angles in radians', () => {
 	const exposure = { ...DEFAULT_EXPOSURE_SETTINGS, exposureTime: 99, gain: 120 }
-	const solving = { ...DEFAULT_CAMERA_PLATE_SOLVING, provider: 'nova', scaleTolerance: 0.3 } as const
+	const solving = { ...DEFAULT_CAMERA_PLATE_SOLVING, strategy: 'blind', scaleTolerance: 0.3 } as const
 	const request = mountPointingRequest({ ...DEFAULT_POINTING_MODEL_SETTINGS, exposureTime: 7, minimumAltitude: 30, meridianAvoidance: 10 }, exposure, solving, { connectionId: 'c', deviceId: 'm' }, true)
 
 	expect(request.capture.exposureTime).toBe(7)

@@ -16,7 +16,7 @@ Target Centering gives the operator and the automations a verified position, and
 - Holds the camera and the setup's mount in one operation until the end, so nothing comes between an exposure and its correction (see [Operation Lifecycle Rules](operation-lifecycle-rules.md)).
 - The first slew goes through the mount commands' GoTo, applying the [Mount Pointing Model](mount-pointing-model.md) in force once; later corrections are the residuals measured on the sky.
 - Takes its frames through the shared camera capturer with the camera settings of Camera Acquisition and its own exposure time; frames are auxiliary and recorded in the [Capture Frames](capture-frames.md) registry.
-- Solves each frame with [Plate Solving](plate-solving.md), whose provider is fixed when the session starts.
+- Solves each frame with [Plate Solving](plate-solving.md), whose settings are fixed when the session starts.
 - Suspends the [Guiding](guiding.md) through the setup's guide output, which drives its mount, before moving it, keeps it from starting meanwhile, and restores it afterwards.
 - The target is typed or selected in the [Sky Map](sky-map.md).
 - The [Meridian Flip Executor](meridian-flip-executor.md) composes it inside its reservation after a flip.

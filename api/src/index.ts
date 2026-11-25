@@ -281,7 +281,6 @@ export type {
 	ExternalToolEvent,
 	ExternalToolField,
 	ExternalToolId,
-	ExternalToolLoginRequest,
 	ExternalToolSaveRequest,
 	ExternalToolState,
 	ExternalToolTestRequest,
@@ -615,23 +614,7 @@ export type {
 } from './saturn.astronomy'
 export type { SaturnEvent, SaturnEventContacts, SaturnEventKind, SaturnEventsRequest, SaturnEventVisibility, SaturnNight, SaturnVisibilityReason, SaturnVisibilityStatus } from './saturn.events'
 export type { WheelMoveRequest, WheelNamesRequest } from './wheels'
-export type {
-	AstapStarDetectionSettings,
-	NebulosaStarDetectionSettings,
-	StarAcceptance,
-	StarDetectionErrorCode,
-	StarDetectionEvent,
-	StarDetectionJob,
-	StarDetectionJobState,
-	StarDetectionOrigin,
-	StarDetectionRequest,
-	StarDetectionResult,
-	StarDetectionSettings,
-	StarDetectionSnapshot,
-	StarDetectionSummary,
-	StarDetectorProvider,
-	StarMeasurement,
-} from './stars'
+export type { StarAcceptance, StarDetectionErrorCode, StarDetectionEvent, StarDetectionJob, StarDetectionJobState, StarDetectionOrigin, StarDetectionRequest, StarDetectionResult, StarDetectionSettings, StarDetectionSnapshot, StarDetectionSummary, StarMeasurement } from './stars'
 export type { StarProfileCut, StarProfileMeasured, StarProfileMeasurement, StarProfileNoStar, StarProfileNoStarReason, StarProfilePreview, StarProfileRequest, StarProfileResult } from './starprofile.analysis'
 export type { StarProfileErrorCode } from './starprofile'
 export type {
@@ -663,7 +646,7 @@ export type { SampleTileHeader } from './imagesamples'
 export type { ImageStatisticsErrorCode, ImageStatisticsEvent, ImageStatisticsJob, ImageStatisticsJobState, ImageStatisticsReport, ImageStatisticsRequest, ImageStatisticsSnapshot, ImageStatisticsSummary, PlaneStatistics, StatisticsBackground, StatisticsHistogram, StatisticsNumericLimits } from './imagestatistics'
 export type { StreakContextSources, StreakDetectionErrorCode, StreakDetectionEvent, StreakDetectionJob, StreakDetectionJobState, StreakDetectionRequest, StreakDetectionResult, StreakDetectionSnapshot, StreakDetectionSummary, StreakDetectorSettings } from './streaks'
 export type { QuadIndexBand, QuadIndexBandItem, QuadIndexDownloadsEvent, QuadIndexDownloadsSnapshot, QuadIndexErrorCode, QuadIndexInstallState, QuadIndexJob, QuadIndexJobState, QuadIndexSource, QuadIndexSourceId } from './platesolving.downloads'
-export type { PlateSolutions, PlateSolveErrorCode, PlateSolveJob, PlateSolveJobState, PlateSolveOrigin, PlateSolveOutcome, PlateSolveRemote, PlateSolveRequest, PlateSolveResult, PlateSolverProvider, PlateSolverSettings, PlateSolveSnapshot, PlateSolveStage, PlateSolveSummary, PlateSolvingEvent } from './platesolving'
+export type { PlateSolutions, PlateSolveErrorCode, PlateSolveJob, PlateSolveJobState, PlateSolveOrigin, PlateSolveOutcome, PlateSolveRequest, PlateSolveResult, PlateSolveSnapshot, PlateSolveStage, PlateSolveSummary, PlateSolvingEvent } from './platesolving'
 export type { PlateSolveHint, PlateSolveHints, PlateSolveHintSource, PlateSolveStrategy, ResolvedPlateSolveHints } from './platesolving.hints'
 export type { EphemerisAttempt, EphemerisHorizonsReason, EphemerisKernelReason, EphemerisKernelsUsed, EphemerisMode, EphemerisProvenance, EphemerisSkipReason, EphemerisSourceKind, EphemerisUnavailableCode } from './ephemeris.chain'
 export type { SkyEvents, SkyObserver, SkyPosition, SkyPositionKernels, SkyPositionSource } from './sky/ephemeris'
@@ -1126,7 +1109,7 @@ const indiMessages = new IndiMessageService(connections.devices, (id) => connect
 listenSockets(indiMessages)
 connections.listen((event) => indiMessages.connectionChanged(event))
 
-// Settings of the external programs, such as ASTAP, read by the services that run them; a change of MediaMTX restarts the
+// Settings of the external programs and data, read by the services that use them; a change of MediaMTX restarts the
 // gateway of the observatory cameras, and one of the built-in solver tells the index downloads whether their folder is
 // searched.
 const externalTools = new ExternalToolsStore(database, (event) => {
@@ -1161,7 +1144,7 @@ const observatoryCameras = new ObservatoryCameraService(
 )
 
 // Star detection of the image documents, shared by the Images workspace and the captures.
-const stars = new StarDetectionService(images, externalTools, broadcast)
+const stars = new StarDetectionService(images, broadcast)
 const plateSolving = new PlateSolvingService(images, externalTools, broadcast)
 
 // Measurements of the stars a person points at in the image documents.
@@ -1196,7 +1179,7 @@ const calibrationLibrary = new CalibrationLibrary(new CalibrationLibraryStore(da
 
 // Guiding sessions of the guide cameras of the open connections, dispatching their pulses through the commander of the
 // guide output commands and previewing their frames in the image store and the capture frame registry.
-const guiding = new GuidingSessions(connections.devices, (id) => connections.client(id), operations, guideOutputs.commander, images, captureFrames, externalTools, new GuidingCalibrationStore(database), calibrationLibrary, publish, equipmentCatalog)
+const guiding = new GuidingSessions(connections.devices, (id) => connections.client(id), operations, guideOutputs.commander, images, captureFrames, new GuidingCalibrationStore(database), calibrationLibrary, publish, equipmentCatalog)
 
 // Automatic dithering of the camera captures, commanded to the guiding sessions, or moving the mounts with the commanders of
 // the mount and guide output commands, refusing a GoTo dither the Meridian Flip Monitor or the geometry says could flip.

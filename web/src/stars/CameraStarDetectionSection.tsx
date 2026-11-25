@@ -1,11 +1,9 @@
-import type { DeviceSummary, StarDetectorProvider } from 'api'
+import type { DeviceSummary } from 'api'
 import type { ReactNode } from 'react'
 import { openCameraTool } from '../images/opencameratool'
 import { CollapsibleSection } from '../shell/CollapsibleSection'
 import { Button } from '../ui/Button'
 import { Notice } from '../ui/Notice'
-import { useAstapConfigured } from './StarRequestControls'
-import { PROVIDER_LABELS } from './stars'
 
 // Star Detection section of the panels of the camera operations that detect stars in their frames, as Plate Solving is
 // for those that solve them: it says how the operation measures each frame with the profile's star detection settings,
@@ -17,8 +15,6 @@ interface CameraStarDetectionSectionProps {
 	readonly id: string
 	// Camera of the panel; the link is hidden without one.
 	readonly device?: DeviceSummary
-	// Detector described: the profile's, or the one a running session applied.
-	readonly provider: StarDetectorProvider
 	// How the operation detects stars in its frames and uses them, given the highlighted detector name.
 	readonly description: (detector: ReactNode) => ReactNode
 	// Whether the section starts expanded before the operator opens or closes it; true by default.
@@ -26,14 +22,10 @@ interface CameraStarDetectionSectionProps {
 }
 
 // Section with the operation's use of the star detector and a link to the settings.
-export function CameraStarDetectionSection({ id, device, provider, description, defaultOpen }: CameraStarDetectionSectionProps) {
-	const astapConfigured = useAstapConfigured()
-	const label = PROVIDER_LABELS[provider]
-
+export function CameraStarDetectionSection({ id, device, description, defaultOpen }: CameraStarDetectionSectionProps) {
 	return (
-		<CollapsibleSection id={id} title="Star Detection" summary={label} defaultOpen={defaultOpen}>
-			<Notice>{description(<span className="text-ink-100">{label}</span>)}</Notice>
-			{provider === 'astap' && !astapConfigured && <Notice error>{label} is not configured.</Notice>}
+		<CollapsibleSection id={id} title="Star Detection" summary="Nebulosa" defaultOpen={defaultOpen}>
+			<Notice>{description(<span className="text-ink-100">Nebulosa</span>)}</Notice>
 			{device && (
 				<Button variant="secondary" className="self-start" onClick={() => openCameraTool(device.connectionId, device.id, 'star-detection')}>
 					Open Star Detection

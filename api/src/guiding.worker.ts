@@ -3,7 +3,7 @@ import { detectStars } from 'nebulosa/src/imaging/stars/detector'
 import { bufferSource } from 'nebulosa/src/io/io'
 import { decodeCameraBlobFromBase64 } from 'nebulosa/src/observation/capture/capture'
 import { enrichGuideStars } from 'nebulosa/src/observation/guiding/tracker.star'
-import { calibratedFits, LatestMasterDark } from './calibrationdark.master'
+import { LatestMasterDark } from './calibrationdark.master'
 import { inspectHeader } from './calibrationlibrary.sources'
 import { detectStarsInRegions } from './guideregions'
 import type { GuidingWorkerDark, GuidingWorkerDarkOutcome, GuidingWorkerRequest, GuidingWorkerResponse } from './guiding'
@@ -13,17 +13,15 @@ import { calibrateLight, readDigitalFrom } from './imagestacking.analysis'
 
 // Worker thread of the guide frames of one guiding session. It receives the BLOB of one guide exposure at a time,
 // decodes it (base64 or raw FITS/XISF), takes the grayscale copy star detection measures (the luminance of a color or
-// a CFA frame with its trusted pattern), detects its stars with the toolkit detector and the settings of the request
-// (none for a session whose stars ASTAP detects), over the whole frame or only the regions around the stars the guider
-// uses, and samples their peaks, and answers the grayscale image, its stars and the FITS/XISF bytes, all transferred,
+// a CFA frame with its trusted pattern), detects its stars with the toolkit detector and the settings of the request,
+// over the whole frame or only the regions around the stars the guider uses, and samples their peaks, and answers the grayscale image, its stars and the FITS/XISF bytes, all transferred,
 // so neither the decoding nor the detection ever blocks the server event loop, nor competes with the renderings of the
 // image worker. Positions are pixels of the full decoded frame, with the origin at the top-left.
 //
 // A job naming a master dark of the Calibration Library has the frame read in digital numbers and the dark subtracted
 // from its raw samples, before the CFA is debayered and the luminance taken, when the exposure its header gives is the
 // dark's exactly; the toolkit's calibrate refuses a master of another geometry, binning, gain or offset. The grayscale
-// copy, its stars, and, for ASTAP, a FITS file of the calibrated frame (its negative values clipped to 0 by the writer)
-// then come from the calibrated samples; the original bytes are still answered for the preview. A frame the dark does not
+// copy and its stars then come from the calibrated samples; the original bytes are still answered for the preview. A frame the dark does not
 // apply to is measured uncalibrated, and the answer says why. The worker keeps the latest master a job named, read once.
 
 declare const self: Worker
@@ -65,15 +63,12 @@ async function handle({ jobId, bytes, encoding, detection, regions, dark }: Guid
 			response = { jobId, status: 'unsupported' }
 		} else {
 			const image = luminanceImage(read.image, cfaPattern(read.image.header, read.image.metadata.channels))
-			// Without built-in settings the stars are detected by ASTAP on the server.
-			const stars = detection ? enrichGuideStars(regions ? detectStarsInRegions(image, regions, detection) : detectStars(image, detection), image) : []
+			const stars = enrichGuideStars(regions ? detectStarsInRegions(image, regions, detection) : detectStars(image, detection), image)
 			// The decoded bytes may be a view of a larger buffer, which must not be transferred along with them.
 			const file = decoded.byteOffset === 0 && decoded.byteLength === decoded.buffer.byteLength ? new Uint8Array(decoded.buffer) : new Uint8Array(decoded)
 			const metadata = inspectHeader(read.image.header, 'fits', false).metadata
-			const detectionBytes = calibration?.image && !detection ? await calibratedFits(calibration.image, decoded.byteLength) : undefined
-			response = { jobId, status: 'decoded', image, stars, bytes: file, metadata, ...(calibration && { dark: calibration.outcome }), ...(detectionBytes && { detectionBytes }) }
+			response = { jobId, status: 'decoded', image, stars, bytes: file, metadata, ...(calibration && { dark: calibration.outcome }) }
 			transfer = file.buffer === image.raw.buffer ? [image.raw.buffer] : [image.raw.buffer, file.buffer]
-			if (detectionBytes) transfer.push(detectionBytes.buffer)
 		}
 	} catch (error) {
 		response = { jobId, status: 'failed', error: Error.isError(error) ? error.message : String(error) }

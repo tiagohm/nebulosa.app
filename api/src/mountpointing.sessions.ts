@@ -33,7 +33,7 @@ import { CORRECTION_REFUSALS, correctedCommand } from './mountpointing.correctio
 import { apparentFromIcrs, type EquatorialPosition, pointingEphemeris, type PointingSite } from './mountpointing.frames'
 import type { PointingAcquisitionState, PointingModelFile, PointingMountIdentity, PointingOpticsFingerprint, PointingSampleRecord, PointingVerification } from './mountpointing.store'
 import { type OperationDevice, type OperationRegistry, settledResult } from './operations'
-import type { PlateSolvePreparation, PlateSolveRequest, PlateSolverProvider, PlateSolvingService } from './platesolving'
+import type { PlateSolvePreparation, PlateSolveRequest, PlateSolvingService } from './platesolving'
 
 // Acquisition of the samples of a mount pointing model, for one camera and one mount. A session walks the waypoints of a
 // plan: it sends the mount to each one with an uncorrected GoTo, never a Sync, waits for it to settle, takes one temporary
@@ -155,8 +155,6 @@ export interface MountPointingSessionSummary {
 	readonly mountName: string
 	// Request the session runs with.
 	readonly request: Omit<MountPointingRequest, 'token'>
-	// Plate solver of every frame.
-	readonly provider: PlateSolverProvider
 	// What the session is doing.
 	readonly state: MountPointingState
 	// Step of the waypoint, while running.
@@ -221,7 +219,7 @@ export type MountPointingListener = (event: MountPointingEvent) => void
 // commander's default of 10 minutes.
 const SLEW_TIMEOUT = 300000
 
-// Longest wait for one solve, queue included, in seconds; the provider's own timeout normally ends it first.
+// Longest wait for one solve, queue included, in seconds; the solver's own timeout normally ends it first.
 const SOLVE_TIMEOUT = 600
 
 // Watchdog after an aborted solve before it is reported unresponsive, in seconds.
@@ -397,9 +395,8 @@ export class MountPointingSessions {
 		const repeated = this.#repeated(request.token)
 		if (repeated) return this.#accepted(repeated)
 
-		// The provider settings are resolved first, so nothing can take the devices between the checks below and the start.
+		// The settings of the solver are resolved first, so nothing can take the devices between the checks below and the start.
 		const preparation = await this.plateSolving.prepare(request.solving)
-		if (!preparation) return unsupported('The plate solver is not configured; set it up in Settings → External Tools')
 
 		const camera = connectedDevice(this, connectionId, 'camera', deviceId, 'Camera')
 		if (camera instanceof Response) return camera
@@ -451,7 +448,6 @@ export class MountPointingSessions {
 				mount: request.mount,
 				mountName: mount.name,
 				request: settings,
-				provider: request.solving.provider,
 				state: 'preparing',
 				plannedCount: model.plan.waypoints.length,
 				acceptedCount: visited.size,
@@ -483,7 +479,7 @@ export class MountPointingSessions {
 	// Tests a revision of a model on the sky, without activating it. Responds 202 with MountPointingStartResponse (a repeated
 	// token answers its first verification); 404 for an unknown camera, mount, model, or revision; 409 when a device is
 	// disconnected or held, the camera has a session that did not end, or the model belongs to another mount or site; and 422
-	// when the plate solver is not configured, the mount cannot be sampled, or the revision did not pass its offline gate.
+	// when the mount cannot be sampled or the revision did not pass its offline gate.
 	async verify(modelId: string, request: MountPointingVerifyRequest): Promise<Response> {
 		const repeated = this.#repeated(request.token)
 		if (repeated) return this.#accepted(repeated)
@@ -495,7 +491,6 @@ export class MountPointingSessions {
 		if (revision.gate !== 'passed') return unsupported('The revision did not pass its offline quality')
 
 		const preparation = await this.plateSolving.prepare(request.solving)
-		if (!preparation) return unsupported('The plate solver is not configured; set it up in Settings → External Tools')
 
 		const camera = connectedDevice(this, request.camera.connectionId, 'camera', request.camera.deviceId, 'Camera')
 		if (camera instanceof Response) return camera
@@ -532,7 +527,6 @@ export class MountPointingSessions {
 				mount: mountDevice,
 				mountName: mount.name,
 				request: { mount: mountDevice, capture, solving, plan, settleDelay, stopTracking: true, equatorialConfirmed: true },
-				provider: solving.provider,
 				state: 'preparing',
 				plannedCount: waypoints.length,
 				acceptedCount: 0,
@@ -563,8 +557,8 @@ export class MountPointingSessions {
 
 	// Resumes a paused session in a new operation, after checking everything again. Responds 202 with
 	// MountPointingStartResponse (a repeated token answers its first resume); 404 for an unknown or ended session; 409 when
-	// it is not paused, a device is disconnected or held, or the mount or its site changed; and 422 when the plate solver is
-	// not configured or the mount cannot be sampled any more.
+	// it is not paused, a device is disconnected or held, or the mount or its site changed; and 422 when the mount cannot
+	// be sampled any more.
 	async resume(sessionId: string, { token }: CommandRequest): Promise<Response> {
 		const repeated = this.#repeated(token)
 		if (repeated) return this.#accepted(repeated)
@@ -576,7 +570,6 @@ export class MountPointingSessions {
 
 		const { camera: cameraDevice, mount: mountDevice, request } = session.summary
 		const preparation = await this.plateSolving.prepare(request.solving)
-		if (!preparation) return unsupported('The plate solver is not configured; set it up in Settings → External Tools')
 
 		const camera = connectedDevice(this, cameraDevice.connectionId, 'camera', cameraDevice.deviceId, 'Camera')
 		if (camera instanceof Response) return camera

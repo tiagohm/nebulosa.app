@@ -20,7 +20,7 @@ import type { DeviceRegistry } from './devices'
 import { errorResponse } from './http'
 import type { ImageStore } from './images'
 import { type OperationDevice, type OperationRegistry, type ToolInvocation, settledResult } from './operations'
-import { StarDetectionError, type StarDetectionPreparation, type StarDetectionRequest, type StarDetectionService, type StarDetectorProvider } from './stars'
+import { StarDetectionError, type StarDetectionRequest, type StarDetectionService } from './stars'
 
 // Auto Focus service: runs the toolkit's runAutoFocus for one camera and one focuser inside a single operation of
 // the process-wide registry, which holds both devices for the whole session, so neither a capture nor a manual
@@ -28,8 +28,8 @@ import { StarDetectionError, type StarDetectionPreparation, type StarDetectionRe
 // fitting and the best position; this service adapts the shared services to it: the backlash compensated mover of
 // the focuser commands (with an optional settle wait after each move), the camera capturer of the capture service
 // (its auxiliary FITS frames written to a temporary directory and deleted after each measurement, never saved as
-// captures), and the shared star detection, whose median HFD of the accepted stars is the measurement. The provider
-// and its ASTAP settings are resolved once when a session starts and never change during it.
+// captures), and the shared star detection, whose median HFD of the accepted stars is the measurement, with the
+// detector settings of the request for the whole session.
 //
 // Each frame is decoded into the image store as a capture document and recorded in the capture frame registry as
 // the latest frame of its camera (origin autofocus, identified by the session id and the frame number), the same
@@ -153,8 +153,6 @@ export interface AutoFocusSessionSummary {
 	readonly focuserName: string
 	// Request the session runs with.
 	readonly request: Omit<AutoFocusRequest, 'token'>
-	// Star detector of every measurement.
-	readonly provider: StarDetectorProvider
 	// What the session is doing.
 	readonly state: AutoFocusState
 	// Logical focuser position when the session started, in steps; absent while preparing.
@@ -322,26 +320,18 @@ export class AutoFocusSessions {
 	// Starts a session. Responds 202 with AutoFocusStartResponse once accepted (a repeated token answers its first
 	// session); its progress and outcome arrive as autofocus:updated and operation:updated events. Responds 404 for
 	// an unknown camera or focuser, 409 when either is disconnected or held by another operation, and 422 when the
-	// focuser cannot move to absolute positions or the detector is ASTAP and it is not configured.
-	async start(connectionId: string, deviceId: string, request: AutoFocusRequest): Promise<Response> {
-		const admitted = await this.admit(connectionId, deviceId, request)
+	// focuser cannot move to absolute positions.
+	start(connectionId: string, deviceId: string, request: AutoFocusRequest): Response {
+		const admitted = this.admit(connectionId, deviceId, request)
 		return admitted.ok ? Response.json({ sessionId: admitted.sessionId, operationId: admitted.operationId } satisfies AutoFocusStartResponse, { status: 202 }) : refusalResponse(admitted)
 	}
 
 	// Admits a session, under the reservation of invocation when given (which must then hold the camera and the focuser),
 	// and returns its identity and end, or why it was refused, as start answers it. A repeated token answers the session
 	// it started, while it is remembered.
-	async admit(connectionId: string, deviceId: string, request: AutoFocusRequest, invocation?: ToolInvocation): Promise<AutoFocusAdmission> {
+	admit(connectionId: string, deviceId: string, request: AutoFocusRequest, invocation?: ToolInvocation): AutoFocusAdmission {
 		const repeated = this.#sessions.repeated(request.token)
 		if (repeated) return admitted(repeated, true)
-
-		// The provider settings are resolved first, so nothing can take the devices between the checks below and the start.
-		const preparation = await this.stars.prepare(request.detection)
-		if (!preparation) return refusal('ASTAP is not configured; set it up in Settings → External Tools or measure with the Nebulosa detector', 422, 'unsupported')
-
-		// The same request, sent twice, may have started its session while this one was prepared.
-		const raced = this.#sessions.repeated(request.token)
-		if (raced) return admitted(raced, true)
 
 		const resolvedCamera = resolveConnected(this, connectionId, 'camera', deviceId, 'Camera')
 		if (!resolvedCamera.ok) return resolvedCamera
@@ -363,7 +353,6 @@ export class AutoFocusSessions {
 				focuser: request.focuser,
 				focuserName: focuser.name,
 				request: settings,
-				provider: request.detection.detector.provider,
 				state: 'preparing',
 				measurementCount: 0,
 				verification: 'pending',
@@ -378,7 +367,7 @@ export class AutoFocusSessions {
 		}
 
 		const record = this.operations.run('focuser.autofocus', cameraDevice.connectionId === request.focuser.connectionId && cameraDevice.deviceId === request.focuser.deviceId ? [cameraDevice] : [cameraDevice, request.focuser], token, () => {
-			const handle = this.#run(session, camera, focuser, preparation)
+			const handle = this.#run(session, camera, focuser, request.detection)
 			session.handle = handle
 			return handle.result
 		})
@@ -416,7 +405,7 @@ export class AutoFocusSessions {
 
 	// Starts the operation of a session holding its camera and focuser, and runs the autofocus and its
 	// verification inside it.
-	#run(session: Session, camera: Camera, focuser: Focuser, preparation: StarDetectionPreparation): OperationHandle<AutoFocusRunResult> {
+	#run(session: Session, camera: Camera, focuser: Focuser, detection: StarDetectionRequest): OperationHandle<AutoFocusRunResult> {
 		const resources: ResourceRequest[] = [{ key: resourceKey(camera), device: camera }]
 		if (resourceKey(focuser) !== resourceKey(camera)) resources.push({ key: resourceKey(focuser), device: focuser })
 
@@ -428,7 +417,7 @@ export class AutoFocusSessions {
 				const { mount, wheel, rotator } = snoopedDevices(this.devices, camera, request.snoop)
 				const capture: AutoFocusCaptureOptions = { ...request.capture, exposureTimeUnit: 'second', frameType: 'LIGHT', compressed: false, mount, wheel, rotator }
 				const mover = this.#settlingMover(session, request.settleDelay)
-				const measure = (path: string, signal: AbortSignal) => this.#measure(session, path, preparation, signal)
+				const measure = (path: string, signal: AbortSignal) => this.#measure(session, path, detection, signal)
 				// The runner first moves to the far end of the sweep from where the focuser stands.
 				session.next = mover.position(focuser) + (request.reversed ? -1 : 1) * request.initialOffsetSteps * request.stepSize
 
@@ -526,7 +515,7 @@ export class AutoFocusSessions {
 	// registry, which closes the previous one unless leased, and measures its aggregate HFD with the prepared
 	// detector, whose job retains the document until it ends. A frame that cannot be decoded or measured is an invalid
 	// point, with the reason in its warnings; a cancellation rejects, so the runner ends the session.
-	async #measure(session: Session, path: string, preparation: StarDetectionPreparation, signal: AbortSignal): Promise<FrameMeasurement> {
+	async #measure(session: Session, path: string, detection: StarDetectionRequest, signal: AbortSignal): Promise<FrameMeasurement> {
 		const { camera, cameraName, sessionId } = session.summary
 		const capture = session.frame?.capture ?? 0
 		let imageId: string | undefined
@@ -544,7 +533,8 @@ export class AutoFocusSessions {
 			this.frames.previewed(info, frame, cameraName, 'autofocus')
 			if (session.frame) session.frame.imageId = info.id
 
-			const result = await this.stars.measure(info.id, preparation, signal, { kind: 'autofocus', sessionId, ...camera, frameId, capture })
+			const result = await this.stars.measure(info.id, detection, signal, { kind: 'autofocus', sessionId, ...camera, frameId, capture })
+
 			detail = { detectedCount: result.detectedCount, acceptedCount: result.acceptedCount, elapsed: result.elapsed, warnings: result.measurement === 'ok' ? result.warnings : [...result.warnings, result.measurement === 'noStars' ? 'Too few accepted stars to measure the HFD.' : 'The HFD could not be measured.'] }
 			if (session.frame) session.frame.detail = detail
 			return { measured: true, hfd: result.aggregateHfd, imageId, detail }

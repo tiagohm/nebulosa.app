@@ -12,7 +12,7 @@ import { operationsState } from '../operations'
 import { CameraPlateSolvingSection } from '../platesolving/CameraPlateSolvingSection'
 import { type CoordinateStyle, formatDeclinationAs, formatRightAscensionAs } from '../platesolving/coordinates'
 import { catalogTarget } from '../platesolving/measurement'
-import { AngleField, useSolverConfigured } from '../platesolving/PlateSolveControls'
+import { AngleField } from '../platesolving/PlateSolveControls'
 import { activeProfile, cameraPlateSolving, exposureSettings, imageAstrometrySettings, profileState, setTargetCenteringSettings, targetCenteringSettings } from '../profile/profile'
 import { type CameraIdentity, TARGET_CENTERING_LIMITS, type TargetCenteringSettings } from '../profile/schema'
 import { CollapsibleSection } from '../shell/CollapsibleSection'
@@ -86,7 +86,6 @@ export function TargetCenteringSections({ device, availability, mount, guideOutp
 	const exposure = exposureSettings(profile.settings, identity)
 	const solving = cameraPlateSolving(profile.settings, identity)
 	const { coordinates } = imageAstrometrySettings(profile.settings)
-	const configured = useSolverConfigured(solving.provider)
 	const key = device && cameraKey(device.connectionId, device.id)
 	const session = key ? runtime.sessions[key] : undefined
 	const capabilities = watchedDeviceState(control, 'camera', device)
@@ -101,7 +100,7 @@ export function TargetCenteringSections({ device, availability, mount, guideOutp
 	const shownTarget: TargetCenteringDraft | undefined = running && session ? session.request.target : draft
 	const shown: Readonly<TargetCenteringSettings> = running && session ? appliedSettings(session, settings) : settings
 	const mountAvailability = roleAvailability('MOUNT', mount, operations)
-	const blockerOf = (mode: TargetCenteringMode) => (running ? undefined : targetCenteringBlocker(mode, availability, mountAvailability, mountState, draft, configured))
+	const blockerOf = (mode: TargetCenteringMode) => (running ? undefined : targetCenteringBlocker(mode, availability, mountAvailability, mountState, draft))
 	const catalog = catalogTarget(sky.selection)
 	const mountDevice = mount.device && { connectionId: mount.device.connectionId, deviceId: mount.device.id }
 	const mountName = mount.device?.name ?? 'The mount'
@@ -256,7 +255,7 @@ function SessionState({ session }: { readonly session: TargetCenteringSessionSum
 const DIAGNOSTIC_COLUMNS: readonly TableColumn[] = ['Frame', 'Outcome', { key: 'distance', label: 'Distance', numeric: true }, { key: 'east', label: 'East', numeric: true }, { key: 'north', label: 'North', numeric: true }]
 
 // What each attempt of a session measured, in order, with the model that corrected its first slew.
-function Diagnostics({ session: { attempts, model, request, provider } }: { readonly session: TargetCenteringSessionSummary }) {
+function Diagnostics({ session: { attempts, model, request } }: { readonly session: TargetCenteringSessionSummary }) {
 	return (
 		<CollapsibleSection id="images.target-centering.diagnostics" title="Diagnostics" defaultOpen={false}>
 			<TargetCenteringBullseye attempts={attempts} tolerance={request.tolerance} />
@@ -272,7 +271,6 @@ function Diagnostics({ session: { attempts, model, request, provider } }: { read
 				))}
 			</Table>
 			<DataList>
-				<DataRow label="Solver">{provider}</DataRow>
 				<DataRow label="Pointing Model">{model ? model.revisionId : 'None applied'}</DataRow>
 			</DataList>
 			<Notice>Offsets are those of the solved center from the target, on the sky: they are not turned with the image.</Notice>

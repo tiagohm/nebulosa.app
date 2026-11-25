@@ -13,7 +13,6 @@ import { formatArcmin, formatArcsec, formatClockTime, formatDegrees, formatExpos
 import { useActiveSite, useDisplayZone } from '../location/useLocation'
 import { operationsState } from '../operations'
 import { CameraPlateSolvingSection } from '../platesolving/CameraPlateSolvingSection'
-import { useSolverConfigured } from '../platesolving/PlateSolveControls'
 import { activeProfile, cameraPlateSolving, exposureSettings, ipolarSettings, profileState, setIPolarSettings } from '../profile/profile'
 import { type CameraIdentity, DEFAULT_IPOLAR_DARK_SETTINGS, IPOLAR_MAXIMUM_ROTATION, IPOLAR_MINIMUM_ROTATION, type IPolarDarkSettings, type IPolarSettings } from '../profile/schema'
 import { CollapsibleSection } from '../shell/CollapsibleSection'
@@ -88,7 +87,6 @@ export function IPolarSections({ device, availability, mount, settings: identity
 	const settings = ipolarSettings(profile.settings, identity)
 	const exposure = exposureSettings(profile.settings, identity)
 	const solving = cameraPlateSolving(profile.settings, identity)
-	const configured = useSolverConfigured(solving.provider)
 	const key = device && cameraKey(device.connectionId, device.id)
 	const session = key ? runtime.sessions[key] : undefined
 	const details = session ? runtime.details[session.sessionId] : undefined
@@ -103,7 +101,7 @@ export function IPolarSections({ device, availability, mount, settings: identity
 	const automatic = shown.mode === 'automatic'
 	const slewRate = running && session ? session.request.slewRate : ipolarSlewRate(settings, mountState)
 	const mountAvailability = roleAvailability('MOUNT', mount, operations, automatic ? ipolarMountSupport(mountState) : undefined)
-	const blocker = running ? undefined : ipolarBlocker({ camera: availability, mount: mountAvailability, mode: settings.mode, mountState, slewRate, site, solverConfigured: configured, dark: settings.dark })
+	const blocker = running ? undefined : ipolarBlocker({ camera: availability, mount: mountAvailability, mode: settings.mode, mountState, slewRate, site, dark: settings.dark })
 	const slewRates = mountState?.slewRates ?? []
 
 	// Updates fields of the camera's iPolar form.

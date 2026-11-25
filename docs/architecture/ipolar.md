@@ -16,7 +16,7 @@ iPolar needs neither: the frames need not overlap, the axis need not be in the i
 - Holds the camera and the setup's mount in one manual operation until the session ends, so nothing slews the mount between the frames; it never holds a guide output (see [Operation Lifecycle Rules](operation-lifecycle-rules.md)).
 - In automatic mode it turns the mount with timed manual motions of the mount commander; in manual mode the mount, when the setup has one, is only watched.
 - Takes its frames through the shared camera capturer with the camera settings of Camera Acquisition and its own exposure time; frames are auxiliary and recorded in the [Capture Frames](capture-frames.md) registry.
-- Solves each frame with [Plate Solving](plate-solving.md), whose provider is fixed when the session starts.
+- Solves each frame with [Plate Solving](plate-solving.md), whose settings are fixed when the session starts.
 - Takes the Earth and the Sun from the [Ephemeris Chain](ephemeris-chain.md) and the site from the profile's active observing site ([Observing Sites and Time Zones](observing-sites-and-time-zones.md)), never from the driver.
 - Can subtract a master dark the operator pins from the [Calibration Library](calibration-library.md), leased for the session and limited to the darks of the camera's [Equipment Catalog](equipment-catalog.md) camera.
 - An [Equipment Control](equipment-control.md) stop of either device cancels it, and its outcome raises a [notification](notifications.md).

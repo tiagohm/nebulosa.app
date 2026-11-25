@@ -7,7 +7,7 @@ import { AppDatabase } from './database'
 import { ExternalToolsStore } from './externaltools'
 import { ImageStore } from './images'
 import { PlateSolvingService, type PlateSolveResult } from './platesolving'
-import { DEFAULT_NEBULOSA_SETTINGS, DEFAULT_STAR_ACCEPTANCE, StarDetectionService } from './stars'
+import { DEFAULT_STAR_DETECTION_SETTINGS, DEFAULT_STAR_ACCEPTANCE, StarDetectionService } from './stars'
 import { countClasses, createStreakDetectionRoutes, MAX_QUEUED, streakCacheKey, type StreakDetectionEvent, type StreakDetectionJob, type StreakDetectionRequest, StreakDetectionService, type StreakDetectionServiceOptions } from './streaks'
 
 const root = mkdtempSync(join(tmpdir(), 'nebulosa-streaks-test-'))
@@ -85,7 +85,7 @@ function setup(options?: StreakDetectionServiceOptions) {
 	const images = new ImageStore()
 	const tools = new ExternalToolsStore(AppDatabase.memory())
 	const plateSolving = new PlateSolvingService(images, tools, () => {})
-	const stars = new StarDetectionService(images, tools, () => {})
+	const stars = new StarDetectionService(images, () => {})
 	const events: StreakDetectionEvent[] = []
 	const service = new StreakDetectionService(images, plateSolving, stars, (event) => events.push(event), options)
 	return { images, tools, plateSolving, stars, service, events }
@@ -282,7 +282,7 @@ describe('classification context', () => {
 	test('uses the accepted stars of a completed star detection of the same image', async () => {
 		const { images, stars, service, events } = setup()
 		const info = await images.open(writeStreakField())
-		const detection = await stars.measure(info.id, { detector: DEFAULT_NEBULOSA_SETTINGS, acceptance: DEFAULT_STAR_ACCEPTANCE })
+		const detection = await stars.measure(info.id, { detector: DEFAULT_STAR_DETECTION_SETTINGS, acceptance: DEFAULT_STAR_ACCEPTANCE })
 		const accepted = detection.accepted.filter(Boolean).length
 		const job = submit(service, info.id, { ...REQUEST, starDetectionJobId: detection.jobId })
 

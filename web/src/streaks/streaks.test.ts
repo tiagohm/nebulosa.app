@@ -47,7 +47,7 @@ describe('jobs', () => {
 
 	test('other events are ignored', () => {
 		const streaks = state()
-		handleStreaksEvent(streaks, { type: 'stars:updated', job: { jobId: 'x', imageId: 'image-1', origin: { kind: 'manual' }, request: { detector: { provider: 'nebulosa', maxStars: 1, minSNR: 0, searchRegion: 0 }, acceptance: { minSNR: 0, minHfd: 0, maxHfd: 0, edgeMargin: 0 } }, state: 'queued', queuedAt: 1 } })
+		handleStreaksEvent(streaks, { type: 'stars:updated', job: { jobId: 'x', imageId: 'image-1', origin: { kind: 'manual' }, request: { detector: { maxStars: 1, minSNR: 0, searchRegion: 0 }, acceptance: { minSNR: 0, minHfd: 0, maxHfd: 0, edgeMargin: 0 } }, state: 'queued', queuedAt: 1 } })
 		expect(streaks.jobs).toEqual({})
 	})
 

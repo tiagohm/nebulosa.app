@@ -1,13 +1,11 @@
-import type { ExternalToolCapability, ExternalToolCheck, ExternalToolConfig, ExternalToolLoginRequest, ExternalToolState, ServerEvent } from 'api'
+import type { ExternalToolCapability, ExternalToolCheck, ExternalToolConfig, ExternalToolState, ServerEvent } from 'api'
 import { proxy } from 'valtio'
 import { type ApiFetch, browserFetch, jsonInit, responseError } from '../http'
 
-// External programs and web services the server supports (ASTAP, solve-field, nova.astrometry.net, the folders of the
-// built-in solver, MediaMTX), with their
-// saved settings and latest check, as the server reports them. The server owns the settings: this store mirrors
-// its snapshot and its externalTool:updated events, and sends saves, checks, sign-ins, and sign-outs. An API key is
-// only sent with a sign-in, never kept here. The edits of a tab stay in the page until
-// saved; a check never saves anything.
+// External programs and data the server supports (the folders of the built-in solver, MediaMTX), with their saved
+// settings and latest check, as the server reports them. The server owns the settings: this store mirrors its snapshot
+// and its externalTool:updated events, and sends saves and checks. The edits of a tab stay in the page until saved; a
+// check never saves anything.
 
 // Mirror of the server's external programs.
 export interface ExternalToolsState {
@@ -29,7 +27,6 @@ export type ExternalToolTestResult = { readonly check: ExternalToolCheck } | { r
 // Display name of each capability.
 export const CAPABILITY_LABELS: Readonly<Record<ExternalToolCapability, string>> = {
 	'plate-solving': 'Plate solving',
-	'star-detection': 'Star detection',
 	'video-gateway': 'Observatory cameras',
 }
 
@@ -46,11 +43,10 @@ function toolUrl(id: string) {
 
 // Whether two configurations are the same; an absent field equals an empty one.
 export function sameConfig(a: ExternalToolConfig, b: ExternalToolConfig) {
-	return a.executable === b.executable && a.timeout === b.timeout && (a.config ?? '') === (b.config ?? '') && (a.endpoint ?? '') === (b.endpoint ?? '') && (a.indexDirectory ?? '') === (b.indexDirectory ?? '') && (a.catalogDirectory ?? '') === (b.catalogDirectory ?? '')
+	return a.executable === b.executable && a.timeout === b.timeout && (a.indexDirectory ?? '') === (b.indexDirectory ?? '') && (a.catalogDirectory ?? '') === (b.catalogDirectory ?? '')
 }
 
-// Whether the settings of a program that is not a web service are set up enough to be used: an executable. The
-// built-in solver always is, since an empty Index Folder stands for its default index folder.
+// Whether the settings of a program are set up enough to be used: an executable. The built-in solver always is, since an empty Index Folder stands for its default index folder.
 export function hasSettings(tool: Pick<ExternalToolState, 'fields'>, { executable }: ExternalToolConfig) {
 	return tool.fields.includes('indexDirectory') || executable.trim() !== ''
 }
@@ -140,33 +136,6 @@ export async function testExternalTool(id: string, config: ExternalToolConfig, r
 		const response = await request(`${toolUrl(id)}/test`, jsonInit('POST', { config }))
 		if (!response.ok) return { error: await responseError(response) }
 		return { check: (await response.json()) as ExternalToolCheck }
-	} catch {
-		return { error: 'Unable to reach the server' }
-	}
-}
-
-// Outcome of signing in or out of a web service: its new state, or an error message.
-export type ExternalToolLoginResult = { readonly tool: ExternalToolState } | { readonly error: string }
-
-// Signs in to a web service with the API key of an account; the server sends it once to the service and stores
-// only the session it returns.
-export function signInExternalTool(state: ExternalToolsState, id: string, apiKey: string, request: ApiFetch = browserFetch) {
-	return changeSession(state, `${toolUrl(id)}/login`, { apiKey } satisfies ExternalToolLoginRequest, request)
-}
-
-// Signs out of a web service: the server removes its saved session.
-export function signOutExternalTool(state: ExternalToolsState, id: string, request: ApiFetch = browserFetch) {
-	return changeSession(state, `${toolUrl(id)}/logout`, undefined, request)
-}
-
-// Posts a sign-in or sign-out and stores the new state of the service.
-async function changeSession(state: ExternalToolsState, url: string, body: ExternalToolLoginRequest | undefined, request: ApiFetch): Promise<ExternalToolLoginResult> {
-	try {
-		const response = await request(url, jsonInit('POST', body))
-		if (!response.ok) return { error: await responseError(response) }
-		const tool = (await response.json()) as ExternalToolState
-		upsert(state, tool)
-		return { tool }
 	} catch {
 		return { error: 'Unable to reach the server' }
 	}

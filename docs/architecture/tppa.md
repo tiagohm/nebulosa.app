@@ -16,7 +16,7 @@ TPPA measures it with the imaging camera itself, giving the azimuth and altitude
 - Holds the camera and the mount in one manual operation from the first frame until the session ends, refinement and pauses included, so no GoTo, nudge, capture, or Auto Focus comes between the poses (see [Operation Lifecycle Rules](operation-lifecycle-rules.md)).
 - Moves the mount with the timed manual motions of the mount commander shared with Mount Nudge, and may start the mount's tracking.
 - Takes its frames through the shared camera capturer with the camera settings of Camera Acquisition and its own exposure time; frames are auxiliary and recorded in the [Capture Frames](capture-frames.md) registry.
-- Solves each frame with [Plate Solving](plate-solving.md), whose provider is fixed when the session starts.
+- Solves each frame with [Plate Solving](plate-solving.md), whose settings are fixed when the session starts.
 - An [Equipment Control](equipment-control.md) stop of either device cancels it, and its outcome raises a [notification](notifications.md).
 
 ## Rules and Limitations

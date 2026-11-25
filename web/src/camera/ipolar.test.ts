@@ -42,7 +42,6 @@ function summary(patch: Partial<IPolarSessionSummary> = {}): IPolarSessionSummar
 		camera: { connectionId: 'c', deviceId: 'cam' },
 		cameraName: 'Camera',
 		request: ipolarRequest(DEFAULT_IPOLAR_SETTINGS, DEFAULT_EXPOSURE_SETTINGS, DEFAULT_CAMERA_PLATE_SOLVING, SITE, undefined, undefined),
-		provider: 'astap',
 		state: 'capturing',
 		frameCount: 1,
 		attemptCount: 0,
@@ -61,7 +60,7 @@ function details(patch: Partial<IPolarSession> = {}): IPolarSession {
 }
 
 function context(patch: Partial<IPolarStartContext> = {}): IPolarStartContext {
-	return { camera: READY, mount: READY, mode: 'manual', mountState: mountState(), slewRate: 'SPEED_4', site: SITE, solverConfigured: true, ...patch }
+	return { camera: READY, mount: READY, mode: 'manual', mountState: mountState(), slewRate: 'SPEED_4', site: SITE, ...patch }
 }
 
 // Fetch fake answering each URL with the response its handler builds, recording the requests.
@@ -75,7 +74,7 @@ function fakeFetch(handler: (url: string, init?: RequestInit) => Response | Prom
 }
 
 test('the request sends the site, rotation and threshold in radians, and the mount and preset only when used', () => {
-	const manual = ipolarRequest({ ...DEFAULT_IPOLAR_SETTINGS, exposureTime: 4, completionThreshold: 45 }, DEFAULT_EXPOSURE_SETTINGS, { provider: 'nova', strategy: 'blind' }, SITE, undefined, 'SPEED_4')
+	const manual = ipolarRequest({ ...DEFAULT_IPOLAR_SETTINGS, exposureTime: 4, completionThreshold: 45 }, DEFAULT_EXPOSURE_SETTINGS, { strategy: 'blind' }, SITE, undefined, 'SPEED_4')
 	expect(manual).toMatchObject({ mode: 'manual', refraction: true, site: { name: 'Home', elevation: 800 } })
 	expect(manual.site.latitude).toBeCloseTo(deg(-22), 12)
 	expect(manual.completionThreshold).toBeCloseTo(arcsec(45), 12)
@@ -91,13 +90,12 @@ test('the request sends the site, rotation and threshold in radians, and the mou
 	expect(ipolarSlewRate({}, undefined)).toBeUndefined()
 })
 
-test('a manual start needs only the camera, a site and a solver; an automatic one the mount and its preset', () => {
+test('a manual start needs only the camera and a site; an automatic one the mount and its preset', () => {
 	expect(ipolarBlocker(context())).toBeUndefined()
 	expect(ipolarBlocker(context({ mount: { status: 'notSelected', message: 'No mount.' }, mountState: undefined }))).toBeUndefined()
 	expect(ipolarBlocker(context({ mount: { status: 'busy', operations: [], message: 'The Mount is busy.' } }))).toBe('The Mount is busy.')
 	expect(ipolarBlocker(context({ camera: { status: 'busy', operations: [], message: 'The camera is busy.' } }))).toBe('The camera is busy.')
 	expect(ipolarBlocker(context({ site: undefined }))).toContain('observing site')
-	expect(ipolarBlocker(context({ solverConfigured: false }))).toContain('not configured')
 
 	const automatic = { mode: 'automatic' as const }
 	expect(ipolarBlocker(context(automatic))).toBeUndefined()

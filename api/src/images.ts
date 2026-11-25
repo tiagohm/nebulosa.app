@@ -376,7 +376,7 @@ export type ImageWorkerRequest =
 	| { readonly type: 'open'; readonly id: number; readonly path: string }
 	| { readonly type: 'openCapture'; readonly id: number; readonly bytes: Uint8Array<ArrayBuffer>; readonly name: string; readonly capture: ImageCapture }
 	| { readonly type: 'render'; readonly id: number; readonly document: string; readonly request: RenderRequest }
-	| { readonly type: 'encode'; readonly id: number; readonly document: string; readonly format: SaveFormat; readonly settings?: DisplaySettings; readonly omit?: readonly string[] }
+	| { readonly type: 'encode'; readonly id: number; readonly document: string; readonly format: SaveFormat; readonly settings?: DisplaySettings }
 	| { readonly type: 'detectionImage'; readonly id: number; readonly document: string }
 	| { readonly type: 'detectionRegion'; readonly id: number; readonly document: string; readonly rect: ImageRect }
 	| { readonly type: 'fullCopy'; readonly id: number; readonly document: string }
@@ -652,14 +652,6 @@ export class ImageStore implements Disposable, ClientListener {
 		return this.#encode(id, format, settings)
 	}
 
-	// Encodes an open or retained document as a FITS file in the scale of its source, for a program that reads
-	// files, such as ASTAP, leaving out the header keywords named in omit (such as the pointing a blind plate solve
-	// must not use). The document itself is unchanged. Resolves to undefined when it is neither open nor retained.
-	detectionFile(id: string, omit?: readonly string[]): Promise<Uint8Array<ArrayBuffer> | undefined> {
-		if (!this.#documents.has(id) && !this.#retained.has(id)) return Promise.resolve(undefined)
-		return this.#encode(id, 'fits', undefined, omit)
-	}
-
 	// Returns the size, channels, CFA pattern, header, and acquisition data of an open or retained document, or
 	// undefined when it is neither.
 	metadata(id: string): DocumentMetadata | undefined {
@@ -752,10 +744,10 @@ export class ImageStore implements Disposable, ClientListener {
 		return response.info
 	}
 
-	// Asks the worker to encode a document, a JPEG rendered with settings, without the header keywords named in omit.
+	// Asks the worker to encode a document, a JPEG rendered with settings.
 	// Throws DisplayError for a JPEG the settings cannot render.
-	async #encode(id: string, format: SaveFormat, settings?: DisplaySettings, omit?: readonly string[]): Promise<Uint8Array<ArrayBuffer> | undefined> {
-		const response = await this.#request({ type: 'encode', id: this.#id++, document: id, format, ...(settings && { settings }), ...(omit?.length && { omit }) })
+	async #encode(id: string, format: SaveFormat, settings?: DisplaySettings): Promise<Uint8Array<ArrayBuffer> | undefined> {
+		const response = await this.#request({ type: 'encode', id: this.#id++, document: id, format, ...(settings && { settings }) })
 		if (response.status === 'encoded') return response.bytes
 		if (response.status === 'missing') return undefined
 		if (response.status === 'invalid') throw new DisplayError(response.error)

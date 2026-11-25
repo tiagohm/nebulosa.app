@@ -1,4 +1,4 @@
-import type { MountCoordinate, MountState, PlateSolutions, PlateSolveJob, PlateSolveRequest, PlateSolveResult, PlateSolverProvider, PlateSolveSnapshot, PlateSolveStage, PlateSolveStrategy, ResolvedPlateSolveHints, ServerEvent } from 'api'
+import type { MountCoordinate, MountState, PlateSolutions, PlateSolveJob, PlateSolveRequest, PlateSolveResult, PlateSolveSnapshot, PlateSolveStage, PlateSolveStrategy, ResolvedPlateSolveHints, ServerEvent } from 'api'
 import type { PlateSolution } from 'nebulosa/src/astrometry/solvers/platesolver'
 import { normalizeAngle, toDeg, toHour } from 'nebulosa/src/math/units/angle'
 import { proxy, ref } from 'valtio'
@@ -32,27 +32,18 @@ export interface PlateSolvingState {
 	hints: Record<string, ResolvedPlateSolveHints>
 }
 
-// Display names of the solvers.
-export const PROVIDER_LABELS: Readonly<Record<PlateSolverProvider, string>> = { astap: 'ASTAP', astrometryLocal: 'Astrometry.net Local', nova: 'Astrometry.net Online', nebulosa: 'Nebulosa' }
-
-// Solvers, in selector order.
-export const PROVIDERS: readonly PlateSolverProvider[] = ['astap', 'astrometryLocal', 'nova', 'nebulosa']
-
 // Display names of the strategies.
 export const STRATEGY_LABELS: Readonly<Record<PlateSolveStrategy, string>> = { assisted: 'Assisted', blind: 'Blind' }
 
-// External Tools entry of each solver, for its availability and its settings link.
-export const PROVIDER_TOOLS: Readonly<Record<PlateSolverProvider, string>> = { astap: 'astap', astrometryLocal: 'astrometryLocal', nova: 'nova', nebulosa: 'nebulosa' }
-
 // Display names of the steps of a running job.
-export const STAGE_LABELS: Readonly<Record<PlateSolveStage, string>> = { preparing: 'Preparing the image', solving: 'Solving', uploading: 'Uploading to the service', submitted: 'Waiting for the remote job', retrieving: 'Retrieving the solution' }
+export const STAGE_LABELS: Readonly<Record<PlateSolveStage, string>> = { preparing: 'Preparing the image', solving: 'Solving' }
 
-// Request of a first solve: ASTAP around the pointing of the header.
-export const DEFAULT_PLATE_SOLVE_REQUEST: PlateSolveRequest = { provider: 'astap', strategy: 'assisted' }
+// Request of a first solve: a search around the pointing of the header.
+export const DEFAULT_PLATE_SOLVE_REQUEST: PlateSolveRequest = { strategy: 'assisted' }
 
 // Returns the settings of a request that a camera or a profile shares, leaving its hints out.
-export function plateSolveSettings({ provider, strategy, downsample, scaleTolerance }: PlateSolveRequest): CameraPlateSolvingSettings {
-	return { provider, strategy, ...(downsample !== undefined && { downsample }), ...(scaleTolerance !== undefined && { scaleTolerance }) }
+export function plateSolveSettings({ strategy, scaleTolerance }: PlateSolveRequest): CameraPlateSolvingSettings {
+	return { strategy, ...(scaleTolerance !== undefined && { scaleTolerance }) }
 }
 
 // Returns the request of a document: the settings it shares, those of its camera or of its profile, with its own hints.

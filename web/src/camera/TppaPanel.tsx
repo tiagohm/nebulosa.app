@@ -9,7 +9,6 @@ import type { RoleDevice } from '../equipment/useEquipment'
 import { formatArcmin, formatDegrees, formatFixed, formatSignedArcmin, MISSING } from '../format'
 import { operationsState } from '../operations'
 import { CameraPlateSolvingSection } from '../platesolving/CameraPlateSolvingSection'
-import { useSolverConfigured } from '../platesolving/PlateSolveControls'
 import { activeProfile, cameraPlateSolving, exposureSettings, profileState, setTppaSettings, tppaSettings } from '../profile/profile'
 import { type CameraIdentity, TPPA_MAXIMUM_ROTATION, TPPA_MINIMUM_ROTATION, type TppaSettings } from '../profile/schema'
 import { CollapsibleSection } from '../shell/CollapsibleSection'
@@ -60,7 +59,6 @@ export function TppaSections({ device, availability, mount, settings: identity }
 	const settings = tppaSettings(profile.settings, identity)
 	const exposure = exposureSettings(profile.settings, identity)
 	const solving = cameraPlateSolving(profile.settings, identity)
-	const configured = useSolverConfigured(solving.provider)
 	const key = device && cameraKey(device.connectionId, device.id)
 	const session = key ? runtime.sessions[key] : undefined
 	const details = session ? runtime.details[session.sessionId] : undefined
@@ -74,7 +72,7 @@ export function TppaSections({ device, availability, mount, settings: identity }
 	const shown: Readonly<TppaSettings> = running && session ? appliedSettings(session) : settings
 	const slewRate = running && session ? session.request.slewRate : tppaSlewRate(settings, mountState)
 	const mountAvailability = roleAvailability('MOUNT', mount, operations, tppaMountSupport(mountState))
-	const blocker = running ? undefined : tppaBlocker(availability, mountAvailability, mountState, slewRate, configured)
+	const blocker = running ? undefined : tppaBlocker(availability, mountAvailability, mountState, slewRate)
 	const slewRates = mountState?.slewRates ?? []
 
 	// Updates fields of the camera's TPPA form.

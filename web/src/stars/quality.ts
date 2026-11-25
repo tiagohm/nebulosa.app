@@ -1,4 +1,4 @@
-import type { StarDetectionJob, StarDetectionOrigin, StarDetectionRequest, StarDetectorProvider, StarMeasurement } from 'api'
+import type { StarDetectionJob, StarDetectionOrigin, StarDetectionRequest, StarMeasurement } from 'api'
 import { latestJob, type StarsState } from './stars'
 
 // Quality of an image as the measurements already made on it describe it: the latest star detection of its image id,
@@ -24,8 +24,6 @@ export interface ImageQualitySummary {
 	readonly measurementId?: string
 	// Who asked for the measurement: manual or autofocus.
 	readonly origin?: StarDetectionOrigin['kind']
-	// Detector that measured it.
-	readonly provider?: StarDetectorProvider
 	// Detector settings and acceptance criteria of the measurement, which an HFD is only comparable under.
 	readonly request?: StarDetectionRequest
 	// Outcome of the aggregate HFD of a completed measurement.
@@ -63,7 +61,7 @@ export function imageQuality(state: Pick<StarsState, 'jobs' | 'latest'>, imageId
 	const status = statusOf(job)
 	if (status === 'not-measured') return { imageId, status }
 
-	const measured = { imageId, status, measurementId: job.jobId, origin: job.origin.kind, provider: job.request.detector.provider, request: job.request }
+	const measured = { imageId, status, measurementId: job.jobId, origin: job.origin.kind, request: job.request }
 	if (status === 'failed') return { ...measured, ...(job.error !== undefined && { error: job.error }) }
 	if (status === 'pending' || !job.summary) return measured
 

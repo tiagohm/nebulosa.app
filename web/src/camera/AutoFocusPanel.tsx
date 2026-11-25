@@ -12,7 +12,6 @@ import { activeProfile, autoFocusSettings, exposureSettings, profileState, setAu
 import type { AutoFocusSettings, CameraIdentity } from '../profile/schema'
 import { CollapsibleSection } from '../shell/CollapsibleSection'
 import { CameraStarDetectionSection } from '../stars/CameraStarDetectionSection'
-import { useAstapConfigured } from '../stars/StarRequestControls'
 import { Button } from '../ui/Button'
 import { Checkbox } from '../ui/Checkbox'
 import { DataList, DataRow } from '../ui/DataRow'
@@ -82,7 +81,6 @@ export function AutoFocusSections({ device, availability, focuser, settings: ide
 	const operations = useSnapshot(operationsState)
 	const control = useSnapshot(controlRuntime)
 	const wheel = useRoleDevice('FILTER_WHEEL')
-	const astapConfigured = useAstapConfigured()
 	const profile = activeProfile(profiles)
 	const settings = autoFocusSettings(profile.settings, identity)
 	const detection = starDetectionSettings(profile.settings)
@@ -101,7 +99,7 @@ export function AutoFocusSections({ device, availability, focuser, settings: ide
 	// Where the focuser stands, in steps; unknown while it is disconnected or has not reported.
 	const position = focuserState?.connected ? focuserState.position.value : undefined
 	const sweep = position === undefined ? undefined : autoFocusSweep(position, settings, stepSize)
-	const blocker = running ? undefined : autoFocusBlocker(availability, focuser && roleAvailability('FOCUSER', focuser, operations), focuserState, detection.detector.provider === 'astap' && !astapConfigured, sweep)
+	const blocker = running ? undefined : autoFocusBlocker(availability, focuser && roleAvailability('FOCUSER', focuser, operations), focuserState, sweep)
 	const acquisition = running && session ? session.request.capture : exposure
 
 	// Updates fields of the camera's Auto Focus form.
@@ -190,13 +188,7 @@ export function AutoFocusSections({ device, availability, focuser, settings: ide
 			>
 				<ExposureTimeInput value={settings.exposureTime} exposure={capabilities?.exposure} units={EXPOSURE_UNITS} disabled={locked} onChange={(exposureTime) => update({ exposureTime })} />
 			</CameraAcquisitionSection>
-			<CameraStarDetectionSection
-				id="images.auto-focus.star-detection"
-				device={device}
-				provider={running && session ? session.request.detection.detector.provider : detection.detector.provider}
-				defaultOpen={false}
-				description={(detector) => <>Each frame is measured by the median HFD of its accepted stars with the Star Detection settings ({detector} detector). Frames are kept in memory only.</>}
-			/>
+			<CameraStarDetectionSection id="images.auto-focus.star-detection" device={device} defaultOpen={false} description={(detector) => <>Each frame is measured by the median HFD of its accepted stars with the Star Detection settings ({detector} detector). Frames are kept in memory only.</>} />
 		</>
 	)
 }

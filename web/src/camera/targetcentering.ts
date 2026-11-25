@@ -69,10 +69,9 @@ export function targetCenteringMountSupport(state: Pick<MountState, 'canGoTo' | 
 }
 
 // Returns why a mode cannot start now, or undefined when it can, from the availability of the camera and of the setup's
-// mount, the mount's reported state (undefined while unknown), the target, and whether the plate solver is configured. A
-// mount that is not tracking is accepted when it can switch tracking, which the server starts for the session. The server
+// mount, the mount's reported state (undefined while unknown), and the target. A mount that is not tracking is accepted when it can switch tracking, which the server starts for the session. The server
 // checks again.
-export function targetCenteringBlocker(mode: TargetCenteringMode, camera: RoleAvailability, mount: RoleAvailability, state: MountState | undefined, draft: TargetCenteringDraft | undefined, solverConfigured: boolean): string | undefined {
+export function targetCenteringBlocker(mode: TargetCenteringMode, camera: RoleAvailability, mount: RoleAvailability, state: MountState | undefined, draft: TargetCenteringDraft | undefined): string | undefined {
 	if (camera.status !== 'ready') return camera.message
 	if (mount.status !== 'ready') return mount.message
 	if (!state) return 'The mount state is not known yet.'
@@ -86,7 +85,6 @@ export function targetCenteringBlocker(mode: TargetCenteringMode, camera: RoleAv
 	}
 
 	if (draft?.rightAscension === undefined || draft.declination === undefined) return 'Enter the coordinates of the target.'
-	if (!solverConfigured) return 'The plate solver is not configured.'
 	return undefined
 }
 

@@ -5,8 +5,7 @@ import type { CameraPlateSolvingSettings } from '../profile/schema'
 import { CollapsibleSection } from '../shell/CollapsibleSection'
 import { Button } from '../ui/Button'
 import { Notice } from '../ui/Notice'
-import { useSolverConfigured } from './PlateSolveControls'
-import { PROVIDER_LABELS } from './platesolving'
+import { STRATEGY_LABELS } from './platesolving'
 
 // Plate Solving section of the panels of the camera operations that solve frames, as Star Detection is for those that
 // detect stars: it says how the operation solves each frame with the camera's plate solving settings, which are edited
@@ -29,13 +28,9 @@ interface CameraPlateSolvingSectionProps {
 
 // Section with the operation's use of the solver and a link to the settings.
 export function CameraPlateSolvingSection({ id, device, solving, description, defaultOpen }: CameraPlateSolvingSectionProps) {
-	const configured = useSolverConfigured(solving.provider)
-	const label = PROVIDER_LABELS[solving.provider]
-
 	return (
-		<CollapsibleSection id={id} title="Plate Solving" summary={label} defaultOpen={defaultOpen}>
-			<Notice>{description(<span className="text-accent">{label}</span>, solving.strategy === 'assisted')}</Notice>
-			{!configured && <Notice error>{label} is not configured.</Notice>}
+		<CollapsibleSection id={id} title="Plate Solving" summary={STRATEGY_LABELS[solving.strategy]} defaultOpen={defaultOpen}>
+			<Notice>{description(<span className="text-accent">Nebulosa</span>, solving.strategy === 'assisted')}</Notice>
 			{device && (
 				<Button variant="secondary" className="self-start" onClick={() => openCameraTool(device.connectionId, device.id, 'plate-solver')}>
 					Open Plate Solving

@@ -47,7 +47,7 @@ function request(mount: { connectionId: string; deviceId: string }, patch: Parti
 		token: `token-${tokens++}`,
 		mount,
 		capture: { exposureTime: 0.05, gain: 0, offset: 0, binX: 1, binY: 1, subframe: true, x: 0, y: 0, width: 64, height: 64, frameFormat: '' },
-		solving: { provider: 'astap', strategy: 'assisted' },
+		solving: { strategy: 'assisted' },
 		direction: 'WEST',
 		slewRate: 'SPEED_4',
 		rotation: deg(8),
@@ -64,14 +64,13 @@ function tanSolution(rightAscension: number, declination: number): PlateSolution
 	return plateSolutionFrom(header)!
 }
 
-// Plate solver standing for ASTAP: solves a frame at the J2000 center the camera simulator stamps from the mount it
-// snoops (RA/DEC keywords, degrees); configured unless told otherwise.
+// Plate solver standing for the built-in one: solves a frame at the J2000 center the camera simulator stamps from the
+// mount it snoops (RA/DEC keywords, degrees).
 function fakeSolver(images: ImageStore) {
 	const origins: PlateSolveOrigin[] = []
-	let configured = true
 
 	const solver = {
-		prepare: (solving: PlateSolveRequest) => Promise.resolve(configured ? { request: solving, tool: { executable: 'astap', timeout: 60000 } } : undefined),
+		prepare: (solving: PlateSolveRequest) => Promise.resolve({ request: solving, tool: { executable: '', timeout: 60000, indexDirectory: '', catalogDirectory: '' } }),
 		solve: (imageId: string, _preparation: PlateSolvePreparation, _signal?: AbortSignal, origin?: PlateSolveOrigin) => {
 			if (origin) origins.push(origin)
 			const { header } = images.metadata(imageId)!
@@ -80,7 +79,7 @@ function fakeSolver(images: ImageStore) {
 		},
 	}
 
-	return { solver, origins, unconfigure: () => (configured = false) }
+	return { solver, origins }
 }
 
 // A small preview-only capture request.
@@ -280,12 +279,10 @@ describe('TPPA sessions', () => {
 		expect(mount.tracking).toBeTrue()
 	})
 
-	test('a mount without the slew rate or a solver not configured is refused before anything starts', async () => {
-		const { id, cameraId, tppa, mountDevice, solving, events } = await setup()
+	test('a mount without the slew rate is refused before anything starts', async () => {
+		const { id, cameraId, tppa, mountDevice, events } = await setup()
 
 		expect((await tppa.start(id, cameraId, request(mountDevice, { slewRate: 'WARP' }))).status).toBe(422)
-		solving.unconfigure()
-		expect((await tppa.start(id, cameraId, request(mountDevice))).status).toBe(422)
 		expect(events).toEqual([])
 	})
 

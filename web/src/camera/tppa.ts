@@ -65,9 +65,8 @@ export function tppaMountSupport(state: Pick<MountState, 'mountType' | 'canMove'
 
 // Returns why no session can start now, or undefined when one can, from the availability of the camera and of the
 // setup's mount (unsupported per tppaMountSupport), the mount's reported state (undefined while unknown), the slew
-// rate a start would send (tppaSlewRate), and whether the plate solver is configured. A mount that is not tracking is
-// accepted when it can switch tracking, which the server starts for the session. The server checks again.
-export function tppaBlocker(camera: RoleAvailability, mount: RoleAvailability, state: MountState | undefined, slewRate: string | undefined, solverConfigured: boolean): string | undefined {
+// rate a start would send (tppaSlewRate). A mount that is not tracking is accepted when it can switch tracking, which the server starts for the session. The server checks again.
+export function tppaBlocker(camera: RoleAvailability, mount: RoleAvailability, state: MountState | undefined, slewRate: string | undefined): string | undefined {
 	if (camera.status !== 'ready') return camera.message
 	if (mount.status !== 'ready') return mount.message
 	if (!state) return 'The mount state is not known yet.'
@@ -75,7 +74,6 @@ export function tppaBlocker(camera: RoleAvailability, mount: RoleAvailability, s
 	if (state.site.latitude === 0 && state.site.longitude === 0) return 'The mount reports no site; send it from Equipment Control.'
 	if (state.parked || state.parking) return 'The mount is parked.'
 	if (!state.tracking && !state.canTracking) return 'The mount is not tracking and cannot start tracking.'
-	if (!solverConfigured) return 'The plate solver is not configured.'
 	return undefined
 }
 

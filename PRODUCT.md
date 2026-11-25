@@ -26,8 +26,8 @@ Nebulosa is an integrated astronomical imaging application. It replaces the chai
 - Used at night, in the dark, at the telescope or within reach of it. Dark adaptation matters.
 - Regularly operated from a phone or tablet over the local network, not only from a desktop beside the rig.
 - Sessions run for hours, often unattended. The operator walks away and comes back expecting to read the state of everything at a glance.
-- Often run at dark sites with no internet. Core work (device control, capture, analysis, the sky catalog, the planners) must not depend on online services; online sources (weather, SDO images, SkyBoT, nova.astrometry.net, satellite elements) are enhancements that degrade to absence.
-- External programs the operator installs and configures in Settings: ASTAP, a local astrometry.net, nova.astrometry.net, and MediaMTX for observatory cameras.
+- Often run at dark sites with no internet. Core work (device control, capture, analysis, the sky catalog, the planners) must not depend on online services; online sources (weather, SDO images, SkyBoT, satellite elements) are enhancements that degrade to absence.
+- Plate solving and star detection are built in and need no external program; the operator installs the index files or a star database of the plate solver and, for observatory cameras, MediaMTX, and configures them in Settings.
 - The server has no authentication: it is meant for `localhost` or a trusted network.
 
 ## Capabilities and Constraints

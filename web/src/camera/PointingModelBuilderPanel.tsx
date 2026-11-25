@@ -28,7 +28,6 @@ import {
 } from '../mountpointing/mountpointing'
 import { operationsState } from '../operations'
 import { CameraPlateSolvingSection } from '../platesolving/CameraPlateSolvingSection'
-import { useSolverConfigured } from '../platesolving/PlateSolveControls'
 import { activeProfile, cameraPlateSolving, exposureSettings, pointingModelSettings, profileState, setPointingModelSettings } from '../profile/profile'
 import { type CameraIdentity, POINTING_MODEL_MAXIMUM_POINTS, POINTING_MODEL_MINIMUM_POINTS, POINTING_MODEL_PRESETS, type PointingModelSettings } from '../profile/schema'
 import { CollapsibleSection } from '../shell/CollapsibleSection'
@@ -86,7 +85,6 @@ export function PointingModelBuilderSections({ device, availability, role, mount
 	const settings = pointingModelSettings(profile.settings, identity)
 	const exposure = exposureSettings(profile.settings, identity)
 	const solving = cameraPlateSolving(profile.settings, identity)
-	const configured = useSolverConfigured(solving.provider)
 	const key = device && cameraKey(device.connectionId, device.id)
 	const session = key ? runtime.sessions[key] : undefined
 	const capabilities = watchedDeviceState(control, 'camera', device)
@@ -101,7 +99,7 @@ export function PointingModelBuilderSections({ device, availability, role, mount
 	const shown: Readonly<PointingModelSettings> = running && session ? appliedSettings(session) : settings
 	const mountAvailability = roleAvailability('MOUNT', mount, operations, mountPointingMountSupport(mountState))
 	const unknownType = mountState?.mountType === 'UNKNOWN'
-	const blocker = running ? undefined : mountPointingBlocker(availability, mountAvailability, role, mountState, configured, !unknownType || confirmed)
+	const blocker = running ? undefined : mountPointingBlocker(availability, mountAvailability, role, mountState, !unknownType || confirmed)
 	const model = session ? runtime.models[session.modelId] : undefined
 	const mountDevice = mount.device && { connectionId: mount.device.connectionId, deviceId: mount.device.id }
 

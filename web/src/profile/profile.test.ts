@@ -4,7 +4,7 @@ import { proxy, snapshot } from 'valtio'
 import { ORIGINAL_DISPLAY_SETTINGS } from '../images/display'
 import { DEFAULT_IMAGE_ASTROMETRY } from '../platesolving/preferences'
 import { DEFAULT_STAR_PROFILE_SETTINGS } from '../stars/starprofile.settings'
-import { DEFAULT_ASTAP_SETTINGS, DEFAULT_STAR_REQUEST } from '../stars/stars'
+import { DEFAULT_STAR_REQUEST } from '../stars/stars'
 import { DEFAULT_STREAK_SETTINGS } from '../streaks/streaks'
 import {
 	meridianFlipSettings,
@@ -82,7 +82,6 @@ import {
 	setDateTimePreferences,
 	dateTimePreferences,
 	setStarDetectionSettings,
-	setStarDetector,
 	setStreakDetectionSettings,
 	setImageAstrometrySettings,
 	imageAstrometrySettings,
@@ -326,10 +325,10 @@ describe('settings', () => {
 		const state = load()
 		expect(imagePlateSolving(activeProfile(state).settings)).toEqual(DEFAULT_CAMERA_PLATE_SOLVING)
 
-		setImagePlateSolving(state, { provider: 'nova', strategy: 'blind', downsample: 2 })
+		setImagePlateSolving(state, { strategy: 'blind', scaleTolerance: 0.3 })
 
 		const { settings } = state.profiles[0]
-		expect(imagePlateSolving(settings)).toEqual({ provider: 'nova', strategy: 'blind', downsample: 2 })
+		expect(imagePlateSolving(settings)).toEqual({ strategy: 'blind', scaleTolerance: 0.3 })
 		expect(cameraPlateSolving(settings, { connectionId: 'c', deviceId: 'd' })).toEqual(DEFAULT_CAMERA_PLATE_SOLVING)
 	})
 })
@@ -499,11 +498,11 @@ describe('camera forms', () => {
 
 	test('the plate solving settings belong to the camera and keep the scale tolerance', () => {
 		const state = load()
-		setCameraPlateSolving(state, MAIN, { provider: 'nova', strategy: 'assisted', scaleTolerance: 0.3 })
+		setCameraPlateSolving(state, MAIN, { strategy: 'assisted', scaleTolerance: 0.3 })
 		expect(cameraPlateSolving(activeProfile(state).settings, GUIDE)).toEqual(DEFAULT_CAMERA_PLATE_SOLVING)
 
 		const reloaded = state.profiles[0].settings
-		expect(cameraPlateSolving(reloaded, MAIN)).toEqual({ provider: 'nova', strategy: 'assisted', scaleTolerance: 0.3 })
+		expect(cameraPlateSolving(reloaded, MAIN)).toEqual({ strategy: 'assisted', scaleTolerance: 0.3 })
 	})
 
 	test('the DARV form is kept per camera and persisted', () => {
@@ -580,25 +579,9 @@ describe('camera forms', () => {
 		const state = load()
 		expect(starDetectionSettings(activeProfile(state).settings)).toEqual(DEFAULT_STAR_REQUEST)
 
-		const request = { detector: { provider: 'nebulosa', maxStars: 50, minSNR: 2, searchRegion: 0, maximumRadius: 24 }, acceptance: { minSNR: 0, minHfd: 1, maxHfd: 0, edgeMargin: 10 } } as const
+		const request = { detector: { maxStars: 50, minSNR: 2, searchRegion: 0, maximumRadius: 24 }, acceptance: { minSNR: 0, minHfd: 1, maxHfd: 0, edgeMargin: 10 } } as const
 		setStarDetectionSettings(state, request)
 		expect(starDetectionSettings(state.profiles[0].settings)).toEqual(request)
-	})
-
-	test('choosing a detector restores its last settings and keeps the acceptance', () => {
-		const state = load()
-		const tuned = { detector: { provider: 'nebulosa', maxStars: 50, minSNR: 2, searchRegion: 0, maximumRadius: 24 }, acceptance: { minSNR: 0, minHfd: 1, maxHfd: 0, edgeMargin: 10 } } as const
-		setStarDetectionSettings(state, tuned)
-
-		setStarDetector(state, 'astap')
-		expect(starDetectionSettings(state.profiles[0].settings)).toEqual({ detector: DEFAULT_ASTAP_SETTINGS, acceptance: tuned.acceptance })
-
-		setStarDetectionSettings(state, { detector: { provider: 'astap', maxStars: 300, minSNR: 15 }, acceptance: tuned.acceptance })
-		setStarDetector(state, 'nebulosa')
-		expect(starDetectionSettings(state.profiles[0].settings)).toEqual(tuned)
-
-		setStarDetector(state, 'astap')
-		expect(starDetectionSettings(state.profiles[0].settings).detector).toEqual({ provider: 'astap', maxStars: 300, minSNR: 15 })
 	})
 
 	test('the Star Profile Inspector settings are the profile ones, and are persisted', () => {

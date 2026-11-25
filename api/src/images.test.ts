@@ -500,7 +500,6 @@ describe('retention', () => {
 			expect(await images.encode(info.id, 'fits')).toBeUndefined()
 			expect(images.retain(info.id)).toBeUndefined()
 			expect(await images.detectionImage(info.id)).toBeDefined()
-			expect(await images.detectionFile(info.id)).toBeDefined()
 
 			images.release(info.id)
 			expect(discarded).toEqual([])

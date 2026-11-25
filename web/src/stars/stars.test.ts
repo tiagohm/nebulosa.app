@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import type { StarDetectionJob, StarDetectionResult } from 'api'
 import { proxy } from 'valtio'
-import { DEFAULT_ASTAP_SETTINGS, DEFAULT_STAR_REQUEST, handleStarsEvent, latestJob, latestResult, loadResult, markerRadius, pickStar, refreshStars, runDetection, sameRequest, starPaths, type StarsState, withAcceptance, withDetectorSettings } from './stars'
+import { DEFAULT_STAR_REQUEST, handleStarsEvent, latestJob, latestResult, loadResult, markerRadius, pickStar, refreshStars, runDetection, sameRequest, starPaths, type StarsState, withAcceptance, withDetectorSettings } from './stars'
 
 function state(): StarsState {
 	return proxy<StarsState>({ jobs: {}, latest: {}, results: {}, resultErrors: {}, submitErrors: {} })
@@ -70,13 +70,13 @@ describe('jobs', () => {
 
 	test('a submission becomes the latest job, and a refusal is kept', async () => {
 		const stars = state()
-		const { request, calls } = fetcher({ '/api/images/image-1/stars': [202, job()], '/api/images/image-2/stars': [422, { error: 'ASTAP is not configured' }] })
+		const { request, calls } = fetcher({ '/api/images/image-1/stars': [202, job()], '/api/images/image-2/stars': [503, { error: 'Too many star detections are waiting' }] })
 		await runDetection(stars, 'image-1', DEFAULT_STAR_REQUEST, request)
 		await runDetection(stars, 'image-2', DEFAULT_STAR_REQUEST, request)
 
 		expect(calls).toEqual(['/api/images/image-1/stars', '/api/images/image-2/stars'])
 		expect(latestJob(stars, 'image-1')?.jobId).toBe('job-1')
-		expect(stars.submitErrors['image-2']).toBe('ASTAP is not configured')
+		expect(stars.submitErrors['image-2']).toBe('Too many star detections are waiting')
 	})
 
 	test('an answer or a snapshot arriving after the end of a job never takes it back', async () => {
@@ -94,15 +94,15 @@ describe('jobs', () => {
 	test('a cached answer to a submission becomes the latest job again, even after a reconnection', async () => {
 		const stars = state()
 		const builtin = job({ state: 'completed' })
-		const astap = job({ jobId: 'job-2', state: 'completed', queuedAt: 2000 })
+		const newer = job({ jobId: 'job-2', state: 'completed', queuedAt: 2000 })
 		handleStarsEvent(stars, { type: 'stars:updated', job: builtin })
-		handleStarsEvent(stars, { type: 'stars:updated', job: astap })
+		handleStarsEvent(stars, { type: 'stars:updated', job: newer })
 		expect(latestJob(stars, 'image-1')?.jobId).toBe('job-2')
 
 		await runDetection(stars, 'image-1', DEFAULT_STAR_REQUEST, fetcher({ '/api/images/image-1/stars': [200, builtin] }).request)
 		expect(latestJob(stars, 'image-1')?.jobId).toBe('job-1')
 
-		await refreshStars(stars, fetcher({ '/api/stars': [200, { jobs: [builtin, astap] }] }).request)
+		await refreshStars(stars, fetcher({ '/api/stars': [200, { jobs: [builtin, newer] }] }).request)
 		expect(latestJob(stars, 'image-1')?.jobId).toBe('job-1')
 	})
 
@@ -124,7 +124,7 @@ describe('jobs', () => {
 
 	test('compares requests field by field', () => {
 		expect(sameRequest(DEFAULT_STAR_REQUEST, { detector: { ...DEFAULT_STAR_REQUEST.detector }, acceptance: { ...DEFAULT_STAR_REQUEST.acceptance } })).toBeTrue()
-		expect(sameRequest(DEFAULT_STAR_REQUEST, { ...DEFAULT_STAR_REQUEST, detector: DEFAULT_ASTAP_SETTINGS })).toBeFalse()
+		expect(sameRequest(DEFAULT_STAR_REQUEST, { ...DEFAULT_STAR_REQUEST, detector: { ...DEFAULT_STAR_REQUEST.detector, minSNR: 10 } })).toBeFalse()
 		expect(sameRequest(DEFAULT_STAR_REQUEST, { ...DEFAULT_STAR_REQUEST, acceptance: { ...DEFAULT_STAR_REQUEST.acceptance, minHfd: 1 } })).toBeFalse()
 	})
 })
@@ -159,13 +159,11 @@ describe('overlay geometry', () => {
 })
 
 describe('request edits', () => {
-	test('edit only the settings a detector has', () => {
-		const builtin = withDetectorSettings(DEFAULT_STAR_REQUEST, { maxStars: 100, searchRegion: 12, maximumRadius: 48 })
-		expect(builtin.detector).toEqual({ provider: 'nebulosa', maxStars: 100, minSNR: 0, searchRegion: 12, maximumRadius: 48 })
-
-		const astap = withDetectorSettings({ ...builtin, detector: DEFAULT_ASTAP_SETTINGS }, { minSNR: 20, searchRegion: 5, maximumRadius: 16 })
-		expect(astap.detector).toEqual({ provider: 'astap', maxStars: 0, minSNR: 20 })
-		expect(withAcceptance(astap, { minHfd: 1.5 }).acceptance).toEqual({ minSNR: 0, minHfd: 1.5, maxHfd: 0, edgeMargin: 0 })
-		expect(DEFAULT_STAR_REQUEST.detector).toEqual({ provider: 'nebulosa', maxStars: 500, minSNR: 0, searchRegion: 0, maximumRadius: 32 })
+	test('edit the settings of the detector and the acceptance', () => {
+		const edited = withDetectorSettings(DEFAULT_STAR_REQUEST, { maxStars: 100, searchRegion: 12, maximumRadius: 48 })
+		expect(edited.detector).toEqual({ maxStars: 100, minSNR: 0, searchRegion: 12, maximumRadius: 48 })
+		expect(withDetectorSettings(edited, { minSNR: 20 }).detector).toEqual({ maxStars: 100, minSNR: 20, searchRegion: 12, maximumRadius: 48 })
+		expect(withAcceptance(edited, { minHfd: 1.5 }).acceptance).toEqual({ minSNR: 0, minHfd: 1.5, maxHfd: 0, edgeMargin: 0 })
+		expect(DEFAULT_STAR_REQUEST.detector).toEqual({ maxStars: 500, minSNR: 0, searchRegion: 0, maximumRadius: 32 })
 	})
 })

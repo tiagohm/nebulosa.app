@@ -132,20 +132,17 @@ export interface IPolarStartContext {
 	readonly slewRate: string | undefined
 	// Active observing site of the profile.
 	readonly site: ObservingSite | undefined
-	// Whether the plate solver is configured.
-	readonly solverConfigured: boolean
 	// Master dark of the form; absent subtracts none.
 	readonly dark?: Pick<IPolarDarkSettings, 'enabled' | 'masterId'>
 }
 
-// Returns why no session can start now, or undefined when one can. A manual session needs only a ready camera, a site
-// and a solver; the setup's mount is used when ready, ignored when absent or disconnected, and blocks only while
+// Returns why no session can start now, or undefined when one can. A manual session needs only a ready camera and a
+// site; the setup's mount is used when ready, ignored when absent or disconnected, and blocks only while
 // another operation holds it. An automatic session needs the mount ready and supported, a preset it announces,
 // and unparked; its clearance is the operator's, warned beside the Start button. The server checks again.
-export function ipolarBlocker({ camera, mount, mode, mountState, slewRate, site, solverConfigured, dark }: IPolarStartContext): string | undefined {
+export function ipolarBlocker({ camera, mount, mode, mountState, slewRate, site, dark }: IPolarStartContext): string | undefined {
 	if (camera.status !== 'ready') return camera.message
 	if (!site) return 'Choose an active observing site for the profile.'
-	if (!solverConfigured) return 'The plate solver is not configured.'
 	if (dark?.enabled && dark.masterId === undefined) return 'Choose the master dark to subtract.'
 
 	if (mode === 'manual') return mount.status === 'busy' ? mount.message : undefined

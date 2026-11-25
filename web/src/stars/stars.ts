@@ -1,4 +1,4 @@
-import type { AstapStarDetectionSettings, NebulosaStarDetectionSettings, ServerEvent, StarAcceptance, StarDetectionJob, StarDetectionRequest, StarDetectionResult, StarDetectionSettings, StarDetectionSnapshot, StarDetectorProvider } from 'api'
+import type { ServerEvent, StarAcceptance, StarDetectionJob, StarDetectionRequest, StarDetectionResult, StarDetectionSettings, StarDetectionSnapshot } from 'api'
 import { proxy, ref } from 'valtio'
 import { latestOf, trackJob } from '../analysis'
 import { type ApiFetch, browserFetch, jsonInit, responseError } from '../http'
@@ -26,32 +26,23 @@ export interface StarsState {
 	submitErrors: Record<string, string>
 }
 
-// Display names of the detectors.
-export const PROVIDER_LABELS: Readonly<Record<StarDetectorProvider, string>> = { nebulosa: 'Nebulosa', astap: 'ASTAP' }
-
-// Detectors, in selector order.
-export const PROVIDERS: readonly StarDetectorProvider[] = ['nebulosa', 'astap']
-
-// Largest signal-aperture radius of the built-in detector, in pixels: large enough to measure the defocused stars at
+// Largest signal-aperture radius of the detector, in pixels: large enough to measure the defocused stars at
 // the ends of an Auto Focus curve, which the fixed 4 px aperture saturates. The aperture grows only while a star
 // extends beyond it, so focused stars are measured as with the fixed one.
 export const DEFAULT_APERTURE_RADIUS = 32
 
-// Defaults of the built-in detector: the 500 brightest stars, any SNR, no uniqueness filter, and an aperture grown up
-// to DEFAULT_APERTURE_RADIUS.
-export const DEFAULT_NEBULOSA_SETTINGS: NebulosaStarDetectionSettings = { provider: 'nebulosa', maxStars: 500, minSNR: 0, searchRegion: 0, maximumRadius: DEFAULT_APERTURE_RADIUS }
-
-// Defaults of ASTAP, as the server's: every star of SNR 10 or more.
-export const DEFAULT_ASTAP_SETTINGS: AstapStarDetectionSettings = { provider: 'astap', maxStars: 0, minSNR: 10 }
+// Defaults of the detector: the 500 brightest stars, any SNR, no uniqueness filter, and an aperture grown up to
+// DEFAULT_APERTURE_RADIUS.
+export const DEFAULT_STAR_DETECTION_SETTINGS: StarDetectionSettings = { maxStars: 500, minSNR: 0, searchRegion: 0, maximumRadius: DEFAULT_APERTURE_RADIUS }
 
 // Acceptance of every star with finite, positive measurements inside the image.
 export const DEFAULT_STAR_ACCEPTANCE: StarAcceptance = { minSNR: 0, minHfd: 0, maxHfd: 0, edgeMargin: 0 }
 
-// Request of a first run: the built-in detector with its defaults.
-export const DEFAULT_STAR_REQUEST: StarDetectionRequest = { detector: DEFAULT_NEBULOSA_SETTINGS, acceptance: DEFAULT_STAR_ACCEPTANCE }
+// Request of a first run: the detector with its defaults.
+export const DEFAULT_STAR_REQUEST: StarDetectionRequest = { detector: DEFAULT_STAR_DETECTION_SETTINGS, acceptance: DEFAULT_STAR_ACCEPTANCE }
 
-// Most stars the built-in detector returns (NEBULOSA_STAR_LIMIT of the API).
-export const NEBULOSA_STAR_LIMIT = 2000
+// Most stars the detector returns (STAR_DETECTION_LIMIT of the API).
+export const STAR_DETECTION_LIMIT = 2000
 
 // Mirror of the server's star detection jobs, shared by every component of the tab.
 export const starsState = proxy<StarsState>({ jobs: {}, latest: {}, results: {}, resultErrors: {}, submitErrors: {} })
@@ -59,30 +50,23 @@ export const starsState = proxy<StarsState>({ jobs: {}, latest: {}, results: {},
 // Jobs whose result is being fetched.
 const fetching = new Set<string>()
 
-// Returns the default settings of a detector.
-export function defaultSettings(provider: StarDetectorProvider): StarDetectionSettings {
-	return provider === 'nebulosa' ? DEFAULT_NEBULOSA_SETTINGS : DEFAULT_ASTAP_SETTINGS
-}
-
-// Settings of a detector a control edits; searchRegion and maximumRadius apply to the built-in detector only.
+// Settings of the detector a control edits.
 export interface StarDetectorPatch {
 	// Maximum number of stars kept.
 	readonly maxStars?: number
 	// Minimum SNR of a detection.
 	readonly minSNR?: number
-	// Uniqueness box of the built-in detector, in pixels.
+	// Uniqueness box of the detector, in pixels.
 	readonly searchRegion?: number
-	// Largest signal-aperture radius of the built-in detector, in pixels.
+	// Largest signal-aperture radius of the detector, in pixels.
 	readonly maximumRadius?: number
 }
 
-// Returns a request with settings of its detector replaced; a field its detector does not have is ignored.
+// Returns a request with settings of its detector replaced.
 export function withDetectorSettings(request: StarDetectionRequest, { maxStars, minSNR, searchRegion, maximumRadius }: StarDetectorPatch): StarDetectionRequest {
 	const { detector } = request
-	const common = { maxStars: maxStars ?? detector.maxStars, minSNR: minSNR ?? detector.minSNR }
-	if (detector.provider !== 'nebulosa') return { ...request, detector: { ...detector, ...common } }
 	const radius = maximumRadius ?? detector.maximumRadius
-	return { ...request, detector: { ...detector, ...common, searchRegion: searchRegion ?? detector.searchRegion, ...(radius !== undefined && { maximumRadius: radius }) } }
+	return { ...request, detector: { ...detector, maxStars: maxStars ?? detector.maxStars, minSNR: minSNR ?? detector.minSNR, searchRegion: searchRegion ?? detector.searchRegion, ...(radius !== undefined && { maximumRadius: radius }) } }
 }
 
 // Returns a request with acceptance criteria replaced.

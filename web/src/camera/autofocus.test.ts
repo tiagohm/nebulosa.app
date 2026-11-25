@@ -40,7 +40,6 @@ function summary(patch: Partial<AutoFocusSessionSummary> = {}): AutoFocusSession
 		focuser: FOCUSER,
 		focuserName: 'Focuser',
 		request: autoFocusRequest(DEFAULT_AUTO_FOCUS_SETTINGS, DEFAULT_STAR_REQUEST, DEFAULT_EXPOSURE_SETTINGS, FOCUSER, 100, {}),
-		provider: 'nebulosa',
 		state: 'exposing',
 		measurementCount: 0,
 		verification: 'pending',
@@ -141,12 +140,12 @@ test('a start carries a fresh token and records a refusal; a stop names its sess
 test('the request takes its exposure time and the camera settings fitted to the camera, snoops the setup devices, and always grows the aperture of the built-in detector', () => {
 	const capabilities = { exposure: { min: 0.001, max: 60 }, gain: { min: 0, max: 100 }, offset: { min: 0, max: 50 }, bin: { x: 2, y: 2 }, subframe: { width: 1000, height: 800 }, frameFormats: [{ name: 'RAW16', label: 'Raw 16' }], transferFormats: ['FITS'] } as unknown as CameraCapabilities
 	const exposure = { ...DEFAULT_EXPOSURE_SETTINGS, exposureTime: 5, gain: 300, offset: 20, binX: 4, binY: 4, subframe: true, x: 100, y: 50, width: 400, height: 300, frameFormat: 'RAW16' } as const
-	const detection = { ...DEFAULT_STAR_REQUEST, detector: { provider: 'nebulosa', maxStars: 100, minSNR: 0, searchRegion: 0 } } as const
+	const detection = { ...DEFAULT_STAR_REQUEST, detector: { maxStars: 100, minSNR: 0, searchRegion: 0 } } as const
 	const request = autoFocusRequest({ ...DEFAULT_AUTO_FOCUS_SETTINGS, exposureTime: 120 }, detection, exposure, FOCUSER, 250, { mount: 'm', focuser: 'f', wheel: 'w', rotator: 'r' }, capabilities)
 
 	expect(request.capture).toEqual({ exposureTime: 60, gain: 100, offset: 20, binX: 2, binY: 2, subframe: true, x: 100, y: 50, width: 400, height: 300, frameFormat: 'RAW16' })
 	expect(request.snoop).toEqual({ mount: 'm', wheel: 'w', rotator: 'r' })
-	expect(request.detection.detector).toEqual({ provider: 'nebulosa', maxStars: 100, minSNR: 0, searchRegion: 0, maximumRadius: 32 })
+	expect(request.detection.detector).toEqual({ maxStars: 100, minSNR: 0, searchRegion: 0, maximumRadius: 32 })
 	expect(request.stepSize).toBe(250)
 	expect(defaultStepSize(0, 100000)).toBe(500)
 	expect(defaultStepSize(0, 50)).toBe(1)
@@ -176,13 +175,12 @@ test('a session starts only on a ready camera with an associated, ready focuser 
 	const busy = { status: 'busy', operations: [], message: 'The camera is busy.' } as const
 	const focuser = { canAbsoluteMove: true }
 
-	expect(autoFocusBlocker(ready, ready, focuser, false)).toBeUndefined()
-	expect(autoFocusBlocker(busy, ready, focuser, false)).toBe('The camera is busy.')
-	expect(autoFocusBlocker(ready, undefined, focuser, false)).toBe(NO_FOCUSER)
-	expect(autoFocusBlocker(ready, { status: 'notSelected', message: 'No Focuser selected in Equipment Setup.' }, focuser, false)).toBe('No Focuser selected in Equipment Setup.')
-	expect(autoFocusBlocker(ready, ready, undefined, false)).toBe('The focuser state is not known yet.')
-	expect(autoFocusBlocker(ready, ready, { canAbsoluteMove: false }, false)).toBe('The focuser cannot move to absolute positions, which the Auto Focus needs.')
-	expect(autoFocusBlocker(ready, ready, focuser, true)).toBe('ASTAP is not configured.')
+	expect(autoFocusBlocker(ready, ready, focuser)).toBeUndefined()
+	expect(autoFocusBlocker(busy, ready, focuser)).toBe('The camera is busy.')
+	expect(autoFocusBlocker(ready, undefined, focuser)).toBe(NO_FOCUSER)
+	expect(autoFocusBlocker(ready, { status: 'notSelected', message: 'No Focuser selected in Equipment Setup.' }, focuser)).toBe('No Focuser selected in Equipment Setup.')
+	expect(autoFocusBlocker(ready, ready, undefined)).toBe('The focuser state is not known yet.')
+	expect(autoFocusBlocker(ready, ready, { canAbsoluteMove: false })).toBe('The focuser cannot move to absolute positions, which the Auto Focus needs.')
 })
 
 test('an Auto Focus frame takes the focuser position its session recorded, and nothing is guessed', () => {
@@ -210,9 +208,9 @@ test('the first pass of a sweep is planned from the start position, and one beyo
 
 	expect(autoFocusSweep(50000, { initialOffsetSteps: 4, reversed: false }, 500)).toEqual({ far: 52000, near: 49500 })
 	expect(autoFocusSweep(50000, { initialOffsetSteps: 4, reversed: true }, 500)).toEqual({ far: 48000, near: 50500 })
-	expect(autoFocusBlocker(ready, ready, focuser, false, { far: 52000, near: 49500 })).toBeUndefined()
-	expect(autoFocusBlocker(ready, ready, focuser, false, { far: 170000, near: 20000 })).toBe('The sweep would move the focuser to 170000 steps, outside its travel of 0 to 100000 steps. Lower Step Size or Positions per Side.')
-	expect(autoFocusBlocker(ready, ready, focuser, false, { far: 4000, near: -1000 })).toBe('The sweep would move the focuser to -1000 steps, outside its travel of 0 to 100000 steps. Lower Step Size or Positions per Side.')
+	expect(autoFocusBlocker(ready, ready, focuser, { far: 52000, near: 49500 })).toBeUndefined()
+	expect(autoFocusBlocker(ready, ready, focuser, { far: 170000, near: 20000 })).toBe('The sweep would move the focuser to 170000 steps, outside its travel of 0 to 100000 steps. Lower Step Size or Positions per Side.')
+	expect(autoFocusBlocker(ready, ready, focuser, { far: 4000, near: -1000 })).toBe('The sweep would move the focuser to -1000 steps, outside its travel of 0 to 100000 steps. Lower Step Size or Positions per Side.')
 })
 
 test('a form without a saved step size takes a two-hundredth of the travel of a connected focuser, else a fixed one', () => {

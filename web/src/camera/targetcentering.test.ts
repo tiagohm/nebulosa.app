@@ -35,7 +35,6 @@ function summary(patch: Partial<TargetCenteringSessionSummary> = {}): TargetCent
 		warnings: [],
 		startedAt: 1,
 		revision: 1,
-		provider: 'astap',
 		request: { mount, mode: 'center', target: { frame: 'J2000', ...TARGET }, tolerance: 1e-4 } as TargetCenteringSessionSummary['request'],
 		...patch,
 	}
@@ -62,12 +61,11 @@ function fakeFetch(answers: Record<string, () => Response>) {
 }
 
 describe('target centering blockers', () => {
-	const blocker = (mode: Parameters<typeof targetCenteringBlocker>[0], state: MountState | undefined = MOUNT, draft: Parameters<typeof targetCenteringBlocker>[4] = TARGET, configured = true) => targetCenteringBlocker(mode, READY, READY, state, draft, configured)
+	const blocker = (mode: Parameters<typeof targetCenteringBlocker>[0], state: MountState | undefined = MOUNT, draft: Parameters<typeof targetCenteringBlocker>[4] = TARGET) => targetCenteringBlocker(mode, READY, READY, state, draft)
 
-	test('a center needs a target, a solver, and a mount able to move', () => {
+	test('a center needs a target and a mount able to move', () => {
 		expect(blocker('center')).toBeUndefined()
 		expect(blocker('center', MOUNT, {})).toBe('Enter the coordinates of the target.')
-		expect(blocker('center', MOUNT, TARGET, false)).toBe('The plate solver is not configured.')
 		expect(blocker('center', { ...MOUNT, parked: true })).toBe('The mount is parked.')
 		expect(blocker('center', { ...MOUNT, site: { latitude: 0, longitude: 0 } } as MountState)).toContain('no site')
 		expect(blocker('center', { ...MOUNT, canGoTo: false })).toBe('The mount cannot go to a target.')
@@ -82,13 +80,13 @@ describe('target centering blockers', () => {
 
 	test('verify only asks nothing of a mount it never commands', () => {
 		expect(blocker('verifyOnly', { ...MOUNT, parked: true, canGoTo: false, tracking: false, canTracking: false })).toBeUndefined()
-		expect(targetCenteringBlocker('verifyOnly', READY, READY, undefined, TARGET, true)).toBe('The mount state is not known yet.')
+		expect(targetCenteringBlocker('verifyOnly', READY, READY, undefined, TARGET)).toBe('The mount state is not known yet.')
 	})
 
 	test('the camera and the mount come first', () => {
 		const busy = { status: 'busy', message: 'The camera is busy.' } as RoleAvailability
-		expect(targetCenteringBlocker('center', busy, READY, MOUNT, TARGET, true)).toBe('The camera is busy.')
-		expect(targetCenteringBlocker('verifyOnly', READY, busy, MOUNT, TARGET, true)).toBe('The camera is busy.')
+		expect(targetCenteringBlocker('center', busy, READY, MOUNT, TARGET)).toBe('The camera is busy.')
+		expect(targetCenteringBlocker('verifyOnly', READY, busy, MOUNT, TARGET)).toBe('The camera is busy.')
 	})
 
 	test('a mount that cannot abort is unsupported, and an unknown state says nothing', () => {

@@ -57,7 +57,7 @@ describe('credits', () => {
 
 	test('the services of the server are credited', () => {
 		const urls = credits.map((credit) => credit.url).join(' ')
-		for (const host of ['open-meteo.com', '7timer.info', 'ssd-api.jpl.nasa.gov', 'ssp.imcce.fr', 'sdo.gsfc.nasa.gov', 'swpc.noaa.gov', 'iers.org', 'nova.astrometry.net']) expect(urls).toContain(host)
+		for (const host of ['open-meteo.com', '7timer.info', 'ssd-api.jpl.nasa.gov', 'ssp.imcce.fr', 'sdo.gsfc.nasa.gov', 'swpc.noaa.gov', 'iers.org']) expect(urls).toContain(host)
 	})
 })
 

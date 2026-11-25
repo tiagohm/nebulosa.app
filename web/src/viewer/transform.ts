@@ -44,7 +44,7 @@ export interface ViewTransform {
 export const MIN_SCALE = 1 / 64
 
 // Largest scale, in viewport pixels per image pixel: each image pixel 32 viewport pixels wide.
-export const MAX_SCALE = 32
+export const MAX_SCALE = 512
 
 // Scale factor of one zoom-in step; zoom-out divides by it.
 export const ZOOM_STEP = 1.25

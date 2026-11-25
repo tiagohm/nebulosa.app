@@ -922,7 +922,7 @@ export type {
 	MountPointingStep,
 } from './mountpointing.sessions'
 export type { PointingAcquisitionState, PointingModelExport, PointingModelFile, PointingModelSummary, PointingMountIdentity, PointingOpticsFingerprint, PointingPlanRecord, PointingRevision, PointingSampleRecord, PointingVerification } from './mountpointing.store'
-export type { TppaAlignment, TppaAttempt, TppaCaptureSettings, TppaEvent, TppaGeometry, TppaOverlay, TppaPoint, TppaRequest, TppaSession, TppaSessionSummary, TppaSnapshot, TppaStartResponse, TppaState } from './tppa'
+export type { TppaAlignment, TppaAltitudeCorrection, TppaAttempt, TppaAzimuthCorrection, TppaCaptureSettings, TppaEvent, TppaGeometry, TppaOverlay, TppaPoint, TppaRequest, TppaSession, TppaSessionSummary, TppaSnapshot, TppaStartResponse, TppaState } from './tppa'
 export type { DarkEvidence, DarkRejection } from './calibrationdark'
 export type {
 	IPolarAttempt,

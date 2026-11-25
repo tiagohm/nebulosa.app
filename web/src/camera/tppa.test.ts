@@ -1,10 +1,10 @@
 import { expect, test } from 'bun:test'
 import type { MountState, TppaSession, TppaSessionSummary } from 'api'
-import { deg } from 'nebulosa/src/math/units/angle'
+import { arcmin, deg } from 'nebulosa/src/math/units/angle'
 import { proxy } from 'valtio'
 import { DEFAULT_CAMERA_PLATE_SOLVING, DEFAULT_EXPOSURE_SETTINGS, DEFAULT_TPPA_SETTINGS } from '../profile/schema'
 import { cameraKey } from './capture'
-import { handleTppaEvent, refreshTppa, startTppa, stopTppaRefinement, tppaBlocker, tppaFrameRole, tppaMountSupport, tppaRequest, type TppaRuntime, tppaSlewRate } from './tppa'
+import { handleTppaEvent, refreshTppa, startTppa, stopTppaRefinement, tppaAligned, tppaBlocker, tppaCorrectionText, tppaFrameRole, tppaMountSupport, tppaNearPole, tppaRequest, type TppaRuntime, tppaSlewRate, tppaSummaryText } from './tppa'
 
 function newState() {
 	return proxy<TppaRuntime>({ sessions: {}, details: {}, pending: {}, errors: {} })
@@ -165,11 +165,32 @@ test('a TPPA frame is a pose, a rejected candidate, or a refinement frame of its
 	const session = details({
 		points: [{ point: 1, frame: 1, rightAscension: 0, declination: 0, time: 1 }],
 		attempts: [{ point: 2, frame: 2, rotation: deg(3), totalRotation: deg(3), separation: deg(3), accepted: false, reason: 'insufficientRotation' }],
-		initialAlignment: { stage: 'acquisition', frame: 4, azimuthError: 0, altitudeError: 0, totalError: 0, azimuthAdjustment: 0, altitudeAdjustment: 0, time: 1 },
+		initialAlignment: { stage: 'acquisition', frame: 4, azimuthError: 0, altitudeError: 0, totalError: 0, azimuthAdjustment: 0, altitudeAdjustment: 0, azimuthCorrection: 'west', altitudeCorrection: 'lower', time: 1 },
 	})
 
 	expect(tppaFrameRole(session, { sessionId: 's1', generation: 1 })).toEqual({ point: 1, rejected: false, refinement: false })
 	expect(tppaFrameRole(session, { sessionId: 's1', generation: 2 })).toEqual({ rejected: true, refinement: false })
 	expect(tppaFrameRole(session, { sessionId: 's1', generation: 5 })).toEqual({ rejected: false, refinement: true })
 	expect(tppaFrameRole(session, { sessionId: 's2', generation: 1 })).toBeUndefined()
+})
+
+test('a TPPA estimate is said as the moves of the pole with their size, in the way the server gives', () => {
+	expect(tppaCorrectionText({ azimuthError: arcmin(1.04), altitudeError: arcmin(-0.4), azimuthCorrection: 'west', altitudeCorrection: 'raise' })).toEqual({ azimuth: 'Move west 1.0′', altitude: 'Raise 0.4′' })
+	expect(tppaCorrectionText({ azimuthError: arcmin(-2), altitudeError: arcmin(3), azimuthCorrection: 'east', altitudeCorrection: 'lower' })).toEqual({ azimuth: 'Move east 2.0′', altitude: 'Lower 3.0′' })
+	expect(tppaCorrectionText({ azimuthError: arcmin(0.04), altitudeError: arcmin(0.1), azimuthCorrection: 'west', altitudeCorrection: 'lower' })).toEqual({ azimuth: 'No move', altitude: 'Lower 0.1′' })
+	expect(tppaAligned(arcmin(1))).toBeTrue()
+	expect(tppaAligned(arcmin(1.1))).toBeFalse()
+})
+
+test('a mount pointing within 10° of either pole is near the pole', () => {
+	expect(tppaNearPole({ declination: deg(81) })).toBeTrue()
+	expect(tppaNearPole({ declination: deg(-85) })).toBeTrue()
+	expect(tppaNearPole({ declination: deg(79) })).toBeFalse()
+	expect(tppaNearPole(undefined)).toBeFalse()
+})
+
+test('a TPPA session is summarized by its state and its error or point', () => {
+	expect(tppaSummaryText({ state: 'capturing', point: 2 })).toBe('Exposing · point 2/3')
+	expect(tppaSummaryText({ state: 'failed', point: 1, endedAt: 2 })).toBe('Failed')
+	expect(tppaSummaryText({ state: 'refining', alignment: { totalError: arcmin(2.5) } as TppaSessionSummary['alignment'] })).toBe('Refining · 2.5′')
 })

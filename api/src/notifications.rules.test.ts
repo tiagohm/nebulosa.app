@@ -133,6 +133,7 @@ test('reports Auto Focus and TPPA transitions', () => {
 	expect(classifier.classify(tppa({ state: 'refinementPaused' }))).toEqual([])
 	expect(classifier.classify(tppa({ state: 'completed' }))).toEqual([])
 	expect(classifier.classify(tppa({ state: 'failed', reason: 'timeout' }))[0]).toMatchObject({ key: 'tppa:t1', code: 'tppa.failed' })
+	expect(classifier.classify(tppa({ sessionId: 't2', state: 'failed', reason: 'unexpectedState', error: 'point 2 moved against the RA direction' }))[0]).toMatchObject({ message: 'TPPA of CCD with Mount failed: point 2 moved against the RA direction.' })
 })
 
 test('reports iPolar ready to refine, within its target, and failed, never a cancellation', () => {

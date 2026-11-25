@@ -452,12 +452,12 @@ export class NotificationClassifier {
 
 	// Reports a TPPA ready for refinement or failed; it never claims the alignment is good.
 	#tppa(session: TppaSessionSummary): NotificationDraft[] {
-		const { sessionId, camera, mountName, state, reason } = session
+		const { sessionId, camera, cameraName, mountName, state, reason } = session
 		const source = this.#source('tppa', camera.connectionId, session.mount.deviceId, session.operationId, sessionId)
 		const target = cameraTool(camera.connectionId, camera.deviceId, 'tppa')
 
 		if (state === 'readyToRefine') return [{ key: `tppa.ready:${sessionId}`, level: 'info', code: 'tppa.readyToRefine', title: 'TPPA ready to refine', message: `The polar error of ${mountName} was estimated; adjust the mount while TPPA refines it.`, source, target }]
-		if (state === 'failed' && !this.#quiet(camera.connectionId, reason)) return [{ key: `tppa:${sessionId}`, level: 'error', code: 'tppa.failed', title: 'TPPA failed', message: `TPPA with ${mountName} failed: ${failureText(reason, session.error)}.`, source, target }]
+		if (state === 'failed' && !this.#quiet(camera.connectionId, reason)) return [{ key: `tppa:${sessionId}`, level: 'error', code: 'tppa.failed', title: 'TPPA failed', message: `TPPA of ${cameraName} with ${mountName} failed: ${session.error ?? failureText(reason, undefined)}.`, source, target }]
 		return []
 	}
 

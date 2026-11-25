@@ -143,9 +143,19 @@ export interface TppaAlignment {
 	readonly azimuthAdjustment: number
 	// Altitude knob change inferred from the last refinement frame, in radians; 0 for the initial estimate.
 	readonly altitudeAdjustment: number
+	// Way the mount pole has to move in azimuth to remove azimuthError (tppaCorrection).
+	readonly azimuthCorrection: TppaAzimuthCorrection
+	// Way the mount pole has to move in altitude to remove altitudeError (tppaCorrection).
+	readonly altitudeCorrection: TppaAltitudeCorrection
 	// Midpoint of the exposure, Unix milliseconds (UTC).
 	readonly time: number
 }
+
+// Horizon the mount pole has to move towards to remove the azimuth error.
+export type TppaAzimuthCorrection = 'east' | 'west'
+
+// Way the mount pole has to move to remove the altitude error: raised or lowered.
+export type TppaAltitudeCorrection = 'raise' | 'lower'
 
 // Correction guide of the latest estimate over its frame, in the continuous WCS pixel convention of the toolkit.
 export interface TppaOverlay {
@@ -630,6 +640,7 @@ export class TppaSessions {
 			totalError,
 			azimuthAdjustment: result.azimuthAdjustment,
 			altitudeAdjustment: result.altitudeAdjustment,
+			...tppaCorrection(result.azimuthError, result.altitudeError, session.mount.geographicCoordinate.latitude),
 			time: frame?.observedAt ?? timeToUnixMillis(sample[2]),
 		}
 
@@ -672,7 +683,7 @@ export class TppaSessions {
 		const ended = { ...restoration, warnings, exposure: undefined, endedAt: Date.now() }
 		if (result.ok || (result.reason === 'aborted' && estimated)) this.#sessions.update(session, { state: 'completed', ...ended })
 		else if (result.reason === 'aborted') this.#sessions.update(session, { state: 'cancelled', ...ended })
-		else this.#sessions.update(session, { state: 'failed', reason: result.reason, ...(result.error !== undefined && { error: result.error }), ...ended })
+		else this.#sessions.update(session, { state: 'failed', reason: result.reason, ...(result.error !== undefined && { error: tppaErrorText(result.error) }), ...ended })
 	}
 
 	// Records a warning of a session.
@@ -697,6 +708,48 @@ function mountRefusal(mount: Mount, slewRate: string) {
 	if (mount.parked || mount.parking) return `${mount.name} is parked`
 	if (!mount.tracking && !mount.canTracking) return `${mount.name} is not tracking and cannot start tracking`
 	return undefined
+}
+
+// Returns the way the mount pole has to move to remove a polar error, from the signed azimuth and altitude errors of
+// the toolkit (radians) and the site's geodetic latitude (radians; the northern convention at 0). The toolkit measures
+// the azimuth error from the pole's azimuth, positive towards the east in the north and towards the west in the south,
+// and the altitude error positive when the pole stands too high in the north and too low in the south. A zero error
+// gives the way of a positive one; its size says there is nothing to move.
+export function tppaCorrection(azimuthError: number, altitudeError: number, latitude: number): Pick<TppaAlignment, 'azimuthCorrection' | 'altitudeCorrection'> {
+	const north = latitude >= 0
+	return { azimuthCorrection: azimuthError > 0 === north ? 'west' : 'east', altitudeCorrection: altitudeError > 0 === north ? 'lower' : 'raise' }
+}
+
+// Explanation and remedy of each reason the toolkit rejects a pose, said after "point N", for people.
+const REJECTION_TEXT: Readonly<Record<PolarAlignmentGeometryRejection, string>> = {
+	nearPole: `is within ${Math.round(DEFAULT_POLAR_ALIGNMENT_GEOMETRY_LIMITS.minimumPolarDistance / DEG2RAD)}° of the celestial pole, where the RA rotation cannot be measured; point the telescope farther from the pole, near the meridian, and start again`,
+	insufficientRotation: 'did not rotate far enough; raise the Rotation per Point or choose a faster slew rate, and start again',
+	insufficientSeparation: 'is too close to the previous point on the sky; raise the Rotation per Point and start again',
+	reversedRotation: 'moved against the RA direction; check that nothing else moves the mount and start again',
+	excessiveRotation: `rotated more than ${Math.round(DEFAULT_POLAR_ALIGNMENT_GEOMETRY_LIMITS.maximumRotation / DEG2RAD)}° from the first point; lower the Rotation per Point or choose a slower slew rate, and start again`,
+	declinationChanged: 'changed declination, so the mount did not move in RA only; check that nothing else moves the mount and that the DEC clutch is tight, and start again',
+	collinear: 'leaves the three points on a line that gives no pole; raise the Rotation per Point and start again',
+}
+
+// Failure detail of the toolkit's TPPA runner for a rejected pose: the pose number and the rejection.
+const REJECTED_POSE = /^pose ([123]) rejected: (\w+)$/
+
+// Failure detail of the toolkit's TPPA runner for a pose not reached: the pose number and the attempts made.
+const UNREACHED_POSE = /^pose ([123]) not reached in (\d+) attempts$/
+
+// Failure detail of the toolkit's TPPA runner for a first frame that did not solve.
+const UNSOLVED_FIRST_POSE = 'the first pose did not solve'
+
+// Returns the failure detail of the toolkit's TPPA runner for people: a rejected pose, an unreached one, or an
+// unsolved first frame explained with what to do; any other detail as it is.
+export function tppaErrorText(error: string): string {
+	const rejected = REJECTED_POSE.exec(error)
+	const reason = rejected?.[2] as PolarAlignmentGeometryRejection | undefined
+	if (rejected && reason && reason in REJECTION_TEXT) return `point ${rejected[1]} ${REJECTION_TEXT[reason]}`
+	const unreached = UNREACHED_POSE.exec(error)
+	if (unreached) return `point ${unreached[1]} was not reached in ${unreached[2]} attempts; check that the frames solve and that the mount rotates in RA, and start again`
+	if (error === UNSOLVED_FIRST_POSE) return 'the first frame did not solve; check the focus, the exposure time, and the plate solving settings, and start again'
+	return error
 }
 
 // Returns the warnings with one more, keeping the latest MAXIMUM_WARNINGS.

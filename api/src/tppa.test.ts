@@ -18,7 +18,7 @@ import { AppDatabase } from './database'
 import { ImageStore } from './images'
 import { OperationRegistry } from './operations'
 import type { PlateSolveOrigin, PlateSolvePreparation, PlateSolveRequest, PlateSolveResult } from './platesolving'
-import { type TppaEvent, type TppaRequest, type TppaSession, TppaSessions } from './tppa'
+import { type TppaEvent, type TppaRequest, type TppaSession, TppaSessions, tppaCorrection, tppaErrorText } from './tppa'
 
 const SKIP = process.env.RUN_ALL_TESTS !== 'true'
 
@@ -311,5 +311,34 @@ describe('TPPA sessions', () => {
 		expect(await second.json()).toEqual(started as never)
 		await tppa.stop(started.sessionId)
 		await waitUntil(ended)
+	})
+})
+
+describe('correction', () => {
+	test('a pole east of and above the true pole in the north moves west and down', () => {
+		expect(tppaCorrection(deg(0.1), deg(0.1), deg(45))).toEqual({ azimuthCorrection: 'west', altitudeCorrection: 'lower' })
+		expect(tppaCorrection(deg(-0.1), deg(-0.1), deg(45))).toEqual({ azimuthCorrection: 'east', altitudeCorrection: 'raise' })
+	})
+
+	test('the southern hemisphere reverses both ways', () => {
+		expect(tppaCorrection(deg(0.1), deg(0.1), deg(-23))).toEqual({ azimuthCorrection: 'east', altitudeCorrection: 'raise' })
+		expect(tppaCorrection(deg(-0.1), deg(-0.1), deg(-23))).toEqual({ azimuthCorrection: 'west', altitudeCorrection: 'lower' })
+	})
+})
+
+describe('failure text', () => {
+	test('a rejected pose is explained with what to do', () => {
+		expect(tppaErrorText('pose 1 rejected: nearPole')).toStartWith('point 1 is within 10° of the celestial pole')
+		expect(tppaErrorText('pose 3 rejected: declinationChanged')).toStartWith('point 3 changed declination')
+	})
+
+	test('an unreached or unsolved pose is explained', () => {
+		expect(tppaErrorText('pose 2 not reached in 5 attempts')).toStartWith('point 2 was not reached in 5 attempts;')
+		expect(tppaErrorText('the first pose did not solve')).toStartWith('the first frame did not solve;')
+	})
+
+	test('any other detail is kept', () => {
+		expect(tppaErrorText('mount M did not rotate in RA')).toBe('mount M did not rotate in RA')
+		expect(tppaErrorText('pose 2 rejected: somethingNew')).toBe('pose 2 rejected: somethingNew')
 	})
 })

@@ -1,8 +1,10 @@
-import type { CameraCapabilities, MountState, ServerEvent, TppaRequest, TppaSession, TppaSessionSummary, TppaState } from 'api'
+import type { CameraCapabilities, MountState, ServerEvent, TppaAlignment, TppaAltitudeCorrection, TppaAttempt, TppaAzimuthCorrection, TppaOverlay, TppaRequest, TppaSession, TppaSessionSummary, TppaState } from 'api'
 import { nanoid } from 'nanoid'
 import { DEG2RAD } from 'nebulosa/src/core/constants'
+import { arcmin } from 'nebulosa/src/math/units/angle'
 import { proxy } from 'valtio'
 import type { RoleAvailability } from '../equipment/availability'
+import { formatArcmin } from '../format'
 import { type ApiFetch, browserFetch, deviceUrl, jsonInit } from '../http'
 import type { CameraExposureSettings, CameraPlateSolvingSettings, TppaSettings } from '../profile/schema'
 import { SnapshotRefreshes } from '../refresh'
@@ -44,6 +46,86 @@ export const TPPA_STATE_LABELS: Readonly<Record<TppaState, string>> = {
 	completed: 'Completed',
 	failed: 'Failed',
 	cancelled: 'Stopped',
+}
+
+// Polar error at or below which the panel and the correction guide say the mount is aligned, in radians (1
+// arcminute): the error that keeps field rotation and declination drift negligible over a long exposure at the focal
+// lengths of most imaging rigs. It names a result; the session keeps refining below it.
+export const TPPA_ALIGNED_ERROR = arcmin(1)
+
+// Angular distance from the celestial pole under which the toolkit refuses the first point, in radians: 10°, the
+// minimumPolarDistance of its DEFAULT_POLAR_ALIGNMENT_GEOMETRY_LIMITS.
+export const TPPA_MINIMUM_POLAR_DISTANCE = 10 * DEG2RAD
+
+// Verb of each way the mount pole moves in azimuth, said before the amount.
+export const TPPA_AZIMUTH_CORRECTION_LABELS: Readonly<Record<TppaAzimuthCorrection, string>> = { east: 'Move east', west: 'Move west' }
+
+// Verb of each way the mount pole moves in altitude, said before the amount.
+export const TPPA_ALTITUDE_CORRECTION_LABELS: Readonly<Record<TppaAltitudeCorrection, string>> = { raise: 'Raise', lower: 'Lower' }
+
+// What happened to a candidate of the second or third point that was not accepted, said after its rotation.
+export const TPPA_REJECTION_LABELS: Readonly<Record<NonNullable<TppaAttempt['reason']>, string>> = {
+	nearPole: 'too close to the celestial pole',
+	insufficientRotation: 'not far enough, moving further',
+	insufficientSeparation: 'too close to the previous point, moving further',
+	reversedRotation: 'moved against the RA direction',
+	excessiveRotation: 'rotated too far',
+	declinationChanged: 'the declination changed',
+	collinear: 'the points lie on a line',
+}
+
+// Why the correction guide could not be drawn over a frame, with what to do when the operator can act.
+export const TPPA_OVERLAY_FAILURE_LABELS: Readonly<Record<NonNullable<TppaOverlay['failure']>, string>> = {
+	invalidOptions: 'its options are invalid',
+	invalidFrame: 'the frame has no usable size',
+	invalidWcs: 'the plate solution of the frame cannot be used',
+	missingLocation: 'the mount reports no site; send it from Equipment Control',
+	invalidPole: 'the mount pole could not be placed on the sky',
+	invalidReference: 'the reference star could not be placed on the sky',
+	unprojectableReference: 'the reference star cannot be placed on the frame',
+	unprojectableTarget: 'the target cannot be placed on the frame',
+	degenerateCorrection: 'the correction is undefined for this field',
+}
+
+// What each warning of the correction guide means for the operator.
+export const TPPA_OVERLAY_WARNING_LABELS: Readonly<Record<NonNullable<TppaOverlay['geometry']>['diagnostics']['warnings'][number], string>> = {
+	correctionNotConverged: 'the correction is approximate; follow the numbers of the panel',
+	correctionIllConditioned: 'the correction is poorly defined in this field; follow the numbers of the panel',
+	referenceOutsideFrame: 'the star is outside the frame; follow its arrow',
+	contourOmitted: 'some error rings fall outside the frame',
+	contourIllConditioned: 'some error rings are approximate',
+}
+
+// Returns the moves that remove the polar error of an estimate, in words with their size: "Move west 1.0′", "Lower
+// 0.4′", or "No move" when the error rounds to 0.0′. The way is the server's (TppaAlignment), never derived here from
+// the signs.
+export function tppaCorrectionText(alignment: Pick<TppaAlignment, 'azimuthError' | 'altitudeError' | 'azimuthCorrection' | 'altitudeCorrection'>): { readonly azimuth: string; readonly altitude: string } {
+	return { azimuth: moveText(TPPA_AZIMUTH_CORRECTION_LABELS[alignment.azimuthCorrection], alignment.azimuthError), altitude: moveText(TPPA_ALTITUDE_CORRECTION_LABELS[alignment.altitudeCorrection], alignment.altitudeError) }
+}
+
+// Returns a move of the pole by the size of an error (radians) after its verb, or "No move" when it rounds to 0.0′.
+function moveText(verb: string, error: number) {
+	const size = formatArcmin(Math.abs(error))
+	return size === formatArcmin(0) ? 'No move' : `${verb} ${size}`
+}
+
+// Returns whether a polar error, in radians, is within TPPA_ALIGNED_ERROR.
+export function tppaAligned(totalError: number): boolean {
+	return totalError <= TPPA_ALIGNED_ERROR
+}
+
+// Returns whether the mount reports pointing nearer the celestial pole than the toolkit accepts for the first point,
+// from its declination of date (radians); false while its state is unknown.
+export function tppaNearPole(state: Pick<MountState, 'declination'> | undefined): boolean {
+	return state !== undefined && Math.PI / 2 - Math.abs(state.declination) < TPPA_MINIMUM_POLAR_DISTANCE
+}
+
+// Returns the one-line summary of a session beside its collapsed section: its state, and the polar error once
+// estimated or the point being acquired.
+export function tppaSummaryText(session: Pick<TppaSessionSummary, 'state' | 'alignment' | 'point' | 'endedAt'>): string {
+	const state = TPPA_STATE_LABELS[session.state]
+	if (session.alignment) return `${state} · ${formatArcmin(session.alignment.totalError)}`
+	return session.point && tppaRunning(session) ? `${state} · point ${session.point}/3` : state
 }
 
 // Label of each RA direction.

@@ -123,7 +123,7 @@ export const IMAGE_TOOL_DEFINITIONS: Readonly<Record<ImageToolId, ImageToolDefin
 	'mount-nudge': { id: 'mount-nudge', label: 'Mount Nudge', panelTitle: 'Mount Nudge', icon: 'move', category: 'camera', panel: MountNudgeTool, sheet: true },
 	guiding: { id: 'guiding', label: 'Guiding', panelTitle: 'Guiding', icon: 'guideStar', category: 'camera', panel: GuidingTool, sheet: true },
 	darv: { id: 'darv', label: 'DARV', panelTitle: 'DARV', icon: 'darv', category: 'camera', panel: DarvTool },
-	tppa: { id: 'tppa', label: 'TPPA', panelTitle: 'TPPA', icon: 'threePoint', category: 'camera', panel: TppaTool },
+	tppa: { id: 'tppa', label: 'TPPA', panelTitle: 'TPPA', icon: 'threePoint', category: 'camera', panel: TppaTool, sheet: true },
 	ipolar: { id: 'ipolar', label: 'iPolar', panelTitle: 'iPolar', icon: 'polarScope', category: 'camera', panel: IPolarTool },
 	'pointing-model-builder': { id: 'pointing-model-builder', label: 'Pointing Model Builder', panelTitle: 'Pointing Model Builder', icon: 'pointingModel', category: 'camera', panel: PointingModelBuilderTool },
 	'target-centering': { id: 'target-centering', label: 'Target Centering', panelTitle: 'Target Centering', icon: 'target', category: 'camera', panel: TargetCenteringTool },

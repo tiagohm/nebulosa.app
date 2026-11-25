@@ -70,7 +70,7 @@ function fakeSolver(images: ImageStore) {
 	const origins: PlateSolveOrigin[] = []
 
 	const solver = {
-		prepare: (solving: PlateSolveRequest) => Promise.resolve({ request: solving, tool: { executable: '', timeout: 60000, indexDirectory: '', catalogDirectory: '' } }),
+		prepare: (solving: PlateSolveRequest) => Promise.resolve({ request: solving, tool: { executable: '', timeout: 60000, indexDirectory: '' } }),
 		solve: (imageId: string, _preparation: PlateSolvePreparation, _signal?: AbortSignal, origin?: PlateSolveOrigin) => {
 			if (origin) origins.push(origin)
 			const { header } = images.metadata(imageId)!

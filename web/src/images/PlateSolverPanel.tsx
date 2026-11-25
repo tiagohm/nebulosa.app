@@ -50,8 +50,8 @@ import type { ImageToolPanelProps } from './tools'
 // image (a camera tab waiting for its first frame), with Solve Image disabled until it has one. A job stays bound to the
 // image it solved, so switching documents never shows its solution on another one. The latest solution is that of the
 // newest solve that found one, so a solve that runs, fails, or ends without a solution keeps the solution shown, and a
-// solution chosen in Solutions stays shown whatever ends. The index files and star database of the solver are set in
-// Settings → External Tools, which the Solver section links to. Sync Mount, after a confirmation, syncs the MOUNT of the active equipment setup on the centre
+// solution chosen in Solutions stays shown whatever ends. The index folder of the solver is set in Settings → External
+// Tools, which the Solver section links to. Sync Mount, after a confirmation, syncs the MOUNT of the active equipment setup on the centre
 // of the solution shown; nothing here moves a mount.
 
 // Display names of the hint origins.

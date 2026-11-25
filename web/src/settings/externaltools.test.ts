@@ -121,8 +121,7 @@ test('a check describes only the values it checked', () => {
 	expect(checkMatches(check(), { executable: '/usr/bin/mediamtx', timeout: 300000 })).toBeFalse()
 })
 
-test('the folders of the built-in solver are part of a configuration', () => {
+test('the index folder of the built-in solver is part of a configuration', () => {
 	expect(sameConfig({ executable: '', timeout: 1000 }, { executable: '', timeout: 1000, indexDirectory: '' })).toBeTrue()
 	expect(sameConfig({ executable: '', timeout: 1000, indexDirectory: 'a' }, { executable: '', timeout: 1000, indexDirectory: 'b' })).toBeFalse()
-	expect(sameConfig({ executable: '', timeout: 1000, catalogDirectory: 'd50' }, { executable: '', timeout: 1000 })).toBeFalse()
 })

@@ -11,7 +11,7 @@ import { NativePlateSolver, NativeSolveError } from './platesolving.native'
 // Plate solving service of the manual solves of the Images workspace, on files and camera frames alike. A solve finds
 // the World Coordinate System of an image document of the image store, addressed by its id (a document never changes,
 // so the id is its scientific identity), with the built-in solver (platesolving.native.ts), run on a worker of its own
-// over the grayscale copy of the document with the index files and star database of the folders set in External Tools,
+// over the grayscale copy of the document with the index files of the folder set in External Tools,
 // whose settings are resolved once per job (or once per capture session) and never come from a request.
 //
 // The result keeps the whole WCS header of the solver (CD matrix, SIP terms, frame) as the toolkit's PlateSolution,
@@ -251,14 +251,14 @@ const DERIVED_FIELDS = new Set(['orientation', 'scale', 'width', 'height', 'pari
 // Origin of a solve a person asked for.
 const MANUAL_ORIGIN: PlateSolveOrigin = { kind: 'manual' }
 
-// Returns the key of an equivalent solve: the same image, strategy, effective hints, tolerance, folders of the solver,
+// Returns the key of an equivalent solve: the same image, strategy, effective hints, tolerance, index folder,
 // pixels (the fingerprint of private pixels, empty for the image itself), and generation of the downloaded index
 // bands, which advances when one is installed or removed. The timeout is left out, since it does not change a result;
-// so are the other changes of the contents of the folders, so a solve after their index files changed by hand answers
+// so are the other changes of the contents of the folder, so a solve after its index files changed by hand answers
 // with the kept result of the same request.
 export function plateSolveCacheKey(imageId: string, { strategy, scaleTolerance }: PlateSolveRequest, hints: ResolvedPlateSolveHints, tool: ExternalToolConfig, fingerprint: string = '', indexGeneration: number = 0): string {
 	const values = [hints.rightAscension?.value, hints.declination?.value, hints.radius?.value, hints.scale?.value]
-	return JSON.stringify([imageId, strategy, values, scaleTolerance ?? DEFAULT_SCALE_TOLERANCE, tool.indexDirectory ?? '', tool.catalogDirectory ?? '', fingerprint, indexGeneration])
+	return JSON.stringify([imageId, strategy, values, scaleTolerance ?? DEFAULT_SCALE_TOLERANCE, tool.indexDirectory ?? '', fingerprint, indexGeneration])
 }
 
 // Returns the solution of a WCS header for an image of width × height pixels, or undefined when plateSolutionFrom
@@ -464,7 +464,6 @@ export class PlateSolvingService implements Disposable {
 				{
 					pixels: pixels ? { kind: 'fits', bytes: pixels.bytes } : { kind: 'image', image: image! },
 					indexDirectory: tool.indexDirectory?.trim() ?? '',
-					catalogDirectory: tool.catalogDirectory?.trim() ?? '',
 					width,
 					height,
 					...(position && { position }),
@@ -501,7 +500,7 @@ function warnings(request: PlateSolveRequest, hints: ResolvedPlateSolveHints, so
 	if (request.strategy === 'assisted' && !hints.rightAscension) warnings.push('No position was known: the search covered the whole sky.')
 	if (hints.rightAscension?.source === 'header') warnings.push('The search center is the pointing recorded in the header.')
 	if (hints.radius?.source === 'default') warnings.push('The search radius is the default one.')
-	if (!solution) warnings.push('A search without a solution may need index files or a star database covering this field and scale.')
+	if (!solution) warnings.push('A search without a solution may need index files covering this field and scale.')
 	return warnings
 }
 

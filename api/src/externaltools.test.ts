@@ -66,7 +66,7 @@ describe('catalog', () => {
 		const tools = (await (await call(routes, '/api/settings/external-tools', 'GET')).json()) as ExternalToolState[]
 
 		expect(tools.map((tool) => tool.id)).toEqual(['nebulosa', 'mediamtx'])
-		expect(tools[0]).toMatchObject({ name: 'Nebulosa', capabilities: ['plate-solving'], fields: ['indexDirectory', 'catalogDirectory'], status: 'configured', revision: 0, config: { executable: '', timeout: DEFAULT_EXTERNAL_TOOL_TIMEOUT, indexDirectory: '', catalogDirectory: '' } })
+		expect(tools[0]).toMatchObject({ name: 'Nebulosa', capabilities: ['plate-solving'], fields: ['indexDirectory'], status: 'configured', revision: 0, config: { executable: '', timeout: DEFAULT_EXTERNAL_TOOL_TIMEOUT, indexDirectory: '' } })
 		expect(tools[0].lastCheck).toBeUndefined()
 		expect(tools[1]).toMatchObject({ name: 'MediaMTX', capabilities: ['video-gateway'], fields: ['executable'], status: 'notConfigured', timeoutLimits: { min: 1000, max: 60000 }, config: { executable: '', timeout: DEFAULT_MEDIAMTX_TIMEOUT } })
 	})
@@ -101,7 +101,7 @@ describe('persistence', () => {
 		const reopened = new AppDatabase(file)
 		const second = new ExternalToolsStore(reopened)
 		expect(await second.get('mediamtx')).toMatchObject({ status: 'configured', revision: 1, config: { executable: path, timeout: 60000 } })
-		expect(rows(reopened)).toEqual([{ tool_id: 'mediamtx', executable: path, timeout: 60000, index_directory: null, catalog_directory: null, revision: 1, updated_at: expect.any(Number) }])
+		expect(rows(reopened)).toEqual([{ tool_id: 'mediamtx', executable: path, timeout: 60000, index_directory: null, revision: 1, updated_at: expect.any(Number) }])
 		reopened.close()
 	})
 
@@ -313,37 +313,33 @@ describe('built-in solver', () => {
 		const { store: tools } = store(undefined, probe)
 		const indexes = folder('nqi-480-4-0001.nqi')
 
-		expect(await tools.resolve('nebulosa')).toEqual({ executable: '', timeout: DEFAULT_EXTERNAL_TOOL_TIMEOUT, indexDirectory: defaultIndexes, catalogDirectory: '' })
+		expect(await tools.resolve('nebulosa')).toEqual({ executable: '', timeout: DEFAULT_EXTERNAL_TOOL_TIMEOUT, indexDirectory: defaultIndexes })
 		expect(await tools.save('nebulosa', { executable: '/bin/sh', timeout: 60000, indexDirectory: indexes }, 0)).toMatchObject({ status: 'saved', tool: { status: 'configured' } })
-		expect(await tools.resolve('nebulosa')).toEqual({ executable: '', timeout: 60000, indexDirectory: indexes, catalogDirectory: '' })
+		expect(await tools.resolve('nebulosa')).toEqual({ executable: '', timeout: 60000, indexDirectory: indexes })
 
 		await tools.checkSaved()
 		expect(calls).toEqual([])
 		expect((await tools.get('nebulosa')).lastCheck).toMatchObject({ status: 'available', code: 'ok' })
 	})
 
-	test('finds the index files with the subfolders and the supported star databases', async () => {
+	test('finds the index files with the subfolders', async () => {
 		const { store: tools } = store()
-		const indexes = folder('gaia/nqi-480-4-0001.nqi', 'gaia/nqi-480-4-0002.nqi', 'an/index-4110.fits', 'an/notes.fits')
-		const catalog = folder('d50_0101.1476', 'd50_0102.1476', 'g16_0101.290', 'v50_0101.1476')
+		const indexes = folder('gaia/nqi-480-4-0001.nqi', 'gaia/nqi-480-4-0002.nqi', 'an/index-4110.fits', 'an/notes.fits', 'd50_0101.1476')
 
-		const check = await tools.check('nebulosa', { executable: '', timeout: 60000, indexDirectory: indexes, catalogDirectory: catalog })
+		const check = await tools.check('nebulosa', { executable: '', timeout: 60000, indexDirectory: indexes })
 		expect(check).toMatchObject({ status: 'available', code: 'ok', resolvedPath: indexes })
-		expect(check.message).toBe('Found 2 Nebulosa index files, 1 Astrometry.net index file, star database ASTAP D50, HNSKY G16. The files are read once a solve needs them.')
-
-		const catalogOnly = await tools.check('nebulosa', { executable: '', timeout: 60000, catalogDirectory: catalog })
-		expect(catalogOnly.message).toContain('only images with a known position and scale are solved')
+		expect(check.message).toBe('Found 2 Nebulosa index files, 1 Astrometry.net index file. The files are read once a solve needs them.')
 	})
 
-	test('refuses folders that are unset, missing, files, or hold nothing it reads', async () => {
+	test('refuses an index folder that is unset, missing, a file, or holds nothing it reads', async () => {
 		const { store: tools } = store()
 		const file = join(root, `solver-file-${files++}`)
 		writeFileSync(file, '')
 
-		expect(await tools.check('nebulosa', { executable: '', timeout: 60000, indexDirectory: ' ', catalogDirectory: '' })).toMatchObject({ status: 'unavailable', code: 'noIndexes', resolvedPath: defaultIndexes, message: expect.stringContaining('Download the index bands') })
+		expect(await tools.check('nebulosa', { executable: '', timeout: 60000, indexDirectory: ' ' })).toMatchObject({ status: 'unavailable', code: 'noIndexes', resolvedPath: defaultIndexes, message: expect.stringContaining('Download the index bands') })
 		expect(await tools.check('nebulosa', { executable: '', timeout: 60000, indexDirectory: join(root, 'nowhere') })).toMatchObject({ status: 'unavailable', code: 'missing' })
-		expect(await tools.check('nebulosa', { executable: '', timeout: 60000, catalogDirectory: file })).toMatchObject({ status: 'failed', code: 'notDirectory' })
-		expect(await tools.check('nebulosa', { executable: '', timeout: 60000, indexDirectory: folder('readme.txt'), catalogDirectory: folder('v50_0101.1476') })).toMatchObject({ status: 'unavailable', code: 'noIndexes' })
+		expect(await tools.check('nebulosa', { executable: '', timeout: 60000, indexDirectory: file })).toMatchObject({ status: 'failed', code: 'notDirectory' })
+		expect(await tools.check('nebulosa', { executable: '', timeout: 60000, indexDirectory: folder('readme.txt', 'd50_0101.1476') })).toMatchObject({ status: 'unavailable', code: 'noIndexes' })
 	})
 
 	test('an empty Index Folder checks the default index folder once a band is installed there', async () => {
@@ -361,11 +357,11 @@ describe('built-in solver', () => {
 	test('keeps its folders across a restart', async () => {
 		const file = databaseFile()
 		const database = new AppDatabase(file)
-		await new ExternalToolsStore(database).save('nebulosa', { executable: '', timeout: 90000, indexDirectory: '/data/quads', catalogDirectory: '/opt/astap' }, 0)
+		await new ExternalToolsStore(database).save('nebulosa', { executable: '', timeout: 90000, indexDirectory: '/data/quads' }, 0)
 		database.close()
 
 		const reopened = new AppDatabase(file)
-		expect(await new ExternalToolsStore(reopened).resolve('nebulosa')).toEqual({ executable: '', timeout: 90000, indexDirectory: '/data/quads', catalogDirectory: '/opt/astap' })
+		expect(await new ExternalToolsStore(reopened).resolve('nebulosa')).toEqual({ executable: '', timeout: 90000, indexDirectory: '/data/quads' })
 		reopened.close()
 	})
 })

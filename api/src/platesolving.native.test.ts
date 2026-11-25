@@ -13,7 +13,7 @@ import { AppDatabase } from './database'
 import { ExternalToolsStore } from './externaltools'
 import { ImageStore } from './images'
 import { type PlateSolveRequest, type PlateSolvingEvent, PlateSolvingService } from './platesolving'
-import { findQuadIndexFiles, findStarDatabases, largestStarDatabase, NativePlateSolver, NativeSolveError } from './platesolving.native'
+import { findQuadIndexFiles, NativePlateSolver, NativeSolveError } from './platesolving.native'
 
 const root = mkdtempSync(join(tmpdir(), 'nebulosa-native-solve-test-'))
 
@@ -131,11 +131,11 @@ const INDEXES = folder()
 writeIndex(INDEXES, 0.2)
 writeIndex(INDEXES, 0.28)
 
-// Creates a service whose built-in solver reads the folders.
-async function setup(indexDirectory: string, catalogDirectory = '', defaultIndexDirectory?: string) {
+// Creates a service whose built-in solver reads the index folder.
+async function setup(indexDirectory: string, defaultIndexDirectory?: string) {
 	const images = new ImageStore()
 	const tools = new ExternalToolsStore(AppDatabase.memory(), undefined, undefined, defaultIndexDirectory)
-	await tools.save('nebulosa', { executable: '', timeout: 60000, indexDirectory, catalogDirectory }, 0)
+	await tools.save('nebulosa', { executable: '', timeout: 60000, indexDirectory }, 0)
 	const events: PlateSolvingEvent[] = []
 	const service = new PlateSolvingService(images, tools, (event) => events.push(event))
 	const path = join(root, `image-${folders++}.fits`)
@@ -207,31 +207,6 @@ describe('files', () => {
 			chmodSync(join(directory, 'locked'), 0o755)
 		}
 	})
-
-	test('finds the supported star databases, shallowest first, ASTAP first', async () => {
-		const directory = folder()
-		for (const name of ['D80_0101.1476', 'd20_0101.1476', 'g14_0101.290', 'v50_0101.1476', 'readme.txt']) writeFileSync(join(directory, name), '')
-
-		expect((await findStarDatabases(directory)).map(({ kind, database }) => `${kind}:${database}`)).toEqual(['astap:d20', 'astap:d80', 'hnsky:g14'])
-	})
-
-	test('the largest star database is chosen, whatever its kind', async () => {
-		const directory = folder()
-		writeFileSync(join(directory, 'd80_0101.1476'), Buffer.alloc(300))
-		writeFileSync(join(directory, 'd80_0102.1476'), Buffer.alloc(300))
-		writeFileSync(join(directory, 'g14_0101.290'), Buffer.alloc(100))
-		const databases = await findStarDatabases(directory)
-
-		expect(databases.map(({ database, bytes }) => `${database}:${bytes}`)).toEqual(['d80:600', 'g14:100'])
-		expect(largestStarDatabase(databases)?.database).toBe('d80')
-		expect(
-			largestStarDatabase([
-				{ bytes: 10, database: 'd20' },
-				{ bytes: 50, database: 'g16' },
-			])?.database,
-		).toBe('g16')
-		expect(largestStarDatabase([])).toBeUndefined()
-	})
 })
 
 describe('solve', () => {
@@ -240,7 +215,7 @@ describe('solve', () => {
 		const result = await service.solve(info.id, BLIND)
 
 		expect(result.outcome).toBe('solved')
-		expect(result.tool).toEqual({ executable: '', timeout: 60000, indexDirectory: INDEXES, catalogDirectory: '' })
+		expect(result.tool).toEqual({ executable: '', timeout: 60000, indexDirectory: INDEXES })
 		expect(result.solution!.parity).toBe('NORMAL')
 		expect(result.scale! / SCALE).toBeCloseTo(1, 3)
 		expect(centerError(result.rightAscension!, result.declination!)).toBeLessThan(2)
@@ -271,7 +246,7 @@ describe('solve', () => {
 
 	test('an empty Index Folder searches the default index folder, which may not exist yet', async () => {
 		const missing = join(root, `default-${folders++}`)
-		const { service, info } = await setup('', '', missing)
+		const { service, info } = await setup('', missing)
 		const result = await service.solve(info.id, BLIND)
 
 		expect(result.outcome).toBe('noSolution')
@@ -309,16 +284,6 @@ describe('solve', () => {
 		expect(result.warnings.some((warning) => /-region\.nqi was skipped: .*\d\.nqi holds more of the same tile/.test(warning))).toBeTrue()
 		service[Symbol.dispose]()
 	})
-
-	test('the star database is searched only around a known position and scale', async () => {
-		const catalog = folder()
-		const { service, info } = await setup('', catalog)
-		const result = await service.solve(info.id, BLIND)
-
-		expect(result.outcome).toBe('noSolution')
-		expect(result.warnings).toContain('The star database is searched only around a known position with a known scale.')
-		service[Symbol.dispose]()
-	})
 })
 
 describe('worker', () => {
@@ -336,7 +301,7 @@ describe('worker', () => {
 		const solver = new NativePlateSolver()
 
 		try {
-			return await solver.solve({ pixels: { kind: 'fits', bytes: new Uint8Array(0) }, indexDirectory: '', catalogDirectory: '', width: 1, height: 1, timeout: 60000 }, signal)
+			return await solver.solve({ pixels: { kind: 'fits', bytes: new Uint8Array(0) }, indexDirectory: '', width: 1, height: 1, timeout: 60000 }, signal)
 		} finally {
 			solver[Symbol.dispose]()
 			if (previous === undefined) delete process.env.NEBULOSA_PLATESOLVING_WORKER

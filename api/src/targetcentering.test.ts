@@ -61,7 +61,7 @@ function fakeSolver(images: ImageStore) {
 	const control = { unsolved: 0, stall: false, error: undefined as Error | undefined, dx: arcmin(5), dy: arcmin(-3), onSolve: undefined as VoidFunction | undefined }
 
 	const solver = {
-		prepare: (solving: PlateSolveRequest) => Promise.resolve({ request: solving, tool: { executable: '', timeout: 60000, indexDirectory: '', catalogDirectory: '' } }),
+		prepare: (solving: PlateSolveRequest) => Promise.resolve({ request: solving, tool: { executable: '', timeout: 60000, indexDirectory: '' } }),
 		solve: async (imageId: string, preparation: PlateSolvePreparation, signal?: AbortSignal, origin?: PlateSolveOrigin) => {
 			if (origin) origins.push(origin)
 			requests.push(preparation.request)

@@ -134,13 +134,13 @@ describe('solution', () => {
 		expect(validatedSolution({ ...solution, widthInPixels: 7, rightAscension: 0 }, 100, 50)).toEqual(solution)
 	})
 
-	test('cache key follows the request, the folders, the pixels, and the index bands, but not the timeout', () => {
+	test('cache key follows the request, the index folder, the pixels, and the index bands, but not the timeout', () => {
 		const hints = resolvePlateSolveHints('assisted', { RA: 42, DEC: -17 }, {})
-		const tool = { executable: '', timeout: 1, indexDirectory: '/indexes', catalogDirectory: '' }
+		const tool = { executable: '', timeout: 1, indexDirectory: '/indexes' }
 		expect(plateSolveCacheKey('i', ASSISTED, hints, tool)).toBe(plateSolveCacheKey('i', ASSISTED, hints, { ...tool, timeout: 2 }))
 		expect(plateSolveCacheKey('i', ASSISTED, hints, tool)).not.toBe(plateSolveCacheKey('i', { ...ASSISTED, strategy: 'blind' }, hints, tool))
 		expect(plateSolveCacheKey('i', ASSISTED, hints, tool)).not.toBe(plateSolveCacheKey('i', { ...ASSISTED, scaleTolerance: 0.1 }, hints, tool))
-		expect(plateSolveCacheKey('i', ASSISTED, hints, tool)).not.toBe(plateSolveCacheKey('i', ASSISTED, hints, { ...tool, catalogDirectory: '/astap' }))
+		expect(plateSolveCacheKey('i', ASSISTED, hints, tool)).not.toBe(plateSolveCacheKey('i', ASSISTED, hints, { ...tool, indexDirectory: '/other' }))
 		expect(plateSolveCacheKey('i', ASSISTED, hints, tool)).not.toBe(plateSolveCacheKey('i', ASSISTED, hints, tool, 'dark:7:digest'))
 		expect(plateSolveCacheKey('i', ASSISTED, hints, tool, '', 0)).not.toBe(plateSolveCacheKey('i', ASSISTED, hints, tool, '', 1))
 	})
@@ -167,7 +167,7 @@ describe('awaited solve', () => {
 		const result = await service.solve(info.id, preparation, undefined, ORIGIN)
 
 		expect(result).toMatchObject({ outcome: 'noSolution', tool: (await tools.resolve('nebulosa'))! })
-		expect(result.warnings).toContain('A search without a solution may need index files or a star database covering this field and scale.')
+		expect(result.warnings).toContain('A search without a solution may need index files covering this field and scale.')
 		expect(events.at(-1)!.job.origin).toEqual(ORIGIN)
 		expect(await service.solve(info.id, preparation, undefined, ORIGIN)).toBe(result)
 	})

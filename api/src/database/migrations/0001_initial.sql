@@ -28,8 +28,6 @@ CREATE TABLE external_tool_settings (
 	timeout INTEGER NOT NULL CHECK (timeout > 0),
 	-- Folder of the quad index files of the built-in solver; NULL for another program.
 	index_directory TEXT,
-	-- Folder of the star database of the built-in solver; NULL for another program.
-	catalog_directory TEXT,
 	-- Revision of the settings, increased by every save; >= 1.
 	revision INTEGER NOT NULL CHECK (revision > 0),
 	-- When the settings last changed, Unix milliseconds (UTC).

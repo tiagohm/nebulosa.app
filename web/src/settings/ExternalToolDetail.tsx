@@ -17,7 +17,7 @@ import { savedDisplay, ToolBadge, type ToolDisplay, toolDisplay } from './Extern
 import { QuadIndexDownloads } from './QuadIndexDownloads'
 
 // Settings of one external program: its state and the test that proves it first, then the settings it takes (its
-// executable path on the server, or the folders of the built-in solver, with its downloadable index bands after them)
+// executable path on the server, or the index folder of the built-in solver, with its downloadable index bands after them)
 // and the time limit of a run, edited as a local draft that only Save sends to the server, then what it is used for and
 // needs. Test checks the draft on the server without saving it, starting the program once to print its version, and its result is shown only while the draft still has the values
 // it checked. The header shows the state of the saved settings, the same one as the list; a result of unsaved values is
@@ -56,7 +56,7 @@ function formatLimit(milliseconds: number) {
 	return seconds % 60 === 0 ? `${seconds / 60} min` : `${Math.floor(seconds / 60)} min ${seconds % 60} s`
 }
 
-// Details of a check, collapsed by default: where the program resolved to, the version it printed (the folders of the
+// Details of a check, collapsed by default: where the program resolved to, the version it printed (the index folder of the
 // built-in solver instead), and when it ran.
 function CheckDiagnostics({ check, folders }: { readonly check: ExternalToolCheck; readonly folders: boolean }) {
 	const timeZone = useActiveTimeZone()
@@ -67,7 +67,6 @@ function CheckDiagnostics({ check, folders }: { readonly check: ExternalToolChec
 				{folders ? (
 					<>
 						<DataRow label="Index folder">{check.config.indexDirectory || `Default, ${check.resolvedPath ?? MISSING}`}</DataRow>
-						<DataRow label="Star database folder">{check.config.catalogDirectory || MISSING}</DataRow>
 					</>
 				) : (
 					<>
@@ -122,7 +121,7 @@ export function ExternalToolDetail({ tool, onDirtyChange }: ExternalToolDetailPr
 	const { min, max } = tool.timeoutLimits
 	// Whether the program is a gateway the server keeps running, whose timeout bounds its start, not a run.
 	const gateway = tool.capabilities.includes('video-gateway')
-	// Whether the program is the built-in solver, which takes folders instead of an executable.
+	// Whether the program is the built-in solver, which takes an index folder instead of an executable.
 	const folders = tool.fields.includes('indexDirectory')
 	const check = test && checkMatches(test, draft) ? test : tool.lastCheck && checkMatches(tool.lastCheck, draft) ? tool.lastCheck : undefined
 	const staleTest = !testing && !check && test !== undefined
@@ -212,7 +211,7 @@ export function ExternalToolDetail({ tool, onDirtyChange }: ExternalToolDetailPr
 							{testing ? 'Testing…' : 'Test Settings'}
 						</Button>
 					</Actions>
-					<Notice>{folders ? 'Test looks for the index files and star databases in the folders on the server, without saving; it does not read them nor analyze an image.' : `Test starts ${tool.name} once on the server to print its version, without saving; it does not analyze an image.`}</Notice>
+					<Notice>{folders ? 'Test looks for the index files in the index folder on the server, without saving; it does not read them nor analyze an image.' : `Test starts ${tool.name} once on the server to print its version, without saving; it does not analyze an image.`}</Notice>
 				</PanelSection>
 				<PanelSection title="Configuration">
 					{tool.fields.includes('executable') && (
@@ -227,12 +226,6 @@ export function ExternalToolDetail({ tool, onDirtyChange }: ExternalToolDetailPr
 							<Notice>
 								Folder of Nebulosa (.nqi) and Astrometry.net (index-*.fits) quad index files on the server, searched with its subfolders. They solve images anywhere on the sky at the scales of their bands. Empty, the default index folder is searched, where the downloaded index bands are installed.
 							</Notice>
-						</>
-					)}
-					{tool.fields.includes('catalogDirectory') && (
-						<>
-							<TextInput label="Star Database Folder" placeholder="Optional, such as the folder of ASTAP" value={draft.catalogDirectory ?? ''} onChange={(e) => edit({ ...draft, catalogDirectory: e.target.value })} />
-							<Notice>Folder of an ASTAP (D05, D20, D50, D80) or HNSKY (G14, G16) star database on the server; the largest one is used. It solves images around a known position and scale when the index files find nothing.</Notice>
 						</>
 					)}
 					<NumberInput label={gateway ? 'Startup Time Limit' : 'Run Time Limit'} suffix="s" min={min / 1000} max={max / 1000} step={1} value={draft.timeout / 1000} onChange={(seconds) => edit({ ...draft, timeout: seconds * 1000 })} />

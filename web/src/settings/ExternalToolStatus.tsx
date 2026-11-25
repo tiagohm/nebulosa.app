@@ -30,7 +30,7 @@ const TOOL_HINTS: Readonly<Record<ToolDisplay, string>> = {
 	notChecked: 'The settings have not been tested since the server started',
 	checking: 'The server is testing the settings',
 	available: 'The program answered when the server started it, or its folders hold what it reads',
-	noIndexes: 'The folders hold no index file and no supported star database',
+	noIndexes: 'The index folder holds no index file',
 	notFound: 'Nothing exists where the settings point on the server',
 	failed: 'The server cannot use the program with these settings',
 }

@@ -313,11 +313,11 @@ export const QUAD_INDEX_BANDS: readonly QuadIndexBand[] = [
 	},
 ]
 
-// Shortest quad, as a fraction of the shorter side of the image, of the bands the solver builds around a known position
-// (DEFAULT_NEARBY_BAND_FRACTIONS of the toolkit's native solver).
+// Shortest quad, as a fraction of the shorter side of the image, of the bands that serve a field best: quads of 20% to
+// 40% of it are large enough for a few stars to fix the scale and small enough to fit the field at any rotation.
 const BEST_LOWER_FRACTION = 0.2
 
-// Longest quad, as a fraction of the shorter side, of those bands: their widest one starts at 40% and spans √2.
+// Longest quad, as a fraction of the shorter side, of those bands: the widest one starts at 40% and spans √2.
 const BEST_UPPER_FRACTION = 0.4 * Math.SQRT2
 
 // Smallest shorter side of the image, as a multiple of the longest quad, for which the solver still searches a band:

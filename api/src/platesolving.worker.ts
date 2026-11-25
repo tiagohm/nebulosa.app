@@ -1,6 +1,6 @@
 import fs from 'fs'
 import { open, stat } from 'fs/promises'
-import { nativeNearbyPlateSolve, nativePlateSolve, type NativePlateSolveOptions, type NativePlateSolveResult } from 'nebulosa/src/astrometry/solvers/native'
+import { nativePlateSolve, type NativePlateSolveOptions, type NativePlateSolveResult } from 'nebulosa/src/astrometry/solvers/native'
 import { PlateSolveError } from 'nebulosa/src/astrometry/solvers/platesolver'
 import type { QuadIndex } from 'nebulosa/src/astrometry/solvers/quad.index'
 import { AstrometryNetQuadIndex } from 'nebulosa/src/astrometry/solvers/quad.index.astrometrynet'
@@ -11,14 +11,12 @@ import { fileHandleSource } from 'nebulosa/src/io/file'
 import { readFits } from 'nebulosa/src/io/formats/fits/fits'
 import { bufferSource } from 'nebulosa/src/io/io'
 import { luminanceImage, readImageFrom } from './imagedecode'
-import { findQuadIndexFiles, findStarDatabases, largestStarDatabase, type NativeSolveErrorCode, type NativeSolveParameters, type NativeWorkerRequest, type NativeWorkerResponse, starDatabaseName } from './platesolving.native'
+import { findQuadIndexFiles, type NativeSolveErrorCode, type NativeSolveParameters, type NativeWorkerRequest, type NativeWorkerResponse } from './platesolving.native'
 import { errorCode } from './util'
 
 // Worker thread of the built-in plate solver (see platesolving.native.ts). For each solve it detects the stars of the
 // grayscale copy of an image, or of the FITS of private pixels it decodes, searches the quad index files of the folder
-// of the solve with the toolkit's nativePlateSolve and, when they find nothing and the position and the scale are
-// known, the quads nativeNearbyPlateSolve builds in memory from the largest star database of its folder. The indexes
-// of a folder stay open between solves while its files keep their sizes and times: the .nqi tiles of one band and
+// of the solve with the toolkit's nativePlateSolve. The indexes of a folder stay open between solves while its files keep their sizes and times: the .nqi tiles of one band and
 // source become one index, opened at once (of two files of the same tile, the one holding more quads, so the whole-sky
 // file of a full run wins over the -region one of a regional run), while an Astrometry.net file, which is read whole where it cannot be mapped,
 // is opened only once a field its band can serve needs it. A file that cannot be read is skipped with a warning. A
@@ -244,8 +242,8 @@ class SolveFailure extends Error {
 	}
 }
 
-// Solves the stars of a request: the indexes of its folder first, then the star database around the position. Resolves
-// to the solution, or undefined when none was found, with the warnings of the solve.
+// Solves the stars of a request with the indexes of its folder. Resolves to the solution, or undefined when none was
+// found, with the warnings of the solve.
 async function solve(request: NativeSolveParameters, signal: AbortSignal): Promise<{ readonly result?: NativePlateSolveResult; readonly warnings: string[] }> {
 	const started = performance.now()
 	// Time left of the whole solve, at least 1 ms, since a timeout of 0 means the solver's default.
@@ -271,29 +269,11 @@ async function solve(request: NativeSolveParameters, signal: AbortSignal): Promi
 
 	if (indexes.length > 0) {
 		const result = await nativePlateSolve(stars, indexes, { ...options, timeout: remaining() }, signal)
-		if (result) return { result, warnings }
-	} else if (request.indexDirectory && !missing) {
-		warnings.push('The index folder holds no index file that serves this field and scale.')
+		return { result, warnings }
 	}
 
-	if (!request.catalogDirectory) return { warnings }
-
-	if (!position || !scale) {
-		warnings.push('The star database is searched only around a known position with a known scale.')
-		return { warnings }
-	}
-
-	const database = largestStarDatabase(await findStarDatabases(request.catalogDirectory))
-
-	if (!database) {
-		warnings.push('The star database folder holds no supported database.')
-		return { warnings }
-	}
-
-	using catalog = database.open()
-	const result = await nativeNearbyPlateSolve(stars, catalog, { ...options, ...position, scale, timeout: remaining() }, signal)
-	if (result) warnings.push(`The solution was found around the position with the star database ${starDatabaseName(database)}.`)
-	return { result, warnings }
+	if (request.indexDirectory && !missing) warnings.push('The index folder holds no index file that serves this field and scale.')
+	return { warnings }
 }
 
 // Runs the solve of a request and posts its outcome.

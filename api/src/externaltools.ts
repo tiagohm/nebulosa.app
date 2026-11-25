@@ -5,17 +5,17 @@ import type { AppDatabase } from './database'
 import { errorResponse } from './http'
 import { parseVersion, supportedVersion } from './observatorycameras.gateway'
 import { DEFAULT_QUAD_INDEX_DIRECTORY } from './platesolving.downloads'
-import { findQuadIndexFiles, findStarDatabases, type QuadIndexFiles, type StarDatabase, starDatabaseName } from './platesolving.native'
+import { findQuadIndexFiles, type QuadIndexFiles } from './platesolving.native'
 import { errorCode } from './util'
 
 // Server-side settings of the external programs and data the backend uses: MediaMTX, the media gateway of Observatory
-// Cameras, and the folders of the index files and star database of the built-in plate solver, which ships with the
-// server while its data does not. Each one is registered here with the capabilities it provides and the settings it
+// Cameras, and the folder of the index files of the built-in plate solver, which ships with the server while its data
+// does not. Each one is registered here with the capabilities it provides and the settings it
 // takes; nothing else can be configured, and no route runs an arbitrary command. Settings belong to the server instance
 // (not to a browser, profile, or workspace), are persisted in the operational database, and are applied to the next
 // runs without a restart. A test checks the executable on the server's filesystem, then starts the program once with a
-// fixed argument that only prints its version, and checks the version the gateway needs. The folders of the built-in
-// solver are checked for the index files and star databases they hold, and nothing is started; an empty Index Folder
+// fixed argument that only prints its version, and checks the version the gateway needs. The folder of the built-in
+// solver is checked for the index files it holds, and nothing is started; an empty Index Folder
 // stands for the default index folder of the data directory, where its downloaded bands are installed, so the built-in
 // solver is always configured. A test never analyzes an image, so it proves that the program runs, not that it solves.
 // The saved settings of every program are checked again when the server starts, since checks are kept in memory only.
@@ -28,9 +28,8 @@ export type ExternalToolId = 'nebulosa' | 'mediamtx'
 // running to relay the observatory cameras to browsers.
 export type ExternalToolCapability = 'plate-solving' | 'video-gateway'
 
-// Setting a program takes besides its timeout: its executable, or the folders of the index files and of the star
-// database of the built-in solver.
-export type ExternalToolField = 'executable' | 'indexDirectory' | 'catalogDirectory'
+// Setting a program takes besides its timeout: its executable, or the folder of the index files of the built-in solver.
+export type ExternalToolField = 'executable' | 'indexDirectory'
 
 // Valid range of a timeout, in milliseconds.
 export interface TimeoutLimits {
@@ -71,9 +70,6 @@ export interface ExternalToolConfig {
 	// Folder of quad index files on the server's filesystem, searched with its subfolders: Nebulosa .nqi tiles and
 	// Astrometry.net index files; empty for none.
 	readonly indexDirectory?: string
-	// Folder of an ASTAP (.1476) or HNSKY (.290) star database on the server's filesystem, searched around a known
-	// position and scale; empty for none.
-	readonly catalogDirectory?: string
 }
 
 // State of the saved settings: not configured (no executable), or configured.
@@ -83,7 +79,7 @@ export type ExternalToolConfigStatus = 'notConfigured' | 'configured'
 export type ExternalToolCheckStatus = 'available' | 'unavailable' | 'failed'
 
 // Reason of a check outcome:
-// - ok: the program answered when started (the built-in solver: its folders hold index files or a star database).
+// - ok: the program answered when started (the built-in solver: its folder holds index files).
 // - empty: no path is set.
 // - missing: nothing exists at the path, or the name is not on the server's PATH.
 // - notFile: the path is a directory or another non-regular file.
@@ -93,8 +89,8 @@ export type ExternalToolCheckStatus = 'available' | 'unavailable' | 'failed'
 // - notStarted: the server could not start the program, such as a file that is not a program of this computer.
 // - noAnswer: the program did not end within PROBE_TIMEOUT when started to print its version.
 // - incompatibleVersion: the program is not MediaMTX 1.21 or a later 1.x, which the gateway needs.
-// - notDirectory: a folder of the built-in solver is a file or another non-directory.
-// - noIndexes: the folders of the built-in solver hold no index file and no supported star database.
+// - notDirectory: the index folder of the built-in solver is a file or another non-directory.
+// - noIndexes: the index folder of the built-in solver holds no index file.
 export type ExternalToolCheckCode = 'ok' | 'empty' | 'missing' | 'notFile' | 'notExecutable' | 'inaccessible' | 'notStarted' | 'noAnswer' | 'incompatibleVersion' | 'notDirectory' | 'noIndexes'
 
 // Result of checking the executable of a configuration on the server's filesystem.
@@ -105,7 +101,7 @@ export interface ExternalToolCheck {
 	readonly code: ExternalToolCheckCode
 	// Configuration checked, so a client can tell whether the result still applies to what it edits.
 	readonly config: ExternalToolConfig
-	// Absolute path the executable (for the built-in solver, its first folder set) resolved to; absent when it was not found.
+	// Absolute path the executable (for the built-in solver, its index folder) resolved to; absent when it was not found.
 	readonly resolvedPath?: string
 	// Version the program printed when started; absent when it printed none and when it was not started.
 	readonly version?: string
@@ -168,10 +164,10 @@ export const EXTERNAL_TOOLS: readonly ExternalToolDefinition[] = [
 	{
 		id: 'nebulosa',
 		name: 'Nebulosa',
-		description: 'Plate solver built into Nebulosa, which searches quad index files and a star database on this server; images never leave it.',
-		requirements: 'Solving needs quad index files whose bands cover the field of view of your images (Nebulosa .nqi tiles or Astrometry.net index files), or, around a known position and scale, a star database of ASTAP or HNSKY, such as D50.',
+		description: 'Plate solver built into Nebulosa, which searches quad index files on this server; images never leave it.',
+		requirements: 'Solving needs quad index files whose bands cover the field of view of your images (Nebulosa .nqi tiles or Astrometry.net index files).',
 		capabilities: ['plate-solving'],
-		fields: ['indexDirectory', 'catalogDirectory'],
+		fields: ['indexDirectory'],
 		timeoutLimits: { min: 1000, max: 3600000 },
 		defaultTimeout: DEFAULT_EXTERNAL_TOOL_TIMEOUT,
 	},
@@ -198,7 +194,6 @@ interface ToolRow {
 	readonly executable: string
 	readonly timeout: number
 	readonly index_directory: string | null
-	readonly catalog_directory: string | null
 	readonly revision: number
 }
 
@@ -214,18 +209,17 @@ function definition(id: ExternalToolId): ExternalToolDefinition {
 
 // Whether two configurations are the same; an absent field equals an empty one.
 function sameConfig(a: ExternalToolConfig, b: ExternalToolConfig) {
-	return a.executable === b.executable && a.timeout === b.timeout && (a.indexDirectory ?? '') === (b.indexDirectory ?? '') && (a.catalogDirectory ?? '') === (b.catalogDirectory ?? '')
+	return a.executable === b.executable && a.timeout === b.timeout && (a.indexDirectory ?? '') === (b.indexDirectory ?? '')
 }
 
 // Returns the settings of a program that it takes, from any configuration: the fields it does not take are left
 // out, and the executable of a program without one is empty.
-function configOf(id: ExternalToolId, { executable, timeout, indexDirectory, catalogDirectory }: ExternalToolConfig): ExternalToolConfig {
+function configOf(id: ExternalToolId, { executable, timeout, indexDirectory }: ExternalToolConfig): ExternalToolConfig {
 	const { fields } = definition(id)
 	return {
 		executable: fields.includes('executable') ? executable : '',
 		timeout,
 		...(fields.includes('indexDirectory') && { indexDirectory: indexDirectory ?? '' }),
-		...(fields.includes('catalogDirectory') && { catalogDirectory: catalogDirectory ?? '' }),
 	}
 }
 
@@ -346,25 +340,25 @@ async function inspectTool(id: ExternalToolId, config: ExternalToolConfig, probe
 	return { status: 'available', code: 'ok', resolvedPath, version, message: `${named} answered when started.` }
 }
 
-// Inspects a folder of the built-in solver: undefined when it is a folder the server may read, else why it cannot be used.
-async function inspectFolder(path: string, label: string): Promise<Inspection | undefined> {
+// Inspects the index folder of the built-in solver: undefined when it is a folder the server may read, else why it
+// cannot be used.
+async function inspectFolder(path: string): Promise<Inspection | undefined> {
 	try {
-		if (!(await stat(path)).isDirectory()) return { status: 'failed', code: 'notDirectory', resolvedPath: path, message: `The ${label} is not a folder.` }
+		if (!(await stat(path)).isDirectory()) return { status: 'failed', code: 'notDirectory', resolvedPath: path, message: 'The index folder is not a folder.' }
 		await readdir(path)
 		return undefined
 	} catch (error) {
 		const code = errorCode(error)
-		if (code === 'ENOENT' || code === 'ENOTDIR') return { status: 'unavailable', code: 'missing', message: `No folder exists at the path of the ${label} on the server.` }
-		return { status: 'failed', code: 'inaccessible', resolvedPath: path, message: `The ${label} cannot be read by the server.` }
+		if (code === 'ENOENT' || code === 'ENOTDIR') return { status: 'unavailable', code: 'missing', message: 'No folder exists at the path of the index folder on the server.' }
+		return { status: 'failed', code: 'inaccessible', resolvedPath: path, message: 'The index folder cannot be read by the server.' }
 	}
 }
 
-// Inspects the folders of the built-in solver (resolved against the server's working directory): each one set must be
-// a folder the server reads, and together they must hold an index file or a supported star database. An empty Index
-// Folder stands for defaultIndexDirectory, which holds no index file until a band is downloaded. Nothing is started.
-async function inspectSolverFolders({ indexDirectory = '', catalogDirectory = '' }: ExternalToolConfig, defaultIndexDirectory: string): Promise<Inspection> {
+// Inspects the index folder of the built-in solver (resolved against the server's working directory): it must be a
+// folder the server reads holding an index file. An empty Index Folder stands for defaultIndexDirectory, which holds no
+// index file until a band is downloaded. Nothing is started.
+async function inspectSolverFolders({ indexDirectory = '' }: ExternalToolConfig, defaultIndexDirectory: string): Promise<Inspection> {
 	const indexPath = indexDirectory.trim() ? resolve(indexDirectory) : defaultIndexDirectory
-	const catalogPath = catalogDirectory.trim() ? resolve(catalogDirectory) : undefined
 	// The default index folder is created by the first download, so it may not exist yet.
 	const defaultMissing =
 		!indexDirectory.trim() &&
@@ -372,30 +366,26 @@ async function inspectSolverFolders({ indexDirectory = '', catalogDirectory = ''
 			(e) => e.isDirectory(),
 			() => false,
 		))
-	const problem = (!defaultMissing && (await inspectFolder(indexPath, 'index folder'))) || (catalogPath && (await inspectFolder(catalogPath, 'star database folder')))
+	const problem = !defaultMissing && (await inspectFolder(indexPath))
 	if (problem) return problem
 
 	const resolvedPath = indexPath
 	let files: QuadIndexFiles = { nebulosa: [], astrometryNet: [], unreadable: [] }
-	let databases: StarDatabase[] = []
 
-	// The folders were readable a moment ago; one that stops being so is reported as such.
+	// The folder was readable a moment ago; one that stops being so is reported as such.
 	try {
 		if (!defaultMissing) files = await findQuadIndexFiles(indexPath)
-		if (catalogPath) databases = await findStarDatabases(catalogPath)
 	} catch {
-		return { status: 'failed', code: 'inaccessible', resolvedPath, message: 'The folders cannot be read by the server.' }
+		return { status: 'failed', code: 'inaccessible', resolvedPath, message: 'The index folder cannot be read by the server.' }
 	}
 
 	const found: string[] = []
 	if (files.nebulosa.length > 0) found.push(`${files.nebulosa.length} Nebulosa index ${files.nebulosa.length === 1 ? 'file' : 'files'}`)
 	if (files.astrometryNet.length > 0) found.push(`${files.astrometryNet.length} Astrometry.net index ${files.astrometryNet.length === 1 ? 'file' : 'files'}`)
-	if (databases.length > 0) found.push(`star database ${databases.map(starDatabaseName).join(', ')}`)
 
-	if (found.length === 0) return { status: 'unavailable', code: 'noIndexes', resolvedPath, message: `The folders hold no index file and no supported star database (ASTAP D05, D20, D50, D80, or HNSKY G14, G16).${indexDirectory.trim() ? '' : ' Download the index bands that cover the field of view of your images.'}` }
-	const blind = files.nebulosa.length + files.astrometryNet.length > 0 ? '' : ' Without index files, only images with a known position and scale are solved.'
+	if (found.length === 0) return { status: 'unavailable', code: 'noIndexes', resolvedPath, message: `The index folder holds no index file.${indexDirectory.trim() ? '' : ' Download the index bands that cover the field of view of your images.'}` }
 	const unreadable = files.unreadable.length === 0 ? '' : ` ${files.unreadable.length} ${files.unreadable.length === 1 ? 'subfolder' : 'subfolders'} of the index folder cannot be read and ${files.unreadable.length === 1 ? 'is' : 'are'} left out.`
-	return { status: 'available', code: 'ok', resolvedPath, message: `Found ${found.join(', ')}.${blind}${unreadable} The files are read once a solve needs them.` }
+	return { status: 'available', code: 'ok', resolvedPath, message: `Found ${found.join(', ')}.${unreadable} The files are read once a solve needs them.` }
 }
 
 // Settings of the supported external programs, persisted in the operational database. Saves are applied one at a
@@ -418,19 +408,19 @@ export class ExternalToolsStore {
 
 	// Returns the saved settings of a program, the defaults when never saved.
 	#tool(id: ExternalToolId): StoredTool {
-		const row = this.database.db.query<ToolRow, [string]>('SELECT executable, timeout, index_directory, catalog_directory, revision FROM external_tool_settings WHERE tool_id = ?').get(id)
+		const row = this.database.db.query<ToolRow, [string]>('SELECT executable, timeout, index_directory, revision FROM external_tool_settings WHERE tool_id = ?').get(id)
 		if (!row) return { ...configOf(id, { executable: '', timeout: definition(id).defaultTimeout }), revision: 0 }
-		const { executable, timeout, index_directory, catalog_directory, revision } = row
-		return { ...configOf(id, { executable, timeout, indexDirectory: index_directory ?? undefined, catalogDirectory: catalog_directory ?? undefined }), revision }
+		const { executable, timeout, index_directory, revision } = row
+		return { ...configOf(id, { executable, timeout, indexDirectory: index_directory ?? undefined }), revision }
 	}
 
 	// Saves the settings of a program under revision. Throws when the database cannot be written.
-	#write(id: ExternalToolId, { executable, timeout, indexDirectory, catalogDirectory }: ExternalToolConfig, revision: number) {
+	#write(id: ExternalToolId, { executable, timeout, indexDirectory }: ExternalToolConfig, revision: number) {
 		this.database.db
 			.query(
-				'INSERT INTO external_tool_settings (tool_id, executable, timeout, index_directory, catalog_directory, revision, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT (tool_id) DO UPDATE SET executable = excluded.executable, timeout = excluded.timeout, index_directory = excluded.index_directory, catalog_directory = excluded.catalog_directory, revision = excluded.revision, updated_at = excluded.updated_at',
+				'INSERT INTO external_tool_settings (tool_id, executable, timeout, index_directory, revision, updated_at) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT (tool_id) DO UPDATE SET executable = excluded.executable, timeout = excluded.timeout, index_directory = excluded.index_directory, revision = excluded.revision, updated_at = excluded.updated_at',
 			)
-			.run(id, executable, timeout, indexDirectory ?? null, catalogDirectory ?? null, revision, Date.now())
+			.run(id, executable, timeout, indexDirectory ?? null, revision, Date.now())
 	}
 
 	// Returns the state of a program, configured once its executable (the built-in solver always) is set.

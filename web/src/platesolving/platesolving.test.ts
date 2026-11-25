@@ -46,7 +46,7 @@ function job(patch: Partial<PlateSolveJob> = {}): PlateSolveJob {
 const SOLUTION = { CTYPE1: 'RA---TAN', rightAscension: 1, declination: 0.5, scale: 1e-5 } as unknown as PlateSolution
 
 function result(patch: Partial<PlateSolveResult> = {}): PlateSolveResult {
-	return { jobId: 'j1', imageId: 'i1', request: { strategy: 'assisted' }, hints: {}, tool: { executable: '', timeout: 1000, indexDirectory: '', catalogDirectory: '' }, outcome: 'solved', solution: SOLUTION, widthInPixels: 100, heightInPixels: 50, elapsed: 10, queueTime: 0, warnings: [], ...patch }
+	return { jobId: 'j1', imageId: 'i1', request: { strategy: 'assisted' }, hints: {}, tool: { executable: '', timeout: 1000, indexDirectory: '' }, outcome: 'solved', solution: SOLUTION, widthInPixels: 100, heightInPixels: 50, elapsed: 10, queueTime: 0, warnings: [], ...patch }
 }
 
 // Fetch fake mapping each URL to a status and a body, recording the URLs requested.

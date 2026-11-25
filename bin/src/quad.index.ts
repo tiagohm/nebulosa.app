@@ -1,14 +1,15 @@
 import fs from 'fs/promises'
 import { join } from 'path'
 import { exit } from 'process'
-import { findStarDatabases, type StarDatabaseKind, SUPPORTED_STAR_DATABASES } from 'api/platesolving.native'
 import { DEFAULT_QUAD_STARS_PER_CELL, healpixCellSize, quadCellNside } from 'nebulosa/src/astrometry/solvers/quad.builder'
 import type { SkyCone } from 'nebulosa/src/astrometry/solvers/quad.index'
 import { catalogQuadIndexStars } from 'nebulosa/src/astrometry/solvers/quad.index.ephemeral'
 import { buildQuadIndexTile, decodeQuadIndexHeader, encodeQuadIndexTile, QUAD_INDEX_EXTENSION, type QuadIndexStars, quadIndexTileCone, quadIndexTileFileName, verifyQuadIndexTile } from 'nebulosa/src/astrometry/solvers/quad.index.file'
 import { eraC2s, eraS2c } from 'nebulosa/src/astronomy/coordinates/erfa/erfa'
 import { circleToPixels, coordToPixel } from 'nebulosa/src/astronomy/sky/spatial/healpix'
+import { AstapCatalog, type Astap1476Database } from 'nebulosa/src/catalogs/stars/astap'
 import type { StarCatalog } from 'nebulosa/src/catalogs/stars/catalog'
+import { HnskyCatalog, type Hnsky290Database } from 'nebulosa/src/catalogs/stars/hnsky'
 import { ASEC2RAD, DEG2RAD, MILLIASEC2RAD } from 'nebulosa/src/core/constants'
 
 // Generates the quad index files of the built-in plate solver (not committed): one set of HEALPix tiles per band of
@@ -154,6 +155,47 @@ const usage = 'Usage: bun make:quads [--catalog astap|hnsky --path <directory> [
 if (!(magnitudeLimit > 0) || bands.some((band) => !(band > 0)) || (region !== undefined && !(region.radius > 0)) || (catalogKind !== undefined && catalogKind !== 'astap' && catalogKind !== 'hnsky') || (catalogKind !== undefined && (option('--path') === undefined || option('--concurrency') !== undefined))) {
 	console.error(usage)
 	exit(1)
+}
+
+// Extension of the files of an ASTAP star database (.1476) and of an HNSKY one (.290), by kind.
+const STAR_DATABASE_EXTENSIONS = { astap: '.1476', hnsky: '.290' } as const
+
+// Star databases the toolkit's readers decode, by kind, shallowest first.
+const SUPPORTED_STAR_DATABASES = { astap: ['d05', 'd20', 'd50', 'd80'], hnsky: ['g14', 'g16'] } as const satisfies { readonly astap: readonly Astap1476Database[]; readonly hnsky: readonly Hnsky290Database[] }
+
+// Kind of a local star database: ASTAP or HNSKY.
+type StarDatabaseKind = keyof typeof SUPPORTED_STAR_DATABASES
+
+// A local star database: the files of one supported database in a folder, named <database>_<tile>.<extension>.
+interface StarDatabase {
+	// Program whose format the files are in.
+	readonly kind: StarDatabaseKind
+	// Name of the database, lowercase, such as d50.
+	readonly database: Astap1476Database | Hnsky290Database
+	// Opens a new reader over the files; a reader caches every tile it reads until it is disposed.
+	readonly open: () => StarCatalog & Disposable
+}
+
+// Returns the supported star databases whose files are in a folder (not its subfolders), shallowest first within each
+// kind, ASTAP first. Throws when the folder cannot be read.
+async function findStarDatabases(directory: string): Promise<StarDatabase[]> {
+	const names = await fs.readdir(directory)
+	const databases: StarDatabase[] = []
+
+	for (const kind of ['astap', 'hnsky'] as const) {
+		const extension = STAR_DATABASE_EXTENSIONS[kind]
+		const files = names.filter((name) => name.toLowerCase().endsWith(extension) && name.includes('_'))
+
+		for (const database of SUPPORTED_STAR_DATABASES[kind]) {
+			const members = files.filter((name) => name.toLowerCase().startsWith(`${database}_`))
+			if (members.length === 0) continue
+			const map = new Map(members.map((name) => [name.toLowerCase(), Bun.file(join(directory, name))] as const))
+			const open = kind === 'astap' ? () => new AstapCatalog().open(map, database as Astap1476Database) : () => new HnskyCatalog().open(map, database as Hnsky290Database)
+			databases.push({ kind, database, open })
+		}
+	}
+
+	return databases
 }
 
 // Finds a local ASTAP or HNSKY star database: one supported database of a directory, the requested one or else the only

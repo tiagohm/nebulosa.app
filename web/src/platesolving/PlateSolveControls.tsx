@@ -50,8 +50,7 @@ export function useSolverState(): string {
 	return tool ? summaryOf(tool).label : 'Loading…'
 }
 
-// State of the solver, as the server's External Tools settings report it for its index files and star database, with a
-// link to them.
+// State of the solver, as the server's External Tools settings report it for its index files, with a link to them.
 export function SolverAvailability() {
 	const { tools } = useSnapshot(externalToolsState)
 	const tool = tools.find((t) => t.id === SOLVER_TOOL)
@@ -76,7 +75,7 @@ export function StrategyControls({ request, onChange, disabled }: PlateSolveCont
 	return (
 		<>
 			<SegmentedControl options={STRATEGIES} value={request.strategy} format={(strategy) => STRATEGY_LABELS[strategy]} disabled={disabled} onChange={(strategy) => onChange({ ...request, strategy })} />
-			<Notice>{request.strategy === 'assisted' ? 'Searches around the position of the hints or of the image header.' : 'Searches the whole sky; a known image scale is still used. Success depends on the index files or the star database of the solver.'}</Notice>
+			<Notice>{request.strategy === 'assisted' ? 'Searches around the position of the hints or of the image header.' : 'Searches the whole sky; a known image scale is still used. Success depends on the index files of the solver.'}</Notice>
 		</>
 	)
 }

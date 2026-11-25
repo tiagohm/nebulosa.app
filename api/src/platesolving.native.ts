@@ -1,40 +1,14 @@
 import { readdir, realpath, stat } from 'fs/promises'
 import { extname, join } from 'path'
 import { QUAD_INDEX_EXTENSION } from 'nebulosa/src/astrometry/solvers/quad.index.file'
-import { AstapCatalog, type Astap1476Database } from 'nebulosa/src/catalogs/stars/astap'
-import type { StarCatalog } from 'nebulosa/src/catalogs/stars/catalog'
-import { HnskyCatalog, type Hnsky290Database } from 'nebulosa/src/catalogs/stars/hnsky'
 import type { Image } from 'nebulosa/src/imaging/model/types'
 import type { FitsHeader } from 'nebulosa/src/io/formats/fits/fits'
 
 // Built-in plate solver of the server: the toolkit's native solver (nativePlateSolve, after Astrometry.net) run on a
 // worker of its own (platesolving.worker.ts), which detects the stars of the grayscale copy of an image, searches the
-// quad index files of a folder (Nebulosa .nqi tiles and Astrometry.net index files) and, around a known position and
-// scale, the quads it builds in memory from a local ASTAP or HNSKY star database. This module finds those files on the
-// server's filesystem, for the worker, the check of External Tools, and the index generator of bin, and is the client
-// of the worker: one worker kept between solves, so the indexes it opened stay open, asked to stop a solve by a
+// quad index files of a folder (Nebulosa .nqi tiles and Astrometry.net index files). This module finds those files on
+// the server's filesystem, for the worker and the check of External Tools, and is the client of the worker: one worker kept between solves, so the indexes it opened stay open, asked to stop a solve by a
 // message (the solver yields to its event loop between slices) and terminated only when it does not answer in time.
-
-// Extension of the files of an ASTAP star database (.1476) and of an HNSKY one (.290), by kind.
-const STAR_DATABASE_EXTENSIONS = { astap: '.1476', hnsky: '.290' } as const
-
-// Star databases the toolkit's readers decode, by kind, shallowest first.
-export const SUPPORTED_STAR_DATABASES = { astap: ['d05', 'd20', 'd50', 'd80'], hnsky: ['g14', 'g16'] } as const satisfies { readonly astap: readonly Astap1476Database[]; readonly hnsky: readonly Hnsky290Database[] }
-
-// Kind of a local star database: ASTAP or HNSKY.
-export type StarDatabaseKind = keyof typeof SUPPORTED_STAR_DATABASES
-
-// A local star database: the files of one supported database in a folder, named <database>_<tile>.<extension>.
-export interface StarDatabase {
-	// Program whose format the files are in.
-	readonly kind: StarDatabaseKind
-	// Name of the database, lowercase, such as d50.
-	readonly database: Astap1476Database | Hnsky290Database
-	// Total size of its files, bytes: the measure of how many stars it holds, since its databases differ in depth.
-	readonly bytes: number
-	// Opens a new reader over the files; a reader caches every tile it reads until it is disposed.
-	readonly open: () => StarCatalog & Disposable
-}
 
 // Quad index files of a folder and its subfolders, each list sorted by path.
 export interface QuadIndexFiles {
@@ -98,49 +72,6 @@ export async function findQuadIndexFiles(directory: string): Promise<QuadIndexFi
 	return { nebulosa: nebulosa.sort(), astrometryNet: astrometryNet.sort(), unreadable: unreadable.sort() }
 }
 
-// Returns the supported star databases whose files are in a folder (not its subfolders), shallowest first within each
-// kind, ASTAP first, each with the total size of its files. Throws when the folder cannot be read.
-export async function findStarDatabases(directory: string): Promise<StarDatabase[]> {
-	const names = await readdir(directory)
-	const databases: StarDatabase[] = []
-
-	for (const kind of ['astap', 'hnsky'] as const) {
-		const extension = STAR_DATABASE_EXTENSIONS[kind]
-		const files = names.filter((name) => name.toLowerCase().endsWith(extension) && name.includes('_'))
-
-		for (const database of SUPPORTED_STAR_DATABASES[kind]) {
-			const members = files.filter((name) => name.toLowerCase().startsWith(`${database}_`))
-			if (members.length === 0) continue
-			const map = new Map(members.map((name) => [name.toLowerCase(), Bun.file(join(directory, name))] as const))
-			const open = kind === 'astap' ? () => new AstapCatalog().open(map, database as Astap1476Database) : () => new HnskyCatalog().open(map, database as Hnsky290Database)
-			const sizes = await Promise.all(
-				members.map((name) =>
-					stat(join(directory, name)).then(
-						({ size }) => size,
-						() => 0,
-					),
-				),
-			)
-			databases.push({ kind, database, bytes: sizes.reduce((sum, size) => sum + size, 0), open })
-		}
-	}
-
-	return databases
-}
-
-// Returns the star database holding the most data, so the most stars to choose the brightest of each cell from,
-// whatever its kind; undefined for none. A tie keeps the first.
-export function largestStarDatabase<T extends Pick<StarDatabase, 'bytes'>>(databases: readonly T[]): T | undefined {
-	let largest: T | undefined
-	for (const database of databases) if (!largest || database.bytes > largest.bytes) largest = database
-	return largest
-}
-
-// Name of a star database for people, such as ASTAP D50.
-export function starDatabaseName({ kind, database }: Pick<StarDatabase, 'kind' | 'database'>) {
-	return `${kind.toUpperCase()} ${database.toUpperCase()}`
-}
-
 // Pixels a native solve measures: the grayscale copy of an image, or a FITS file of private pixels (see
 // PlateSolvePixels), decoded by the worker.
 export type NativeSolvePixels = { readonly kind: 'image'; readonly image: Image } | { readonly kind: 'fits'; readonly bytes: Uint8Array<ArrayBuffer> }
@@ -151,8 +82,6 @@ export interface NativeSolveParameters {
 	readonly pixels: NativeSolvePixels
 	// Folder of the quad index files; empty for none.
 	readonly indexDirectory: string
-	// Folder of the star database of the search around a position; empty for none.
-	readonly catalogDirectory: string
 	// Width of the image, in pixels.
 	readonly width: number
 	// Height of the image, in pixels.
@@ -228,7 +157,7 @@ export class NativePlateSolver implements Disposable {
 	// Solves posted to the worker and not answered yet, by job id.
 	readonly #pending = new Map<string, PendingSolve>()
 
-	// Solves the stars of the pixels with the indexes and the star database of the parameters, whose pixels are
+	// Solves the stars of the pixels with the indexes of the parameters, whose pixels are
 	// transferred to the worker. Resolves to the outcome of a search that ended, with or without a solution; rejects with NativeSolveError when it ran out of time, was cancelled by signal, could not read its pixels, or
 	// failed, or when the worker died.
 	solve(parameters: NativeSolveParameters, signal: AbortSignal): Promise<NativeSolveOutcome> {

@@ -121,7 +121,7 @@ function fakeSolver(rig: Rig) {
 	const pixels: string[] = []
 
 	const solver = {
-		prepare: (solving: PlateSolveRequest) => Promise.resolve({ request: solving, tool: { executable: '', timeout: 60000, indexDirectory: '', catalogDirectory: '' } }),
+		prepare: (solving: PlateSolveRequest) => Promise.resolve({ request: solving, tool: { executable: '', timeout: 60000, indexDirectory: '' } }),
 		solve: (_imageId: string, _preparation: PlateSolvePreparation, _signal?: AbortSignal, origin?: PlateSolveOrigin, calibrated?: PlateSolvePixels) => {
 			if (origin) origins.push(origin)
 			pixels.push(calibrated?.fingerprint ?? 'raw')

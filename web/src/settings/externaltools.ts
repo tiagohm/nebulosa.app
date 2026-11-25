@@ -2,7 +2,7 @@ import type { ExternalToolCapability, ExternalToolCheck, ExternalToolConfig, Ext
 import { proxy } from 'valtio'
 import { type ApiFetch, browserFetch, jsonInit, responseError } from '../http'
 
-// External programs and data the server supports (the folders of the built-in solver, MediaMTX), with their saved
+// External programs and data the server supports (the index folder of the built-in solver, MediaMTX), with their saved
 // settings and latest check, as the server reports them. The server owns the settings: this store mirrors its snapshot
 // and its externalTool:updated events, and sends saves and checks. The edits of a tab stay in the page until saved; a
 // check never saves anything.
@@ -43,7 +43,7 @@ function toolUrl(id: string) {
 
 // Whether two configurations are the same; an absent field equals an empty one.
 export function sameConfig(a: ExternalToolConfig, b: ExternalToolConfig) {
-	return a.executable === b.executable && a.timeout === b.timeout && (a.indexDirectory ?? '') === (b.indexDirectory ?? '') && (a.catalogDirectory ?? '') === (b.catalogDirectory ?? '')
+	return a.executable === b.executable && a.timeout === b.timeout && (a.indexDirectory ?? '') === (b.indexDirectory ?? '')
 }
 
 // Whether the settings of a program are set up enough to be used: an executable. The built-in solver always is, since an empty Index Folder stands for its default index folder.

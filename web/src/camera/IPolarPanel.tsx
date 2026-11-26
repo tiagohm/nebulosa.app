@@ -1,4 +1,5 @@
 import type { CalibrationMasterSummary, DeviceSummary, IPolarSession, IPolarSessionSummary } from 'api'
+import { cn } from 'cn'
 import { toArcsec, toDeg } from 'nebulosa/src/math/units/angle'
 import { useEffect, useState } from 'react'
 import { useSnapshot } from 'valtio'
@@ -9,20 +10,23 @@ import type { BindableDevice } from '../equipment/catalog'
 import { CatalogCameraNotice, useBoundCamera } from '../equipment/CatalogCameraNotice'
 import { EquipmentSetupButton } from '../equipment/EquipmentSetupButton'
 import type { RoleDevice } from '../equipment/useEquipment'
-import { formatArcmin, formatArcsec, formatClockTime, formatDegrees, formatExposureTime, formatFixed, formatSignedArcmin, formatTemperature, MISSING } from '../format'
+import { formatArcmin, formatArcsec, formatClockDuration, formatClockTime, formatDegrees, formatExposureTime, formatFixed, formatTemperature, MISSING } from '../format'
 import { useActiveSite, useDisplayZone } from '../location/useLocation'
 import { operationsState } from '../operations'
 import { CameraPlateSolvingSection } from '../platesolving/CameraPlateSolvingSection'
 import { activeProfile, cameraPlateSolving, exposureSettings, ipolarSettings, profileState, setIPolarSettings } from '../profile/profile'
 import { type CameraIdentity, DEFAULT_IPOLAR_DARK_SETTINGS, IPOLAR_MAXIMUM_ROTATION, IPOLAR_MINIMUM_ROTATION, type IPolarDarkSettings, type IPolarSettings } from '../profile/schema'
 import { CollapsibleSection } from '../shell/CollapsibleSection'
+import { navigate, routeState } from '../shell/route'
 import { Button } from '../ui/Button'
 import { Checkbox } from '../ui/Checkbox'
 import { DataList, DataRow } from '../ui/DataRow'
+import { LinkButton } from '../ui/LinkButton'
 import { Notice } from '../ui/Notice'
 import { NumberInput } from '../ui/NumberInput'
 import { SegmentedControl } from '../ui/SegmentedControl'
 import { Select } from '../ui/Select'
+import { useNow } from '../useNow'
 import { CameraAcquisitionSection } from './CameraAcquisitionSection'
 import { cameraKey } from './capture'
 import { ExposureTimeInput } from './ExposureTimeInput'
@@ -30,6 +34,8 @@ import { FrameProgress } from './FrameProgress'
 import {
 	confirmIPolarRotation,
 	finishIPolar,
+	ipolarConvergenceText,
+	ipolarCorrectionText,
 	ipolarDarkText,
 	IPOLAR_DIRECTION_LABELS,
 	IPOLAR_DIRECTIONS,
@@ -40,9 +46,12 @@ import {
 	ipolarBlocker,
 	ipolarMountSupport,
 	ipolarRequest,
+	ipolarRetryText,
 	ipolarRunning,
 	ipolarRuntime,
 	ipolarSlewRate,
+	ipolarSummaryText,
+	ipolarWithinTarget,
 	startIPolar,
 	startIPolarRefinement,
 	stopIPolar,
@@ -51,17 +60,23 @@ import {
 import { loadLiveMasters } from './livestacking'
 import { SessionStateText } from './SessionStateText'
 
-// Contextual panel sections of iPolar, a camera operation of the Images camera tabs: the equipment and the mode (the
-// operator turns the RA axis by hand, or the setup's mount turns it), the frame exposure, the rotation, the plate solving
-// settings it applies, the refinement, the calibration, the polar error and its convergence, and the commands (Start,
-// Rotation Done, Refine, Pause, Finish, Stop). Frames are taken with the exposure time of this form and the camera's
-// camera settings, edited only in Camera Acquisition, and solved with the camera's plate solving settings; the site is
-// always the profile's active observing site, which the panel does not show. The camera is the panel's target and the mount the MOUNT of the
-// active equipment setup, required only for the automatic rotation. The forms are the camera's, kept in the profile, and
-// stay locked showing the values applied while a session runs; before an automatic rotation, a notice beside Start asks
-// the operator to check the mount is clear to turn. The session is the server's, shown here whichever tab started it, and keeps
-// running when the panel unmounts. Errors are the signed on-sky components the server measured; no knob direction is
-// inferred.
+// Contextual panel sections of iPolar, a camera operation of the Images camera tabs. The session leads: its state with
+// the time a solve or a rotation has taken, the polar error as the panel's one Readout with the moves of the mount pole
+// in words, as the server decided them from the visible pole, the step instruction, the mode and what Start does, the
+// commands, and why a start is blocked with the way to fix it; then the calibration, collapsed once a measurement leads;
+// then the settings, collapsed with a summary (rotation, acquisition, dark, plate solving, refinement), and the
+// equipment last. Frames are taken with the exposure time of this form and the camera's camera settings, edited only in
+// Camera Acquisition, and solved with the camera's plate solving settings; the site is always the profile's active
+// observing site, which the panel does not show. The camera is the panel's target and the mount the MOUNT of the active
+// equipment setup, required only for the automatic rotation. The forms are the camera's, kept in the profile, and stay
+// locked showing the values applied while a session runs. The session is the server's, shown here whichever tab
+// started it, and keeps running when the panel unmounts.
+
+// Classes of the session commands: a touch target of 44 px on a coarse pointer, since they are pressed at the mount.
+const COMMAND_CLASS = 'pointer-coarse:min-h-[44px]'
+
+// Time a frame has been solving after which the panel says a solve over the whole sky can take minutes, in seconds.
+const SLOW_SOLVE = 20
 
 // Camera an iPolar panel aligns with and the forms it edits.
 export interface IPolarTarget {
@@ -103,6 +118,13 @@ export function IPolarSections({ device, availability, mount, settings: identity
 	const mountAvailability = roleAvailability('MOUNT', mount, operations, automatic ? ipolarMountSupport(mountState) : undefined)
 	const blocker = running ? undefined : ipolarBlocker({ camera: availability, mount: mountAvailability, mode: settings.mode, mountState, slewRate, site, dark: settings.dark })
 	const slewRates = mountState?.slewRates ?? []
+	const acquisition = running && session ? session.request.capture : exposure
+	const direction = IPOLAR_DIRECTION_LABELS[shown.direction]
+	const dark = shown.dark ?? DEFAULT_IPOLAR_DARK_SETTINGS
+	// Where the blocker is fixed: the observing sites of Settings, the equipment setup, or the mount's own page (busy,
+	// disconnected, parked, no preset); nothing to open for the camera, which is the tab's, or the dark, which is below.
+	const fix =
+		blocker === undefined || availability.status !== 'ready' || (settings.dark?.enabled && settings.dark.masterId === undefined) ? undefined : !site ? 'site' : automatic && (mountAvailability.status === 'notSelected' || mountAvailability.status === 'unsupported') ? 'setup' : mount.device ? 'mount' : undefined
 
 	// Updates fields of the camera's iPolar form.
 	function update(patch: Partial<IPolarSettings>) {
@@ -118,33 +140,80 @@ export function IPolarSections({ device, availability, mount, settings: identity
 
 	return (
 		<>
-			<CollapsibleSection id="images.ipolar.equipment" title="Equipment">
-				<DataList>
-					<DataRow label="Camera">
-						<DeviceLink device={device} />
-					</DataRow>
-					<DataRow label="Mount">
-						<DeviceLink device={mount.device} fallback="Not assigned" />
-					</DataRow>
-				</DataList>
-				<SegmentedControl label="RA Rotation" options={IPOLAR_MODES} value={shown.mode} format={(mode) => IPOLAR_MODE_LABELS[mode]} disabled={locked} onChange={(mode) => update({ mode })} />
-				<Notice>The camera must be fixed to the part of the mount that turns in RA. Do not move DEC, the camera, or the optics once the session starts: that needs a new calibration.</Notice>
-				{!running && automatic && mountAvailability.status !== 'ready' && <Notice>{mountAvailability.message}</Notice>}
-				{!running && automatic && (mountAvailability.status === 'notSelected' || mountAvailability.status === 'unsupported') && <EquipmentSetupButton />}
-				{!automatic && mountAvailability.status !== 'ready' && <Notice>Without a mount, its declination and pier side cannot be watched: the software cannot prove the motion was RA only.</Notice>}
+			<CollapsibleSection id="images.ipolar.session" title={running ? 'Current Session' : session ? 'Last Session' : 'Session'} summary={session && ipolarSummaryText(session)}>
+				{session && <SessionState session={session} details={details} />}
+				{session?.measurement && <PolarError session={session} ended={!running} timeZone={site?.timeZone} />}
+				{session?.state === 'waitingForRotation' && (
+					<Notice>
+						Turn the RA axis by hand {IPOLAR_MINIMUM_ROTATION}° to {IPOLAR_MAXIMUM_ROTATION}° now (20° to 40° is best), keeping DEC still, then press Rotation Done.
+					</Notice>
+				)}
+				{session?.state === 'readyToRefine' && <Notice>Start the refinement, then turn the azimuth and altitude knobs of the mount base while the error refreshes.</Notice>}
+				{session?.state === 'refining' && <Notice>Turn the azimuth and altitude knobs of the mount base until the pole marker sits on the RA axis marker; the mount is not moved. The error refreshes with every frame.</Notice>}
+				{!running && <SegmentedControl label="RA Rotation" options={IPOLAR_MODES} value={shown.mode} format={(mode) => IPOLAR_MODE_LABELS[mode]} disabled={locked} onChange={(mode) => update({ mode })} />}
+				{!running && blocker === undefined && automatic && (
+					<Notice warning>
+						Start turns {mount.device?.name ?? 'the mount'} in RA by itself, about {formatFixed(shown.rotation, 0)}° towards the {direction.toLowerCase()}: make sure counterweights, cables, the pier, and the roof leave it clear.
+					</Notice>
+				)}
+				{!running && blocker === undefined && !automatic && <Notice>After the first frame, you turn the RA axis by hand; nothing is moved by the software.</Notice>}
+				<div className="flex flex-wrap gap-2">
+					{running ? (
+						<>
+							{session!.state === 'waitingForRotation' && (
+								<Button className={COMMAND_CLASS} title="Tell iPolar the RA axis was turned; nothing is moved" disabled={pending} onClick={() => void confirmIPolarRotation(ipolarRuntime, session!)}>
+									Rotation Done
+								</Button>
+							)}
+							{(session!.state === 'readyToRefine' || session!.state === 'refinementPaused') && (
+								<Button className={COMMAND_CLASS} title="Take frames and refresh the error while you turn the knobs" disabled={pending} onClick={() => void startIPolarRefinement(ipolarRuntime, session!)}>
+									{session!.state === 'readyToRefine' ? 'Start Refinement' : 'Resume Refinement'}
+								</Button>
+							)}
+							{session!.state === 'refining' && (
+								<Button variant="secondary" className={COMMAND_CLASS} title="Stop taking frames; the devices stay held" disabled={pending} onClick={() => void stopIPolarRefinement(ipolarRuntime, session!)}>
+									Pause Refinement
+								</Button>
+							)}
+							{session!.calibration && session!.state !== 'stopping' && (
+								<Button variant="secondary" className={COMMAND_CLASS} title="End the session as completed and keep its last measurement" disabled={pending} onClick={() => void finishIPolar(ipolarRuntime, session!)}>
+									Finish
+								</Button>
+							)}
+							<Button
+								variant={session!.state === 'rotating' ? 'primary' : 'secondary'}
+								className={COMMAND_CLASS}
+								title={session!.state === 'rotating' ? 'Stop the RA rotation and end the session' : 'End the session as stopped'}
+								disabled={pending || session!.state === 'stopping'}
+								onClick={() => void stopIPolar(ipolarRuntime, session!)}
+							>
+								{session!.state === 'stopping' ? 'Stopping…' : 'Stop'}
+							</Button>
+						</>
+					) : (
+						<Button className={COMMAND_CLASS} title={blocker} disabled={blocker !== undefined || pending} onClick={start}>
+							Start Polar Alignment
+						</Button>
+					)}
+				</div>
+				{blocker && <Notice>{blocker}</Notice>}
+				{fix === 'setup' && <EquipmentSetupButton />}
+				{fix === 'site' && (
+					<LinkButton className="self-start text-xs" onClick={() => navigate(routeState, { workspace: 'settings', section: 'observing-sites' })}>
+						Open the observing sites in Settings
+					</LinkButton>
+				)}
+				{fix === 'mount' && mount.device && (
+					<LinkButton className="self-start text-xs" onClick={() => navigate(routeState, { workspace: 'equipment', device: mount.device!.id })}>
+						Open {mount.device.name} in Equipment Control
+					</LinkButton>
+				)}
+				{error && <Notice error>{error}</Notice>}
+				{session && <SessionNotes session={session} />}
 			</CollapsibleSection>
-			<CameraAcquisitionSection
-				id="images.ipolar.acquisition"
-				device={device}
-				exposure={running && session ? session.request.capture : exposure}
-				capabilities={capabilities}
-				description="Frames are LIGHT, taken with the exposure time above and the camera settings of Camera Acquisition, and shown as the latest frame of the camera; they are kept in memory only. Keep the binning and the subframe unchanged during a session."
-			>
-				<ExposureTimeInput value={shown.exposureTime} exposure={capabilities?.exposure} disabled={locked} onChange={(exposureTime) => update({ exposureTime })} />
-			</CameraAcquisitionSection>
-			<DarkSection device={device} dark={shown.dark ?? DEFAULT_IPOLAR_DARK_SETTINGS} exposureTime={shown.exposureTime} locked={locked} session={running ? session : undefined} onChange={(patch) => update({ dark: { ...(settings.dark ?? DEFAULT_IPOLAR_DARK_SETTINGS), ...patch } })} />
-			<CollapsibleSection id="images.ipolar.rotation" title="Rotation">
-				{automatic ? (
+			{session && <Calibration session={session} details={details} />}
+			<CollapsibleSection id="images.ipolar.rotation" title="Rotation" summary={automatic ? `${IPOLAR_MODE_LABELS.automatic} · ${direction} · ${formatFixed(shown.rotation, 0)}° · settle ${shown.settleDelay} s` : `${IPOLAR_MODE_LABELS.manual} · settle ${shown.settleDelay} s`} defaultOpen={false}>
+				{automatic && (
 					<>
 						<SegmentedControl label="RA Direction" options={IPOLAR_DIRECTIONS} value={shown.direction} format={(direction) => IPOLAR_DIRECTION_LABELS[direction]} disabled={locked} onChange={(direction) => update({ direction })} />
 						{slewRates.length > 0 ? (
@@ -153,76 +222,54 @@ export function IPolarSections({ device, availability, mount, settings: identity
 							<Notice>Slew Rate: {running ? shown.slewRate : 'the mount reports no preset yet.'}</Notice>
 						)}
 						<NumberInput label="RA Rotation" value={shown.rotation} min={IPOLAR_MINIMUM_ROTATION} max={IPOLAR_MAXIMUM_ROTATION} step={1} suffix="°" disabled={locked} onChange={(rotation) => update({ rotation })} />
-						<NumberInput label="Settle Time" value={shown.settleDelay} min={0} max={120} step={0.5} suffix="s" disabled={locked} onChange={(settleDelay) => update({ settleDelay })} />
-						<Notice>
-							The mount turns in RA only, towards the {IPOLAR_DIRECTION_LABELS[shown.direction].toLowerCase()}, about {formatFixed(shown.rotation, 1)}° in bounded steps. Rotation is measured by plate solving, never assumed from the motion time.
-						</Notice>
-					</>
-				) : (
-					<>
-						<NumberInput label="Settle Time" value={shown.settleDelay} min={0} max={120} step={0.5} suffix="s" disabled={locked} onChange={(settleDelay) => update({ settleDelay })} />
-						<Notice>
-							After the first frame, turn the RA axis by hand {IPOLAR_MINIMUM_ROTATION}° to {IPOLAR_MAXIMUM_ROTATION}° (20° to 40° is best), then press Rotation Done. Nothing is moved by the software.
-						</Notice>
 					</>
 				)}
+				<NumberInput label="Settle Time" value={shown.settleDelay} min={0} max={120} step={0.5} suffix="s" disabled={locked} onChange={(settleDelay) => update({ settleDelay })} />
+				<Notice>
+					{automatic ? 'The mount turns in bounded steps; the rotation is measured by plate solving, never assumed from the motion time.' : 'The rotation is measured by plate solving.'} The camera must be fixed to the part of the mount that turns in RA: moving DEC, the camera, or the optics after the
+					calibration needs a new one.
+				</Notice>
+				{!automatic && mountAvailability.status !== 'ready' && mountAvailability.status !== 'busy' && <Notice>Without a mount, its declination and pier side cannot be watched, so the RA-only motion rests on your word.</Notice>}
 			</CollapsibleSection>
+			<CameraAcquisitionSection
+				id="images.ipolar.acquisition"
+				device={device}
+				exposure={acquisition}
+				capabilities={capabilities}
+				defaultOpen={false}
+				summary={`${formatExposureTime(shown.exposureTime)} · ${acquisition.binX}×${acquisition.binY}`}
+				description="Frames are LIGHT, taken with the exposure time above and the camera settings of Camera Acquisition, and kept in memory only. Keep the binning and the subframe unchanged during a session."
+			>
+				<ExposureTimeInput value={shown.exposureTime} exposure={capabilities?.exposure} disabled={locked} onChange={(exposureTime) => update({ exposureTime })} />
+			</CameraAcquisitionSection>
+			<DarkSection device={device} dark={dark} exposureTime={shown.exposureTime} locked={locked} session={running ? session : undefined} onChange={(patch) => update({ dark: { ...(settings.dark ?? DEFAULT_IPOLAR_DARK_SETTINGS), ...patch } })} />
 			<CameraPlateSolvingSection
 				id="images.ipolar.plate-solver"
 				device={device}
 				solving={running && session ? session.request.solving : solving}
+				defaultOpen={false}
 				description={(solver, assisted) => (
 					<>
-						Each frame is solved with the Plate Solving settings ({solver} solver, {assisted ? 'searched around the mount position snooped into its header during an automatic rotation, else over the whole sky' : 'searched over the whole sky'}); the rotation and the polar error are measured from the
-						solutions.
+						Each frame is solved with the Plate Solving settings ({solver} solver, {assisted ? 'around the position the mount reports during an automatic rotation, else over the whole sky' : 'over the whole sky'}); the rotation and the polar error are measured from the solutions.
 					</>
 				)}
 			/>
-			<CollapsibleSection id="images.ipolar.refinement" title="Refinement">
+			<CollapsibleSection id="images.ipolar.refinement" title="Refinement" summary={`every ${shown.refinementDelay} s · target ${shown.completionThreshold}″`} defaultOpen={false}>
 				<NumberInput label="Refinement Interval" value={shown.refinementDelay} min={0} max={600} step={0.5} suffix="s" disabled={locked} onChange={(refinementDelay) => update({ refinementDelay })} />
 				<NumberInput label="Target Error" value={shown.completionThreshold} min={1} max={3600} step={5} suffix="″" disabled={locked} onChange={(completionThreshold) => update({ completionThreshold })} />
 				<Checkbox label="Correct for atmospheric refraction" checked={shown.refraction} disabled={locked} onChange={(refraction) => update({ refraction })} />
+				<Notice>The target error is a requested threshold, not a measure of accuracy.</Notice>
 			</CollapsibleSection>
-			{session && <Calibration session={session} details={details} />}
-			{session?.measurement && <PolarError session={session} timeZone={site?.timeZone} />}
-			<CollapsibleSection id="images.ipolar.controls" title="Controls">
-				{session && <SessionState session={session} />}
-				{running ? (
-					<>
-						{session!.state === 'waitingForRotation' && (
-							<Button disabled={pending} onClick={() => void confirmIPolarRotation(ipolarRuntime, session!)}>
-								Rotation Done
-							</Button>
-						)}
-						{(session!.state === 'readyToRefine' || session!.state === 'refinementPaused') && (
-							<Button disabled={pending} onClick={() => void startIPolarRefinement(ipolarRuntime, session!)}>
-								{session!.state === 'readyToRefine' ? 'Start Refinement' : 'Resume Refinement'}
-							</Button>
-						)}
-						{session!.state === 'refining' && (
-							<Button variant="secondary" disabled={pending} onClick={() => void stopIPolarRefinement(ipolarRuntime, session!)}>
-								Pause Refinement
-							</Button>
-						)}
-						{session!.calibration && session!.state !== 'stopping' && (
-							<Button variant="secondary" disabled={pending} onClick={() => void finishIPolar(ipolarRuntime, session!)}>
-								Finish
-							</Button>
-						)}
-						<Button variant="secondary" disabled={pending || session!.state === 'stopping'} onClick={() => void stopIPolar(ipolarRuntime, session!)}>
-							{session!.state === 'stopping' ? 'Stopping…' : 'Stop'}
-						</Button>
-					</>
-				) : (
-					<Button disabled={blocker !== undefined || pending} onClick={start}>
-						Start Polar Alignment
-					</Button>
-				)}
-				{!running && automatic && <Notice>Pressing Start turns the mount in RA by itself: make sure counterweights, cables, the pier, and the roof leave it clear.</Notice>}
-				{blocker && <Notice>{blocker}</Notice>}
-				{session?.state === 'waitingForRotation' && <Notice>Turn the RA axis by hand now, keeping DEC still, then press Rotation Done.</Notice>}
-				{session?.state === 'refining' && <Notice>Adjust the altitude and azimuth of the mount base to bring the pole marker onto the axis marker; the mount is not moved.</Notice>}
-				{error && <Notice error>{error}</Notice>}
+			<CollapsibleSection id="images.ipolar.equipment" title="Equipment" summary={mount.device?.name ?? 'No mount'} defaultOpen={false}>
+				<DataList>
+					<DataRow label="Camera">
+						<DeviceLink device={device} />
+					</DataRow>
+					<DataRow label="Mount">
+						<DeviceLink device={mount.device} fallback="Not assigned" />
+					</DataRow>
+				</DataList>
+				{!running && automatic && mountAvailability.status !== 'ready' && <Notice>{mountAvailability.message}</Notice>}
 			</CollapsibleSection>
 		</>
 	)
@@ -244,6 +291,107 @@ function appliedSettings({ request }: IPolarSessionSummary): IPolarSettings {
 	}
 }
 
+// Returns the instant, Unix milliseconds, at which key last changed, starting with the first render: the start of the
+// step a session is in, for the time it has taken.
+function useSince(key: string): number {
+	const [since, setSince] = useState(() => ({ key, at: Date.now() }))
+	if (since.key === key) return since.at
+	const next = { key, at: Date.now() }
+	setSince(next)
+	return next.at
+}
+
+interface SessionStateProps {
+	// Session shown.
+	readonly session: IPolarSessionSummary
+	// Its complete record, once fetched, for the rotation the last candidate reached.
+	readonly details?: IPolarSession
+}
+
+// Headline of the running or last session: its state; the progress of the frame being exposed; while a frame solves or
+// the mount turns, the time the step has taken, measured from when this tab saw it begin, with the rotation the last
+// candidate reached and why a solve can be slow; and its failure.
+function SessionState({ session, details }: SessionStateProps) {
+	const failed = session.state === 'failed'
+	const exposing = session.state === 'capturing' || session.state === 'refining'
+	const waiting = session.endedAt === undefined && (session.state === 'solving' || session.state === 'rotating')
+	const since = useSince(`${session.sessionId}:${session.state}:${session.frameCount}:${session.attemptCount}`)
+	// Only the elapsed time is refreshed here; the session itself runs on the server.
+	const now = useNow(waiting)
+	const elapsed = (now - since) / 1000
+	const turned = session.state === 'rotating' && !session.calibration ? details?.attempts.at(-1)?.rotation : undefined
+
+	return (
+		<>
+			<SessionStateText failed={failed}>{IPOLAR_STATE_LABELS[session.state]}</SessionStateText>
+			{exposing && <FrameProgress exposure={session.exposure} />}
+			{waiting && (
+				<p className="m-0 text-xs leading-4 text-ink-300 tabular-nums">
+					{session.state === 'solving' ? `Frame #${session.frameCount}` : turned !== undefined ? `${formatDegrees(turned, 1)} of ${formatDegrees(session.request.rotation, 0)} turned so far` : 'Turning'} · {formatClockDuration(elapsed)} elapsed
+				</p>
+			)}
+			{waiting && session.state === 'solving' && elapsed >= SLOW_SOLVE && <Notice>A frame solved over the whole sky can take minutes.</Notice>}
+			{failed && session.error && <Notice error>{sentence(session.error)}</Notice>}
+		</>
+	)
+}
+
+interface PolarErrorProps {
+	// Session with a measurement.
+	readonly session: IPolarSessionSummary
+	// Whether the session ended, so the measurement is its last one.
+	readonly ended: boolean
+	// Zone of the active site, for the time of the measurement.
+	readonly timeZone?: string
+}
+
+// The polar error of the latest measurement as the panel's Readout: the total error, said within the target when it
+// is current and within the requested threshold, or stale; the moves of the mount pole in azimuth and altitude in
+// words; and how long it stayed within the target. A later frame that gave no measurement says why.
+function PolarError({ session, ended, timeZone }: PolarErrorProps) {
+	const { zone } = useDisplayZone(timeZone ? { timeZone } : undefined)
+	const measurement = session.measurement!
+	const { convergence, rejection } = session
+	const within = ipolarWithinTarget(session)
+	const correction = ipolarCorrectionText(measurement)
+
+	return (
+		<>
+			<div className="flex flex-col gap-0.5">
+				<p className={cn('m-0 text-3xl leading-9 font-semibold tracking-[-0.01em] tabular-nums', session.current ? 'text-ink-100' : 'text-ink-300')}>{formatArcmin(measurement.totalError)}</p>
+				<p className="m-0 text-xs leading-4 text-ink-300">
+					{within && <span className="text-success">Within target · </span>}
+					{!session.current && <span className="text-warning">Stale · </span>}
+					{`${ended ? 'Last polar error' : 'Polar error'}, frame #${measurement.frame} at ${formatClockTime(measurement.time, zone, { seconds: true })}`}
+				</p>
+			</div>
+			<DataList>
+				<DataRow label="Azimuth">{correction.azimuth}</DataRow>
+				<DataRow label="Altitude">{correction.altitude}</DataRow>
+				<DataRow label="Target" tone={convergence.converged ? 'success' : 'default'}>
+					{ipolarConvergenceText(session)}
+				</DataRow>
+			</DataList>
+			{!session.current && rejection && (
+				<Notice warning>
+					Frame #{rejection.frame} gave no measurement: {IPOLAR_REJECTION_LABELS[rejection.reason]}. The error above is from frame #{measurement.frame}.
+				</Notice>
+			)}
+		</>
+	)
+}
+
+// What the session did to the mount besides turning it (the slew rate restored) and its latest warning, under the
+// commands.
+function SessionNotes({ session }: { readonly session: IPolarSessionSummary }) {
+	return (
+		<>
+			{session.slewRateRestored === true && session.previousSlewRate && <Notice>The slew rate was restored to {session.previousSlewRate}.</Notice>}
+			{session.warnings.length > 0 && <Notice warning>{session.warnings.at(-1)}</Notice>}
+		</>
+	)
+}
+
 interface CalibrationProps {
 	// Session shown.
 	readonly session: IPolarSessionSummary
@@ -251,78 +399,29 @@ interface CalibrationProps {
 	readonly details?: IPolarSession
 }
 
-// The calibration: frames and candidates, the rotation fitted, its quality, and the last rejected candidate.
+// The calibration: frames and candidates, the rotation fitted, its quality, and the last rejected candidate with what
+// follows it; collapsed with a summary once a measurement leads the session.
 function Calibration({ session, details }: CalibrationProps) {
 	const { calibration } = session
 	const rejected = details?.attempts.at(-1)
 
 	return (
-		<CollapsibleSection id="images.ipolar.calibration" title="Calibration">
+		<CollapsibleSection id="images.ipolar.calibration" title="Calibration" defaultOpen={session.measurement === undefined} summary={calibration ? `${formatDegrees(calibration.rotation, 1)} · ${calibration.verified ? 'watched' : 'stated'} RA-only` : `${session.frameCount} frames`}>
 			<DataList>
 				<DataRow label="Frames">{session.frameCount}</DataRow>
-				<DataRow label="Second-Pose Candidates">{session.attemptCount}</DataRow>
+				<DataRow label="Rotation Attempts">{session.attemptCount}</DataRow>
 				<DataRow label="RA Rotation">{calibration ? `${formatDegrees(calibration.rotation, 1)}${calibration.preferred ? '' : ' (outside 20°–40°)'}` : MISSING}</DataRow>
 				<DataRow label="Fit Residual">{calibration ? formatArcsec(calibration.residual) : MISSING}</DataRow>
-				<DataRow label="Axis from Pole">{calibration ? formatArcmin(calibration.axisOffset) : MISSING}</DataRow>
+				<DataRow label="Error at Calibration">{calibration ? formatArcmin(calibration.axisOffset) : MISSING}</DataRow>
 				<DataRow label="RA-Only Motion">{calibration ? (calibration.verified ? 'Watched on the mount' : 'Operator stated') : MISSING}</DataRow>
 			</DataList>
 			{!calibration && rejected && (
 				<Notice>
-					Last candidate{rejected.rotation !== undefined ? ` (${formatDegrees(rejected.rotation, 1)})` : ''}: {IPOLAR_REJECTION_LABELS[rejected.reason]}
-					{rejected.retry ? '; try again.' : '.'}
+					Last frame after the rotation{rejected.rotation !== undefined ? ` (${formatDegrees(rejected.rotation, 1)})` : ''}: {IPOLAR_REJECTION_LABELS[rejected.reason]}
+					{ipolarRetryText(session.request.mode, rejected.retry)}
 				</Notice>
 			)}
 		</CollapsibleSection>
-	)
-}
-
-interface PolarErrorProps {
-	// Session with a measurement.
-	readonly session: IPolarSessionSummary
-	// Zone of the active site, for the time of the measurement.
-	readonly timeZone?: string
-}
-
-// Total, azimuth, and altitude errors of the latest measurement, whether it is current, and the convergence streak.
-function PolarError({ session, timeZone }: PolarErrorProps) {
-	const { zone } = useDisplayZone(timeZone ? { timeZone } : undefined)
-	const measurement = session.measurement!
-	const { convergence, rejection } = session
-
-	return (
-		<CollapsibleSection id="images.ipolar.polar-error" title="Polar Error">
-			<DataList>
-				<DataRow label="Total Error" tone={session.current && convergence.converged ? 'success' : 'default'}>
-					{session.current ? formatArcmin(measurement.totalError) : `${formatArcmin(measurement.totalError)} (stale)`}
-				</DataRow>
-				<DataRow label="Azimuth (+ East)">{formatSignedArcmin(measurement.azimuthError)}</DataRow>
-				<DataRow label="Altitude (+ Above)">{formatSignedArcmin(measurement.altitudeError)}</DataRow>
-				<DataRow label="Measured">{`${formatClockTime(measurement.time, zone, { seconds: true })}, frame #${measurement.frame}`}</DataRow>
-				<DataRow label="Within Target">{`${convergence.streak} of 3${convergence.converged ? ' ✓' : ''}`}</DataRow>
-			</DataList>
-			{!session.current && rejection && (
-				<Notice>
-					Frame #{rejection.frame} gave no measurement: {IPOLAR_REJECTION_LABELS[rejection.reason]}. The values above are not current.
-				</Notice>
-			)}
-			<Notice>The target error is a requested threshold, not a measure of accuracy.</Notice>
-		</CollapsibleSection>
-	)
-}
-
-// Step of the running or last session, the progress of the frame being exposed, its failure, the slew rate restoration,
-// and the latest warning.
-function SessionState({ session }: { readonly session: IPolarSessionSummary }) {
-	const failed = session.state === 'failed'
-
-	return (
-		<>
-			<SessionStateText failed={failed}>{IPOLAR_STATE_LABELS[session.state]}</SessionStateText>
-			{(session.state === 'capturing' || session.state === 'refining') && <FrameProgress exposure={session.exposure} />}
-			{failed && session.error && <Notice error>{session.error}</Notice>}
-			{session.slewRateRestored === true && session.previousSlewRate && <Notice>The slew rate was restored to {session.previousSlewRate}.</Notice>}
-			{session.warnings.length > 0 && <Notice>{session.warnings.at(-1)}</Notice>}
-		</>
 	)
 }
 
@@ -347,11 +446,13 @@ const NO_MASTER = ''
 // The master dark of the Calibration Library the frames are solved less: the operator pins one among the darks of the
 // camera of the Equipment Catalog the camera is bound to (none is chosen automatically), what a frame it does not fit does,
 // and, while a session runs, how it went for the latest frame. The masters are listed from the library; the server checks
-// the pinned one against the camera and the header of every frame.
+// the pinned one against the camera and the header of every frame. Collapsed with a summary, open while an enabled dark
+// waits for its master, which blocks a start.
 function DarkSection({ device, dark, exposureTime, locked, session, onChange }: DarkSectionProps) {
 	const [masters, setMasters] = useState<readonly CalibrationMasterSummary[]>()
 	const exposure = Math.round(exposureTime * 1e6)
 	const cameraId = useBoundCamera(device)
+	const unchosen = dark.enabled && dark.masterId === undefined
 
 	useEffect(() => {
 		if (!dark.enabled || session) return
@@ -365,6 +466,7 @@ function DarkSection({ device, dark, exposureTime, locked, session, onChange }: 
 	const ids = (masters ?? []).map((master) => String(master.masterId))
 	const selected = dark.masterId === undefined ? NO_MASTER : String(dark.masterId)
 	const listed = selected === NO_MASTER || ids.includes(selected)
+	const policy = dark.onUnavailable === 'continue' ? 'solve without' : 'stop'
 
 	function describe(id: string) {
 		if (id === NO_MASTER) return 'Choose a master dark'
@@ -390,7 +492,7 @@ function DarkSection({ device, dark, exposureTime, locked, session, onChange }: 
 	}
 
 	return (
-		<CollapsibleSection id="images.ipolar.dark" title="Dark">
+		<CollapsibleSection id="images.ipolar.dark" title="Dark" summary={!dark.enabled ? 'Off' : unchosen ? 'No master chosen' : `#${dark.masterId} · ${policy}`} defaultOpen={unchosen}>
 			<Checkbox label="Subtract a Calibration Library dark" checked={dark.enabled} disabled={locked} onChange={(enabled) => onChange({ enabled })} />
 			{dark.enabled && <CatalogCameraNotice device={device} lead="Darks come from" purpose="to use the Calibration Library" />}
 			{dark.enabled && (
@@ -414,9 +516,15 @@ function DarkSection({ device, dark, exposureTime, locked, session, onChange }: 
 					{!session && masters !== undefined && masters.length === 0 && <Notice>The Calibration Library has no master dark yet; make one with the Dark Library Wizard.</Notice>}
 					{!session && !listed && <Notice>The dark #{dark.masterId} is no longer in the Calibration Library; choose another one.</Notice>}
 					{session?.dark && <Notice error={session.dark.state === 'failed' || (session.dark.state === 'notApplied' && dark.onUnavailable === 'stop')}>{ipolarDarkText(session.dark, dark.onUnavailable)}</Notice>}
-					<Notice>The camera a master came from cannot be verified; the server checks the master against the exposure, size, gain, offset, binning, and temperature of every frame, and only the frame itself is shown.</Notice>
+					{dark.masterId !== undefined && <Notice>The camera a master came from cannot be verified; the server checks the master against the exposure, size, gain, offset, binning, and temperature of every frame, and only the frame itself is shown.</Notice>}
 				</>
 			)}
 		</CollapsibleSection>
 	)
+}
+
+// Returns a failure detail as a sentence: its first letter in upper case and a final period.
+function sentence(text: string) {
+	const capitalized = text.charAt(0).toUpperCase() + text.slice(1)
+	return capitalized.endsWith('.') ? capitalized : `${capitalized}.`
 }

@@ -925,7 +925,9 @@ export type { PointingAcquisitionState, PointingModelExport, PointingModelFile, 
 export type { TppaAlignment, TppaAltitudeCorrection, TppaAttempt, TppaAzimuthCorrection, TppaCaptureSettings, TppaEvent, TppaGeometry, TppaOverlay, TppaPoint, TppaRequest, TppaSession, TppaSessionSummary, TppaSnapshot, TppaStartResponse, TppaState } from './tppa'
 export type { DarkEvidence, DarkRejection } from './calibrationdark'
 export type {
+	IPolarAltitudeCorrection,
 	IPolarAttempt,
+	IPolarAzimuthCorrection,
 	IPolarCalibrationSummary,
 	IPolarCaptureSettings,
 	IPolarDarkCode,

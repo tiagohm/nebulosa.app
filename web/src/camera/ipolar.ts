@@ -1,9 +1,10 @@
-import type { CameraCapabilities, DarkEvidence, IPolarDarkRequest, IPolarDarkStatus, IPolarRequest, IPolarSession, IPolarSessionSummary, IPolarState, MountState, ServerEvent } from 'api'
+import type { CameraCapabilities, DarkEvidence, IPolarAltitudeCorrection, IPolarAzimuthCorrection, IPolarDarkRequest, IPolarDarkStatus, IPolarMeasurementSummary, IPolarRequest, IPolarSession, IPolarSessionSummary, IPolarState, MountState, ServerEvent } from 'api'
 import { nanoid } from 'nanoid'
 import { ASEC2RAD, DEG2RAD } from 'nebulosa/src/core/constants'
 import type { IPolarRejection } from 'nebulosa/src/observation/alignment/ipolar'
 import { proxy } from 'valtio'
 import type { RoleAvailability } from '../equipment/availability'
+import { formatArcmin, formatArcsec } from '../format'
 import { type ApiFetch, browserFetch, deviceUrl, jsonInit } from '../http'
 import type { ObservingSite } from '../location/site'
 import type { CameraExposureSettings, CameraPlateSolvingSettings, IPolarDarkSettings, IPolarSettings } from '../profile/schema'
@@ -68,6 +69,53 @@ export const IPOLAR_DIRECTION_LABELS: Readonly<Record<IPolarSettings['direction'
 
 // RA directions, in selector order.
 export const IPOLAR_DIRECTIONS = Object.keys(IPOLAR_DIRECTION_LABELS) as IPolarSettings['direction'][]
+
+// Fresh measurements within the threshold in a row that make a session converged: COMPLETION_COUNT of the server.
+export const IPOLAR_COMPLETION_COUNT = 3
+
+// Verb of each way the mount pole moves in azimuth, said before the amount.
+export const IPOLAR_AZIMUTH_CORRECTION_LABELS: Readonly<Record<IPolarAzimuthCorrection, string>> = { east: 'Move east', west: 'Move west' }
+
+// Verb of each way the mount pole moves in altitude, said before the amount.
+export const IPOLAR_ALTITUDE_CORRECTION_LABELS: Readonly<Record<IPolarAltitudeCorrection, string>> = { raise: 'Raise', lower: 'Lower' }
+
+// Returns the moves of the mount pole that remove a measured polar error, in words, as the server decided them: "Move
+// west 1.0′" and "Raise 0.4′", or "No move" for a component that rounds to 0.0′.
+export function ipolarCorrectionText(measurement: Pick<IPolarMeasurementSummary, 'azimuthError' | 'altitudeError' | 'azimuthCorrection' | 'altitudeCorrection'>): { readonly azimuth: string; readonly altitude: string } {
+	return { azimuth: moveText(IPOLAR_AZIMUTH_CORRECTION_LABELS[measurement.azimuthCorrection], measurement.azimuthError), altitude: moveText(IPOLAR_ALTITUDE_CORRECTION_LABELS[measurement.altitudeCorrection], measurement.altitudeError) }
+}
+
+// Returns a move of the pole by the size of an error (radians) after its verb, or "No move" when it rounds to 0.0′.
+function moveText(verb: string, error: number) {
+	const size = formatArcmin(Math.abs(error))
+	return size === formatArcmin(0) ? 'No move' : `${verb} ${size}`
+}
+
+// Returns whether the latest measurement of a session is current and within the requested threshold.
+export function ipolarWithinTarget(session: Pick<IPolarSessionSummary, 'measurement' | 'current' | 'request'>): boolean {
+	return session.current && session.measurement !== undefined && session.measurement.totalError <= session.request.completionThreshold
+}
+
+// Returns how long the measurements stayed within the requested threshold, in words: reached once the server reports the
+// session converged, with the fresh measurements in a row so far, else those out of IPOLAR_COMPLETION_COUNT.
+export function ipolarConvergenceText(session: Pick<IPolarSessionSummary, 'convergence' | 'request'>): string {
+	const target = formatArcsec(session.request.completionThreshold, 0)
+	const { streak, converged } = session.convergence
+	return converged ? `Reached, ${streak} frames within ${target}` : `${streak} of ${IPOLAR_COMPLETION_COUNT} frames within ${target}`
+}
+
+// Returns the one-line summary of a session beside its collapsed section: its state, and the polar error once measured.
+export function ipolarSummaryText(session: Pick<IPolarSessionSummary, 'state' | 'measurement'>): string {
+	const state = IPOLAR_STATE_LABELS[session.state]
+	return session.measurement ? `${state} · ${formatArcmin(session.measurement.totalError)}` : state
+}
+
+// Returns what follows a second-pose candidate that did not calibrate, said after its reason: the next candidate the
+// mount turns to by itself, the RA axis the operator turns again, or nothing when the session gives up.
+export function ipolarRetryText(mode: IPolarRequest['mode'], retry: boolean): string {
+	if (!retry) return '.'
+	return mode === 'automatic' ? '; the mount turns on and tries another frame.' : '; turn the RA axis again, then press Rotation Done.'
+}
 
 // Text of each reason a frame gave no measurement or a candidate did not calibrate.
 export const IPOLAR_REJECTION_LABELS: Readonly<Record<IPolarRejection | 'unsolved', string>> = {
@@ -143,7 +191,7 @@ export interface IPolarStartContext {
 export function ipolarBlocker({ camera, mount, mode, mountState, slewRate, site, dark }: IPolarStartContext): string | undefined {
 	if (camera.status !== 'ready') return camera.message
 	if (!site) return 'Choose an active observing site for the profile.'
-	if (dark?.enabled && dark.masterId === undefined) return 'Choose the master dark to subtract.'
+	if (dark?.enabled && dark.masterId === undefined) return 'Choose the master dark to subtract in the Dark section.'
 
 	if (mode === 'manual') return mount.status === 'busy' ? mount.message : undefined
 

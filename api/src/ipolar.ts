@@ -229,9 +229,19 @@ export interface IPolarMeasurementSummary {
 	readonly azimuthError: number
 	// On-sky component towards the zenith, in radians: positive when the axis lies above the pole.
 	readonly altitudeError: number
+	// Way the mount pole has to move in azimuth to remove azimuthError (ipolarCorrection).
+	readonly azimuthCorrection: IPolarAzimuthCorrection
+	// Way the mount pole has to move in altitude to remove altitudeError (ipolarCorrection).
+	readonly altitudeCorrection: IPolarAltitudeCorrection
 	// Largest angular residual of the frame's attitude fit, in radians.
 	readonly residual: number
 }
+
+// Horizon the mount pole has to move towards to remove the azimuth error.
+export type IPolarAzimuthCorrection = 'east' | 'west'
+
+// Way the mount pole has to move to remove the altitude error: raised or lowered.
+export type IPolarAltitudeCorrection = 'raise' | 'lower'
 
 // The latest frame that gave no measurement.
 export interface IPolarRejectionSummary {
@@ -890,6 +900,7 @@ export class IPolarSessions {
 			totalError: measurement.error.total,
 			azimuthError: measurement.error.azimuth,
 			altitudeError: measurement.error.altitude,
+			...ipolarCorrection(measurement.error.azimuth, measurement.error.altitude),
 			residual: measurement.residual,
 		}
 
@@ -942,7 +953,7 @@ export class IPolarSessions {
 		if (result.ok || (result.reason === 'aborted' && session.finishing)) this.#sessions.update(session, { state: 'completed', ...ended })
 		else if (result.reason === 'aborted') this.#sessions.update(session, { state: 'cancelled', ...ended })
 		else if (session.failure) this.#sessions.update(session, { state: 'failed', reason: session.failure.reason, error: session.failure.error, ...ended })
-		else this.#sessions.update(session, { state: 'failed', reason: result.reason, ...(result.error !== undefined && { error: result.error }), ...ended })
+		else this.#sessions.update(session, { state: 'failed', reason: result.reason, ...(result.error !== undefined && { error: ipolarErrorText(result.error) }), ...ended })
 	}
 
 	// Records a warning of a session.
@@ -964,6 +975,59 @@ function siteMismatch(mount: Mount, site: IPolarSite): string[] {
 	const height = Math.abs(toMeter(elevation) - site.elevation)
 	if (angle <= SITE_MISMATCH_ANGLE && height <= SITE_MISMATCH_ELEVATION) return []
 	return [`${mount.name} reports a site different from ${site.name}; the alignment uses ${site.name}.`]
+}
+
+// Returns the way the mount pole has to move to remove a polar error, from the signed on-sky components of the toolkit
+// (radians), taken at the visible pole in either hemisphere: positive when the axis lies east of it or above it. A zero
+// error gives the way of a positive one; its size says there is nothing to move.
+export function ipolarCorrection(azimuthError: number, altitudeError: number): Pick<IPolarMeasurementSummary, 'azimuthCorrection' | 'altitudeCorrection'> {
+	return { azimuthCorrection: azimuthError >= 0 ? 'west' : 'east', altitudeCorrection: altitudeError >= 0 ? 'lower' : 'raise' }
+}
+
+// Cause of each reason the toolkit rejects a frame, and what the operator does about it before starting again.
+const REJECTION_TEXT: Readonly<Record<IPolarRejection, { readonly cause: string; readonly remedy: string }>> = {
+	inconsistentSensor: { cause: 'the sensor geometry changed', remedy: 'keep the binning and the subframe unchanged during a session' },
+	badTime: { cause: 'the frame times are out of order', remedy: 'check the clock of the computer' },
+	badWcs: { cause: 'the plate solution is unusable', remedy: 'check the focus, the exposure time, and the plate solving settings' },
+	poorConditioning: { cause: 'the field is too small to fix the camera attitude', remedy: 'use a camera with a wider field' },
+	unstableFit: { cause: 'the frames are not related by a rigid rotation', remedy: 'keep the camera and the optics still' },
+	insufficientRotation: { cause: 'the RA rotation is too small', remedy: 'turn the RA axis farther, 20° to 40° is best' },
+	excessiveRotation: { cause: 'the RA rotation is too large', remedy: 'turn the RA axis less, 20° to 40° is best' },
+	wrongAxis: { cause: 'the rotation axis is far from the pole, as after a DEC move', remedy: 'keep DEC still and turn only the RA axis' },
+	geometryMismatch: { cause: 'the camera geometry changed since the calibration', remedy: 'keep the camera and the optics still' },
+	fieldJump: { cause: 'the field jumped, as after a slew', remedy: 'keep the mount from slewing and turn only the RA axis' },
+	singularGeometry: { cause: 'the pole is at the zenith', remedy: 'the polar error cannot be measured there' },
+}
+
+// Failure details of the toolkit's iPolar runner and their explanation for people, with what to do. A detail matches one
+// pattern at most; its groups fill the text.
+const FAILURE_TEXT: readonly (readonly [RegExp, (match: RegExpExecArray) => string])[] = [
+	[/^the second pose was rejected: (\w+)$/, ([, reason]) => rejectionText('the frame after the RA rotation was rejected', reason)],
+	[/^the calibration no longer matches the camera: (\w+)$/, ([, reason]) => rejectionText('the calibration no longer matches the camera', reason)],
+	[/^the second pose was not reached in (\d+) attempts$/, ([, attempts]) => `no frame after the RA rotation calibrated in ${attempts} attempts; check that the frames solve and that the RA axis turns 20° to 40°, and start again`],
+	[/^the first frame did not solve$/, () => 'the first frame did not solve; check the focus, the exposure time, and the plate solving settings, and start again'],
+	[/^(\d+) refinement frames in a row did not solve$/, ([, count]) => `${count} refinement frames in a row did not solve; check the focus, the exposure time, and the sky for clouds, and start again`],
+	[/^mount (.+) did not rotate in RA$/, ([, name]) => `${name} did not rotate in RA; check that it is unparked, that its RA clutch is tight, and that the slew rate moves it, and start again`],
+	[/^the RA rotation did not reach .+$/, ([detail]) => `${detail}; choose a faster slew rate or a smaller RA rotation, and start again`],
+	[/^mount (.+ moved .+ in declination)$/, ([, detail]) => `${detail}; keep DEC still and its clutch tight, and start again`],
+	[/^mount (.+ changed pier side)$/, ([, detail]) => `${detail}; keep the mount from flipping during a session, and start again`],
+]
+
+// Returns a rejection of the toolkit after its context for people: its cause and the remedy, or the bare code of an
+// unknown reason.
+function rejectionText(context: string, reason: string) {
+	const text = Object.hasOwn(REJECTION_TEXT, reason) ? REJECTION_TEXT[reason as IPolarRejection] : undefined
+	return text ? `${context}: ${text.cause}; ${text.remedy}, and start again` : `${context}: ${reason}`
+}
+
+// Returns the failure detail of the toolkit's iPolar runner for people: a rejection, an unreached second pose, an unsolved
+// frame, or a mount that did not turn or moved, explained with what to do; any other detail as it is.
+export function ipolarErrorText(error: string): string {
+	for (const [pattern, text] of FAILURE_TEXT) {
+		const match = pattern.exec(error)
+		if (match) return text(match)
+	}
+	return error
 }
 
 // Returns the warnings with one more, keeping the latest MAXIMUM_WARNINGS.

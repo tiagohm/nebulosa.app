@@ -2,9 +2,9 @@
 
 Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
 
-iPolar measures the polar alignment error by calibrating the mechanical RA axis in the sensor frame from two plate-solved frames taken before and after an RA rotation, then measuring the error from every later frame while the operator adjusts the base.
+iPolar measures the polar alignment error by calibrating the mechanical RA axis in the sensor frame from two plate-solved frames taken before and after an RA rotation, then measuring the error, and the way to move the mount pole on each axis, from every later frame while the operator adjusts the base.
 The session lives in `api/src/ipolar.ts` and runs the toolkit's iPolar runner (`core/src/observation/alignment/`), which owns the geometry, the quality gates, the motions, and the convergence; nothing is fitted in `api` or `web`.
-The web tool is a camera operation of the Images camera tabs (`web/src/images/IPolarTool.tsx`, `web/src/camera/IPolarPanel.tsx`), with an overlay of the axis and the pole over the frame it measured.
+The web tool is a camera operation of the Images camera tabs (`web/src/images/IPolarTool.tsx`, `web/src/camera/IPolarPanel.tsx`), with an overlay of the axis and the pole over the frame it measured, kept dimmed over the later frames of the session until the next measurement.
 
 ## Purpose
 
@@ -23,6 +23,7 @@ iPolar needs neither: the frames need not overlap, the axis need not be in the i
 
 ## Rules and Limitations
 
+- The way to move the mount pole on each axis is decided in `api` from the toolkit's signed errors at the visible pole; `web` shows it and never derives it from the signs.
 - A dark is never chosen automatically, and a frame it does not fit is solved without it or fails the session, as the operator chose.
 - iPolar runs only as a manual operation: there is no in-process admission and no reservation.
 - Two poses cannot prove the motion was pure RA, so a small mixed RA/DEC motion tilts the axis undetected; without a mount, the RA-only motion rests on the operator's word.

@@ -26,7 +26,7 @@ import { CameraCaptures, type CaptureStartRequest } from './captures'
 import { ConnectionManager } from './connection'
 import { AppDatabase } from './database'
 import { ImageStore } from './images'
-import { type IPolarDarkLibrary, type IPolarEvent, type IPolarRequest, type IPolarSession, IPolarSessions } from './ipolar'
+import { type IPolarDarkLibrary, type IPolarEvent, type IPolarRequest, type IPolarSession, IPolarSessions, ipolarCorrection, ipolarErrorText } from './ipolar'
 import { OperationRegistry } from './operations'
 import type { PlateSolveOrigin, PlateSolvePixels, PlateSolvePreparation, PlateSolveRequest, PlateSolveResult } from './platesolving'
 
@@ -481,5 +481,38 @@ describe('iPolar dark', () => {
 		expect(((await response.json()) as { error: string }).error).toContain('another camera')
 		expect(events).toEqual([])
 		expect(leases).toEqual({ taken: 0, released: 0 })
+	})
+})
+
+describe('iPolar correction', () => {
+	test('an axis east of and above the visible pole moves west and lower', () => {
+		expect(ipolarCorrection(deg(0.1), deg(0.1))).toEqual({ azimuthCorrection: 'west', altitudeCorrection: 'lower' })
+		expect(ipolarCorrection(deg(-0.1), deg(-0.1))).toEqual({ azimuthCorrection: 'east', altitudeCorrection: 'raise' })
+	})
+
+	test('a zero error takes the way of a positive one', () => {
+		expect(ipolarCorrection(0, 0)).toEqual({ azimuthCorrection: 'west', altitudeCorrection: 'lower' })
+	})
+})
+
+describe('iPolar failure text', () => {
+	test('a rejection is explained with what to do', () => {
+		expect(ipolarErrorText('the second pose was rejected: wrongAxis')).toBe('the frame after the RA rotation was rejected: the rotation axis is far from the pole, as after a DEC move; keep DEC still and turn only the RA axis, and start again')
+		expect(ipolarErrorText('the calibration no longer matches the camera: fieldJump')).toStartWith('the calibration no longer matches the camera: the field jumped, as after a slew;')
+	})
+
+	test('unsolved frames and mount motions are explained', () => {
+		expect(ipolarErrorText('the second pose was not reached in 8 attempts')).toStartWith('no frame after the RA rotation calibrated in 8 attempts;')
+		expect(ipolarErrorText('the first frame did not solve')).toStartWith('the first frame did not solve;')
+		expect(ipolarErrorText('4 refinement frames in a row did not solve')).toStartWith('4 refinement frames in a row did not solve;')
+		expect(ipolarErrorText('mount EQ6 did not rotate in RA')).toStartWith('EQ6 did not rotate in RA;')
+		expect(ipolarErrorText('mount EQ6 moved 0.62° in declination')).toStartWith('EQ6 moved 0.62° in declination;')
+		expect(ipolarErrorText('mount EQ6 changed pier side')).toStartWith('EQ6 changed pier side;')
+		expect(ipolarErrorText('the RA rotation did not reach 30.0° within 180 s of motion')).toStartWith('the RA rotation did not reach 30.0° within 180 s of motion;')
+	})
+
+	test('any other detail is kept', () => {
+		expect(ipolarErrorText('mount EQ6 disconnected')).toBe('mount EQ6 disconnected')
+		expect(ipolarErrorText('the second pose was rejected: somethingNew')).toBe('the frame after the RA rotation was rejected: somethingNew')
 	})
 })

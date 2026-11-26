@@ -1,4 +1,5 @@
 import type { OperationFailureReason } from 'nebulosa/src/devices/orchestration/operation'
+import { toArcmin } from 'nebulosa/src/math/units/angle'
 import type { AutoFocusSessionSummary } from './autofocus'
 import type { CalibrationJobSummary } from './calibrationlibrary.jobs'
 import type { CaptureSession } from './captures'
@@ -469,8 +470,19 @@ export class NotificationClassifier {
 		const target = cameraTool(camera.connectionId, camera.deviceId, 'ipolar')
 
 		if (state === 'readyToRefine') return [{ key: `ipolar.ready:${sessionId}`, level: 'info', code: 'ipolar.readyToRefine', title: 'iPolar ready to refine', message: `The RA axis seen by ${cameraName} was calibrated; start the refinement and adjust the mount base.`, source, target }]
-		if (state === 'refining' && session.convergence.converged) return [{ key: `ipolar.converged:${sessionId}`, level: 'info', code: 'ipolar.converged', title: 'iPolar within the target', message: `The polar error measured by ${cameraName} stayed within the requested threshold.`, source, target }]
-		if (state === 'failed' && !this.#quiet(camera.connectionId, reason)) return [{ key: `ipolar:${sessionId}`, level: 'error', code: 'ipolar.failed', title: 'iPolar failed', message: `iPolar with ${cameraName} failed: ${failureText(reason, session.error)}.`, source, target }]
+		if (state === 'refining' && session.convergence.converged)
+			return [
+				{
+					key: `ipolar.converged:${sessionId}`,
+					level: 'info',
+					code: 'ipolar.converged',
+					title: 'iPolar within the target',
+					message: `The polar error measured by ${cameraName} stayed within the requested threshold${session.measurement ? `, at ${toArcmin(session.measurement.totalError).toFixed(1)}′` : ''}.`,
+					source,
+					target,
+				},
+			]
+		if (state === 'failed' && !this.#quiet(camera.connectionId, reason)) return [{ key: `ipolar:${sessionId}`, level: 'error', code: 'ipolar.failed', title: 'iPolar failed', message: `iPolar with ${cameraName} failed: ${session.error ?? failureText(reason, undefined)}.`, source, target }]
 		return []
 	}
 

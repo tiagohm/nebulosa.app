@@ -4,7 +4,26 @@ import { arcsec, deg } from 'nebulosa/src/math/units/angle'
 import { proxy } from 'valtio'
 import { DEFAULT_CAMERA_PLATE_SOLVING, DEFAULT_EXPOSURE_SETTINGS, DEFAULT_IPOLAR_SETTINGS } from '../profile/schema'
 import { cameraKey } from './capture'
-import { confirmIPolarRotation, finishIPolar, handleIPolarEvent, ipolarDarkText, ipolarBlocker, ipolarFrameRole, ipolarMountSupport, ipolarRequest, type IPolarRuntime, ipolarSlewRate, refreshIPolar, startIPolar, type IPolarStartContext } from './ipolar'
+import {
+	confirmIPolarRotation,
+	finishIPolar,
+	handleIPolarEvent,
+	ipolarConvergenceText,
+	ipolarCorrectionText,
+	ipolarDarkText,
+	ipolarBlocker,
+	ipolarFrameRole,
+	ipolarMountSupport,
+	ipolarRequest,
+	ipolarRetryText,
+	type IPolarRuntime,
+	ipolarSlewRate,
+	ipolarSummaryText,
+	ipolarWithinTarget,
+	refreshIPolar,
+	startIPolar,
+	type IPolarStartContext,
+} from './ipolar'
 
 function newState() {
 	return proxy<IPolarRuntime>({ sessions: {}, details: {}, pending: {}, errors: {} })
@@ -191,4 +210,27 @@ test('the dark outcome of a frame names the frame, what was not verified, and wh
 	expect(ipolarDarkText({ frame: 5, state: 'notApplied', masterId: 23, code: 'exposureMismatch', reason: 'The frame was exposed 3000 ms, the dark 2000 ms' }, 'continue')).toBe('Dark #23 not subtracted from frame #5: The frame was exposed 3000 ms, the dark 2000 ms. The frame was solved without it.')
 	expect(ipolarDarkText({ frame: 1, state: 'failed', masterId: 23, code: 'calibrationFailed', reason: 'boom' }, 'stop')).toContain('The session stopped.')
 	expect(ipolarDarkText({ frame: 2, state: 'pending', masterId: 23 }, 'continue')).toContain('frame #2')
+})
+
+test('the moves of the mount pole are said in words, and a move that rounds to nothing is none', () => {
+	expect(ipolarCorrectionText({ azimuthError: arcsec(60), altitudeError: arcsec(-24), azimuthCorrection: 'west', altitudeCorrection: 'raise' })).toEqual({ azimuth: 'Move west 1.0′', altitude: 'Raise 0.4′' })
+	expect(ipolarCorrectionText({ azimuthError: arcsec(1), altitudeError: arcsec(-90), azimuthCorrection: 'west', altitudeCorrection: 'raise' })).toEqual({ azimuth: 'No move', altitude: 'Raise 1.5′' })
+})
+
+test('the target is reached by convergence and within only while the measurement is current', () => {
+	const request = { completionThreshold: arcsec(60) } as IPolarSessionSummary['request']
+	const measurement = { totalError: arcsec(30) } as IPolarSessionSummary['measurement']
+	expect(ipolarWithinTarget({ request, measurement, current: true })).toBeTrue()
+	expect(ipolarWithinTarget({ request, measurement, current: false })).toBeFalse()
+	expect(ipolarWithinTarget({ request, measurement: { totalError: arcsec(90) } as IPolarSessionSummary['measurement'], current: true })).toBeFalse()
+	expect(ipolarConvergenceText({ request, convergence: { streak: 2, converged: false } })).toBe('2 of 3 frames within 60″')
+	expect(ipolarConvergenceText({ request, convergence: { streak: 7, converged: true } })).toBe('Reached, 7 frames within 60″')
+	expect(ipolarSummaryText({ state: 'refining', measurement })).toBe('Refining · 0.5′')
+	expect(ipolarSummaryText({ state: 'solving', measurement: undefined })).toBe('Solving')
+})
+
+test('a rejected candidate says what follows in each mode', () => {
+	expect(ipolarRetryText('automatic', true)).toContain('the mount turns on')
+	expect(ipolarRetryText('manual', true)).toContain('Rotation Done')
+	expect(ipolarRetryText('manual', false)).toBe('.')
 })

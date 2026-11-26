@@ -140,10 +140,19 @@ test('reports iPolar ready to refine, within its target, and failed, never a can
 	const classifier = new NotificationClassifier()
 	expect(classifier.classify(ipolar({ state: 'readyToRefine' }))[0]).toMatchObject({ key: 'ipolar.ready:i1', level: 'info', code: 'ipolar.readyToRefine', target: { tool: 'ipolar', deviceId: 'cam' } })
 	expect(classifier.classify(ipolar({ state: 'refining' }))).toEqual([])
-	expect(classifier.classify(ipolar({ state: 'refining', convergence: { streak: 3, converged: true } }))[0]).toMatchObject({ key: 'ipolar.converged:i1', code: 'ipolar.converged' })
+	expect(classifier.classify(ipolar({ sessionId: 'i0', state: 'refining', convergence: { streak: 3, converged: true } }))[0]).toMatchObject({ key: 'ipolar.converged:i0', code: 'ipolar.converged', message: 'The polar error measured by CCD stayed within the requested threshold.' })
+	expect(classifier.classify(ipolar({ state: 'refining', convergence: { streak: 3, converged: true }, measurement: { totalError: (0.3 / 60 / 180) * Math.PI } as IPolarSessionSummary['measurement'] }))[0]).toMatchObject({
+		key: 'ipolar.converged:i1',
+		message: 'The polar error measured by CCD stayed within the requested threshold, at 0.3′.',
+	})
 	expect(classifier.classify(ipolar({ state: 'completed' }))).toEqual([])
 	expect(classifier.classify(ipolar({ state: 'cancelled', reason: 'aborted' }))).toEqual([])
-	expect(classifier.classify(ipolar({ state: 'failed', reason: 'unexpectedState', error: 'the second pose was rejected: wrongAxis' }))[0]).toMatchObject({ key: 'ipolar:i1', code: 'ipolar.failed', level: 'error' })
+	expect(classifier.classify(ipolar({ state: 'failed', reason: 'unexpectedState', error: 'the frame after the RA rotation was rejected: the rotation axis is far from the pole' }))[0]).toMatchObject({
+		key: 'ipolar:i1',
+		code: 'ipolar.failed',
+		level: 'error',
+		message: 'iPolar with CCD failed: the frame after the RA rotation was rejected: the rotation axis is far from the pole.',
+	})
 })
 
 test('reports a blocked mount and the outcome of a centering, never a measurement out of tolerance or a stop', () => {

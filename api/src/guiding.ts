@@ -1,6 +1,6 @@
 import { join } from 'path'
 import type { GuideOutputCommander } from 'nebulosa/src/devices/commanders/guideoutput'
-import type { Camera, GuideOutput, Mount, PierSide } from 'nebulosa/src/devices/indi/device'
+import type { Camera, GuideOutput, Mount, PierSide, Rotator } from 'nebulosa/src/devices/indi/device'
 import type { DeviceHandler } from 'nebulosa/src/devices/indi/manager/device'
 import type { BlobEncoding } from 'nebulosa/src/devices/indi/types'
 import { failedOperationResult, type OperationFailureReason, type OperationResult, type OperationScope, successfulOperationResult } from 'nebulosa/src/devices/orchestration/operation'
@@ -10,7 +10,7 @@ import type { Image } from 'nebulosa/src/imaging/model/types'
 import { numericKeyword } from 'nebulosa/src/io/formats/fits/util'
 import type { CameraCaptureTime } from 'nebulosa/src/observation/capture/types'
 import { assessGuidingCalibration, type GuidingCalibrationAssessment } from 'nebulosa/src/observation/guiding/calibration.quality'
-import { DECLINATION_SCALE_TOLERANCE, type GuidingCalibrationRecord, type GuidingCalibrationTransformation, type GuidingCalibrationTransformOptions } from 'nebulosa/src/observation/guiding/calibration.transform'
+import { DECLINATION_SCALE_TOLERANCE, type GuidingCalibrationRecord, type GuidingCalibrationRotation, type GuidingCalibrationTransformation, type GuidingCalibrationTransformOptions, ROTATION_TOLERANCE } from 'nebulosa/src/observation/guiding/calibration.transform'
 import { DEFAULT_GUIDING_CALIBRATOR_CONFIG, type GuidingCalibrationConfig, type GuidingCalibrationDiagnostics, type GuidingCalibrationFailureCode, type GuidingCalibrationPhase } from 'nebulosa/src/observation/guiding/calibrator'
 import { GuiderClient, type GuideFrameImage, type GuiderClientConnectOptions, type GuiderClientGuiderOptions, type GuiderClientOptions } from 'nebulosa/src/observation/guiding/client'
 import type { DitherAmount } from 'nebulosa/src/observation/guiding/ditherer'
@@ -23,7 +23,7 @@ import type { HeaderMetadata } from './calibrationlibrary.compatibility'
 import { CameraSessionRegistry } from './camerasessions'
 import type { CaptureFrameRegistry } from './captureframes'
 import type { CaptureFrame, CaptureSettings, CaptureSnoop } from './captures'
-import { type ClientResolver, type CommandRefusal, type CommandRequest, failureResponse, notFound, refusal, refusalResponse, resolveConnected } from './commands'
+import { type ClientResolver, type CommandRefusal, type CommandRequest, failureResponse, findDevice, notFound, refusal, refusalResponse, resolveConnected } from './commands'
 import type { DeviceRegistry } from './devices'
 import { type CameraBindings, NO_CAMERA_BINDINGS } from './equipmentcatalog'
 import type { GuideRegions } from './guideregions'
@@ -34,6 +34,7 @@ import { errorResponse } from './http'
 import type { ImageStore } from './images'
 import { frameTarget } from './livestacking.groups'
 import type { OperationDevice, OperationRegistry, ToolInvocation } from './operations'
+import type { RotatorSenseStore } from './rotatorsense.store'
 import type { StarDetectionSettings } from './stars'
 
 // Guiding service: one native guiding session per guide camera, from its first looped exposure to its stop, built on the
@@ -117,6 +118,10 @@ export interface GuidingStartRequest extends CommandRequest {
 	// Mount the guide output drives (the MOUNT of the Equipment Setup), held with the guide output while guiding; absent
 	// when the setup has none.
 	readonly mount?: OperationDevice
+	// Camera rotator of the Equipment Setup, and whether the guide camera turns with it (an off-axis guider behind it), as
+	// the Equipment Setup answers it; absent when the setup has none. A guide camera that turns has its calibration derived
+	// for the angle of the rotator, never read, only followed.
+	readonly rotator?: { readonly device: OperationDevice; readonly guideCameraRotates: boolean }
 	// Guide exposure, in milliseconds.
 	readonly exposure: number
 	// Sensor settings of the guide exposures.
@@ -248,12 +253,22 @@ export interface GuidingCalibrationPatch {
 	readonly disabled: boolean
 }
 
-// Mount context of a calibration, as GuidingCalibrationContext: the declination, apparent of date in radians, and the
-// side of the pier; either absent when unknown.
+// Mount context of a calibration, as GuidingCalibrationContext: the declination, apparent of date in radians, the side
+// of the pier, and the mechanical angle of the camera rotator, in degrees on the scale the rotator commands keep across
+// their syncs; each absent when unknown.
 export interface GuidingMountContext {
 	readonly declination?: number
 	readonly pierSide?: PierSide
+	readonly rotatorAngle?: number
 }
+
+// Mechanical angle of a rotator on a scale its syncs do not move (RotatorCommands.scaledAngle), in degrees.
+export interface RotatorAngleScale {
+	readonly scaledAngle: (rotator: Rotator) => number
+}
+
+// Scale of a service that sees no sync: the angle the rotator reports.
+const REPORTED_ROTATOR_ANGLE: RotatorAngleScale = { scaledAngle: (rotator) => rotator.angle.value }
 
 // Calibration in use by a session.
 export interface GuidingCalibrationSummary {
@@ -274,6 +289,10 @@ export interface GuidingCalibrationSummary {
 	// Transformations of the source in use, and the factor applied to the RA response for the declination.
 	readonly transformations: readonly GuidingCalibrationTransformation[]
 	readonly declinationScale: number
+	// Turn of the rotator the guide camera turns with since the source, in degrees; 0 without one.
+	readonly rotatorChange: number
+	// Whether the calibration waits for a direction check of the turned guide image before the controller guides with it.
+	readonly directionCheckPending: boolean
 	// Whether DEC was assumed perpendicular to RA when it was solved.
 	readonly orthogonalAssumed: boolean
 	// Generation of the calibration in use (see the calibrationGeneration of the telemetry).
@@ -689,7 +708,7 @@ export const GUIDING_REGION_STARS = 16
 export const GUIDING_REGION_RADIUS = 24
 
 // Native events carried only by the telemetry or the record, never as control events.
-const PER_FRAME_EVENTS: ReadonlySet<GuidingEvent['type']> = new Set(['guideStep', 'loopingFrame', 'starLost', 'calibrationStep', 'settling'])
+const PER_FRAME_EVENTS: ReadonlySet<GuidingEvent['type']> = new Set(['guideStep', 'loopingFrame', 'starLost', 'calibrationStep', 'calibrationDirectionCheckStep', 'settling'])
 
 // Bytes of a frame waiting to be previewed.
 interface PendingPreview {
@@ -758,6 +777,8 @@ interface Session {
 	readonly guideOutput: GuideOutput
 	// Mount the guide output drives, as the request named it.
 	readonly mount?: Mount
+	// Camera rotator the guide camera turns with; absent when it turns with none.
+	readonly rotator?: Rotator
 	// Settings the session was started with: the sensor, the optics, the client, and how saved calibrations are reused.
 	readonly cameraSettings: GuidingCameraSettings
 	readonly policy: GuidingCalibrationPolicy
@@ -830,6 +851,7 @@ interface SessionCalibration {
 	context: GuidingMountContext
 	transformations: readonly GuidingCalibrationTransformation[]
 	declinationScale: number
+	rotatorChange: number
 }
 
 // Returns the regions the detection of a session's next frame is limited to, or undefined for the whole frame:
@@ -862,8 +884,10 @@ export class GuidingSessions implements Disposable {
 	// Creates the service. client resolves an open connection id to its client, operations holds and publishes every
 	// session, guideOutputs is the commander the pulses are dispatched through, images receives the previewed frames,
 	// frames records them as the latest frame of their camera, calibrations keeps the completed calibrations, library resolves, pins and leases the master darks of the
-	// frames, listener receives every notification synchronously, and catalog resolves the camera of the Equipment Catalog
-	// a guide camera is bound to, whose darks alone a session chooses.
+	// frames, listener receives every notification synchronously, catalog resolves the camera of the Equipment Catalog
+	// a guide camera is bound to, whose darks alone a session chooses, rotatorScale reads the angle of a rotator across the
+	// syncs of the rotator commands, and senses keeps the guide image senses the direction checks learn (none kept
+	// without it).
 	constructor(
 		readonly devices: DeviceRegistry,
 		readonly client: ClientResolver,
@@ -875,6 +899,8 @@ export class GuidingSessions implements Disposable {
 		readonly library: GuidingDarkLibrary,
 		readonly listener: GuidingListener,
 		readonly catalog: CameraBindings = NO_CAMERA_BINDINGS,
+		readonly rotatorScale: RotatorAngleScale = REPORTED_ROTATOR_ANGLE,
+		readonly senses?: RotatorSenseStore,
 	) {
 		this.#sessions = new CameraSessionRegistry(operations, (session) => listener({ type: 'guiding:updated', session }))
 	}
@@ -930,6 +956,8 @@ export class GuidingSessions implements Disposable {
 		const camera = resolvedCamera.device
 		const guideOutput = resolvedOutput.device
 		const mount = resolvedMount?.device
+		// Only read for its angle; a disconnected one leaves the angle unknown, which a calibration then cannot be derived for.
+		const rotator = request.rotator?.guideCameraRotates ? findDevice(this, request.rotator.device.connectionId, 'rotator', request.rotator.device.deviceId) : undefined
 		if (!guideOutput.canPulseGuide) return refusal(`${guideOutput.name} cannot pulse guide, which guiding needs`, 422, 'unsupported')
 		// A manual session takes the guide output and the mount only while guiding; one inside a reservation must find them reserved too.
 		const run = mount ? [guideOutput, mount] : [guideOutput]
@@ -988,6 +1016,7 @@ export class GuidingSessions implements Disposable {
 			camera,
 			guideOutput,
 			...(mount && { mount }),
+			...(rotator && { rotator }),
 			...(request.dark && { darkRequest: request.dark }),
 			...(catalogCameraId !== undefined && { catalogCameraId }),
 			cameraSettings: request.camera,
@@ -1117,7 +1146,7 @@ export class GuidingSessions implements Disposable {
 		if (!session.policy.autoRestore) return
 		const evidence = this.#evidence(session)
 		if (!evidence) return
-		const { selected } = selectGuidingCalibration(this.#entries(evidence), evidence, context, session.transformOptions)
+		const { selected } = selectGuidingCalibration(this.#entries(evidence), evidence, context, this.#transformOptions(session))
 		if (selected) this.#restore(session, selected.entry.calibrationId, selected.entry.record, selected.entry.assessment, context)
 	}
 
@@ -1125,7 +1154,8 @@ export class GuidingSessions implements Disposable {
 	#restore(session: Session, storedId: string, record: GuidingCalibrationRecord, assessment: GuidingCalibrationAssessment, context: GuidingMountContext) {
 		const previous = session.calibration
 		// Known before the client announces the restore, which publishes the summary.
-		session.calibration = { calibrationId: ++session.calibrations, storedId, origin: 'restored', saved: true, assessment, context, transformations: [], declinationScale: 1 }
+		session.calibration = { calibrationId: ++session.calibrations, storedId, origin: 'restored', saved: true, assessment, context, transformations: [], declinationScale: 1, rotatorChange: 0 }
+		session.interactive.setCalibrationRotation(this.#rotationOf(session))
 		const restored = session.interactive.restoreCalibration(record, context)
 
 		if (restored.status !== 'direct' && restored.status !== 'transformed') {
@@ -1135,6 +1165,7 @@ export class GuidingSessions implements Disposable {
 
 		session.calibration.transformations = restored.transformations
 		session.calibration.declinationScale = restored.declinationScale
+		session.calibration.rotatorChange = restored.rotatorChange
 		this.#publishCalibration(session)
 
 		try {
@@ -1149,14 +1180,16 @@ export class GuidingSessions implements Disposable {
 	// Derives the calibration in use again for the context; returns whether it still applies (else it was dropped).
 	#reassess(session: Session, context: GuidingMountContext) {
 		const info = session.calibration
-		const previous = info && { context: info.context, transformations: info.transformations, declinationScale: info.declinationScale }
+		const previous = info && { context: info.context, transformations: info.transformations, declinationScale: info.declinationScale, rotatorChange: info.rotatorChange }
 		if (info) info.context = context
+		session.interactive.setCalibrationRotation(this.#rotationOf(session))
 		const reassessed = session.interactive.reassessCalibration(context)
 
 		if (reassessed.status === 'direct' || reassessed.status === 'transformed') {
 			if (info) {
 				info.transformations = reassessed.transformations
 				info.declinationScale = reassessed.declinationScale
+				info.rotatorChange = reassessed.rotatorChange
 			}
 
 			this.#publishCalibration(session)
@@ -1284,11 +1317,52 @@ export class GuidingSessions implements Disposable {
 		return new Response(null, { status: 204 })
 	}
 
-	// Returns the declination and side of the pier the mount of a session reports, each absent when unknown.
+	// Returns the declination and side of the pier the mount of a session reports, and the angle of the rotator its guide
+	// camera turns with, each absent when unknown.
 	#mountContext(session: Session): GuidingMountContext {
-		const mount = session.mount
-		if (!mount?.connected) return {}
-		return { ...(mount.hasEquatorialCoordinate && { declination: mount.equatorialCoordinate.declination }), ...(mount.hasPierSide && mount.pierSide !== 'NEITHER' && { pierSide: mount.pierSide }) }
+		const { mount, rotator } = session
+		const rotatorAngle = rotator?.connected ? this.rotatorScale.scaledAngle(rotator) : undefined
+		const turning = rotatorAngle !== undefined && { rotatorAngle }
+		if (!mount?.connected) return { ...turning }
+		return { ...(mount.hasEquatorialCoordinate && { declination: mount.equatorialCoordinate.declination }), ...(mount.hasPierSide && mount.pierSide !== 'NEITHER' && { pierSide: mount.pierSide }), ...turning }
+	}
+
+	// Returns how the guide image of a session follows a camera rotator: fixed without one, else turning with the guide
+	// image sense a direction check learned for this guide camera and rotator, when one did.
+	#rotationOf(session: Session): GuidingCalibrationRotation {
+		const { rotator } = session
+		if (!rotator) return { kind: 'fixed' }
+		const stored = this.#storedSense(session.camera, rotator)
+		return stored === undefined ? { kind: 'turning' } : { kind: 'turning', sense: stored }
+	}
+
+	// Returns the transform options of a session with the rotation of its guide image.
+	#transformOptions(session: Session): GuidingCalibrationTransformOptions {
+		return { ...session.transformOptions, rotation: this.#rotationOf(session) }
+	}
+
+	// Returns the guide image sense stored for a guide camera and a rotator; undefined when none is, or the database cannot be read.
+	#storedSense(camera: Camera, rotator: Rotator) {
+		try {
+			return this.senses?.get('guideImage', camera, rotator)?.sense
+		} catch (error) {
+			console.error('the guide image sense could not be read:', error)
+			return undefined
+		}
+	}
+
+	// Keeps the guide image sense a direction check found for the guide camera and the rotator of a session: replaced when it
+	// is new or another, its use recorded when it is the one stored. A failure is logged; the session guides all the same.
+	#directionChecked(session: Session, sense: 1 | -1, rateRatio: number) {
+		const { camera, rotator } = session
+		if (!rotator || !this.senses) return
+
+		try {
+			if (this.#storedSense(camera, rotator) === sense) this.senses.confirmed('guideImage', camera, rotator, Date.now())
+			else this.senses.learned('guideImage', camera, rotator, sense, undefined, rateRatio, Date.now())
+		} catch (error) {
+			console.error('the guide image sense was not saved:', error)
+		}
 	}
 
 	// Returns the evidence of the equipment and geometry of a session, or undefined before its first frame.
@@ -1302,6 +1376,7 @@ export class GuidingSessions implements Disposable {
 			camera: identityOf(camera),
 			guideOutput: identityOf(guideOutput),
 			...(mount && { mount: identityOf(mount) }),
+			...(session.rotator && { rotator: identityOf(session.rotator) }),
 			binX: cameraSettings.binX ?? 1,
 			binY: cameraSettings.binY ?? 1,
 			width: size.width,
@@ -1354,7 +1429,7 @@ export class GuidingSessions implements Disposable {
 		if (session instanceof Response) return session
 		const evidence = this.#evidence(session)
 		if (!evidence) return Response.json({ candidates: [] } satisfies GuidingCalibrationCandidates)
-		const { candidates } = selectGuidingCalibration(this.#entries(evidence), evidence, this.#mountContext(session), session.transformOptions)
+		const { candidates } = selectGuidingCalibration(this.#entries(evidence), evidence, this.#mountContext(session), this.#transformOptions(session))
 		return Response.json({ equipmentKey: equipmentKeyOf(evidence), candidates } satisfies GuidingCalibrationCandidates)
 	}
 
@@ -1375,7 +1450,7 @@ export class GuidingSessions implements Disposable {
 		if (mismatches.length > 0) return errorResponse('The saved calibration was measured with other equipment or geometry', 422, 'calibrationIncompatible', { reasons: mismatches })
 
 		const context = this.#mountContext(session)
-		const { candidates } = selectGuidingCalibration([entry], evidence, context, session.transformOptions)
+		const { candidates } = selectGuidingCalibration([entry], evidence, context, this.#transformOptions(session))
 		if (candidates[0].status !== 'direct' && candidates[0].status !== 'transformed') return errorResponse('The saved calibration does not apply to the mount as it is now', 422, 'calibrationIncompatible', { reasons: candidates[0].reasons })
 		if (!this.#restore(session, entry.calibrationId, entry.record, entry.assessment, context)) return errorResponse('The calibration is in use', 409, 'busy')
 		this.#sync(session)
@@ -1680,6 +1755,9 @@ export class GuidingSessions implements Disposable {
 		} else if (event.type === 'calibrationRestored' || event.type === 'calibrationTransformed' || event.type === 'calibrationFlipped') {
 			if (event.type === 'calibrationRestored') this.#update(session, { calibrationFailure: undefined })
 			this.#publishCalibration(session)
+		} else if (event.type === 'calibrationDirectionChecked') {
+			this.#directionChecked(session, event.sense, event.rateRatio)
+			this.#publishCalibration(session)
 		} else if (event.type === 'calibrationStarted') this.#update(session, { calibrationFailure: undefined })
 		else if (event.type === 'calibrationFailed') {
 			// The progress of the last step is still on the record: the guider leaves the calibrating state after this event.
@@ -1743,7 +1821,7 @@ export class GuidingSessions implements Disposable {
 		const record = session.client.exportCalibration()
 		const evidence = this.#evidence(session)
 		const assessment = assessGuidingCalibration(calibration)
-		const info: SessionCalibration = { calibrationId: ++session.calibrations, origin: 'new', saved: false, assessment, context: record?.context ?? {}, transformations: [], declinationScale: 1 }
+		const info: SessionCalibration = { calibrationId: ++session.calibrations, origin: 'new', saved: false, assessment, context: record?.context ?? {}, transformations: [], declinationScale: 1, rotatorChange: 0 }
 		session.calibration = info
 
 		if (record && evidence) {
@@ -1784,6 +1862,8 @@ export class GuidingSessions implements Disposable {
 				current: { ...info.context },
 				transformations: info.transformations,
 				declinationScale: info.declinationScale,
+				rotatorChange: info.rotatorChange,
+				directionCheckPending: session.client.getDirectionCheckPending(),
 				orthogonalAssumed: calibration.orthogonalAssumed,
 				generation: session.client.getCalibrationGeneration(),
 				raRate: data.xRate,
@@ -1943,15 +2023,17 @@ export class GuidingSessions implements Disposable {
 }
 
 // Identity of a device of a calibration: its resource key, its name, and its driver executable.
-function identityOf(device: Camera | GuideOutput | Mount): GuidingDeviceIdentity {
+function identityOf(device: Camera | GuideOutput | Mount | Rotator): GuidingDeviceIdentity {
 	return { key: resourceKey(device), name: device.name, ...(device.driver.executable && { driver: device.driver.executable }) }
 }
 
 // Whether the mount context changed enough since a calibration was derived for it to derive it again: another known or
-// unknown side of the pier, a declination that became known or unknown, or one whose cosine changed by more than the
-// toolkit's DECLINATION_SCALE_TOLERANCE.
+// unknown side of the pier, a rotator angle that became known or unknown or turned by more than the toolkit's
+// ROTATION_TOLERANCE, a declination that became known or unknown, or one whose cosine changed by more than the toolkit's
+// DECLINATION_SCALE_TOLERANCE.
 function contextChanged(previous: GuidingMountContext, current: GuidingMountContext) {
 	if (previous.pierSide !== current.pierSide) return true
+	if (previous.rotatorAngle === undefined || current.rotatorAngle === undefined ? previous.rotatorAngle !== current.rotatorAngle : Math.abs(current.rotatorAngle - previous.rotatorAngle) > ROTATION_TOLERANCE) return true
 	if (previous.declination === undefined || current.declination === undefined) return previous.declination !== current.declination
 	return Math.abs(Math.cos(current.declination) / Math.cos(previous.declination) - 1) > DECLINATION_SCALE_TOLERANCE
 }

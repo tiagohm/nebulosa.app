@@ -385,6 +385,35 @@ CREATE TABLE guiding_calibrations (
 
 CREATE INDEX guiding_calibrations_equipment_recent ON guiding_calibrations (equipment_key, created_at);
 
+-- Learned senses of camera rotators (RotatorSenseStore): how an image turns per mechanical degree of a rotator, one row
+-- per kind, camera and rotator, and reverse switch, learned only from a check that passed and replaced when learned
+-- again. positionAngle is the sky position angle of the image top of a main camera (Target Centering); guideImage is
+-- the turn of the image of a guide camera behind the rotator (guiding).
+CREATE TABLE rotator_senses (
+	-- positionAngle or guideImage.
+	kind TEXT NOT NULL CHECK (kind IN ('positionAngle', 'guideImage')),
+	-- Physical camera and rotator, as resource keys joined with '|', stable across restarts and reconnects.
+	equipment_key TEXT NOT NULL,
+	-- Reverse switch of the rotator when it was learned, 0 or 1.
+	reversed INTEGER NOT NULL CHECK (reversed IN (0, 1)),
+	-- Names of the camera and the rotator, for people.
+	camera_name TEXT NOT NULL,
+	rotator_name TEXT NOT NULL,
+	-- Executable of the driver of the rotator; a row learned with another driver is ignored. NULL when unknown.
+	rotator_driver TEXT,
+	-- Sense, +1 or -1.
+	sense INTEGER NOT NULL CHECK (sense IN (1, -1)),
+	-- Parity of the frames it was learned from (positionAngle); NULL when unknown or for guideImage.
+	parity TEXT CHECK (parity IN ('NORMAL', 'FLIPPED')),
+	-- Evidence of the check that learned it: turn of the image per commanded turn, about 1; NULL when unknown.
+	gain REAL,
+	-- When it was learned, Unix milliseconds (UTC).
+	learned_at INTEGER NOT NULL,
+	-- When a check last confirmed it, Unix milliseconds (UTC); NULL when never.
+	last_used_at INTEGER,
+	PRIMARY KEY (kind, equipment_key, reversed)
+) STRICT;
+
 -- Mount pointing models (PointingModelStore): what was measured for each model and every fit of it, never pixels nor
 -- whether a revision is active, which lives in server memory. Samples, revisions, and verifications are immutable once
 -- written: a refit or an exclusion adds a revision. Kept until the operator deletes the model.

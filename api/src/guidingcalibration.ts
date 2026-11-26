@@ -31,6 +31,9 @@ export interface GuidingCalibrationEvidence {
 	readonly guideOutput: GuidingDeviceIdentity
 	// Mount the guide output drives; absent when the Equipment Setup has none.
 	readonly mount?: GuidingDeviceIdentity
+	// Camera rotator the guide camera turns with (an off-axis guider behind it); absent when it turns with none. Not
+	// part of the equipment key, so a calibration of the same guide camera without a rotator stays comparable.
+	readonly rotator?: GuidingDeviceIdentity
 	// Binning of the guide frames.
 	readonly binX: number
 	readonly binY: number
@@ -72,9 +75,10 @@ export interface InvalidGuidingCalibration {
 export type GuidingCalibrationEntry = StoredGuidingCalibration | InvalidGuidingCalibration
 
 // Why a saved calibration does not fit a session: a device, the binning, the frame size, the pixel scale or the guide
-// rate differs, the operator disabled it, its payload is invalid, or the toolkit refused it for the mount context
-// (pierSideUnknown, declinationUnknown, sourceNearPole, declinationNearPole, rateTooSmall).
-export type GuidingCalibrationRejection = 'camera' | 'guideOutput' | 'mount' | 'binning' | 'frameSize' | 'pixelScale' | 'guideRate' | 'disabled' | 'invalid' | 'pierSideUnknown' | 'declinationUnknown' | 'sourceNearPole' | 'declinationNearPole' | 'rateTooSmall'
+// rate differs, it was measured with the guide camera turning with another rotator than the one it turns with now (or
+// none), the operator disabled it, its payload is invalid, or the toolkit refused it for the mount context
+// (pierSideUnknown, declinationUnknown, rotatorAngleUnknown, sourceNearPole, declinationNearPole, rateTooSmall).
+export type GuidingCalibrationRejection = 'camera' | 'guideOutput' | 'mount' | 'rotator' | 'binning' | 'frameSize' | 'pixelScale' | 'guideRate' | 'disabled' | 'invalid' | 'pierSideUnknown' | 'declinationUnknown' | 'rotatorAngleUnknown' | 'sourceNearPole' | 'declinationNearPole' | 'rateTooSmall'
 
 // How a saved calibration fits a session.
 export interface GuidingCalibrationCandidate {
@@ -110,6 +114,8 @@ export function evidenceRejections(saved: GuidingCalibrationEvidence, current: G
 	if (!sameDevice(saved.camera, current.camera)) reasons.push('camera')
 	if (!sameDevice(saved.guideOutput, current.guideOutput)) reasons.push('guideOutput')
 	if (!(saved.mount === undefined ? current.mount === undefined : current.mount !== undefined && sameDevice(saved.mount, current.mount))) reasons.push('mount')
+	// Only a guide camera that turns now needs the rotator angle of the source on the same rotator's scale.
+	if (current.rotator !== undefined && (saved.rotator === undefined || !sameDevice(saved.rotator, current.rotator))) reasons.push('rotator')
 	if (saved.binX !== current.binX || saved.binY !== current.binY) reasons.push('binning')
 	if (saved.width !== current.width || saved.height !== current.height) reasons.push('frameSize')
 	if (!sameMeasure(saved.pixelScale, current.pixelScale)) reasons.push('pixelScale')

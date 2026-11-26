@@ -1,4 +1,4 @@
-import type { CameraCapabilities, MountState, OperationDevice, ServerEvent, TargetCenteringGuidingRestoration, TargetCenteringMode, TargetCenteringOutcome, TargetCenteringRequest, TargetCenteringSession, TargetCenteringSessionSummary, TargetCenteringState, TargetCenteringStep } from 'api'
+import type { CameraCapabilities, MountState, OperationDevice, ServerEvent, TargetCenteringGuidingRestoration, TargetCenteringMode, TargetCenteringOutcome, TargetCenteringRequest, TargetCenteringSenseSource, TargetCenteringSession, TargetCenteringSessionSummary, TargetCenteringState, TargetCenteringStep } from 'api'
 import { nanoid } from 'nanoid'
 import { equatorialFromJ2000 } from 'nebulosa/src/astronomy/coordinates/coordinate'
 import { timeUnix } from 'nebulosa/src/astronomy/time/time'
@@ -24,7 +24,9 @@ import { applySession, type CameraSessionKind, type CameraSessionRecords, refres
 // one instead of starting another. The target being edited is kept for the tab across its reloads (centeringTargetsEntry of
 // profile/view.ts). Where that target stands for the mount, its altitude and its distance, is computed here from what the
 // mount reports, so a Center is refused below the horizon and its confirmation says whether it slews, before the server
-// judges again; a session's state reads as a verdict once it ended.
+// judges again; a session's state reads as a verdict once it ended. A target may also ask for an orientation, the position
+// angle of the image top: Verify Only measures it with any camera, and Center turns the rotator of the Equipment Setup,
+// whose rotation sense the server keeps.
 
 // J2000 target being edited for a camera, in radians.
 export interface TargetCenteringDraft {
@@ -34,6 +36,10 @@ export interface TargetCenteringDraft {
 	readonly declination?: number
 	// Name of the object it came from.
 	readonly label?: string
+	// Whether the session also asks for an orientation.
+	readonly oriented?: boolean
+	// Position angle of the image top, ICRS, from north through east, in radians, [0, 2π); absent until entered.
+	readonly positionAngle?: number
 }
 
 // Target Centering state of the tab.
@@ -65,7 +71,16 @@ export const TARGET_CENTERING_STATE_LABELS: Readonly<Record<TargetCenteringState
 }
 
 // Label of each step of a running session.
-export const TARGET_CENTERING_STEP_LABELS: Readonly<Record<TargetCenteringStep, string>> = { stoppingGuiding: 'Stopping guiding', slewing: 'Slewing', settling: 'Settling', exposing: 'Exposing', solving: 'Solving', correcting: 'Correcting', restoringGuiding: 'Restoring guiding' }
+export const TARGET_CENTERING_STEP_LABELS: Readonly<Record<TargetCenteringStep, string>> = { stoppingGuiding: 'Stopping guiding', slewing: 'Slewing', settling: 'Settling', exposing: 'Exposing', solving: 'Solving', rotating: 'Rotating', correcting: 'Correcting', restoringGuiding: 'Restoring guiding' }
+
+// What an orientation needs from the Equipment Setup: its rotator and whether it can turn now, and whether the setup still
+// has to answer whether its guide camera turns with that rotator.
+export interface TargetCenteringRotation {
+	// Rotator of the setup that turns the camera; absent when it has none.
+	readonly rotator?: RoleAvailability
+	// Whether the setup has a Guide Camera and a Rotator and no answer yet whether the guide camera turns with it.
+	readonly guideRotationUnanswered: boolean
+}
 
 // Returns why a mount can never move for a centering, from the state the server reports, or undefined when it can (or its
 // state is not known yet). Verify Only commands nothing, so this does not concern it.
@@ -96,12 +111,21 @@ export function targetCenteringMountBlocker(mode: TargetCenteringMode, mount: Ro
 // mount, the mount's reported state (undefined while unknown), the target, and where the target stands for the mount
 // (targetCenteringPosition; absent while unknown). A Center refuses a target below the horizon of the mount's site, as
 // the server does. The server checks again.
-export function targetCenteringBlocker(mode: TargetCenteringMode, camera: RoleAvailability, mount: RoleAvailability, state: MountState | undefined, draft: TargetCenteringDraft | undefined, position?: TargetCenteringPosition): string | undefined {
+// An orientation also needs its position angle; a Center of one needs the setup's rotator ready, a mount that is not
+// alt-az, and the answer whether the guide camera turns with the rotator (rotation); Verify Only measures it with none.
+export function targetCenteringBlocker(mode: TargetCenteringMode, camera: RoleAvailability, mount: RoleAvailability, state: MountState | undefined, draft: TargetCenteringDraft | undefined, position?: TargetCenteringPosition, rotation?: TargetCenteringRotation): string | undefined {
 	if (camera.status !== 'ready') return camera.message
 	const mounted = targetCenteringMountBlocker(mode, mount, state)
 	if (mounted) return mounted
 	if (draft?.rightAscension === undefined || draft.declination === undefined) return 'Enter the coordinates of the target.'
 	if (mode === 'center' && position && position.altitude < 0) return `${draft.label ?? 'The target'} is ${formatFixed(toDeg(-position.altitude), 1)}° below the horizon of the mount's site.`
+	if (!draft.oriented) return undefined
+	if (draft.positionAngle === undefined) return 'Enter the position angle of the image top.'
+	if (mode === 'verifyOnly') return undefined
+	if (!rotation?.rotator) return 'Centering an orientation needs a Rotator in the Equipment Setup.'
+	if (rotation.rotator.status !== 'ready') return rotation.rotator.message
+	if (state?.mountType === 'ALTAZ') return 'The field of an alt-az mount turns all the time; a rotator cannot hold an orientation on it.'
+	if (rotation.guideRotationUnanswered) return 'Answer in the Equipment Setup whether the guide camera turns with the rotator.'
 	return undefined
 }
 
@@ -134,9 +158,11 @@ export function targetCenteringSlews(position: TargetCenteringPosition | undefin
 
 // Returns the one-line state of a session for its heading and its collapsed section: what it is doing while it runs, and
 // how it ended, which a completed one states as a verdict with the distance it measured.
-export function targetCenteringStateText(session: Pick<TargetCenteringSessionSummary, 'state' | 'step' | 'request' | 'finalSeparation' | 'positionVerified' | 'readyForImaging'>): string {
-	const { state, step, request, finalSeparation, positionVerified, readyForImaging } = session
-	const distance = finalSeparation === undefined ? undefined : formatAngularSize(finalSeparation)
+export function targetCenteringStateText(session: Pick<TargetCenteringSessionSummary, 'state' | 'step' | 'request' | 'finalSeparation' | 'finalPositionAngleError' | 'positionVerified' | 'orientationVerified' | 'readyForImaging'>): string {
+	const { state, step, request, finalSeparation, finalPositionAngleError, positionVerified, orientationVerified, readyForImaging } = session
+	const off = finalSeparation === undefined ? undefined : formatAngularSize(finalSeparation)
+	// The PA error rides along the distance whenever an orientation was asked.
+	const distance = request.orientation && finalPositionAngleError !== undefined ? [off, `PA ${formatSignedDegrees(finalPositionAngleError)}`].filter(Boolean).join(' · ') : off
 	const label = request.target.label
 
 	switch (state) {
@@ -145,6 +171,7 @@ export function targetCenteringStateText(session: Pick<TargetCenteringSessionSum
 			return `${request.mode === 'verifyOnly' ? 'Verifying' : 'Centering'} · ${step ? TARGET_CENTERING_STEP_LABELS[step] : 'Preparing'}`
 		case 'completed':
 			if (!positionVerified) return distance ? `Off target · ${distance}` : 'Off target'
+			if (request.orientation && !orientationVerified) return distance ? `Off orientation · ${distance}` : 'Off orientation'
 			return [`${request.mode === 'verifyOnly' ? 'On target' : 'Centered'}${label ? ` on ${label}` : ''}`, distance, !readyForImaging && 'guiding not restored'].filter(Boolean).join(' · ')
 		case 'failed':
 			return distance ? `Failed · ${distance} off` : 'Failed'
@@ -170,29 +197,43 @@ export function targetCenteringFrameCount({ attempts, endedAt }: Pick<TargetCent
 	return endedAt === undefined ? attempts.length : attempts.filter(({ outcome }) => outcome !== undefined).length
 }
 
+// Formats an angle in radians as signed degrees to a hundredth.
+export function formatSignedDegrees(angle: number) {
+	const degrees = toDeg(angle)
+	return `${degrees > 0 ? '+' : ''}${formatFixed(degrees, 2)}°`
+}
+
+// Label of where the rotation sense of a session came from.
+export const TARGET_CENTERING_SENSE_SOURCE_LABELS: Readonly<Record<TargetCenteringSenseSource, string>> = { stored: 'Known from an earlier session', learned: 'Learned in this session and kept for the next one', relearned: 'Learned again in this session, the known one being reversed, and kept for the next one' }
+
 // Label of what became of a frame.
 export const TARGET_CENTERING_OUTCOME_LABELS: Readonly<Record<TargetCenteringOutcome, string>> = { solved: 'Solved', noSolution: 'No solution', invalid: 'Rejected', timeout: 'Timed out', failed: 'Solver failed' }
 
 // Builds the start request of a mode from the form of a camera, for the mount of the Equipment Setup and the guide output
 // that drives it (its GUIDE_OUTPUT, absent when it has none), whose guiding the session coordinates. The frames take the exposure time of the form
 // and the camera settings of exposure, whose own exposure time is never sent, fitted to the camera's capabilities as a
-// capture is, and are solved with the plate solving settings of the camera; the angles are sent in radians. Everything is
-// copied, so the session never depends on the profile.
+// capture is, and are solved with the plate solving settings of the camera; the angles are sent in radians. A target with
+// a position angle asks for that orientation too, with the tolerance and the half-turn equivalence of the form, and a
+// Center of it turns the rotator given. Everything is copied, so the session never depends on the profile.
 export function targetCenteringRequest(
 	mode: TargetCenteringMode,
-	target: { readonly rightAscension: number; readonly declination: number; readonly label?: string },
+	target: { readonly rightAscension: number; readonly declination: number; readonly label?: string; readonly positionAngle?: number },
 	settings: Readonly<TargetCenteringSettings>,
 	exposure: Readonly<CameraExposureSettings>,
 	solving: Readonly<CameraPlateSolvingSettings>,
-	{ mount, guideOutput }: { readonly mount: OperationDevice; readonly guideOutput?: OperationDevice },
+	{ mount, guideOutput, rotator }: { readonly mount: OperationDevice; readonly guideOutput?: OperationDevice; readonly rotator?: OperationDevice },
 	capabilities?: CameraCapabilities,
 ): Omit<TargetCenteringRequest, 'token'> {
-	const { rightAscension, declination, label } = target
-	const { exposureTime, tolerance, maximumCorrections, noSolutionRetries, maximumFrames, settleDelay, maximumCorrection, blindRetry, coordinateGuiding } = settings
+	const { rightAscension, declination, label, positionAngle } = target
+	const { exposureTime, tolerance, maximumCorrections, noSolutionRetries, maximumFrames, settleDelay, maximumCorrection, blindRetry, coordinateGuiding, orientationTolerance, halfTurn } = settings
+	const orientation = positionAngle === undefined ? undefined : { positionAngle, tolerance: orientationTolerance * DEG2RAD, halfTurn }
 
 	return {
 		mount,
 		...(guideOutput && { guideOutput }),
+		...(orientation && { orientation }),
+		// Verify Only turns nothing, so it never holds the rotator.
+		...(orientation && mode === 'center' && rotator && { rotator }),
 		mode,
 		target: { frame: 'J2000', rightAscension, declination, ...(label !== undefined && { label }) },
 		capture: fitExposure({ ...exposure, exposureTime }, capabilities),

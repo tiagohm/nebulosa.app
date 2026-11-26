@@ -666,13 +666,27 @@ export interface TargetCenteringSettings {
 	// Whether guiding that is correcting the mount is stopped for the session and restored after, recalibrating; otherwise it
 	// refuses the start.
 	coordinateGuiding: boolean
+	// Accepted difference between the measured and the requested position angle of the image top, in degrees.
+	orientationTolerance: number
+	// Whether a position angle and the one 180° from it frame the same field, so the rotator turns at most a quarter turn
+	// and a meridian flip keeps the orientation.
+	halfTurn: boolean
 }
 
 // Bounds of the Target Centering form, [minimum, maximum], in the units of each field.
-export const TARGET_CENTERING_LIMITS = { tolerance: [1, 3600], maximumCorrections: [1, 10], noSolutionRetries: [0, 5], maximumFrames: [1, 30], settleDelay: [0, 120], maximumCorrection: [0.1, 10] } as const
+export const TARGET_CENTERING_LIMITS = { tolerance: [1, 3600], maximumCorrections: [1, 10], noSolutionRetries: [0, 5], maximumFrames: [1, 30], settleDelay: [0, 120], maximumCorrection: [0.1, 10], orientationTolerance: [0.05, 10] } as const
 
 // Target Centering form of a camera that has none yet; the values are provisional starting points.
-export const DEFAULT_TARGET_CENTERING_SETTINGS: TargetCenteringSettings = { exposureTime: 3, tolerance: 30, maximumCorrections: 4, noSolutionRetries: 1, maximumFrames: 10, settleDelay: 2, maximumCorrection: 1, blindRetry: false, coordinateGuiding: true }
+export const DEFAULT_TARGET_CENTERING_SETTINGS: TargetCenteringSettings = { exposureTime: 3, tolerance: 30, maximumCorrections: 4, noSolutionRetries: 1, maximumFrames: 10, settleDelay: 2, maximumCorrection: 1, blindRetry: false, coordinateGuiding: true, orientationTolerance: 0.5, halfTurn: true }
+
+// Answer of whether a guide camera turns with the rotator of the Equipment Setup (an off-axis guider behind it), for the
+// rotator assigned when it was given.
+export interface GuideCameraRotation {
+	// Id of the ROTATOR then.
+	readonly rotator: string
+	// Whether the guide camera turns with the rotator.
+	readonly rotates: boolean
+}
 
 // Most artificial satellites a profile keeps as favorites.
 export const SATELLITE_FAVORITES_MAXIMUM = 500
@@ -872,6 +886,9 @@ export interface GuidingSettleSettings {
 export interface GuidingSettings {
 	// Guide exposure, in seconds, in [GUIDING_MINIMUM_EXPOSURE, GUIDING_MAXIMUM_EXPOSURE].
 	exposureTime: number
+	// Whether this camera, as the GUIDE_CAMERA of the Equipment Setup, turns with its ROTATOR, as answered once in the
+	// Equipment Setup; an answer given for another rotator is no answer. Absent until answered.
+	rotation?: GuideCameraRotation
 	// Whether the tracker measures one star or many.
 	trackingMode: GuidingStartRequest['trackingMode']
 	// Side of the square the guide star is searched in around the lock, in guide-camera pixels, in

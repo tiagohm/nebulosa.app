@@ -6,7 +6,7 @@ Where each kind of state lives, and why.
 
 ## Where State Lives
 
-- **The operational database** (server): what must survive a restart and be shared by every tab and browser: the workspace, settings of the server instance, objects an operator created, scientifically relevant records, and useful outcomes, such as saved frames, calibration masters, stacking projects, pointing models, guiding calibrations, framings, night plans, the satellite catalog, the SPICE kernels, and the outcomes of operations.
+- **The operational database** (server): what must survive a restart and be shared by every tab and browser: the workspace, settings of the server instance, objects an operator created, scientifically relevant records, and useful outcomes, such as saved frames, calibration masters, stacking projects, pointing models, guiding calibrations, the learned rotation senses of the rotators, framings, night plans, the satellite catalog, the SPICE kernels, and the outcomes of operations.
 - **The workspace** (server, in the database): the saved connections, the observing sites, the Equipment Catalog, and the profiles with their equipment setups, preferences, and camera forms (`api/src/workspace.ts`).
   The tab edits it and writes back each unit that changed (`WorkspaceSync` of `web/src/profile/sync.ts`); a unit edited from an outdated revision is refused with what the server kept, and every write is published so the other tabs apply it.
   The shell waits for the first read and never runs on a profile of its own making.

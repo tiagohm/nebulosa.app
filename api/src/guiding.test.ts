@@ -21,6 +21,7 @@ import { type GuidingDarkLibrary, calibrationProgressOf, GUIDING_REGION_RADIUS, 
 import { GuidingCalibrationStore } from './guidingcalibration.store'
 import { ImageStore } from './images'
 import { type OperationEvent, OperationRegistry, type ToolInvocation } from './operations'
+import { RotatorSenseStore } from './rotatorsense.store'
 
 const SKIP = process.env.RUN_ALL_TESTS !== 'true'
 
@@ -54,7 +55,7 @@ const NO_DARKS: GuidingDarkLibrary = { resolvePreview: () => Promise.resolve({ c
 // The simulator connection with its camera and mount connected, and the guiding sessions over it, guiding through the
 // mount's ST4 port. calibrations keeps the solved calibrations, a database of its own when absent, and the guide camera
 // is bound to catalogCamera in the Equipment Catalog, to none when null.
-async function setup(calibrations = new GuidingCalibrationStore(AppDatabase.memory()), library: GuidingDarkLibrary = NO_DARKS, catalogCamera: string | null = CATALOG_CAMERA) {
+async function setup(calibrations = new GuidingCalibrationStore(AppDatabase.memory()), library: GuidingDarkLibrary = NO_DARKS, catalogCamera: string | null = CATALOG_CAMERA, senses?: RotatorSenseStore) {
 	const manager = new ConnectionManager()
 	disposables.push(manager)
 	const { id } = await manager.connect({ type: 'SIMULATOR' })
@@ -80,6 +81,8 @@ async function setup(calibrations = new GuidingCalibrationStore(AppDatabase.memo
 		library,
 		(event) => events.push(event),
 		{ cameraOf: () => catalogCamera ?? undefined },
+		undefined,
+		senses,
 	)
 	disposables.push(guiding)
 
@@ -664,6 +667,55 @@ describe('guiding', () => {
 			expect((await context.guiding.stop(sessionId)).status).toBe(204)
 		},
 		90000,
+	)
+
+	test.skipIf(SKIP)(
+		'after a rotation of the rotator the guide camera turns with, the calibration is turned and checked instead of solved again, the other way through an off-axis guider',
+		async () => {
+			const found: number[] = []
+
+			for (const mirrored of [false, true]) {
+				const senses = new RotatorSenseStore(AppDatabase.memory())
+				const context = await setup(undefined, undefined, undefined, senses)
+				await trackStars(context)
+				// The pickoff prism of an off-axis guider mirrors the guide image, which then turns the other way.
+				context.client.sendSwitch({ device: context.camera.name, name: 'SIMULATOR_OPTICAL_TRAIN', elements: { MIRRORED: mirrored } })
+				const rotatorId = context.manager.devices.list(context.client).find((device) => device.type === 'rotator')!.id
+				context.manager.devices.switch(context.client, rotatorId, true)
+				const rotator = context.manager.devices.device(context.client, 'rotator', rotatorId)!
+				await waitUntil(() => rotator.connected && rotator.angle.max > 0)
+
+				const { sessionId } = await start(context, guided(context, { snoop: { mount: context.mountId, rotator: rotatorId }, rotator: { device: { connectionId: context.id, deviceId: rotatorId }, guideCameraRotates: true } }))
+				await waitUntil(() => context.guiding.selectTarget(sessionId, {}).status === 200)
+				expect(context.guiding.startGuiding(sessionId, { token: `token-${tokens++}`, recalibrate: false, settle: SETTLE }).status).toBe(202)
+				await waitUntil(() => context.summary()?.calibration?.saved === true, 90000)
+				const solved = context.summary()!.calibration!
+				expect(solved.source.rotatorAngle).toBeCloseTo(rotator.angle.value, 6)
+
+				const suspended = await context.guiding.suspendForMotion(sessionId)
+				if (!suspended.ok) throw new Error('not suspended')
+				const angle = rotator.angle.value
+				context.manager.devices.rotators.moveTo(rotator, angle + 40)
+				await waitUntil(() => !rotator.moving && Math.abs(rotator.angle.value - angle - 40) < 0.1)
+				const before = (await context.guiding.events(sessionId, 0).json()) as GuidingPage<GuidingEventRecord>
+
+				expect(await Promise.race([context.guiding.restoreAfterMotion(suspended.value, new AbortController().signal), Bun.sleep(60000).then(() => 'slow')])).toBe('restored')
+				await waitUntil(() => context.summary()?.calibration?.directionCheckPending === false, 60000)
+				const after = (await context.guiding.events(sessionId, before.items.at(-1)!.sequence).json()) as GuidingPage<GuidingEventRecord>
+				const types = after.items.map((record) => record.event.type)
+				expect(types).toContain('calibrationDirectionChecked')
+				expect(types).not.toContain('calibrationStarted')
+				const checked = after.items.find((record) => record.event.type === 'calibrationDirectionChecked')!.event as Extract<GuidingEventRecord['event'], { type: 'calibrationDirectionChecked' }>
+				expect(context.summary()!.calibration).toMatchObject({ storedId: solved.storedId, transformations: ['rotation'] })
+				expect(context.summary()!.calibration!.rotatorChange).toBeCloseTo(40, 1)
+				expect(senses.get('guideImage', context.camera, rotator)?.sense).toBe(checked.sense)
+				expect((await context.guiding.stop(sessionId)).status).toBe(204)
+				found.push(checked.sense)
+			}
+
+			expect(found[1]).toBe(-found[0])
+		},
+		240000,
 	)
 
 	test.skipIf(SKIP)(

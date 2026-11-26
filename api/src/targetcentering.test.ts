@@ -7,9 +7,11 @@ import { DEC_TAN, RA_TAN } from 'nebulosa/src/astrometry/wcs/fits.wcs'
 import { equatorialToJ2000 } from 'nebulosa/src/astronomy/coordinates/coordinate'
 import { geodeticLocation, localSiderealTime } from 'nebulosa/src/astronomy/observer/location'
 import { timeUnix } from 'nebulosa/src/astronomy/time/time'
+import { RotatorCommander } from 'nebulosa/src/devices/commanders/rotator'
+import type { Rotator } from 'nebulosa/src/devices/indi/device'
 import { isDeviceQuiescent } from 'nebulosa/src/devices/orchestration/device.lifecycle'
 import { failedOperationResult, type OperationResult, successfulOperationResult } from 'nebulosa/src/devices/orchestration/operation'
-import { resourceKey } from 'nebulosa/src/devices/orchestration/resource'
+import { deviceKey, resourceKey } from 'nebulosa/src/devices/orchestration/resource'
 import type { FitsHeader } from 'nebulosa/src/io/formats/fits/fits'
 import { arcmin, arcsec, deg, hour, normalizeAngle, toArcsec, toDeg } from 'nebulosa/src/math/units/angle'
 import { meter } from 'nebulosa/src/math/units/distance'
@@ -24,6 +26,7 @@ import type { MountCorrectionPlan, MountCorrections } from './mountpointing.corr
 import { MountCommands } from './mounts'
 import { OperationRegistry } from './operations'
 import { type PlateSolveOrigin, type PlateSolvePreparation, type PlateSolveRequest, type PlateSolveResult, PlateSolvingError } from './platesolving'
+import { RotatorSenseStore } from './rotatorsense.store'
 import { type TargetCenteringEvent, type TargetCenteringRequest, type TargetCenteringSession, TargetCenteringSessions, type TargetCenteringSessionSummary, type TargetCenteringStartResponse } from './targetcentering'
 
 const root = mkdtempSync(join(tmpdir(), 'nebulosa-centering-test-'))
@@ -46,9 +49,13 @@ async function waitUntil(condition: () => boolean, timeout = 60000) {
 
 let tokens = 0
 
-// Equatorial TAN solution of a 64×64 frame centered on (rightAscension, declination), radians.
-function tanSolution(rightAscension: number, declination: number): PlateSolution {
-	const header: FitsHeader = { CTYPE1: RA_TAN, CTYPE2: DEC_TAN, RADESYS: 'ICRS', CRVAL1: toDeg(normalizeAngle(rightAscension)), CRVAL2: toDeg(declination), CRPIX1: 32.5, CRPIX2: 32.5, CD1_1: -1e-3, CD1_2: 0, CD2_1: 0, CD2_2: 1e-3, NAXIS1: 64, NAXIS2: 64 }
+// Equatorial TAN solution of a 64×64 frame centered on (rightAscension, declination), radians, whose image top points at
+// positionAngle (radians, from north through east; 180° by default, north toward +Y).
+function tanSolution(rightAscension: number, declination: number, positionAngle: number = Math.PI): PlateSolution {
+	const s = 1e-3
+	const cos = Math.cos(positionAngle)
+	const sin = Math.sin(positionAngle)
+	const header: FitsHeader = { CTYPE1: RA_TAN, CTYPE2: DEC_TAN, RADESYS: 'ICRS', CRVAL1: toDeg(normalizeAngle(rightAscension)), CRVAL2: toDeg(declination), CRPIX1: 32.5, CRPIX2: 32.5, CD1_1: s * cos, CD1_2: -s * sin, CD2_1: -s * sin, CD2_2: -s * cos, NAXIS1: 64, NAXIS2: 64 }
 	return plateSolutionFrom(header)!
 }
 
@@ -58,7 +65,8 @@ function tanSolution(rightAscension: number, declination: number): PlateSolution
 function fakeSolver(images: ImageStore) {
 	const origins: PlateSolveOrigin[] = []
 	const requests: PlateSolveRequest[] = []
-	const control = { unsolved: 0, stall: false, error: undefined as Error | undefined, dx: arcmin(5), dy: arcmin(-3), onSolve: undefined as VoidFunction | undefined }
+	// orientation turns the field with a rotator: PA of the image top = sense·M + offset, in degrees.
+	const control = { unsolved: 0, stall: false, error: undefined as Error | undefined, dx: arcmin(5), dy: arcmin(-3), onSolve: undefined as VoidFunction | undefined, orientation: undefined as { rotator: Rotator; sense: 1 | -1; offset: number } | undefined }
 
 	const solver = {
 		prepare: (solving: PlateSolveRequest) => Promise.resolve({ request: solving, tool: { executable: '', timeout: 60000, indexDirectory: '' } }),
@@ -82,7 +90,9 @@ function fakeSolver(images: ImageStore) {
 
 			const { header } = images.metadata(imageId)!
 			const { rightAscension, declination } = applyPointingOffset(deg(header.RA as number), deg(header.DEC as number), control.dx, control.dy)
-			return { outcome: 'solved', solution: tanSolution(rightAscension, declination) } as PlateSolveResult
+			const { orientation } = control
+			const positionAngle = orientation ? deg(orientation.sense * orientation.rotator.angle.value + orientation.offset) : Math.PI
+			return { outcome: 'solved', solution: tanSolution(rightAscension, declination, positionAngle) } as PlateSolveResult
 		},
 	}
 
@@ -152,6 +162,10 @@ async function setup(corrections?: Pick<MountCorrections, 'plan' | 'suspend' | '
 	}
 	const events: TargetCenteringEvent[] = []
 	const auxiliaryDir = mkdtempSync(join(root, 'auxiliary-'))
+	const rotatorCommander = new RotatorCommander(manager.devices.rotators)
+	disposables.push(rotatorCommander)
+	const senses = new RotatorSenseStore(AppDatabase.memory())
+	const rotatorId = devices.find((device) => device.type === 'rotator')!.id
 	const sessions = new TargetCenteringSessions(
 		manager.devices,
 		(connectionId) => manager.client(connectionId),
@@ -165,6 +179,8 @@ async function setup(corrections?: Pick<MountCorrections, 'plan' | 'suspend' | '
 		guiding,
 		(event) => events.push(event),
 		auxiliaryDir,
+		rotatorCommander,
+		senses,
 	)
 
 	manager.devices.switch(client, cameraId, true)
@@ -219,7 +235,16 @@ async function setup(corrections?: Pick<MountCorrections, 'plan' | 'suspend' | '
 	const ended = () => waitUntil(() => events.at(-1)?.session.endedAt !== undefined)
 	const released = () => operations.available(camera) && operations.available(mount)
 
-	return { id, operations, frames, commander, mounts, solving, guiding, sessions, events, auxiliaryDir, camera, cameraId, mount, mountId, offsetTarget, request, start, summary, ended, released }
+	// Connects the rotator of the simulator and turns the field with it.
+	const withRotator = async (sense: 1 | -1, offset: number) => {
+		manager.devices.switch(client, rotatorId, true)
+		const rotator = manager.devices.device(client, 'rotator', rotatorId)!
+		await waitUntil(() => rotator.connected && rotator.angle.max > 0)
+		solving.control.orientation = { rotator, sense, offset }
+		return rotator
+	}
+
+	return { id, operations, frames, commander, mounts, solving, guiding, sessions, events, auxiliaryDir, camera, cameraId, mount, mountId, rotatorId, senses, withRotator, offsetTarget, request, start, summary, ended, released }
 }
 
 // Sends a mount to declination -20° at the sidereal meridian of its site.
@@ -651,6 +676,76 @@ describe('target centering sessions', () => {
 		await ended()
 		expect(summary()).toMatchObject({ state: 'completed', positionVerified: true })
 		expect(toArcsec(summary().finalSeparation!)).toBeLessThan(30)
+	})
+})
+
+describe('orientation', () => {
+	test('center with an orientation turns the rotator, verifies both axes, and the next session turns it once with the sense learned', async () => {
+		const { start, request, ended, summary, withRotator, offsetTarget, id, rotatorId, senses, camera, released, operations } = await setup()
+		const rotator = await withRotator(-1, 30)
+		const rotatorDevice = { connectionId: id, deviceId: rotatorId }
+		// PA now: −M + 30; 40° away from it.
+		const requested = (angle: number) => deg((((-angle + 30 + 40) % 360) + 360) % 360)
+		await start(request({ target: offsetTarget(arcmin(2)), orientation: { positionAngle: requested(rotator.angle.value), tolerance: deg(0.5), halfTurn: true }, rotator: rotatorDevice }))
+
+		await ended()
+		const first = summary()
+		expect(first).toMatchObject({ state: 'completed', positionVerified: true, orientationVerified: true, readyForImaging: true, rotatorName: rotator.name, sense: -1, senseSource: 'learned' })
+		expect(Math.abs(first.finalPositionAngleError!)).toBeLessThan(deg(0.5))
+		expect(first.attempts.filter((attempt) => attempt.rotation !== undefined)).toHaveLength(2)
+		expect(first.attempts.every((attempt) => attempt.rotatorAngle !== undefined)).toBeTrue()
+		expect(senses.get('positionAngle', camera, rotator)?.sense).toBe(-1)
+		expect(released() && operations.available(rotator)).toBeTrue()
+
+		await start(request({ target: offsetTarget(arcmin(2)), orientation: { positionAngle: requested(rotator.angle.value), tolerance: deg(0.5), halfTurn: true }, rotator: rotatorDevice }))
+		await waitUntil(() => summary().sessionId !== first.sessionId && summary().endedAt !== undefined)
+		const second = summary()
+		expect(second).toMatchObject({ state: 'completed', orientationVerified: true, sense: -1, senseSource: 'stored' })
+		expect(second.attempts.filter((attempt) => attempt.rotation !== undefined)).toHaveLength(1)
+	})
+
+	test('the session holds the rotator, and a stop of it from Equipment Control cancels the session', async () => {
+		const { start, request, summary, withRotator, offsetTarget, id, rotatorId, operations, solving } = await setup()
+		const rotator = await withRotator(1, 0)
+		solving.control.stall = true
+		await start(request({ target: offsetTarget(arcmin(2)), orientation: { positionAngle: deg(10), tolerance: deg(0.5), halfTurn: true }, rotator: { connectionId: id, deviceId: rotatorId } }))
+
+		await waitUntil(() => summary().step === 'solving')
+		expect(operations.available(rotator)).toBeFalse()
+		await operations.coordinator.cancelByDevice(deviceKey(rotator))
+		await waitUntil(() => summary().endedAt !== undefined)
+		expect(summary().state).toBe('cancelled')
+	})
+
+	test('verify only measures the orientation without a rotator and moves nothing', async () => {
+		const { start, request, ended, summary, solving, offsetTarget, commander } = await setup()
+		const goTo = spyOn(commander, 'goTo')
+		solving.control.dx = 0
+		solving.control.dy = 0
+		await start(request({ mode: 'verifyOnly', target: offsetTarget(arcsec(5)), tolerance: arcmin(5), orientation: { positionAngle: deg(150), tolerance: deg(0.5), halfTurn: false } }))
+
+		await ended()
+		expect(summary()).toMatchObject({ state: 'completed', positionVerified: true, orientationVerified: false, readyForImaging: false })
+		expect(toDeg(summary().finalPositionAngleError!)).toBeCloseTo(-30, 1)
+		expect(goTo).not.toHaveBeenCalled()
+	})
+
+	test('refuses an orientation it cannot center', async () => {
+		const { sessions, request, id, cameraId, rotatorId, withRotator, mount } = await setup()
+		const rotatorDevice = { connectionId: id, deviceId: rotatorId }
+		const orientation = { positionAngle: deg(10), tolerance: deg(0.5), halfTurn: true }
+		const refused = async (body: TargetCenteringRequest, status: number) => expect((await sessions.start(id, cameraId, body)).status).toBe(status)
+
+		await refused(request({ rotator: rotatorDevice }), 422)
+		await refused(request({ orientation }), 422)
+		// The rotator is not connected yet.
+		await refused(request({ orientation, rotator: rotatorDevice }), 409)
+		await withRotator(1, 0)
+		await refused(request({ orientation: { ...orientation, tolerance: deg(0.01) }, rotator: rotatorDevice }), 422)
+		const type = mount.mountType
+		Object.assign(mount, { mountType: 'ALTAZ' })
+		await refused(request({ orientation, rotator: rotatorDevice }), 422)
+		Object.assign(mount, { mountType: type })
 	})
 })
 

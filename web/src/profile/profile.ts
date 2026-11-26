@@ -413,7 +413,9 @@ export function setPointingModelSettings(state: ProfileState, camera: CameraIden
 
 // Returns the Target Centering form of a camera: the one edited last, or the defaults.
 export function targetCenteringSettings(settings: Pick<ProfileSettings, 'cameras'>, camera: CameraIdentity | undefined): Readonly<TargetCenteringSettings> {
-	return cameraSettings(settings, camera)?.targetCentering ?? DEFAULT_TARGET_CENTERING_SETTINGS
+	const saved = cameraSettings(settings, camera)?.targetCentering
+	// A form saved before a field existed reads it as its default.
+	return saved ? { ...DEFAULT_TARGET_CENTERING_SETTINGS, ...saved } : DEFAULT_TARGET_CENTERING_SETTINGS
 }
 
 // Replaces fields of the Target Centering form of a camera in the active profile.
@@ -711,6 +713,25 @@ function copyTelescopeOptics({ focalLength, focalMultiplier, aperture, telescope
 export function setMainTelescopeOptics(state: ProfileState, optics: TelescopeOptics) {
 	const profile = activeProfile(state)
 	profile.settings.mainTelescope = copyTelescopeOptics(optics)
+}
+
+// Returns whether the GUIDE_CAMERA of the active Equipment Setup turns with its ROTATOR, as answered in the guiding form of
+// that camera for the rotator assigned now; undefined when either role is empty, or the answer was given for another
+// rotator, or never. A guide camera assigned anew has a form of its own, so the question is asked again for it.
+export function guideCameraRotates(profile: Pick<Profile, 'connectionId' | 'equipment' | 'settings'>): boolean | undefined {
+	const setup = activeSetup(profile)
+	if (!profile.connectionId || !setup.GUIDE_CAMERA || !setup.ROTATOR) return undefined
+	const answer = guidingSettings(profile.settings, { connectionId: profile.connectionId, deviceId: setup.GUIDE_CAMERA.id }).rotation
+	return answer?.rotator === setup.ROTATOR.id ? answer.rotates : undefined
+}
+
+// Answers, in the guiding form of the GUIDE_CAMERA of the active Equipment Setup and for its ROTATOR, whether the guide
+// camera turns with the rotator. Ignored while either role is empty.
+export function setGuideCameraRotates(state: ProfileState, rotates: boolean) {
+	const profile = activeProfile(state)
+	const setup = activeSetup(profile)
+	if (!profile.connectionId || !setup.GUIDE_CAMERA || !setup.ROTATOR) return
+	setGuidingSettings(state, { connectionId: profile.connectionId, deviceId: setup.GUIDE_CAMERA.id }, { rotation: { rotator: setup.ROTATOR.id, rotates } })
 }
 
 // Replaces the guide telescope optics of the active profile's Equipment Setup, with the telescope of the Equipment Catalog

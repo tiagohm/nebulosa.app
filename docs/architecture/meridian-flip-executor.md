@@ -29,5 +29,5 @@ It composes the services that own each step instead of commanding devices itself
 - A flip is verified only by a pier side the driver reports; an inference from plate solutions is supporting evidence, never a mechanical confirmation.
 - Only an accepted flip goes on to recentering and Auto Focus, and the Executor alone suspends and restores guiding.
 - The capture resumes only when every step succeeded; otherwise it stays paused for the operator, and a flip motion that fails with the mount still moving leaves the execution blocked.
-- Only the main camera's capture is paused, a non-sidereal target is never flipped, the firmware limit is only what the operator enters, no dome is slaved, and no rotator is moved.
+- Only the main camera's capture is paused, a non-sidereal target is never flipped, the firmware limit is only what the operator enters, no dome is slaved, and no rotator is moved: its recentering asks no orientation, and a flip turns the field by half a turn, which keeps an orientation that allows it.
 - Hardware acceptance on a real mount (timing against the firmware, cable clearance) is the operator's.

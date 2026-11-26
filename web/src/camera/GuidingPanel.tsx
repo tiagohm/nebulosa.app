@@ -112,6 +112,10 @@ export interface GuidingTarget {
 	readonly settings?: CameraIdentity
 	// Devices snooped into the guide frame headers.
 	readonly snoop: CaptureSnoop
+	// Rotator of the equipment setup the guide camera may turn with; absent without one.
+	readonly rotator?: RoleDevice
+	// Whether the guide camera turns with the rotator, as the Equipment Setup answers it; absent while unanswered.
+	readonly guideCameraRotates?: boolean
 }
 
 // Label of each durable command, as its outcome is reported.
@@ -127,7 +131,7 @@ const DITHER_MODE_LABELS: Readonly<Record<GuidingDitherMode, string>> = { random
 const TRACKING_LABELS: Readonly<Record<GuidingSettings['trackingMode'], string>> = { singleStar: 'Single Star', multiStar: 'Multi Star' }
 
 // Guiding panel sections of a camera.
-export function GuidingSections({ device, availability, guideOutput, mount, settings: identity, snoop }: GuidingTarget) {
+export function GuidingSections({ device, availability, guideOutput, mount, settings: identity, snoop, rotator, guideCameraRotates }: GuidingTarget) {
 	const profiles = useSnapshot(profileState)
 	const runtime = useSnapshot(guidingRuntime)
 	const operations = useSnapshot(operationsState)
@@ -179,7 +183,19 @@ export function GuidingSections({ device, availability, guideOutput, mount, sett
 			guidingRuntime,
 			device.connectionId,
 			device.id,
-			guidingRequest(settings, exposure, { guideOutput: { connectionId: guideOutput.device.connectionId, deviceId: guideOutput.device.id }, ...(mount.device && { mount: { connectionId: mount.device.connectionId, deviceId: mount.device.id } }) }, snoop, detection, focalLength, capabilities),
+			guidingRequest(
+				settings,
+				exposure,
+				{
+					guideOutput: { connectionId: guideOutput.device.connectionId, deviceId: guideOutput.device.id },
+					...(mount.device && { mount: { connectionId: mount.device.connectionId, deviceId: mount.device.id } }),
+					...(rotator?.device && { rotator: { device: { connectionId: rotator.device.connectionId, deviceId: rotator.device.id }, ...(guideCameraRotates !== undefined && { guideCameraRotates }) } }),
+				},
+				snoop,
+				detection,
+				focalLength,
+				capabilities,
+			),
 		)
 	}
 

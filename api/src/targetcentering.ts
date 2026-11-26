@@ -5,7 +5,8 @@ import type { PlateSolution } from 'nebulosa/src/astrometry/solvers/platesolver'
 import { angularDistance, equatorialToJ2000 } from 'nebulosa/src/astronomy/coordinates/coordinate'
 import { timeUnix } from 'nebulosa/src/astronomy/time/time'
 import type { MountCommander } from 'nebulosa/src/devices/commanders/mount'
-import type { Camera, Mount, MountTargetCoordinate, PierSide } from 'nebulosa/src/devices/indi/device'
+import type { RotatorCommander } from 'nebulosa/src/devices/commanders/rotator'
+import type { Camera, Mount, MountTargetCoordinate, PierSide, Rotator } from 'nebulosa/src/devices/indi/device'
 import { isDeviceQuiescent } from 'nebulosa/src/devices/orchestration/device.lifecycle'
 import { failedOperationResult, type OperationContext, type OperationFailureReason, type OperationHandle, type OperationResult, successfulOperationResult } from 'nebulosa/src/devices/orchestration/operation'
 import { abortableDelay } from 'nebulosa/src/devices/orchestration/operation.wait'
@@ -15,7 +16,7 @@ import { type Angle, toArcsec, toDeg } from 'nebulosa/src/math/units/angle'
 import { toMeter } from 'nebulosa/src/math/units/distance'
 import type { CameraCapturer } from 'nebulosa/src/observation/capture/capture'
 import { type CameraCaptureTime, SYSTEM_CAMERA_CAPTURE_CLOCK } from 'nebulosa/src/observation/capture/types'
-import { type CenteringCorrection, type CenteringFrame, type CenteringMeasurement, type CenteringObserver, type CenteringOptions, type CenteringStep, type CenteringTarget, centerTarget } from 'nebulosa/src/observation/mount/centering'
+import { type CenteringCorrection, type CenteringFrame, type CenteringMeasurement, type CenteringObserver, type CenteringOptions, type CenteringOrientation, type CenteringRotationCheck, type CenteringServices, type CenteringStep, type CenteringTarget, centerTarget } from 'nebulosa/src/observation/mount/centering'
 import { CameraSessionRegistry } from './camerasessions'
 import { type CaptureFrameRegistry, captureFrameId } from './captureframes'
 import { type CaptureFrame, type CaptureSettings, exposureProgressListener } from './captures'
@@ -26,6 +27,7 @@ import type { ImageStore } from './images'
 import type { MountCommands } from './mounts'
 import { type OperationDevice, type OperationRegistry, type ToolInvocation, settledResult } from './operations'
 import { type PlateSolvePreparation, type PlateSolveRequest, PlateSolvingError, type PlateSolvingService } from './platesolving'
+import type { RotatorSenseStore, StoredRotatorSense } from './rotatorsense.store'
 import type { SkyObserver } from './sky/ephemeris'
 
 // Target Centering: brings a fixed J2000 target to the center of a camera, or measures how far it is, inside one
@@ -47,6 +49,12 @@ import type { SkyObserver } from './sky/ephemeris'
 // would not tell); without one, no guiding moves the mount. A session belongs to the server: it survives tab reloads and workspace changes, and ends
 // with the process; sessions live in memory, the latest of each camera. Angles are radians, durations seconds, and instants
 // Unix milliseconds.
+//
+// A session may also ask for an orientation, the position angle of the image top. Verify Only measures it with any camera;
+// Center turns the rotator of the Equipment Setup toward it inside the same loop, the operation holding the rotator with the
+// mount, so the final frame proves both. The rotation sense the loop learns is kept in the operational database for the
+// camera and the rotator (RotatorSenseStore) and read when a later session is admitted, whoever admits it; the rotator's
+// angle is never synced. Rotator angles are mechanical degrees.
 
 // What a session does:
 // - center: slews to the target when the mount stands farther than a correction may go, then corrects until a solution
@@ -96,6 +104,13 @@ export interface TargetCenteringRequest extends CommandRequest {
 	// What to do with guiding: stop it for the session and restore it after, or refuse to start while it may pulse the mount.
 	// Verify Only never stops it, since it moves nothing.
 	readonly guiding: 'coordinate' | 'requireIdle'
+	// Orientation to reach (Center) or measure (Verify Only) besides the position: the position angle of the image top,
+	// ICRS, from north through east, in radians, its tolerance in radians, and whether θ and θ + π frame the same field.
+	// Absent centers the position only.
+	readonly orientation?: CenteringOrientation
+	// Rotator of the Equipment Setup that turns the camera, by its exact connection and device ids; needed by a Center with
+	// an orientation, ignored by Verify Only, and refused without an orientation.
+	readonly rotator?: OperationDevice
 }
 
 // What a session is doing:
@@ -122,7 +137,12 @@ export type TargetCenteringOutcome = 'solved' | 'noSolution' | 'invalid' | 'time
 // - pierSide: the mount changed pier side during the session.
 // - parked: the mount was parked during the session.
 // - unsupported: the mount cannot go to a target.
-export type TargetCenteringRefusal = 'correctionRefused' | 'belowHorizon' | 'tooLarge' | 'pierSide' | 'parked' | 'unsupported'
+// - rotatorUnreachable: the orientation, and its half-turn twin when allowed, lies outside the limits of the rotator.
+export type TargetCenteringRefusal = 'correctionRefused' | 'belowHorizon' | 'tooLarge' | 'pierSide' | 'parked' | 'unsupported' | 'rotatorUnreachable'
+
+// Where the rotation sense of a session came from: the database, learned by this session where none was known, or learned
+// again because the stored one was contradicted.
+export type TargetCenteringSenseSource = 'stored' | 'learned' | 'relearned'
 
 // What became of guiding: nothing to restore, or the outcome of restoring what the session stopped.
 export type TargetCenteringGuidingRestoration = 'notNeeded' | GuidingRestoration
@@ -151,6 +171,14 @@ export interface TargetCenteringAttempt {
 	readonly dy?: number
 	// Destination of the correction that followed, J2000, in radians.
 	readonly correction?: { readonly rightAscension: Angle; readonly declination: Angle }
+	// Mechanical angle of the rotator during the exposure, in degrees; absent without a rotator.
+	readonly rotatorAngle?: number
+	// Position angle of the image top at the target's pixel, ICRS, in radians; absent without an orientation.
+	readonly positionAngle?: Angle
+	// Requested minus measured position angle, in radians, wrapped as the orientation asks; absent without an orientation.
+	readonly positionAngleError?: Angle
+	// Rotation that followed, between mechanical angles in degrees.
+	readonly rotation?: { readonly from: number; readonly to: number }
 }
 
 // Session record published to clients. It carries no WCS; the complete record does.
@@ -186,12 +214,22 @@ export interface TargetCenteringSessionSummary {
 	readonly exposure?: CameraCaptureTime
 	// Whether a solution taken after the last motion lies within tolerance; only this proves a position.
 	readonly positionVerified: boolean
-	// Whether the session leaves everything ready to go on acquiring: a verified position, and guiding as it found it.
+	// Whether the same solution has the orientation within its tolerance; false without an orientation.
+	readonly orientationVerified: boolean
+	// Whether the session leaves everything ready to go on acquiring: a verified position, a verified orientation when one was
+	// asked, and guiding as it found it.
 	readonly readyForImaging: boolean
 	// What became of guiding; notNeeded until a session stopped some.
 	readonly guidingRestoration: TargetCenteringGuidingRestoration
 	// Distance of the latest solution from the target, in radians; absent before one.
 	readonly finalSeparation?: Angle
+	// Requested minus measured position angle of the latest solution, in radians; absent without an orientation or before one.
+	readonly finalPositionAngleError?: Angle
+	// Name of the rotator the session turns; absent without one.
+	readonly rotatorName?: string
+	// Rotation sense in force, and where it came from; absent while none is known.
+	readonly sense?: 1 | -1
+	readonly senseSource?: TargetCenteringSenseSource
 	// Problems meant for people, latest last.
 	readonly warnings: readonly string[]
 	// Why a motion was refused.
@@ -253,6 +291,28 @@ const STALL_LIMIT = 2
 // Warnings kept per session.
 const MAXIMUM_WARNINGS = 20
 
+// What the last frame of a session verified, a frame taken after the last motion: the position, and the orientation when one
+// was asked (false otherwise).
+interface TargetCenteringVerification {
+	readonly position: boolean
+	readonly orientation: boolean
+}
+
+// Nothing verified.
+const NOTHING_VERIFIED: TargetCenteringVerification = { position: false, orientation: false }
+
+// Smallest orientation tolerance a Center turning a rotator accepts, in degrees: about the precision of the position
+// angle of a plate solution of few stars.
+const MINIMUM_ORIENTATION_TOLERANCE = 0.05
+
+// Margin added to half a step of the rotator for the smallest orientation tolerance it can hold, in degrees.
+const ROTATOR_STEP_MARGIN = 0.01
+
+// Returns what the measurement of an attempt verifies against the tolerances of a request.
+function verificationOf({ tolerance, orientation }: Pick<TargetCenteringRequest, 'tolerance' | 'orientation'>, { separation, positionAngleError }: Pick<TargetCenteringAttempt, 'separation' | 'positionAngleError'>): TargetCenteringVerification {
+	return { position: separation !== undefined && separation <= tolerance, orientation: orientation !== undefined && positionAngleError !== undefined && Math.abs(positionAngleError) <= orientation.tolerance }
+}
+
 // A session while its service knows it.
 interface Session {
 	summary: TargetCenteringSessionSummary
@@ -260,6 +320,10 @@ interface Session {
 	readonly camera: Camera
 	// Mount of the session.
 	readonly mount: Mount
+	// Rotator the session turns; absent without one.
+	readonly rotator?: Rotator
+	// Rotation sense the database held for the camera and the rotator when the session was admitted.
+	readonly storedSense?: StoredRotatorSense
 	// Provider settings resolved when the session started.
 	readonly preparation: PlateSolvePreparation
 	// Site the mount reported when the session started, whose horizon every motion is checked against.
@@ -281,7 +345,7 @@ interface Session {
 	// What the operator asked for the operation being cancelled.
 	intent?: 'stop'
 	// Operation holding the devices, while one runs.
-	handle?: OperationHandle<boolean>
+	handle?: OperationHandle<TargetCenteringVerification>
 	// Reservation the session runs inside, when a caller composing tools admitted it.
 	readonly invocation?: ToolInvocation
 	// Resolved with the final summary once the session ended.
@@ -364,7 +428,8 @@ export class TargetCenteringSessions {
 	// commands), capturer takes the frames (the one of the capture service), images receives the frames, frames records them as
 	// the latest frame of their camera and closes them, plateSolving solves them, guiding tells whether the mount is being
 	// guided, and listener receives every session change synchronously. auxiliaryDir is the parent of the temporary directory
-	// of each session.
+	// of each session. rotatorCommander turns the rotators (the one of the rotator commands), without which no orientation is
+	// centered, and senses keeps the rotation senses the sessions learn, without which every session probes again.
 	constructor(
 		readonly devices: DeviceRegistry,
 		readonly client: ClientResolver,
@@ -378,6 +443,8 @@ export class TargetCenteringSessions {
 		readonly guiding: TargetCenteringGuiding,
 		readonly listener: TargetCenteringListener,
 		readonly auxiliaryDir: string = tmpdir(),
+		readonly rotatorCommander?: RotatorCommander,
+		readonly senses?: RotatorSenseStore,
 	) {
 		this.#sessions = new CameraSessionRegistry(operations, (session) => listener({ type: 'targetCentering:updated', session }))
 	}
@@ -433,6 +500,10 @@ export class TargetCenteringSessions {
 		const refused = mountRefusal(mount, mode)
 		if (refused) return refusal(refused, 422, 'unsupported')
 
+		const rotated = this.#rotatorOf(request, mount)
+		if (rotated !== undefined && !('name' in rotated)) return rotated
+		const rotator = rotated
+
 		const observer = observerOf(mount)
 
 		if (mode !== 'verifyOnly') {
@@ -447,13 +518,14 @@ export class TargetCenteringSessions {
 		if (runs.length > 0 && !stoppable) return refusal(mode === 'verifyOnly' ? 'Guiding is correcting the mount; stop it before measuring' : 'Guiding is correcting the mount, or is paused or calibrating; stop it before centering', 409, 'guidingActive')
 		// A mount guiding holds is taken once the session stopped guiding; inside a reservation, it must still be reserved by it.
 		const mountFree = runs.length === 0 ? this.operations.admits(mount, invocation) : !invocation || this.operations.reserves(mount, invocation)
-		if (!this.operations.admits(camera, invocation) || !mountFree) return refusal('The device is busy', 409, 'busy')
+		if (!this.operations.admits(camera, invocation) || !mountFree || (rotator && !this.operations.admits(rotator, invocation))) return refusal('The device is busy', 409, 'busy')
 
 		const key = resourceKey(camera)
 		const previous = this.#sessions.of(key)
 		if (previous && previous.summary.endedAt === undefined) return refusal('The camera has a centering session that did not end', 409, 'busy')
 
 		const { token, ...settings } = request
+		const storedSense = rotator && this.#storedSense(camera, rotator)
 		const session: Session = {
 			summary: {
 				sessionId: Bun.randomUUIDv7(),
@@ -466,7 +538,10 @@ export class TargetCenteringSessions {
 				state: 'preparing',
 				attempts: [],
 				positionVerified: false,
+				orientationVerified: false,
 				readyForImaging: false,
+				...(rotator && { rotatorName: rotator.name }),
+				...(storedSense && { sense: storedSense.sense, senseSource: 'stored' as const }),
 				guidingRestoration: 'notNeeded',
 				warnings: mode === 'verifyOnly' && !mount.tracking ? [`${mount.name} is not tracking, so the frames may trail.`] : [],
 				startedAt: Date.now(),
@@ -474,6 +549,8 @@ export class TargetCenteringSessions {
 			},
 			camera,
 			mount,
+			...(rotator && { rotator }),
+			...(storedSense && { storedSense }),
 			preparation,
 			observer,
 			solutions: new Map(),
@@ -487,7 +564,7 @@ export class TargetCenteringSessions {
 			settled: Promise.withResolvers(),
 		}
 
-		const record = this.operations.run('mount.targetCentering', [session.summary.camera, session.summary.mount], token, () => {
+		const record = this.operations.run('mount.targetCentering', request.rotator && rotator ? [session.summary.camera, session.summary.mount, request.rotator] : [session.summary.camera, session.summary.mount], token, () => {
 			const handle = this.#run(session)
 			session.handle = handle
 			return handle.result
@@ -496,6 +573,35 @@ export class TargetCenteringSessions {
 		this.#sessions.adopt(key, session, record.operationId)
 		void settledResult(session.handle!.result).then((result) => this.#operationEnded(session, result))
 		return admitted(session, false)
+	}
+
+	// Returns the rotator a request turns, undefined when it turns none, or why it is refused: a rotator without an
+	// orientation, a Center with an orientation and no rotator, a rotator unknown, disconnected or moving, an alt-az mount
+	// (whose field turns continuously), an orientation tolerance below what the rotator resolves (max(0.05°, half its step
+	// plus 0.01°)), or no commander to turn it. Verify Only turns nothing and needs none.
+	#rotatorOf({ mode, orientation, rotator: device }: TargetCenteringRequest, mount: Mount): Rotator | CommandRefusal | undefined {
+		if (device && !orientation) return refusal('A rotator turns the camera only toward a requested orientation', 422, 'unsupported')
+		if (!orientation || mode === 'verifyOnly') return undefined
+		if (!device) return refusal('Centering an orientation needs the rotator of the Equipment Setup; Verify Only measures it without one', 422, 'unsupported')
+		const resolved = resolveConnected(this, device.connectionId, 'rotator', device.deviceId, 'Rotator')
+		if (!resolved.ok) return resolved
+		const rotator = resolved.device
+		if (rotator.moving) return refusal(`${rotator.name} is moving`, 409, 'busy')
+		if (mount.mountType === 'ALTAZ') return refusal(`${mount.name} is an alt-az mount, whose field turns all the time; a rotator cannot hold an orientation on it`, 422, 'unsupported')
+		const resolution = Math.max(MINIMUM_ORIENTATION_TOLERANCE, (rotator.angle.step > 0 ? rotator.angle.step / 2 : 0) + ROTATOR_STEP_MARGIN)
+		if (!(toDeg(orientation.tolerance) >= resolution)) return refusal(`The orientation tolerance is below what ${rotator.name} can resolve, ${resolution.toFixed(2)}°`, 422, 'invalidParameter')
+		if (!this.rotatorCommander) return refusal('No rotator can be turned here', 422, 'unsupported')
+		return rotator
+	}
+
+	// Returns the rotation sense stored for a camera and a rotator; undefined when none is, or the database cannot be read.
+	#storedSense(camera: Camera, rotator: Rotator) {
+		try {
+			return this.senses?.get('positionAngle', camera, rotator)
+		} catch (error) {
+			console.error('the rotation sense could not be read:', error)
+			return undefined
+		}
 	}
 
 	// Stops a session. Answers at once, because a camera may stay held for minutes while its frame arrives; the end arrives as an
@@ -510,7 +616,7 @@ export class TargetCenteringSessions {
 		const session = this.#sessions.find(sessionId)
 		if (!session) return false
 
-		if (session.summary.state === 'blocked') this.#finish(session, 'cancelled', false)
+		if (session.summary.state === 'blocked') this.#finish(session, 'cancelled', NOTHING_VERIFIED)
 		else if (session.summary.endedAt === undefined) {
 			session.intent = 'stop'
 			this.#sessions.update(session, { state: 'stopping', step: undefined, exposure: undefined })
@@ -521,15 +627,20 @@ export class TargetCenteringSessions {
 		return true
 	}
 
-	// Runs a session: the root holds the camera and stops guiding, and its child then holds the mount for all the work. Resolves
-	// whether the position was verified; a Verify Only that measured a position out of tolerance succeeds with false.
-	#run(session: Session): OperationHandle<boolean> {
-		const { camera, mount } = session
+	// Runs a session: the root holds the camera and stops guiding, and its child then holds the mount, and the rotator when it
+	// turns one, for all the work. Resolves what was verified; a Verify Only that measured out of tolerance succeeds with it.
+	#run(session: Session): OperationHandle<TargetCenteringVerification> {
+		const { camera, mount, rotator } = session
+		const motion = rotator ? [mount, rotator] : [mount]
 
-		return this.operations.scope(session.invocation).start<boolean>('targetCenteringSession', [{ key: resourceKey(camera), device: camera }], async (root) => {
+		return this.operations.scope(session.invocation).start<TargetCenteringVerification>('targetCenteringSession', [{ key: resourceKey(camera), device: camera }], async (root) => {
 			const stopped = await this.#stopGuiding(session)
 			if (!stopped.ok) return stopped
-			return await root.start<boolean>('targetCenteringMotion', [{ key: resourceKey(mount), device: mount }], (context) => this.#work(session, context)).result
+			return await root.start<TargetCenteringVerification>(
+				'targetCenteringMotion',
+				motion.map((device) => ({ key: resourceKey(device), device })),
+				(context) => this.#work(session, context),
+			).result
 		})
 	}
 
@@ -564,7 +675,7 @@ export class TargetCenteringSessions {
 	}
 
 	// Does the work of a session holding both devices, in a temporary directory removed at the end.
-	async #work(session: Session, context: OperationContext): Promise<OperationResult<boolean>> {
+	async #work(session: Session, context: OperationContext): Promise<OperationResult<TargetCenteringVerification>> {
 		const { mount, camera } = session
 		const { mode, target } = session.summary.request
 		const directory = await mkdtemp(join(this.auxiliaryDir, 'nebulosa-centering-'))
@@ -582,8 +693,9 @@ export class TargetCenteringSessions {
 				if (!slewed.ok) return slewed
 			}
 
-			const services = {
+			const services: CenteringServices = {
 				mountCommander: this.commander,
+				...(session.rotator && this.rotatorCommander && { rotatorCommander: this.rotatorCommander }),
 				cameraCapturer: this.capturer,
 				solver: (frame: CenteringFrame, signal: AbortSignal) => this.#solve(session, frame, signal),
 				auxiliaryPath: (attempt: number) => join(directory, `centering-${attempt}.fit`),
@@ -592,14 +704,14 @@ export class TargetCenteringSessions {
 			}
 			const centered = await centerTarget(context, mount, camera, target, this.#options(session), services)
 
-			if (centered.ok) return successfulOperationResult(true)
+			if (centered.ok) return successfulOperationResult({ position: true, orientation: session.summary.request.orientation !== undefined })
 
 			// A solve that ran out of time ends the loop before its measurement.
 			if (centered.reason === 'timeout') this.#updateAttempt(session, session.summary.attempts.length, { outcome: 'timeout', error: centered.error })
 
-			// Out of tolerance is what a measurement may find, not a failure of it.
+			// Out of tolerance is what a measurement may find, not a failure of it; nothing moved since it was taken.
 			const last = session.summary.attempts.at(-1)
-			if (mode === 'verifyOnly' && centered.reason === 'unexpectedState' && last?.separation !== undefined) return successfulOperationResult(false)
+			if (mode === 'verifyOnly' && centered.reason === 'unexpectedState' && last?.separation !== undefined) return successfulOperationResult(verificationOf(session.summary.request, last))
 
 			return centered
 		} finally {
@@ -643,7 +755,7 @@ export class TargetCenteringSessions {
 
 	// Returns the options of the toolkit's loop for a session. The corrections go to a position measured from the sky, so a model
 	// in force is out of their way.
-	#options({ summary: { request } }: Session): CenteringOptions {
+	#options({ summary: { request }, rotator, storedSense }: Session): CenteringOptions {
 		const { tolerance, mode, maximumCorrections, noSolutionRetries, maximumFrames, settleDelay, capture } = request
 
 		return {
@@ -658,6 +770,8 @@ export class TargetCenteringSessions {
 			solveTimeout: SOLVE_TIMEOUT,
 			abortGrace: SOLVE_ABORT_GRACE,
 			slew: { timeout: CORRECTION_TIMEOUT },
+			...(request.orientation && { orientation: request.orientation }),
+			...(rotator && { rotation: { rotator, ...(storedSense && { sense: { value: storedSense.sense, ...(storedSense.parity && { parity: storedSense.parity }) } }) } }),
 		}
 	}
 
@@ -671,24 +785,42 @@ export class TargetCenteringSessions {
 			measured: (measurement) => this.#measured(session, measurement),
 			captureListener: exposureProgressListener((exposure) => this.#sessions.update(session, { exposure })),
 			beforeCorrection: (correction) => this.#beforeCorrection(session, correction),
+			rotationChecked: (check) => this.#rotationChecked(session, check),
+			rotationUnreachable: () => this.#sessions.update(session, { refusal: 'rotatorUnreachable' }),
+		}
+	}
+
+	// Keeps the sense a response check found: saved when learned, its use recorded when confirmed. A database that cannot be
+	// written leaves a warning; the session goes on with the sense it learned.
+	#rotationChecked(session: Session, { sense, parity, gain, source }: CenteringRotationCheck) {
+		const { camera, rotator } = session
+		if (source !== 'confirmed') this.#sessions.update(session, { sense, senseSource: source })
+		if (!rotator || !this.senses) return
+
+		try {
+			if (source === 'confirmed') this.senses.confirmed('positionAngle', camera, rotator, Date.now())
+			else this.senses.learned('positionAngle', camera, rotator, sense, parity, gain, Date.now())
+		} catch (error) {
+			if (source !== 'confirmed') this.#warn(session, `The rotation sense of ${rotator.name} was not saved, so the next session probes it again: ${Error.isError(error) ? error.message : String(error)}`)
 		}
 	}
 
 	// Records what a frame measured.
-	#measured(session: Session, { attempt, solution, separation, dx, dy }: CenteringMeasurement) {
+	#measured(session: Session, { attempt, solution, separation, dx, dy, rotatorAngle, positionAngle, positionAngleError }: CenteringMeasurement) {
 		if (!solution) {
 			const known = session.summary.attempts.find((each) => each.attempt === attempt)
-			if (known?.outcome === undefined) this.#updateAttempt(session, attempt, { outcome: 'noSolution' })
+			if (known?.outcome === undefined) this.#updateAttempt(session, attempt, { outcome: 'noSolution', ...(rotatorAngle !== undefined && { rotatorAngle }) })
 			return
 		}
 
 		session.solutions.set(attempt, solution)
-		this.#updateAttempt(session, attempt, { outcome: 'solved', solved: { rightAscension: solution.rightAscension, declination: solution.declination }, separation, dx, dy })
-		this.#sessions.update(session, { finalSeparation: separation })
+		const orientation = positionAngle !== undefined && positionAngleError !== undefined && { positionAngle, positionAngleError }
+		this.#updateAttempt(session, attempt, { outcome: 'solved', solved: { rightAscension: solution.rightAscension, declination: solution.declination }, separation, dx, dy, ...(rotatorAngle !== undefined && { rotatorAngle }), ...orientation })
+		this.#sessions.update(session, { finalSeparation: separation, ...(positionAngleError !== undefined && { finalPositionAngleError: positionAngleError }) })
 	}
 
 	// Decides whether a correction may go, and records it when it does. Returns why it may not.
-	#beforeCorrection(session: Session, { attempt, separation, rightAscension, declination }: CenteringCorrection) {
+	#beforeCorrection(session: Session, { attempt, separation, mount: destination, rotator: rotation }: CenteringCorrection) {
 		const { mount, observer } = session
 		const { maximumCorrection } = session.summary.request
 
@@ -699,12 +831,14 @@ export class TargetCenteringSessions {
 
 		if (mount.parked || mount.parking) return refuse('parked', `${mount.name} was parked`)
 		if (mount.pierSide !== session.pierSide && mount.pierSide !== 'NEITHER' && session.pierSide !== 'NEITHER') return refuse('pierSide', `${mount.name} changed pier side during the session`)
-		if (separation > maximumCorrection) return refuse('tooLarge', `The correction of ${(toArcsec(separation) / 60).toFixed(1)}′ is over the maximum of ${(toArcsec(maximumCorrection) / 60).toFixed(1)}′; center again to slew there`)
 
-		const refused = this.mounts.refusal(mount, j2000Target(rightAscension, declination), observer)
-		if (refused) return refuse(refusalOf(refused[2]), refused[0])
+		if (destination) {
+			if (separation > maximumCorrection) return refuse('tooLarge', `The correction of ${(toArcsec(separation) / 60).toFixed(1)}′ is over the maximum of ${(toArcsec(maximumCorrection) / 60).toFixed(1)}′; center again to slew there`)
+			const refused = this.mounts.refusal(mount, j2000Target(destination.rightAscension, destination.declination), observer)
+			if (refused) return refuse(refusalOf(refused[2]), refused[0])
+		}
 
-		this.#updateAttempt(session, attempt, { correction: { rightAscension, declination } })
+		this.#updateAttempt(session, attempt, { ...(destination && { correction: { rightAscension: destination.rightAscension, declination: destination.declination } }), ...(rotation && { rotation: { from: rotation.from, to: rotation.to } }) })
 		return undefined
 	}
 
@@ -757,7 +891,7 @@ export class TargetCenteringSessions {
 
 	// Ends a session once its operation ended. The tracking a session started stays on only for a position it reached, and a mount
 	// that cannot be confirmed stopped keeps the session blocked.
-	async #operationEnded(session: Session, result: OperationResult<boolean>) {
+	async #operationEnded(session: Session, result: OperationResult<TargetCenteringVerification>) {
 		const { mount } = session
 		session.handle = undefined
 		session.guidingHold?.[Symbol.dispose]()
@@ -782,14 +916,14 @@ export class TargetCenteringSessions {
 			else this.#warn(session, `The tracking of ${mount.name} that the session started was left on.`)
 		}
 
-		return this.#finish(session, session.intent === 'stop' || result.reason === 'aborted' ? 'cancelled' : 'failed', false, failure)
+		return this.#finish(session, session.intent === 'stop' || result.reason === 'aborted' ? 'cancelled' : 'failed', NOTHING_VERIFIED, failure)
 	}
 
-	// Ends a session in a state.
-	#finish(session: Session, state: Extract<TargetCenteringState, 'completed' | 'failed' | 'cancelled'>, positionVerified: boolean, failure?: Pick<TargetCenteringSessionSummary, 'reason' | 'error'>) {
-		const { guidingRestoration } = session.summary
-		const readyForImaging = positionVerified && (guidingRestoration === 'notNeeded' || guidingRestoration === 'restored')
-		this.#sessions.update(session, { state, step: undefined, exposure: undefined, positionVerified, readyForImaging, endedAt: Date.now(), ...failure })
+	// Ends a session in a state, with what its last frame verified.
+	#finish(session: Session, state: Extract<TargetCenteringState, 'completed' | 'failed' | 'cancelled'>, verified: TargetCenteringVerification, failure?: Pick<TargetCenteringSessionSummary, 'reason' | 'error'>) {
+		const { guidingRestoration, request } = session.summary
+		const readyForImaging = verified.position && (request.orientation === undefined || verified.orientation) && (guidingRestoration === 'notNeeded' || guidingRestoration === 'restored')
+		this.#sessions.update(session, { state, step: undefined, exposure: undefined, positionVerified: verified.position, orientationVerified: verified.orientation, readyForImaging, endedAt: Date.now(), ...failure })
 		session.ended.resolve(session.summary)
 		session.settled.resolve(session.summary)
 	}

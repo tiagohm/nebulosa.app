@@ -73,6 +73,7 @@ import { createPlanetaryEventsRoutes, PlanetaryEventsService } from './planetary
 import { createPlateSolvingRoutes, PlateSolvingService } from './platesolving'
 import { createQuadIndexDownloadRoutes, DEFAULT_QUAD_INDEX_DIRECTORY, QuadIndexDownloads } from './platesolving.downloads'
 import { createRotatorRoutes, RotatorCommands } from './rotators'
+import { RotatorSenseStore } from './rotatorsense.store'
 import { createSatelliteRoutes, SatelliteService, satelliteSkyAdapter } from './satellites'
 import { SatelliteAutoDownload } from './satellites.auto'
 import { SatelliteEphemeris } from './satellites.ephemeris'
@@ -957,6 +958,7 @@ export type {
 	TargetCenteringOutcome,
 	TargetCenteringRefusal,
 	TargetCenteringRequest,
+	TargetCenteringSenseSource,
 	TargetCenteringSession,
 	TargetCenteringSessionSummary,
 	TargetCenteringSnapshot,
@@ -1088,6 +1090,9 @@ const focusers = new FocuserCommands(connections.devices, (id) => connections.cl
 const wheels = new WheelCommands(connections.devices, (id) => connections.client(id), operations)
 const rotators = new RotatorCommands(connections.devices, (id) => connections.client(id), operations)
 
+// Rotation senses of the camera rotators that Target Centering and guiding learn, kept for the next session.
+const rotatorSenses = new RotatorSenseStore(database)
+
 // Cover, flat panel, and dew heater commands over the devices of the open connections.
 const covers = new CoverCommands(connections.devices, (id) => connections.client(id), operations)
 const flatPanels = new FlatPanelCommands(connections.devices, (id) => connections.client(id), operations)
@@ -1181,7 +1186,7 @@ const calibrationLibrary = new CalibrationLibrary(new CalibrationLibraryStore(da
 
 // Guiding sessions of the guide cameras of the open connections, dispatching their pulses through the commander of the
 // guide output commands and previewing their frames in the image store and the capture frame registry.
-const guiding = new GuidingSessions(connections.devices, (id) => connections.client(id), operations, guideOutputs.commander, images, captureFrames, new GuidingCalibrationStore(database), calibrationLibrary, publish, equipmentCatalog)
+const guiding = new GuidingSessions(connections.devices, (id) => connections.client(id), operations, guideOutputs.commander, images, captureFrames, new GuidingCalibrationStore(database), calibrationLibrary, publish, equipmentCatalog, rotators, rotatorSenses)
 
 // Automatic dithering of the camera captures, commanded to the guiding sessions, or moving the mounts with the commanders of
 // the mount and guide output commands, refusing a GoTo dither the Meridian Flip Monitor or the geometry says could flip.
@@ -1284,7 +1289,7 @@ const darkLibraryWizard = new DarkLibraryWizardSessions(
 // Target Centering sessions of the cameras of the open connections, sending the first slew through the mount commands, so a
 // model in force corrects it once, correcting with their commander from what the plate solving service measures, and taking
 // their frames with the capturer of the captures.
-const targetCentering = new TargetCenteringSessions(connections.devices, (id) => connections.client(id), operations, mounts, mounts.commander, captures.capturer, images, captureFrames, plateSolving, guiding, publish)
+const targetCentering = new TargetCenteringSessions(connections.devices, (id) => connections.client(id), operations, mounts, mounts.commander, captures.capturer, images, captureFrames, plateSolving, guiding, publish, undefined, rotators.commander, rotatorSenses)
 
 // Meridian Flip Executor of the mounts of the open connections: flips at the meridian passage the Monitor follows, composing the
 // captures, guiding, mount commands, Target Centering, and Auto Focus, after the Monitor so it reads its state of each event.

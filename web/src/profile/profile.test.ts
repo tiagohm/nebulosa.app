@@ -11,6 +11,7 @@ import {
 	ditherSettings,
 	mountDitherSettings,
 	setDitherSettings,
+	setGuideCameraRotates,
 	setMountDitherSettings,
 	mountRemoteBinding,
 	satelliteFavorites,
@@ -32,6 +33,7 @@ import {
 	statusChipPreferences,
 	activeSetup,
 	assignDevice,
+	guideCameraRotates,
 	autoFocusSettings,
 	exposureSettings,
 	profileCamera,
@@ -232,6 +234,30 @@ describe('equipment', () => {
 		expect(assignDevice(state, 'GUIDE_CAMERA', dev('cam-2'))).toEqual({ ok: true })
 		expect(assignDevice(state, 'MAIN_CAMERA', undefined)).toEqual({ ok: true })
 		expect(activeSetup(activeProfile(state))).toEqual({ GUIDE_CAMERA: dev('cam-2') })
+	})
+
+	test('whether the guide camera turns with the rotator is asked once, and again when either device changes', () => {
+		const state = load()
+		selectConnection(state, 'c')
+		expect(guideCameraRotates(activeProfile(state))).toBeUndefined()
+		setGuideCameraRotates(state, true)
+		expect(guideCameraRotates(activeProfile(state))).toBeUndefined()
+
+		assignDevice(state, 'GUIDE_CAMERA', dev('guide'))
+		assignDevice(state, 'ROTATOR', dev('rot'))
+		expect(guideCameraRotates(activeProfile(state))).toBeUndefined()
+		setGuideCameraRotates(state, true)
+		expect(guideCameraRotates(activeProfile(state))).toBeTrue()
+		setGuideCameraRotates(state, false)
+		expect(guideCameraRotates(activeProfile(state))).toBeFalse()
+
+		// Another rotator, or another guide camera, has no answer yet.
+		assignDevice(state, 'ROTATOR', dev('rot-2'))
+		expect(guideCameraRotates(activeProfile(state))).toBeUndefined()
+		assignDevice(state, 'ROTATOR', dev('rot'))
+		expect(guideCameraRotates(activeProfile(state))).toBeFalse()
+		assignDevice(state, 'GUIDE_CAMERA', dev('guide-2'))
+		expect(guideCameraRotates(activeProfile(state))).toBeUndefined()
 	})
 
 	test('missing assignment names are filled from the listed devices', () => {

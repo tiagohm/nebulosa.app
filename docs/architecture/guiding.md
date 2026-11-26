@@ -18,7 +18,8 @@ Guiding is what keeps every long light frame sharp, and the capture, centering, 
 - Pulses go through the guide output commander, so ending a run waits for the observed end of every pulse.
 - Detects the stars of its frames with the toolkit detector and the settings of [Star Detection](star-detection.md).
 - Can subtract a master dark of the [Calibration Library](calibration-library.md), chosen among those of the guide camera's [Equipment Catalog](equipment-catalog.md) camera or pinned by the operator, and leased while used.
-- Saves every completed calibration in the database and restores a matching one at Start Guiding, derived for where the mount points now (see [Persistence and State](persistence-and-state.md)).
+- Saves every completed calibration in the database and restores a matching one at Start Guiding, derived for where the mount points now and, when the guide camera turns with the setup's rotator, for the angle of that rotator (see [Persistence and State](persistence-and-state.md)).
+- Follows the angle of the setup's rotator, read and never commanded, when the Equipment Setup answers that the guide camera turns with it (an off-axis guider behind it), and keeps the guide image sense its direction checks learn in the database.
 - Records the newest frame in the [Capture Frames](capture-frames.md) registry so the camera tab shows it, never saved.
 - Camera Acquisition claims the dither commands of a session to dither between its frames.
 - [Target Centering](target-centering.md) and the [Meridian Flip Executor](meridian-flip-executor.md) hold guiding through a guide output and suspend and restore it around a motion of its mount, handing the guide output and the mount to their reservation with no gap.
@@ -33,4 +34,6 @@ Guiding is what keeps every long light frame sharp, and the capture, centering, 
 - A caller inside the process can admit a session under a reservation that holds the guide camera and the guide output; every command of the session then runs inside it, whoever sends it.
 - The controller and tracking settings are fixed when the session starts; only the exposure changes on a running session.
 - A mount that reports no side of the pier never has a calibration restored or derived, so it calibrates again after every motion.
+- A calibration turned for a rotation large enough to tell its sense is checked first by one RA pulse and its return, a few seconds, never a recalibration; only a check that fails calibrates again. A smaller rotation of an unknown sense is not applied.
+- A sync of the rotator made outside Nebulosa, or before a restart, is not seen; the direction check of the next rotation is what catches it.
 - Sessions, events, and telemetry live in memory and do not survive a restart; only the saved calibrations persist.

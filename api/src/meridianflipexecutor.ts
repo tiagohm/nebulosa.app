@@ -141,7 +141,7 @@ export interface MeridianFlipTarget {
 
 // Settings of Target Centering an execution measures and recenters with; the mount, the target, the mode, and the guiding
 // coordination are the execution's.
-export type MeridianFlipCentering = Omit<TargetCenteringRequest, 'token' | 'mount' | 'guideOutput' | 'mode' | 'target' | 'guiding'>
+export type MeridianFlipCentering = Omit<TargetCenteringRequest, 'token' | 'mount' | 'guideOutput' | 'mode' | 'target' | 'guiding' | 'orientation' | 'rotator'>
 
 // Settings of Auto Focus an execution refocuses with; the focuser is the setup's.
 export type MeridianFlipAutoFocus = Omit<AutoFocusRequest, 'token' | 'focuser'>

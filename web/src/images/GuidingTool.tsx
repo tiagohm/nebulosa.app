@@ -14,5 +14,5 @@ import type { ImageToolPanelProps } from './tools'
 export function GuidingTool({ camera }: ImageToolPanelProps) {
 	const operations = useSnapshot(operationsState)
 	if (!camera) return <EmptyState title="No camera tab" description="Select a camera tab to guide with its camera." />
-	return <GuidingSections device={camera.device.device} availability={deviceAvailability('camera', camera.device, operations)} guideOutput={camera.guideOutput} mount={camera.mount} settings={camera.settings} snoop={camera.snoop} />
+	return <GuidingSections device={camera.device.device} availability={deviceAvailability('camera', camera.device, operations)} guideOutput={camera.guideOutput} mount={camera.mount} settings={camera.settings} snoop={camera.snoop} rotator={camera.rotator} guideCameraRotates={camera.guideCameraRotates} />
 }

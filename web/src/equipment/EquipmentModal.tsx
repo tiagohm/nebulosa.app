@@ -1,9 +1,9 @@
 import type { DeviceSummary } from 'api'
-import { type ReactNode, useState } from 'react'
+import { Fragment, type ReactNode, useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { connect, connectionState, serverOf } from '../connection/connection'
 import { DEFAULT_TELESCOPE, type TelescopeOptics } from '../framing/geometry'
-import { activeProfile, activeSetup, assignDevice, profileState, setGuideTelescopeOptics, setMainTelescopeOptics } from '../profile/profile'
+import { activeProfile, activeSetup, assignDevice, guideCameraRotates, profileState, setGuideCameraRotates, setGuideTelescopeOptics, setMainTelescopeOptics } from '../profile/profile'
 import { navigate, routeState } from '../shell/route'
 import { Button } from '../ui/Button'
 import { ConfirmButton } from '../ui/ConfirmButton'
@@ -13,6 +13,7 @@ import { LinkButton } from '../ui/LinkButton'
 import { Modal, ModalActions } from '../ui/Modal'
 import { NumberInput } from '../ui/NumberInput'
 import { SectionHeading } from '../ui/SectionHeading'
+import { SegmentedControl } from '../ui/SegmentedControl'
 import { Select } from '../ui/Select'
 import { StatusBadge, type StatusTone } from '../ui/StatusBadge'
 import { catalogState } from './catalog'
@@ -30,7 +31,9 @@ import { useWatchedDevices } from './useEquipment'
 // (CatalogBinding), which holds for every profile and is shown read-only while the device is not on an open connection.
 // It also holds the profile's main telescope and guide telescope optics, which no device reports, each a telescope of the
 // Equipment Catalog or entered by hand and shown beside the role group that looks through it: the Sky's Equipment Setup
-// field of view of a camera uses the optics it looks through, and Guiding the second.
+// field of view of a camera uses the optics it looks through, and Guiding the second. With both a Guide Camera and a
+// Rotator assigned, it asks once whether the guide camera turns with the rotator (an off-axis guider behind it), which
+// guiding and Target Centering need; assigning another guide camera or rotator asks again.
 
 // Select value of the None option.
 const NONE = ''
@@ -136,17 +139,19 @@ export function EquipmentModal() {
 												const assigned = setup[definition.role]
 
 												return (
-													<RoleRow
-														// Keyed by profile and connection, so a switch resets the row's messages.
-														key={`${profile.id}:${connection.id}:${definition.role}`}
-														definition={definition}
-														setup={setup}
-														devices={runtime.devices}
-														status={roleStatus(setup, definition.role, runtime)}
-														device={roleDevice(setup, definition.role, runtime)}
-														error={assigned && runtime.errors[assigned.id]}
-														offlineReason={offlineReason}
-													/>
+													<Fragment key={`${profile.id}:${connection.id}:${definition.role}`}>
+														<RoleRow
+															// Keyed by profile and connection, so a switch resets the row's messages.
+															definition={definition}
+															setup={setup}
+															devices={runtime.devices}
+															status={roleStatus(setup, definition.role, runtime)}
+															device={roleDevice(setup, definition.role, runtime)}
+															error={assigned && runtime.errors[assigned.id]}
+															offlineReason={offlineReason}
+														/>
+														{definition.role === 'GUIDE_CAMERA' && setup.GUIDE_CAMERA && setup.ROTATOR && <GuideCameraRotationRow rotates={guideCameraRotates(profile)} />}
+													</Fragment>
 												)
 											})}
 										</ul>
@@ -291,6 +296,36 @@ function ConnectionCallout({ text, children }: ConnectionCalloutProps) {
 			<p className="m-0 min-w-0 flex-[1_1_280px] text-sm leading-5 text-ink-200">{text}</p>
 			{children}
 		</div>
+	)
+}
+
+// Answers of the question whether the guide camera turns with the rotator.
+const ROTATION_ANSWERS = ['yes', 'no'] as const
+
+// Question of the Equipment Setup whether its Guide Camera turns with its Rotator, as an off-axis guider behind the rotator
+// does, asked while unanswered (rotates undefined) and changeable once answered.
+function GuideCameraRotationRow({ rotates }: { readonly rotates?: boolean }) {
+	return (
+		<li className={`flex flex-wrap items-center justify-between gap-x-3 gap-y-2 ${ENTRY_CLASS_NAME}`}>
+			<div className="flex min-w-0 flex-col gap-0.5">
+				<span className="text-sm leading-5 text-ink-100">Does the guide camera turn with the rotator?</span>
+				<span className="text-xs leading-4 text-ink-300">
+					{rotates === undefined ? 'An off-axis guider behind the rotator does. Guiding and Target Centering need the answer before the rotator turns.' : rotates ? 'Guiding turns its calibration with the rotator and checks it with a short pulse.' : 'Guiding keeps its calibration when the rotator turns.'}
+				</span>
+			</div>
+			{rotates === undefined ? (
+				<div className="flex gap-2">
+					<Button variant="secondary" onClick={() => setGuideCameraRotates(profileState, true)}>
+						Yes
+					</Button>
+					<Button variant="secondary" onClick={() => setGuideCameraRotates(profileState, false)}>
+						No
+					</Button>
+				</div>
+			) : (
+				<SegmentedControl options={ROTATION_ANSWERS} value={rotates ? 'yes' : 'no'} format={(answer) => (answer === 'yes' ? 'Yes' : 'No')} onChange={(answer) => setGuideCameraRotates(profileState, answer === 'yes')} />
+			)}
+		</li>
 	)
 }
 

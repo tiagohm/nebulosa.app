@@ -66,7 +66,7 @@ Images and camera operations:
 - **Flat analysis and exposure**: Implemented ([Flat Wizard](flat-wizard.md)).
 - **Dark acquisition**: Implemented ([Dark Library Wizard](dark-library-wizard.md)).
 - **Live stacking**: Implemented ([Live Stacking](live-stacking.md)).
-- **Target Centering**: Implemented ([Target Centering](target-centering.md)).
+- **Target Centering**: Implemented, with an optional orientation through the setup's rotator ([Target Centering](target-centering.md)).
 - **Native guiding**: Implemented ([Guiding](guiding.md)).
 - **Calibration library**: Implemented ([Calibration Library](calibration-library.md)).
 - **Image stacking**: Implemented ([Image Stacking](image-stacking.md)).

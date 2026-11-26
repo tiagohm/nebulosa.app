@@ -116,11 +116,13 @@ export function guidingExposureRange(exposure: CameraCapabilities['exposure'] | 
 // after a flip, declination compensation), the reuse of saved calibrations, the stop on a slew and the master dark of the form, the
 // devices snooped into the frame headers, and the star detector of the profile's Star Detection with its settings (its
 // acceptance criteria are not sent: the tracker filters the stars). The effective focal length of the guide optics, in
-// mm (see guideFocalLength), is sent only when known.
+// mm (see guideFocalLength), is sent only when known. The rotator of the setup is sent with whether the guide camera turns
+// with it, as the Equipment Setup answers it, a camera without an answer taken as turning: its calibration is then
+// checked after a rotation instead of trusted.
 export function guidingRequest(
 	settings: Readonly<GuidingSettings>,
 	exposure: Readonly<CameraExposureSettings>,
-	{ guideOutput, mount }: { readonly guideOutput: OperationDevice; readonly mount?: OperationDevice },
+	{ guideOutput, mount, rotator }: { readonly guideOutput: OperationDevice; readonly mount?: OperationDevice; readonly rotator?: { readonly device: OperationDevice; readonly guideCameraRotates?: boolean } },
 	snoop: CaptureSnoop,
 	detection: Readonly<StarDetectionSettings>,
 	focalLength: number | undefined,
@@ -131,6 +133,7 @@ export function guidingRequest(
 	return {
 		guideOutput,
 		...(mount && { mount }),
+		...(rotator && { rotator: { device: rotator.device, guideCameraRotates: rotator.guideCameraRotates !== false } }),
 		exposure: Math.round(settings.exposureTime * 1000),
 		camera,
 		trackingMode: settings.trackingMode,
@@ -321,12 +324,12 @@ export function formatPulse(milliseconds: number) {
 	return text === MISSING ? MISSING : `${text} ms`
 }
 
-// Returns how the calibration in use was adapted from the one measured: flipped for the other side of the pier, and its
-// RA response scaled for the declination ("flipped for the pier side, RA ×0.87 for the declination"), or undefined when
-// it is used as measured.
-export function formatCalibrationAdaptation({ transformations, declinationScale }: Pick<GuidingCalibrationSummary, 'transformations' | 'declinationScale'>) {
+// Returns how the calibration in use was adapted from the one measured: flipped for the other side of the pier, its RA
+// response scaled for the declination, and turned with the rotator ("flipped for the pier side, RA ×0.87 for the
+// declination, turned 40.0° with the rotator"), or undefined when it is used as measured. rotatorChange is in degrees.
+export function formatCalibrationAdaptation({ transformations, declinationScale, rotatorChange = 0 }: Pick<GuidingCalibrationSummary, 'transformations' | 'declinationScale'> & Partial<Pick<GuidingCalibrationSummary, 'rotatorChange'>>) {
 	if (transformations.length === 0) return undefined
-	return transformations.map((transformation) => (transformation === 'pierFlip' ? 'flipped for the pier side' : `RA ×${formatFixed(declinationScale, 2)} for the declination`)).join(', ')
+	return transformations.map((transformation) => (transformation === 'pierFlip' ? 'flipped for the pier side' : transformation === 'rotation' ? `turned ${formatFixed(rotatorChange, 1)}° with the rotator` : `RA ×${formatFixed(declinationScale, 2)} for the declination`)).join(', ')
 }
 
 // Builds the Start Guiding request of the guiding form; recalibrate is Force Recalibrate, which calibrates whatever the

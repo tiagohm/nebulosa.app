@@ -25,7 +25,7 @@ Operations, besides the view's camera:
 - **iPolar**: requires a plate solver, and the mount for the automatic rotation; holds the camera for the whole session, the mount too when the request names it, never the guide output.
 - **Mount pointing session**: requires the mount, a plate solver, and the main camera; holds the camera and the mount for each stretch of work, free while paused.
 - **Mount pointing verification**: requires the mount and a plate solver; holds the camera and the mount for the whole test.
-- **Target Centering**: requires the mount and a plate solver; holds the camera for the whole session, and the mount from when the guiding it stopped released it until the end.
+- **Target Centering**: requires the mount and a plate solver; holds the camera for the whole session, and the mount, with the rotator for a Center of an orientation, from when the guiding it stopped released it until the end.
 - **Flat Wizard**: requires nothing, the filter wheel, flat panel, and cover being optional; holds the camera and the devices it uses for the whole session, also while it waits for the operator.
 - **Dark Library Wizard**: requires nothing, the filter wheel, flat panel, and cover being optional; holds the camera and the devices its protection selected for the whole session, also while paused.
 - **Sky slew**: requires the mount; holds it until the slew ends.

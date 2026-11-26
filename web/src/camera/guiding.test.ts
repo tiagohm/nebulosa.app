@@ -355,5 +355,6 @@ describe('calibration text', () => {
 	test('the adaptation lists each transformation, or none', () => {
 		expect(formatCalibrationAdaptation({ transformations: [], declinationScale: 1 })).toBeUndefined()
 		expect(formatCalibrationAdaptation({ transformations: ['pierFlip', 'declinationCompensation'], declinationScale: 0.8666 })).toBe('flipped for the pier side, RA ×0.87 for the declination')
+		expect(formatCalibrationAdaptation({ transformations: ['rotation'], declinationScale: 1, rotatorChange: -40 })).toBe('turned -40.0° with the rotator')
 	})
 })

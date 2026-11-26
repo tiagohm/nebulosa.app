@@ -47,6 +47,7 @@ function summary(patch: Partial<TargetCenteringSessionSummary> = {}): TargetCent
 		state: 'running',
 		attempts: [],
 		positionVerified: false,
+		orientationVerified: false,
 		readyForImaging: false,
 		guidingRestoration: 'notNeeded',
 		warnings: [],
@@ -76,6 +77,31 @@ function fakeFetch(answers: Record<string, () => Response>) {
 	}) as typeof fetch
 	return { request, calls }
 }
+
+describe('target centering orientation blockers', () => {
+	const draft = { ...TARGET, oriented: true, positionAngle: 1 }
+	const rotator = { rotator: READY, guideRotationUnanswered: false }
+
+	test('an orientation needs its angle; Center needs the rotator, a mount that is not alt-az, and the guide camera answer', () => {
+		expect(targetCenteringBlocker('verifyOnly', READY, READY, MOUNT, { ...TARGET, oriented: true })).toContain('position angle')
+		expect(targetCenteringBlocker('verifyOnly', READY, READY, MOUNT, draft)).toBeUndefined()
+		expect(targetCenteringBlocker('center', READY, READY, MOUNT, draft, undefined, { guideRotationUnanswered: false })).toContain('Rotator')
+		expect(targetCenteringBlocker('center', READY, READY, MOUNT, draft, undefined, { rotator: { status: 'disconnected', message: 'The rotator is disconnected.' } as RoleAvailability, guideRotationUnanswered: false })).toBe('The rotator is disconnected.')
+		expect(targetCenteringBlocker('center', READY, READY, { ...MOUNT, mountType: 'ALTAZ' }, draft, undefined, rotator)).toContain('alt-az')
+		expect(targetCenteringBlocker('center', READY, READY, MOUNT, draft, undefined, { ...rotator, guideRotationUnanswered: true })).toContain('Equipment Setup')
+		// Verify Only moves nothing, so the answer never blocks it.
+		expect(targetCenteringBlocker('verifyOnly', READY, READY, MOUNT, draft, undefined, { ...rotator, guideRotationUnanswered: true })).toBeUndefined()
+		expect(targetCenteringBlocker('center', READY, READY, MOUNT, draft, undefined, rotator)).toBeUndefined()
+		// Without an orientation the rotator does not matter.
+		expect(targetCenteringBlocker('center', READY, READY, MOUNT, TARGET)).toBeUndefined()
+	})
+
+	test('the state text reads the orientation once it ended', () => {
+		const ended = summary({ state: 'completed', positionVerified: true, orientationVerified: false, finalSeparation: 1e-5, finalPositionAngleError: (2 * Math.PI) / 180, request: { ...summary().request, orientation: { positionAngle: 1, tolerance: 0.01, halfTurn: true } } })
+		expect(targetCenteringStateText(ended)).toContain('Off orientation')
+		expect(targetCenteringStateText(ended)).toContain('PA +2.00°')
+	})
+})
 
 describe('target centering blockers', () => {
 	const blocker = (mode: Parameters<typeof targetCenteringBlocker>[0], state: MountState | undefined = MOUNT, draft: Parameters<typeof targetCenteringBlocker>[4] = TARGET) => targetCenteringBlocker(mode, READY, READY, state, draft)
@@ -126,6 +152,21 @@ describe('target centering request', () => {
 		expect(request.solving).not.toBe(DEFAULT_CAMERA_PLATE_SOLVING)
 		// Without a guide output in the setup none is sent.
 		expect('guideOutput' in targetCenteringRequest('center', TARGET, settings, DEFAULT_EXPOSURE_SETTINGS, DEFAULT_CAMERA_PLATE_SOLVING, { mount })).toBeFalse()
+	})
+
+	test('an orientation is sent in radians with the half turn, and only a Center turns the rotator', () => {
+		const rotator = { connectionId: 'c', deviceId: 'rot' }
+		const settings = { ...DEFAULT_TARGET_CENTERING_SETTINGS, orientationTolerance: 0.25, halfTurn: false }
+		const center = targetCenteringRequest('center', { ...TARGET, positionAngle: 2 }, settings, DEFAULT_EXPOSURE_SETTINGS, DEFAULT_CAMERA_PLATE_SOLVING, { mount, rotator })
+		expect(center.orientation).toEqual({ positionAngle: 2, tolerance: (0.25 * Math.PI) / 180, halfTurn: false })
+		expect(center.rotator).toEqual(rotator)
+
+		const verify = targetCenteringRequest('verifyOnly', { ...TARGET, positionAngle: 2 }, settings, DEFAULT_EXPOSURE_SETTINGS, DEFAULT_CAMERA_PLATE_SOLVING, { mount, rotator })
+		expect(verify.orientation?.positionAngle).toBe(2)
+		expect('rotator' in verify).toBeFalse()
+
+		const plain = targetCenteringRequest('center', TARGET, settings, DEFAULT_EXPOSURE_SETTINGS, DEFAULT_CAMERA_PLATE_SOLVING, { mount, rotator })
+		expect('orientation' in plain || 'rotator' in plain).toBeFalse()
 	})
 })
 

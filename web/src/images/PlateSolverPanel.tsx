@@ -1,5 +1,6 @@
 import type { PlateSolveHint, PlateSolveJob, PlateSolveRequest, PlateSolveResult, ResolvedPlateSolveHints } from 'api'
 import type { PlateSolution } from 'nebulosa/src/astrometry/solvers/platesolver'
+import { imageTopPositionAngle } from 'nebulosa/src/astrometry/wcs/orientation'
 import { type ReactNode, useEffect, useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { analysisElapsed, isActive } from '../analysis'
@@ -14,7 +15,7 @@ import { AdvancedControls, advancedSummary, HintControls, hintsSummary, SolverAv
 import { cancelPlateSolve, effectivePlateSolveRequest, isSolved, loadHints, loadPlateSolveResult, mountSyncBlocker, mountSyncSupport, mountSyncTarget, plateSolveSettings, plateSolvingState, runPlateSolve, solutionOptions, STAGE_LABELS, STRATEGY_LABELS } from '../platesolving/platesolving'
 import { type AstrometryGridSettings, COORDINATE_FORMATS, COORDINATE_PRECISION_RANGE, type CoordinateFormat, GRID_COLORS, GRID_OPACITY_RANGE, type GridColor, ORIENTATION_MODES, type OrientationMode } from '../platesolving/preferences'
 import { usePlateSolution } from '../platesolving/usePlateSolution'
-import { fitsToViewer, imageTopPositionAngle, wcsFrame } from '../platesolving/wcs'
+import { wcsFrame } from '../platesolving/wcs'
 import { activeProfile, cameraPlateSolving, imageAstrometrySettings, imagePlateSolving, profileState, setCameraPlateSolving, setImageAstrometrySettings, setImagePlateSolving } from '../profile/profile'
 import type { CameraIdentity } from '../profile/schema'
 import { CollapsibleSection } from '../shell/CollapsibleSection'
@@ -337,7 +338,8 @@ interface SolutionProps {
 // where it comes from.
 function Solution({ job, latest, solution, style }: SolutionProps) {
 	const timeZone = useActiveTimeZone()
-	const topAngle = imageTopPositionAngle(solution, fitsToViewer(Number(solution.CRPIX1), Number(solution.CRPIX2)))
+	// At the center of the image, as Target Centering takes it from a solved frame.
+	const topAngle = imageTopPositionAngle(solution, (solution.widthInPixels + 1) / 2, (solution.heightInPixels + 1) / 2)
 	const source = job ? `${STRATEGY_LABELS[job.request.strategy]} · ${formatClockTime(job.queuedAt, timeZone, { seconds: true, named: true })}` : 'Image header'
 	const newer = latest && job && latest.jobId !== job.jobId ? latest : undefined
 

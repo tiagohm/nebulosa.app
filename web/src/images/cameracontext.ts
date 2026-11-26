@@ -5,7 +5,7 @@ import type { DitherDevices } from '../camera/DitheringSection'
 import { type DeviceView, roleDevice, roleStatus } from '../equipment/equipment'
 import { CAMERA_ROLES, type CameraRole, type EquipmentRole, type EquipmentSetup } from '../equipment/roles'
 import { type RoleDevice, useWatchedDevices } from '../equipment/useEquipment'
-import { activeProfile, activeSetup, profileCamera, profileState } from '../profile/profile'
+import { activeProfile, activeSetup, guideCameraRotates, profileCamera, profileState } from '../profile/profile'
 import type { CameraIdentity, Profile } from '../profile/schema'
 import type { ImageDocument } from './images'
 
@@ -16,8 +16,10 @@ import type { ImageDocument } from './images'
 // shared by every camera of the connection, since a nudge holds only the mount; the guide output drives that mount, as the
 // setup says whatever device it is, so it is shared the same way, but only the Guide Camera guides through it. Any other camera takes its flats with manual filters and light and leaves the
 // cover as it is. The Main Camera snoops the devices of the setup into its headers, the Guide Camera only the mount, and a
-// camera without a role nothing. The forms of the camera are those of the physical camera in the active
-// profile. An operation keeps the devices it started with; changing tab or profile never redirects it.
+// camera without a role nothing. The rotator carries the Main Camera, which Target Centering turns with it, and the Guide
+// Camera turns with it only when the Equipment Setup answers that it does (an off-axis guider behind it). The forms of the
+// camera are those of the physical camera in the active profile. An operation keeps the devices it started with; changing
+// tab or profile never redirects it.
 
 // Equipment of the operations of a camera tab.
 export interface CameraOperationContext {
@@ -58,12 +60,20 @@ export interface CameraOperationContext {
 	// through, and the GUIDE_OUTPUT pulse dithers go through, when the camera is the Main Camera; absent otherwise, meaning
 	// the camera never dithers.
 	readonly dither?: DitherDevices
+	// Rotator of the setup: the one that turns the camera when it is the Main Camera, or the one a Guide Camera may turn
+	// with; absent for a camera without either role.
+	readonly rotator?: RoleDevice
+	// Whether the Guide Camera of the setup turns with its rotator, as answered in the Equipment Setup; absent while
+	// unanswered or when the setup lacks either.
+	readonly guideCameraRotates?: boolean
+	// Whether the setup has both a Guide Camera and a Rotator, so the answer is needed before the rotator turns.
+	readonly guideRotationAsked: boolean
 }
 
 // Resolves the equipment of the camera tab of a document from the active profile and the devices of the watched
 // connection, which is the profile's, or undefined for a document that is not a camera tab. A camera of another
 // connection than the watched one has no role, no forms, and its devices are unavailable.
-export function cameraOperationContext(document: Pick<ImageDocument, 'source'> | undefined, profile: Pick<Profile, 'connectionId' | 'equipment'>, runtime: Pick<DeviceView, 'watched' | 'devices' | 'pending' | 'errors'>): CameraOperationContext | undefined {
+export function cameraOperationContext(document: Pick<ImageDocument, 'source'> | undefined, profile: Pick<Profile, 'connectionId' | 'equipment'> & Partial<Pick<Profile, 'settings'>>, runtime: Pick<DeviceView, 'watched' | 'devices' | 'pending' | 'errors'>): CameraOperationContext | undefined {
 	if (document?.source.kind !== 'camera') return undefined
 
 	const { connectionId, deviceId } = document.source
@@ -75,10 +85,23 @@ export function cameraOperationContext(document: Pick<ImageDocument, 'source'> |
 	const device = resolve('MAIN_CAMERA', { MAIN_CAMERA: { id: deviceId, name: '' } })
 	const role = watched ? CAMERA_ROLES.find((role) => setup[role]?.id === deviceId) : undefined
 	const settings = watched ? profileCamera(profile, deviceId) : undefined
-	const context: CameraOperationContext = { camera, device, ...(settings && { settings }), mount: resolve('MOUNT'), mountGuideOutput: resolve('GUIDE_OUTPUT'), snoop: {} }
+	const rotates = watched && profile.settings ? guideCameraRotates({ ...profile, settings: profile.settings }) : undefined
+	const context: CameraOperationContext = {
+		camera,
+		device,
+		...(settings && { settings }),
+		mount: resolve('MOUNT'),
+		mountGuideOutput: resolve('GUIDE_OUTPUT'),
+		snoop: {},
+		...(rotates !== undefined && { guideCameraRotates: rotates }),
+		guideRotationAsked: watched && setup.GUIDE_CAMERA !== undefined && setup.ROTATOR !== undefined,
+	}
+	const rotator = setup.ROTATOR ? { rotator: resolve('ROTATOR') } : {}
 
-	if (role === 'MAIN_CAMERA') return { ...context, role, snoop: captureSnoop(setup), focuser: resolve('FOCUSER'), wheel: resolve('FILTER_WHEEL'), flatPanel: resolve('FLAT_PANEL'), cover: resolve('COVER'), dither: { mount: context.mount, guideCamera: resolve('GUIDE_CAMERA'), guideOutput: context.mountGuideOutput } }
-	if (role === 'GUIDE_CAMERA') return { ...context, role, snoop: { mount: setup.MOUNT?.id }, guideOutput: context.mountGuideOutput }
+	if (role === 'MAIN_CAMERA')
+		return { ...context, ...rotator, role, snoop: captureSnoop(setup), focuser: resolve('FOCUSER'), wheel: resolve('FILTER_WHEEL'), flatPanel: resolve('FLAT_PANEL'), cover: resolve('COVER'), dither: { mount: context.mount, guideCamera: resolve('GUIDE_CAMERA'), guideOutput: context.mountGuideOutput } }
+	// A guide camera turning with the rotator snoops it, so its frames carry the angle.
+	if (role === 'GUIDE_CAMERA') return { ...context, ...rotator, role, snoop: { mount: setup.MOUNT?.id, ...(rotates && { rotator: setup.ROTATOR?.id }) }, guideOutput: context.mountGuideOutput }
 	return context
 }
 

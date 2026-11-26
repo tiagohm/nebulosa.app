@@ -1,11 +1,14 @@
 import { existsSync } from 'fs'
 import { mkdir, readdir, stat } from 'fs/promises'
+import { homedir, hostname } from 'os'
 import { basename, dirname, extname, join, resolve } from 'path'
+import { DEFAULT_CAPTURES_DIR } from './captures'
+import { DEFAULT_DATA_DIRECTORY } from './database'
 import { errorResponse } from './http'
 import { errorCode } from './util'
 
 // Browsing of the server's filesystem, so a client on another machine can choose files the server reads,
-// such as images to open, and creation of a directory to save in. Any directory the server process can read is
+// such as images to open, the places a chooser offers as shortcuts, and creation of a directory to save in. Any directory the server process can read is
 // listed, and any it can write gets a new directory, for any client that can reach the API; like every other input,
 // the requested path is not restricted.
 
@@ -32,6 +35,25 @@ export interface DirectoryListing {
 	readonly parent?: string
 	// Directories first, then files, each sorted by name.
 	readonly entries: readonly FileEntry[]
+}
+
+// Directory a chooser offers as a shortcut.
+export interface FilePlace {
+	// Short name of the place, such as Data or Captures.
+	readonly name: string
+	// Absolute path of the directory; empty for the list of drives on Windows.
+	readonly path: string
+}
+
+// Shortcuts of a chooser on this server.
+export interface FilePlaces {
+	// Name of the machine the server runs on, whose filesystem is browsed.
+	readonly host: string
+	// Absolute path of the data directory, listed first when a chooser has no remembered directory.
+	readonly data: string
+	// Existing directories offered as shortcuts: the data directory, the default captures directory, the home directory,
+	// then the list of drives on Windows or the root elsewhere.
+	readonly places: readonly FilePlace[]
 }
 
 // Error of a directory that cannot be listed: missing or not a directory, or not readable.
@@ -111,6 +133,20 @@ async function entry(directory: string, name: string): Promise<FileEntry | undef
 	}
 }
 
+// Returns the shortcuts of a chooser, leaving out the directories that do not exist yet, such as the captures directory
+// before the first saved frame.
+export function filePlaces(): FilePlaces {
+	const data = resolve(DEFAULT_DATA_DIRECTORY)
+	const candidates: FilePlace[] = [
+		{ name: 'Data', path: data },
+		{ name: 'Captures', path: resolve(DEFAULT_CAPTURES_DIR) },
+		{ name: 'Home', path: homedir() },
+	]
+	const places = candidates.filter((place) => existsSync(place.path))
+	places.push(WINDOWS ? { name: 'Drives', path: '' } : { name: 'Root', path: '/' })
+	return { host: hostname(), data, places }
+}
+
 // Lists a directory, resolved against the server's working directory; empty or "." is the working
 // directory, except that empty lists the drives on Windows. When extensions is given (lowercase, without
 // the dot), only files with one of them are listed, along with every directory. Throws DirectoryError.
@@ -181,6 +217,10 @@ export function createFileRoutes() {
 					throw error
 				}
 			},
+		},
+		'/api/files/places': {
+			// Responds with the FilePlaces of the chooser.
+			GET: () => Response.json(filePlaces()),
 		},
 	} as const satisfies Bun.Serve.Routes<undefined, string>
 }

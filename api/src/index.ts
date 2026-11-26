@@ -287,7 +287,7 @@ export type {
 	TimeoutLimits,
 } from './externaltools'
 export type { LeasedPhase, LeasedSession, LeasedStartResponse, LeaseOptions } from './leases'
-export type { CreateDirectoryRequest, DirectoryListing, FileEntry, FileErrorCode } from './files'
+export type { CreateDirectoryRequest, DirectoryListing, FileEntry, FileErrorCode, FilePlace, FilePlaces } from './files'
 export type { FlatPanelIntensityRequest, FlatPanelLightRequest } from './flatpanels'
 export type { FocuserBacklashConfig, FocuserBacklashMode } from './focuserbacklash'
 export type { FocuserBacklashEvent, FocuserBacklashSaveRequest, FocuserBacklashState, FocuserDirection, FocuserMoveRequest, FocuserMoveToRequest, FocuserReverseRequest, FocuserSyncRequest } from './focusers'

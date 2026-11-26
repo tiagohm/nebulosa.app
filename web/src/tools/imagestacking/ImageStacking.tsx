@@ -671,7 +671,7 @@ function ImportDialog({ projectId, onClose }: { readonly projectId: string; read
 				)}
 			</div>
 			<FileExplorerModal open={choosing === 'directory'} title="Add Directory" mode="directory" initialPath={activeProfile(profiles).settings.lastStackingDirectory} onChoose={(path, directory) => add([path], directory)} onClose={() => setChoosing(undefined)} />
-			<FileExplorerModal open={choosing === 'open'} title="Add Files" mode="open" multiple initialPath={activeProfile(profiles).settings.lastStackingDirectory} extensions={IMAGE_EXTENSIONS} onChoose={add} onClose={() => setChoosing(undefined)} />
+			<FileExplorerModal open={choosing === 'open'} title="Add Files" mode="open" action="Add" multiple initialPath={activeProfile(profiles).settings.lastStackingDirectory} extensions={IMAGE_EXTENSIONS} onChoose={add} onClose={() => setChoosing(undefined)} />
 		</Modal>
 	)
 }

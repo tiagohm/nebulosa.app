@@ -2,7 +2,7 @@ import { afterAll, describe, expect, test } from 'bun:test'
 import { existsSync, mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { dirname, join } from 'path'
-import type { DirectoryListing, FileEntry } from './files'
+import type { DirectoryListing, FileEntry, FilePlaces } from './files'
 import { routes } from './index'
 
 const root = mkdtempSync(join(tmpdir(), 'nebulosa-files-'))
@@ -84,5 +84,18 @@ describe('create directory', () => {
 		expect(response.status).toBe(404)
 		expect(await response.json()).toMatchObject({ code: 'notFound' })
 		expect(existsSync(join(root, 'missing'))).toBe(false)
+	})
+})
+
+describe('places', () => {
+	test('offers the data directory and a way to the top of the filesystem', async () => {
+		const response = (routes['/api/files/places'] as Record<string, () => Response>).GET()
+		const places = (await response.json()) as FilePlaces
+
+		expect(response.status).toBe(200)
+		expect(places.host).not.toBe('')
+		expect(places.places[0]).toEqual({ name: 'Data', path: places.data })
+		expect(places.places.every((place) => place.path === '' || place.path === '/' || existsSync(place.path))).toBe(true)
+		expect(places.places.at(-1)).toEqual(process.platform === 'win32' ? { name: 'Drives', path: '' } : { name: 'Root', path: '/' })
 	})
 })

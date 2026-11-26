@@ -77,7 +77,7 @@ export function SaveImageModal({ document, format, onClose }: SaveImageModalProp
 			<FileExplorerModal
 				open={!!document && !replacing}
 				mode="save"
-				title={document ? `Save ${document.name} as ${FORMAT_LABELS[format]}` : 'Save Image'}
+				title={`Save as ${FORMAT_LABELS[format]}`}
 				defaultName={document ? saveFileName(document.name, format) : ''}
 				initialPath={lastSaveDirectory ?? directoryOf(document && documentPath(document)) ?? lastImageDirectory}
 				extensions={SAVE_EXTENSIONS[format]}

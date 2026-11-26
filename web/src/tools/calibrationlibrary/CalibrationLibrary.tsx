@@ -859,7 +859,7 @@ function ImportDialog({ onClose }: { readonly onClose: () => void }) {
 				<ImportReview jobId={jobId} onClose={onClose} />
 			)}
 			<FileExplorerModal open={choosing === 'directory'} title="Add Directory" mode="directory" initialPath={lastDirectory} onChoose={(path, directory) => add([path], directory)} onClose={() => setChoosing(undefined)} />
-			<FileExplorerModal open={choosing === 'open'} title="Add Files" mode="open" multiple initialPath={lastDirectory} extensions={IMAGE_EXTENSIONS} onChoose={add} onClose={() => setChoosing(undefined)} />
+			<FileExplorerModal open={choosing === 'open'} title="Add Files" mode="open" action="Add" multiple initialPath={lastDirectory} extensions={IMAGE_EXTENSIONS} onChoose={add} onClose={() => setChoosing(undefined)} />
 		</Modal>
 	)
 }

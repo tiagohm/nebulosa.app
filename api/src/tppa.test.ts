@@ -315,14 +315,13 @@ describe('TPPA sessions', () => {
 })
 
 describe('correction', () => {
-	test('a pole east of and above the true pole in the north moves west and down', () => {
-		expect(tppaCorrection(deg(0.1), deg(0.1), deg(45))).toEqual({ azimuthCorrection: 'west', altitudeCorrection: 'lower' })
-		expect(tppaCorrection(deg(-0.1), deg(-0.1), deg(45))).toEqual({ azimuthCorrection: 'east', altitudeCorrection: 'raise' })
+	test('a pole east of and above the visible pole moves west and down, in either hemisphere', () => {
+		expect(tppaCorrection(deg(0.1), deg(0.1))).toEqual({ azimuthCorrection: 'west', altitudeCorrection: 'lower' })
+		expect(tppaCorrection(deg(-0.1), deg(-0.1))).toEqual({ azimuthCorrection: 'east', altitudeCorrection: 'raise' })
 	})
 
-	test('the southern hemisphere reverses both ways', () => {
-		expect(tppaCorrection(deg(0.1), deg(0.1), deg(-23))).toEqual({ azimuthCorrection: 'east', altitudeCorrection: 'raise' })
-		expect(tppaCorrection(deg(-0.1), deg(-0.1), deg(-23))).toEqual({ azimuthCorrection: 'west', altitudeCorrection: 'lower' })
+	test('a zero error takes the way of a positive one', () => {
+		expect(tppaCorrection(0, 0)).toEqual({ azimuthCorrection: 'west', altitudeCorrection: 'lower' })
 	})
 })
 

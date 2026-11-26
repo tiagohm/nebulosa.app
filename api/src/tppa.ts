@@ -133,9 +133,9 @@ export interface TppaAlignment {
 	readonly frame: number
 	// Id of the capture document of that frame.
 	readonly imageId?: string
-	// Mount-pole azimuth error, in radians; positive sense per hemisphere.
+	// Mount-pole azimuth error, in radians; positive when the axis lies east of the visible pole, in either hemisphere.
 	readonly azimuthError: number
-	// Mount-pole altitude error, in radians; positive raises the pole in the north.
+	// Mount-pole altitude error, in radians; positive when the axis lies above the visible pole, in either hemisphere.
 	readonly altitudeError: number
 	// Great-circle distance between the mount pole and the refracted celestial pole, in radians.
 	readonly totalError: number
@@ -640,7 +640,7 @@ export class TppaSessions {
 			totalError,
 			azimuthAdjustment: result.azimuthAdjustment,
 			altitudeAdjustment: result.altitudeAdjustment,
-			...tppaCorrection(result.azimuthError, result.altitudeError, session.mount.geographicCoordinate.latitude),
+			...tppaCorrection(result.azimuthError, result.altitudeError),
 			time: frame?.observedAt ?? timeToUnixMillis(sample[2]),
 		}
 
@@ -711,13 +711,10 @@ function mountRefusal(mount: Mount, slewRate: string) {
 }
 
 // Returns the way the mount pole has to move to remove a polar error, from the signed azimuth and altitude errors of
-// the toolkit (radians) and the site's geodetic latitude (radians; the northern convention at 0). The toolkit measures
-// the azimuth error from the pole's azimuth, positive towards the east in the north and towards the west in the south,
-// and the altitude error positive when the pole stands too high in the north and too low in the south. A zero error
-// gives the way of a positive one; its size says there is nothing to move.
-export function tppaCorrection(azimuthError: number, altitudeError: number, latitude: number): Pick<TppaAlignment, 'azimuthCorrection' | 'altitudeCorrection'> {
-	const north = latitude >= 0
-	return { azimuthCorrection: azimuthError > 0 === north ? 'west' : 'east', altitudeCorrection: altitudeError > 0 === north ? 'lower' : 'raise' }
+// the toolkit (radians), taken at the visible pole in either hemisphere: positive when the axis lies east of it or above
+// it. A zero error gives the way of a positive one; its size says there is nothing to move.
+export function tppaCorrection(azimuthError: number, altitudeError: number): Pick<TppaAlignment, 'azimuthCorrection' | 'altitudeCorrection'> {
+	return { azimuthCorrection: azimuthError >= 0 ? 'west' : 'east', altitudeCorrection: altitudeError >= 0 ? 'lower' : 'raise' }
 }
 
 // Explanation and remedy of each reason the toolkit rejects a pose, said after "point N", for people.

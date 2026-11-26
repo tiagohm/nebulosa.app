@@ -22,7 +22,7 @@ TPPA measures it with the imaging camera itself, giving the azimuth and altitude
 ## Rules and Limitations
 
 - Nothing is fitted in `api` or `web`; the rotation is measured from the solves, never assumed from the motion time.
-- The way to move the pole on each axis is decided in `api` from the toolkit's signed errors and the hemisphere of the mount's site; `web` shows it and never derives it from the signs.
+- The way to move the pole on each axis is decided in `api` from the toolkit's signed errors, which are taken at the visible pole in either hemisphere, as iPolar's are; `web` shows it and never derives it from the signs.
 - A session fails rather than give an estimate from a bad geometry, a declination or pier-side change, or a field near the pole.
 - TPPA runs only as a manual operation: there is no in-process admission and no reservation.
 - The backend knows no obstacle or cable limit the driver does not report, so the RA direction is the operator's responsibility.

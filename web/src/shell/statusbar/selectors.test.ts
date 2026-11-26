@@ -30,7 +30,7 @@ import {
 	otherOperations,
 	progressText,
 	roleChip,
-	roleDetailValue,
+	roleDetail,
 	rotatorChip,
 	scopedDeviceErrors,
 	scopedRunningOperations,
@@ -187,7 +187,7 @@ describe('device chips', () => {
 	const dome = { slewing: false, moving: false, homing: false, parking: false, parked: false, hasShutter: true, shutterState: 'OPEN', azimuth: { value: Math.PI / 2, min: 0, max: 2 * Math.PI, step: 0 } } as const
 
 	test('a moving mount shows its motion by precedence', () => {
-		expect(mountChip({ ...mount, slewing: true, tracking: true })).toEqual({ text: 'Slewing', tone: 'active', moving: true, title: 'Slewing' })
+		expect(mountChip({ ...mount, slewing: true, tracking: true })).toEqual({ text: 'Slewing', tone: 'active', moving: true, title: 'Slewing', state: 'Slewing', details: '' })
 		expect(mountChip({ ...mount, moving: true, parked: true }).text).toBe('Moving')
 		// A manual motion also sets the broad slewing flag; the chip names the manual motion, as Equipment Control does.
 		expect(mountChip({ ...mount, moving: true, slewing: true }).text).toBe('Moving')
@@ -203,7 +203,7 @@ describe('device chips', () => {
 	})
 
 	test('a focuser shows its position, and that it moves', () => {
-		expect(focuserChip({ moving: false, position: { value: 1200, min: 0, max: 5000, step: 1 }, temperature: 12.34 })).toEqual({ text: '1200', tone: 'idle', moving: false, title: 'Position 1200 steps · 12.3°C' })
+		expect(focuserChip({ moving: false, position: { value: 1200, min: 0, max: 5000, step: 1 }, temperature: 12.34 })).toEqual({ text: '1200', tone: 'idle', moving: false, title: 'Position 1200 steps · 12.3°C', state: 'Idle', details: 'Position 1200 steps · 12.3°C' })
 		expect(focuserChip({ moving: true, position: { value: 1300, min: 0, max: 5000, step: 1 }, temperature: undefined })).toMatchObject({ text: 'Moving 1300', tone: 'active', moving: true })
 	})
 
@@ -214,7 +214,7 @@ describe('device chips', () => {
 	})
 
 	test('a rotator shows its mechanical angle in degrees', () => {
-		expect(rotatorChip({ moving: false, angle: { value: 90.25, min: 0, max: 360, step: 0 } })).toEqual({ text: '90.3°', tone: 'idle', moving: false, title: 'Mechanical angle 90.3°' })
+		expect(rotatorChip({ moving: false, angle: { value: 90.25, min: 0, max: 360, step: 0 } })).toEqual({ text: '90.3°', tone: 'idle', moving: false, title: 'Mechanical angle 90.3°', state: 'Idle', details: 'Mechanical angle 90.3°' })
 		expect(rotatorChip({ moving: true, angle: { value: 10, min: 0, max: 360, step: 0 } })).toMatchObject({ text: 'Moving 10.0°', moving: true })
 		expect(rotatorChip({ moving: false, angle: { value: -0.04, min: -180, max: 180, step: 0 } }).text).toBe('0.0°')
 	})
@@ -226,12 +226,12 @@ describe('device chips', () => {
 	})
 
 	test('a flat panel shows its light on or off', () => {
-		expect(flatPanelChip({ enabled: true, intensity: { value: 40, min: 0, max: 255, step: 1 } })).toEqual({ text: 'On', tone: 'idle', moving: false, title: 'On · brightness 40' })
+		expect(flatPanelChip({ enabled: true, intensity: { value: 40, min: 0, max: 255, step: 1 } })).toEqual({ text: 'On', tone: 'idle', moving: false, title: 'On · brightness 40', state: 'On', details: 'Brightness 40' })
 		expect(flatPanelChip({ enabled: false, intensity: { value: 0, min: 0, max: 255, step: 1 } }).text).toBe('Off')
 	})
 
 	test('a dome shows its shutter, and what it is doing while it rotates or the shutter moves', () => {
-		expect(domeChip(dome)).toEqual({ text: 'Open', tone: 'idle', moving: false, title: 'Azimuth 90.0° · shutter open' })
+		expect(domeChip(dome)).toEqual({ text: 'Open', tone: 'idle', moving: false, title: 'Azimuth 90.0° · shutter open', state: 'Idle', details: 'Azimuth 90.0° · Shutter open' })
 		expect(domeChip({ ...dome, shutterState: 'CLOSED', moving: true })).toMatchObject({ text: 'Moving Closed', moving: true, title: 'Moving · shutter closed' })
 		expect(domeChip({ ...dome, shutterState: 'OPENING' })).toMatchObject({ text: 'Opening', tone: 'active', moving: true })
 		// Slewing aggregates the shutter and arrives as an event of its own, so it never names a rotation.
@@ -260,10 +260,10 @@ describe('device chips', () => {
 	})
 
 	test('a device of the setup that is not connected says so, as a failure unless it is switching', () => {
-		expect(absentChip('disconnected')).toEqual({ text: 'Disconnected', tone: 'error', moving: false, title: 'Disconnected' })
+		expect(absentChip('disconnected')).toEqual({ text: 'Disconnected', tone: 'error', moving: false, title: 'Disconnected', state: 'Disconnected', details: '' })
 		expect(absentChip('unavailable')).toMatchObject({ text: 'Unavailable', tone: 'error' })
 		expect(absentChip('error')).toMatchObject({ text: 'Error', tone: 'error' })
-		expect(absentChip('connecting')).toEqual({ text: 'Connecting', tone: 'active', moving: true, title: 'Connecting' })
+		expect(absentChip('connecting')).toEqual({ text: 'Connecting', tone: 'active', moving: true, title: 'Connecting', state: 'Connecting', details: '' })
 	})
 
 	test('a hidden device leaves the bar only while it is connected', () => {
@@ -287,15 +287,33 @@ describe('device chips', () => {
 		expect(roleChip('FILTER_WHEEL', device, control('wheel', { position: 0, names: ['L'] }, 'B'))?.title).toBe('State not reported')
 	})
 
-	test('the details show the full reading while connected, and the role status otherwise', () => {
-		expect(roleDetailValue('FILTER_WHEEL', 'connected', device, control('wheel', { position: 1, names: ['L', 'Ha'] })).text).toBe('#2 · Ha')
-		expect(roleDetailValue('MOUNT', 'connected', device, control('mount', { ...mount, slewing: true }))).toEqual({ text: 'Slewing', tone: 'active' })
-		expect(roleDetailValue('FILTER_WHEEL', 'disconnected', device, control('wheel', { position: 1, names: ['L'] })).text).toBe('Disconnected')
-		expect(roleDetailValue('GUIDE_OUTPUT', 'connected', device, control('wheel', {})).text).toBe('Connected')
+	test('the details say what a connected device does apart from what it reads, and the status of one that is not connected', () => {
+		expect(roleDetail('FILTER_WHEEL', 'connected', device, control('wheel', { position: 1, names: ['L', 'Ha'] }))).toEqual({ state: { text: 'Ha', tone: 'idle' }, details: 'Slot 2' })
+		expect(roleDetail('MOUNT', 'connected', device, control('mount', { ...mount, slewing: true, rightAscension: 0, declination: 0 }))).toEqual({ state: { text: 'Slewing', tone: 'active' }, details: 'RA 00 00 00 · Dec +00 00 00' })
+		expect(roleDetail('MOUNT', 'connected', device, control('mount', { ...mount, tracking: true }))).toEqual({ state: { text: 'Tracking', tone: 'ok' }, details: '' })
+		expect(roleDetail('FILTER_WHEEL', 'disconnected', { ...device, connected: false }, control('wheel', { position: 1, names: ['L'] }))).toEqual({ state: { text: 'Disconnected', tone: 'error' }, details: '' })
+		expect(roleDetail('FILTER_WHEEL', 'connecting', { ...device, connected: false }, control('wheel', {}))).toEqual({ state: { text: 'Connecting', tone: 'active' }, details: '' })
+		expect(roleDetail('FILTER_WHEEL', 'connected', device, control('wheel', {}, 'B'))).toEqual({ state: { text: 'Connected', tone: 'muted' }, details: 'State not reported' })
+		expect(roleDetail('GUIDE_OUTPUT', 'connected', device, control('wheel', {})).state).toEqual({ text: 'Connected', tone: 'ok' })
+		expect(roleDetail('GUIDE_OUTPUT', 'unavailable', undefined, control('wheel', {})).state).toEqual({ text: 'Unavailable', tone: 'muted' })
+	})
+
+	test('the details of a device keep its state apart from its readings', () => {
+		expect(cameraChip({ temperature: -10, exposing: true, cooler: { power: 41.6 } })).toMatchObject({ state: 'Exposing', details: 'Sensor -10.0°C · Cooler 42%' })
+		expect(cameraChip({ exposing: false })).toMatchObject({ state: 'Idle', details: '' })
+		expect(focuserChip({ moving: true, position: { value: 10, min: 0, max: 50, step: 1 }, temperature: undefined })).toMatchObject({ state: 'Moving', details: 'Position 10 steps' })
+		expect(wheelChip({ moving: false, position: 2, names: ['L', 'Ha'] })).toMatchObject({ state: '#3', details: '' })
+		expect(wheelChip({ moving: true, position: 1, names: ['L', 'Ha'] })).toMatchObject({ state: 'Changing filter', details: '' })
+		expect(coverChip({ parked: true, parking: false })).toMatchObject({ state: 'Closed', details: '' })
+		expect(flatPanelChip({ enabled: false, intensity: { value: 0, min: 0, max: 255, step: 1 } })).toMatchObject({ state: 'Off', details: '' })
+		expect(domeChip({ ...dome, shutterState: 'OPENING' })).toMatchObject({ state: 'Opening', details: 'Azimuth 90.0°' })
+		expect(domeChip({ ...dome, parked: true, shutterState: 'CLOSED' })).toMatchObject({ state: 'Parked', details: 'Azimuth 90.0° · Shutter closed' })
+		expect(guideChip(undefined, { temperature: -5 })).toMatchObject({ state: 'Not guiding', details: 'Sensor -5.0°C' })
+		expect(mountChip(undefined)).toMatchObject({ state: 'Connected', details: 'State not reported' })
 	})
 
 	test('the links read as text', () => {
-		expect(serverLinkLabel('online')).toBe('Server online')
+		expect(serverLinkLabel('online')).toBe('Online')
 		expect(serverLinkLabel('offline')).toBe('Reconnecting')
 		expect(serverLinkLabel(undefined)).toBe('Connecting')
 		expect(connectionLabel(undefined, 'disconnected')).toBe('No connection')
@@ -489,10 +507,10 @@ describe('fitting chips', () => {
 })
 
 test('a guide camera shows its session, or that it does not guide', () => {
-	expect(guideChip(undefined)).toEqual({ text: 'Not guiding', tone: 'idle', moving: false, title: 'Not guiding' })
+	expect(guideChip(undefined)).toEqual({ text: 'Not guiding', tone: 'idle', moving: false, title: 'Not guiding', state: 'Not guiding', details: '' })
 	expect(guideChip(undefined, { temperature: 5 }, ['status', 'temperature']).text).toBe('Not guiding 5.0°C')
 	const session = { state: 'guiding', settling: false, dithering: false, rms: { ra: 0.3, dec: 0.4, total: 0.5, samples: 20 }, pixelScale: 1.5 } as GuidingSessionSummary
-	expect(guideChip(session)).toEqual({ text: 'RMS 0.75″', tone: 'ok', moving: false, title: 'Guiding · RMS 0.75″' })
+	expect(guideChip(session)).toEqual({ text: 'RMS 0.75″', tone: 'ok', moving: false, title: 'Guiding · RMS 0.75″', state: 'Guiding', details: 'RMS 0.75″' })
 	expect(guideChip({ ...session, state: 'calibrating' }).title).toBe('Calibrating')
 })
 

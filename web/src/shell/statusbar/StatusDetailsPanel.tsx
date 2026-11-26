@@ -1,4 +1,4 @@
-import type { NotificationTarget, OperationRecord } from 'api'
+import type { DeviceSummary, NotificationTarget, OperationRecord } from 'api'
 import { cn } from 'cn'
 import { type ReactNode, type Ref, useEffect, useRef, useState } from 'react'
 import { useSnapshot } from 'valtio'
@@ -7,9 +7,8 @@ import { GUIDING_STATE_LABELS, guidingRuntime } from '../../camera/guiding'
 import { useSelectedConnection } from '../../connection/useSelectedConnection'
 import { controlRuntime } from '../../equipment-control/control'
 import { DeviceLink } from '../../equipment-control/DeviceLink'
-import { roleDevice, roleStatus } from '../../equipment/equipment'
-import { ROLES } from '../../equipment/roles'
-import { RoleStatusText } from '../../equipment/RoleStatusText'
+import { type DeviceView, deviceState, roleDevice, roleStatus, switchDevice, switchSetup } from '../../equipment/equipment'
+import { type EquipmentRole, ROLE_GROUPS, ROLES } from '../../equipment/roles'
 import { useActiveServerId, useRoleDevice, useWatchedDevices } from '../../equipment/useEquipment'
 import { imagesState } from '../../images/images'
 import { useActiveSite, useDisplayZone } from '../../location/useLocation'
@@ -33,6 +32,7 @@ import {
 	activeCapture,
 	activeGuiding,
 	capturePercent,
+	CHIP_ICONS,
 	type ChipSessions,
 	connectionLabel,
 	type DeviceError,
@@ -41,7 +41,8 @@ import {
 	operationTarget,
 	otherOperations,
 	progressText,
-	roleDetailValue,
+	type RoleDetail,
+	roleDetail,
 	scopedDeviceErrors,
 	scopedRunningOperations,
 	type ScopedDevice,
@@ -52,18 +53,19 @@ import { AbortButton, HIT_CLASS, TONE_CLASSES, useOperationAbortable } from './S
 
 // Details of the status bar: a button at its right end, showing how many items the bar left out, and before it, while
 // a device fails, a button naming how many failures there are, both opening a panel above themselves with everything
-// the bar summarizes for the active profile's server connection — the server link and the selected connection, every
-// role with its device and what it reports, the running capture and guiding sessions with the enabled Meridian Flip
+// the bar summarizes for the active profile's server connection — the server link and the selected connection, how many
+// devices of the Equipment Setup are connected, every assigned role with its device, what it is doing in words, and what
+// it reads, the Connect of each device that is not connected and Connect all, the way to the Equipment Setup, the running capture and guiding sessions with the enabled Meridian Flip
 // Monitor and the running Mount Remote Control listeners of the mount, every other running operation with its devices,
 // elapsed time, and reported progress, each with its Abort, the device failures, and the real-time clock, even when the
 // bar has no room for it, then the way to the Status Bar settings of the profile. The panel is placed in the viewport (fixed), so the clipping bar never cuts it, follows the
 // buttons when the window resizes, takes the focus when it opens so the keyboard goes on inside it, and closes when a
 // button is pressed again, on a press outside, on Escape (returning the focus to the details button), and after it
-// opened a device, a camera tab, a tool, or the settings. Closing it, or anything it opens, never stops a session or an operation;
-// only an Abort does.
+// opened a device, a camera tab, a tool, the Equipment Setup, or the settings; a Connect keeps it open. Closing it, or anything
+// it opens, never stops a session or an operation, and nothing in it disconnects a device; only an Abort stops one.
 
 // Width of the panel, in CSS pixels, when the viewport has room for it.
-const PANEL_WIDTH = 380
+const PANEL_WIDTH = 420
 
 // Smallest distance kept between the panel and the edges of the viewport, in CSS pixels.
 const VIEWPORT_GUTTER = 16
@@ -241,9 +243,7 @@ function StatusDetailsPanel({ ref, placement: { bottom, right, width }, onClose 
 				<Row label="Server">{serverLinkLabel(link)}</Row>
 				<Row label="Equipment">{connectionLabel(connection?.name, status)}</Row>
 			</Section>
-			<Section title="Equipment">
-				<EquipmentRows devices={devices} onNavigate={onClose} sessions={{ capture, guiding: session }} />
-			</Section>
+			<EquipmentSection devices={devices} online={status === 'connected'} onNavigate={onClose} sessions={{ capture, guiding: session }} />
 			{(capture !== undefined || session !== undefined || monitor !== undefined || listeners !== undefined) && (
 				<Section title="Sessions">
 					{capture && (
@@ -286,7 +286,7 @@ function StatusDetailsPanel({ ref, placement: { bottom, right, width }, onClose 
 					)}
 				</Section>
 			)}
-			<Section title={`Operations · ${others.length}`}>
+			<Section title="Operations" aside={others.length > 0 ? `${others.length} running` : undefined}>
 				{others.length > 0 ? others.map((operation) => <OperationRow key={operation.operationId} operation={operation} devices={devices.devices} now={now} abortable={abortable(operation)} />) : <p className="m-0 text-ink-300">No other operation running.</p>}
 			</Section>
 			{errors.length > 0 && (
@@ -352,44 +352,128 @@ function AstronomicalTimeSection({ onNavigate }: AstronomicalTimeSectionProps) {
 				}}
 				className="cursor-pointer self-start border-0 bg-transparent p-0 text-accent underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
 			>
-				Open Astronomical Time Converter
+				Astronomical Time Converter
 			</button>
 		</Section>
 	)
 }
 
-interface EquipmentRowsProps {
+interface EquipmentSectionProps {
 	// Devices of the watched connection, with their connect state.
-	readonly devices: ReturnType<typeof useWatchedDevices>
-	// Called after a device was opened.
+	readonly devices: DeviceView
+	// Whether the profile's server connection is open, so its devices are known and can be connected.
+	readonly online: boolean
+	// Called after a device or the Equipment Setup was opened.
 	readonly onNavigate: () => void
 	// Running sessions of the main and guide cameras, read by their rows.
 	readonly sessions: ChipSessions
 }
 
-// Every role of the active profile with its device, status, and what the device reports.
-function EquipmentRows({ devices, onNavigate, sessions }: EquipmentRowsProps) {
+// Roles of the active profile's Equipment Setup: how many of its devices are connected, a row per assigned role in the
+// order of its group, the roles with no device on one line, then Connect all while an assigned device on the open
+// connection is not connected, and the way to the Equipment Setup. Connecting never closes the panel, and nothing here
+// disconnects a device.
+function EquipmentSection({ devices, online, onNavigate, sessions }: EquipmentSectionProps) {
 	const profiles = useSnapshot(profileState)
 	const control = useSnapshot(controlRuntime)
 	const setup = activeSetup(activeProfile(profiles))
+	const assigned = ROLES.filter(({ role }) => setup[role] !== undefined)
+	const unassigned = ROLES.filter(({ role }) => setup[role] === undefined)
+	const known = online && !devices.loading
+	const connected = assigned.filter(({ role }) => roleStatus(setup, role, devices) === 'connected').length
+	const connectable = known ? assigned.flatMap(({ role }) => roleDevice(setup, role, devices) ?? []).filter((device) => !device.connected && !devices.pending[device.id]) : []
+	const summary = assigned.length === 0 ? undefined : !online ? 'Offline' : devices.loading ? 'Loading devices' : `${connected} of ${assigned.length} connected`
 
-	return ROLES.map(({ role, label }) => {
-		const device = roleDevice(setup, role, devices)
-		const status = roleStatus(setup, role, devices)
-		const value = roleDetailValue(role, status, device, control, sessions)
+	// Opens the Equipment Setup of the profile.
+	function openSetup() {
+		deviceState.open = true
+		onNavigate()
+	}
 
-		return (
-			<Row key={role} label={label}>
-				{status === 'notSelected' ? (
-					<RoleStatusText status="notSelected" />
-				) : (
-					<>
-						<DeviceLink device={device} fallback={setup[role]?.name || 'Unavailable device'} className="text-ink-100" onNavigate={onNavigate} /> · {status === 'connected' ? <span className={TONE_CLASSES[value.tone]}>{value.text}</span> : <RoleStatusText status={status} />}
-					</>
+	return (
+		<Section title="Equipment" aside={summary}>
+			{assigned.length === 0 ? (
+				<p className="m-0 text-ink-300">No device is assigned to this profile.</p>
+			) : (
+				<div className="flex flex-col gap-2">
+					{ROLE_GROUPS.map(({ group }) => {
+						const roles = assigned.filter((definition) => definition.group === group)
+						if (roles.length === 0) return null
+
+						return (
+							<ul key={group} className="m-0 flex list-none flex-col p-0">
+								{roles.map(({ role, label }) => {
+									const status = roleStatus(setup, role, devices)
+									if (status === 'notSelected') return null
+									const device = roleDevice(setup, role, devices)
+									const detail: RoleDetail = !online ? OFFLINE_DETAIL : devices.loading ? LOADING_DETAIL : roleDetail(role, status, device, control, sessions)
+									const canConnect = known && device !== undefined && !device.connected && !devices.pending[device.id]
+
+									return <EquipmentRow key={role} role={role} label={label} device={device} name={setup[role]?.name || 'Unavailable device'} detail={detail} canConnect={canConnect} onNavigate={onNavigate} />
+								})}
+							</ul>
+						)
+					})}
+				</div>
+			)}
+			{unassigned.length > 0 && assigned.length > 0 && <p className="m-0 text-ink-300">Not assigned: {unassigned.map(({ label }) => label).join(', ')}</p>}
+			<div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+				{connectable.length > 0 && (
+					<LinkButton title={connectable.length === 1 ? `Connect ${connectable[0]?.name}` : `Connect the ${connectable.length} disconnected devices`} onClick={() => void switchSetup(deviceState, setup, true)}>
+						Connect all
+					</LinkButton>
 				)}
-			</Row>
-		)
-	})
+				<LinkButton onClick={openSetup}>Equipment Setup</LinkButton>
+			</div>
+		</Section>
+	)
+}
+
+// Row of a role while the profile's server connection is closed, so its device is not known.
+const OFFLINE_DETAIL: RoleDetail = { state: { text: 'Offline', tone: 'muted' }, details: '' }
+
+// Row of a role while the device list of the connection is being fetched.
+const LOADING_DETAIL: RoleDetail = { state: { text: 'Loading', tone: 'muted' }, details: '' }
+
+interface EquipmentRowProps {
+	// Role of the row.
+	readonly role: EquipmentRole
+	// Name of the role.
+	readonly label: string
+	// Assigned device, when present on the connection.
+	readonly device?: DeviceSummary
+	// Name of the assigned device, shown without a device to open.
+	readonly name: string
+	// State and readings of the device.
+	readonly detail: RoleDetail
+	// Whether the device can be connected from the row: on the open connection, not connected, and with no request pending.
+	readonly canConnect: boolean
+	// Called after the device was opened.
+	readonly onNavigate: () => void
+}
+
+// One role on two lines: its icon, name, and the state of its device in words, then the device, which opens it in
+// Equipment Control, and its readings, or its Connect while it is not connected.
+function EquipmentRow({ role, label, device, name, detail, canConnect, onNavigate }: EquipmentRowProps) {
+	return (
+		<li className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-2.5 py-1">
+			<Icon name={role === 'GUIDE_OUTPUT' ? 'guideOutput' : CHIP_ICONS[role]} className="size-3.5 text-ink-300" />
+			<span className="min-w-0 truncate text-sm leading-5 text-ink-100">{label}</span>
+			<span className={cn('text-right text-sm leading-5 tabular-nums', TONE_CLASSES[detail.state.tone])}>{detail.state.text}</span>
+			<span className="col-start-2 col-end-4 flex min-w-0 flex-wrap items-baseline gap-x-3 text-xs leading-4">
+				<span className="min-w-0 truncate text-ink-300">
+					<DeviceLink device={device} fallback={name} className="text-ink-300 hover:text-ink-100" onNavigate={onNavigate} />
+				</span>
+				{canConnect && device ? (
+					<LinkButton className="ml-auto text-ink-200 hover:text-accent" title={`Connect ${device.name}`} onClick={() => void switchDevice(deviceState, device.id, true)}>
+						Connect
+					</LinkButton>
+				) : (
+					detail.details && <span className="ml-auto text-right text-ink-200 tabular-nums">{detail.details}</span>
+				)}
+			</span>
+		</li>
+	)
 }
 
 interface OperationRowProps {
@@ -420,15 +504,20 @@ function OperationRow({ operation, devices, now, abortable }: OperationRowProps)
 interface SectionProps {
 	// Heading of the section.
 	readonly title: string
+	// Summary of the section at the end of its heading, such as how many devices are connected; absent for none.
+	readonly aside?: string
 	// Rows of the section.
 	readonly children: ReactNode
 }
 
 // Titled group of rows.
-function Section({ title, children }: SectionProps) {
+function Section({ title, aside, children }: SectionProps) {
 	return (
 		<section className="flex flex-col gap-1">
-			<SectionHeading>{title}</SectionHeading>
+			<div className="flex items-baseline justify-between gap-3">
+				<SectionHeading>{title}</SectionHeading>
+				{aside && <span className="text-xs leading-4 text-ink-300 tabular-nums">{aside}</span>}
+			</div>
 			{children}
 		</section>
 	)

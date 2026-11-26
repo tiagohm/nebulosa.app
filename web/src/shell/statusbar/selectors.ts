@@ -161,7 +161,7 @@ export function roleValue(status: RoleStatus): StatusValue {
 // Returns the state of the event socket as text: online once open, reconnecting after it closed, and connecting
 // before it first opened.
 export function serverLinkLabel(link: ServerLink | undefined) {
-	return link === 'online' ? 'Server online' : link === 'offline' ? 'Reconnecting' : 'Connecting'
+	return link === 'online' ? 'Online' : link === 'offline' ? 'Reconnecting' : 'Connecting'
 }
 
 // Returns the state of the active profile's selected connection as text, such as "Observatory · Connected".
@@ -255,9 +255,23 @@ export interface ChipValue {
 	// Whether the device is moving: slewing, homing, parking, a manual motion, a filter change, or a cover or shutter
 	// opening or closing. Such a chip is the last one left out of a narrow bar.
 	readonly moving: boolean
-	// Full reading, shown as the chip's title and in the details panel, such as "Slewing" or "Position 50000 steps".
+	// Full reading, shown as the chip's title, such as "Slewing" or "Position 50000 steps".
 	readonly title: string
+	// State of the device in words, the first line of its row in the details panel, such as "Exposing", "Tracking", "Idle",
+	// or the name of the filter in place.
+	readonly state: string
+	// Readings that follow the state in the details panel, with their names and units, such as "Sensor -10.2°C · Cooler
+	// 45%"; empty when the device has none.
+	readonly details: string
 }
+
+// Returns the readings of the details panel joined in order, those the device does not have right now left out.
+function detailsText(readings: readonly (string | undefined | false)[]) {
+	return readings.filter(Boolean).join(' · ')
+}
+
+// Reading of a connected device whose driver has reported no state yet.
+const UNREPORTED: ChipValue = { text: '', tone: 'muted', moving: false, title: 'State not reported', state: 'Connected', details: 'State not reported' }
 
 // Readings of a chip by field; a reading the device does not have right now is absent.
 type ChipReadings = Partial<Record<StatusChipField, string>>
@@ -293,59 +307,63 @@ export function cameraChip(state: Partial<Pick<CameraCapabilities, 'temperature'
 	const status = capture ? CAPTURE_PHASE_STATUS[capture.phase] : state?.exposing ? 'Exposing' : undefined
 	const temperature = temperatureText(state?.temperature)
 	const cooler = state?.cooler && Number.isFinite(state.cooler.power) ? `${Math.round(state.cooler.power)}%` : undefined
-	const title = [status, temperature && `Sensor ${temperature}`, cooler && `Cooler ${cooler}`].filter(Boolean).join(' · ') || 'Connected'
-	return { ...chipReading({ status, temperature, cooler }, fields, status ? 'active' : 'idle'), moving: false, title }
+	const details = detailsText([temperature && `Sensor ${temperature}`, cooler && `Cooler ${cooler}`])
+	const title = detailsText([status, details]) || 'Connected'
+	return { ...chipReading({ status, temperature, cooler }, fields, status ? 'active' : 'idle'), moving: false, title, state: status ?? 'Idle', details }
 }
 
 // Returns the reading of a mount: its motion (mountMotion), otherwise parked, then tracking, then idle, and its
 // reported equatorial coordinates of date.
 export function mountChip(state: (Pick<MountState, 'parking' | 'homing' | 'slewing' | 'moving' | 'parked' | 'tracking'> & Partial<Pick<MountState, 'rightAscension' | 'declination'>>) | undefined, fields: readonly StatusChipField[] = DEFAULT_STATUS_CHIPS.MOUNT.fields): ChipValue {
-	if (!state) return { text: '', tone: 'muted', moving: false, title: 'State not reported' }
+	if (!state) return UNREPORTED
 	const motion = mountMotion(state)
 	const status = motion ?? (state.parked ? 'Parked' : state.tracking ? 'Tracking' : 'Idle')
-	const coordinates = state.rightAscension !== undefined && state.declination !== undefined ? `${formatRA(normalizeAngle(state.rightAscension), false)} ${formatDEC(state.declination, false)}` : undefined
-	return { ...chipReading({ status, coordinates }, fields, motion ? 'active' : status === 'Tracking' ? 'ok' : 'idle'), moving: !!motion, title: coordinates ? `${status} · ${coordinates}` : status }
+	const { rightAscension, declination } = state
+	const position = rightAscension !== undefined && declination !== undefined ? [formatRA(normalizeAngle(rightAscension), false), formatDEC(declination, false)] : undefined
+	const coordinates = position?.join(' ')
+	return { ...chipReading({ status, coordinates }, fields, motion ? 'active' : status === 'Tracking' ? 'ok' : 'idle'), moving: !!motion, title: coordinates ? `${status} · ${coordinates}` : status, state: status, details: position ? `RA ${position[0]} · Dec ${position[1]}` : '' }
 }
 
 // Returns the reading of a focuser: "Moving" while it moves, its position in steps, and its temperature.
 export function focuserChip(state: Pick<FocuserState, 'moving' | 'position' | 'temperature'> | undefined, fields: readonly StatusChipField[] = DEFAULT_STATUS_CHIPS.FOCUSER.fields): ChipValue {
-	if (!state) return { text: '', tone: 'muted', moving: false, title: 'State not reported' }
+	if (!state) return UNREPORTED
 	const temperature = temperatureText(state.temperature)
-	const title = `${state.moving ? 'Moving · ' : ''}Position ${state.position.value} steps${temperature ? ` · ${temperature}` : ''}`
-	return { ...chipReading({ status: state.moving ? 'Moving' : undefined, position: String(state.position.value), temperature }, fields, state.moving ? 'active' : 'idle'), moving: state.moving, title }
+	const details = detailsText([`Position ${state.position.value} steps`, temperature])
+	const title = `${state.moving ? 'Moving · ' : ''}${details}`
+	return { ...chipReading({ status: state.moving ? 'Moving' : undefined, position: String(state.position.value), temperature }, fields, state.moving ? 'active' : 'idle'), moving: state.moving, title, state: state.moving ? 'Moving' : 'Idle', details }
 }
 
 // Returns the reading of a filter wheel: "Changing" while it changes filter, otherwise the name of the filter at its
 // 0-based slot, or the 1-based slot number when the driver names none.
 export function wheelChip(state: Pick<WheelState, 'moving' | 'position' | 'names'> | undefined, fields: readonly StatusChipField[] = DEFAULT_STATUS_CHIPS.FILTER_WHEEL.fields): ChipValue {
-	if (!state) return { text: '', tone: 'muted', moving: false, title: 'State not reported' }
-	if (state.moving) return { ...chipReading({ status: 'Changing' }, fields, 'active'), moving: true, title: 'Changing filter' }
+	if (!state) return UNREPORTED
+	if (state.moving) return { ...chipReading({ status: 'Changing' }, fields, 'active'), moving: true, title: 'Changing filter', state: 'Changing filter', details: '' }
 	const slot = `#${state.position + 1}`
 	const name = state.names[state.position]
-	return { text: chipText({ filter: name || slot }, fields), tone: 'idle', moving: false, title: name ? `${slot} · ${name}` : slot }
+	return { text: chipText({ filter: name || slot }, fields), tone: 'idle', moving: false, title: name ? `${slot} · ${name}` : slot, state: name || slot, details: name ? `Slot ${state.position + 1}` : '' }
 }
 
 // Returns the reading of a rotator: "Moving" while it moves, and its mechanical angle in degrees (not a sky position
 // angle).
 export function rotatorChip(state: Pick<RotatorState, 'moving' | 'angle'> | undefined, fields: readonly StatusChipField[] = DEFAULT_STATUS_CHIPS.ROTATOR.fields): ChipValue {
-	if (!state) return { text: '', tone: 'muted', moving: false, title: 'State not reported' }
+	if (!state) return UNREPORTED
 	const angle = `${formatFixed(state.angle.value, 1)}°`
-	return { ...chipReading({ status: state.moving ? 'Moving' : undefined, angle }, fields, state.moving ? 'active' : 'idle'), moving: state.moving, title: `${state.moving ? 'Moving · ' : ''}Mechanical angle ${angle}` }
+	return { ...chipReading({ status: state.moving ? 'Moving' : undefined, angle }, fields, state.moving ? 'active' : 'idle'), moving: state.moving, title: `${state.moving ? 'Moving · ' : ''}Mechanical angle ${angle}`, state: state.moving ? 'Moving' : 'Idle', details: `Mechanical angle ${angle}` }
 }
 
 // Returns the reading of a dust cover: closed (parked), open, or moving.
 export function coverChip(state: Pick<CoverState, 'parked' | 'parking'> | undefined, fields: readonly StatusChipField[] = DEFAULT_STATUS_CHIPS.COVER.fields): ChipValue {
-	if (!state) return { text: '', tone: 'muted', moving: false, title: 'State not reported' }
-	if (state.parking) return { ...chipReading({ status: 'Moving' }, fields, 'active'), moving: true, title: 'Moving' }
+	if (!state) return UNREPORTED
+	if (state.parking) return { ...chipReading({ status: 'Moving' }, fields, 'active'), moving: true, title: 'Moving', state: 'Moving', details: '' }
 	const status = state.parked ? 'Closed' : 'Open'
-	return { text: chipText({ status }, fields), tone: 'idle', moving: false, title: status }
+	return { text: chipText({ status }, fields), tone: 'idle', moving: false, title: status, state: status, details: '' }
 }
 
 // Returns the reading of a flat panel: its light on or off, and, while on, its brightness in the driver's units.
 export function flatPanelChip(state: Pick<FlatPanelState, 'enabled' | 'intensity'> | undefined, fields: readonly StatusChipField[] = DEFAULT_STATUS_CHIPS.FLAT_PANEL.fields): ChipValue {
-	if (!state) return { text: '', tone: 'muted', moving: false, title: 'State not reported' }
+	if (!state) return UNREPORTED
 	const brightness = state.enabled ? String(state.intensity.value) : undefined
-	return { text: chipText({ status: state.enabled ? 'On' : 'Off', brightness }, fields), tone: 'idle', moving: false, title: brightness ? `On · brightness ${brightness}` : 'Off' }
+	return { text: chipText({ status: state.enabled ? 'On' : 'Off', brightness }, fields), tone: 'idle', moving: false, title: brightness ? `On · brightness ${brightness}` : 'Off', state: state.enabled ? 'On' : 'Off', details: brightness ? `Brightness ${brightness}` : '' }
 }
 
 // Text of each shutter state of a dome; an unknown one shows nothing.
@@ -357,7 +375,7 @@ const SHUTTER_TEXT: Readonly<Partial<Record<DomeState['shutterState'], string>>>
 // own after the one that changed them, so reading it would show a rotation for an instant as a shutter stops. A shutter
 // opening or closing on a dome that does not rotate is said once, as the status.
 export function domeChip(state: Pick<DomeState, 'moving' | 'homing' | 'parking' | 'parked' | 'hasShutter' | 'shutterState' | 'azimuth'> | undefined, fields: readonly StatusChipField[] = DEFAULT_STATUS_CHIPS.DOME.fields): ChipValue {
-	if (!state) return { text: '--', tone: 'muted', moving: false, title: 'State not reported' }
+	if (!state) return { ...UNREPORTED, text: '--' }
 	const shutterMoving = state.hasShutter && (state.shutterState === 'OPENING' || state.shutterState === 'CLOSING')
 	const azimuth = formatDegrees(state.azimuth.value, 1)
 	const rotation = state.parking ? 'Parking' : state.homing ? 'Homing' : state.moving ? 'Moving' : state.parked ? 'Parked' : undefined
@@ -367,17 +385,19 @@ export function domeChip(state: Pick<DomeState, 'moving' | 'homing' | 'parking' 
 	const shutter = state.hasShutter ? ` · shutter ${state.shutterState.toLowerCase()}` : ''
 	const tone: StatusTone = state.hasShutter && state.shutterState === 'ERROR' ? 'error' : moving ? 'active' : 'idle'
 	const readings = shutterOnly ? { status: shutterText, azimuth } : { status: rotation, shutter: shutterText, azimuth }
-	return { ...chipReading(readings, fields, tone), moving, title: `${rotation ?? `Azimuth ${azimuth}`}${shutter}` }
+	const details = detailsText([`Azimuth ${azimuth}`, !shutterOnly && shutterText !== undefined && `Shutter ${shutterText.toLowerCase()}`])
+	return { ...chipReading(readings, fields, tone), moving, title: `${rotation ?? `Azimuth ${azimuth}`}${shutter}`, state: (shutterOnly ? shutterText : rotation) ?? 'Idle', details }
 }
 
 // Returns the reading of a guide camera: its running session (see guidingValue), or "Not guiding" while it does not
 // guide, and its sensor temperature when the driver reports a finite one.
 export function guideChip(session: GuidingSessionSummary | undefined, state?: Pick<CameraCapabilities, 'temperature'>, fields: readonly StatusChipField[] = DEFAULT_STATUS_CHIPS.GUIDE_CAMERA.fields): ChipValue {
 	const temperature = temperatureText(state?.temperature)
-	if (!session) return { text: chipText({ status: 'Not guiding', temperature }, fields), tone: 'idle', moving: false, title: 'Not guiding' }
+	const sensor = temperature && `Sensor ${temperature}`
+	if (!session) return { text: chipText({ status: 'Not guiding', temperature }, fields), tone: 'idle', moving: false, title: 'Not guiding', state: 'Not guiding', details: detailsText([sensor]) }
 	const value = guidingValue(session)
 	const label = GUIDING_STATE_LABELS[session.state]
-	return { ...chipReading({ status: value.text, temperature }, fields, value.tone), moving: false, title: value.text === label ? label : `${label} · ${value.text}` }
+	return { ...chipReading({ status: value.text, temperature }, fields, value.tone), moving: false, title: value.text === label ? label : `${label} · ${value.text}`, state: label, details: detailsText([value.text !== label && value.text, sensor]) }
 }
 
 // Role statuses of an assigned device that is not connected.
@@ -388,7 +408,7 @@ export type AbsentStatus = Exclude<RoleStatus, 'notSelected' | 'connected'>
 // kept in view like a moving one; one disconnected, failed, or missing from the connection is a failure.
 export function absentChip(status: AbsentStatus): ChipValue {
 	const switching = status === 'connecting' || status === 'disconnecting'
-	return { text: ROLE_STATUS_LABELS[status], tone: switching ? 'active' : 'error', moving: switching, title: ROLE_STATUS_LABELS[status] }
+	return { text: ROLE_STATUS_LABELS[status], tone: switching ? 'active' : 'error', moving: switching, title: ROLE_STATUS_LABELS[status], state: ROLE_STATUS_LABELS[status], details: '' }
 }
 
 // Sessions that read through a device chip.
@@ -566,11 +586,23 @@ export function fitClocks(clocks: readonly BarClock[], items: readonly BarItem[]
 	return shown
 }
 
-// Returns the value of a role's device for the details panel: the role status while it is not connected, otherwise
-// the full reading of its chip (see roleChip), in the active tone while it moves.
-export function roleDetailValue(role: EquipmentRole, status: RoleStatus, device: Pick<DeviceSummary, 'id' | 'connectionId' | 'connected'> | undefined, control: Pick<ControlRuntime, 'watched' | 'states'>, sessions?: ChipSessions): StatusValue {
-	const chip = status === 'connected' && role !== 'GUIDE_OUTPUT' ? roleChip(role, device, control, sessions) : undefined
-	return chip ? { text: chip.title, tone: chip.moving ? 'active' : chip.tone } : roleValue(status)
+// Row of a role's device in the details panel.
+export interface RoleDetail {
+	// State of the device in words, with its tone: what it is doing while connected (see ChipValue.state), in the active
+	// tone while it moves, otherwise its role status.
+	readonly state: StatusValue
+	// Readings that follow the state, such as "Sensor -10.2°C · Cooler 45%"; empty when there are none.
+	readonly details: string
+}
+
+// Returns the row of a role's assigned device for the details panel. A connected device says what it does and what it
+// reads, from its chip (see roleChip). One that is not connected says its role status in the tone its chip has, since the
+// Equipment Setup says it is in use, except a guide output, which is absent until its mount or camera connects.
+export function roleDetail(role: EquipmentRole, status: AssignedStatus, device: Pick<DeviceSummary, 'id' | 'connectionId' | 'connected'> | undefined, control: Pick<ControlRuntime, 'watched' | 'states'>, sessions?: ChipSessions): RoleDetail {
+	if (role === 'GUIDE_OUTPUT') return { state: roleValue(status), details: '' }
+	const chip = status === 'connected' ? roleChip(role, device, control, sessions) : absentChip(status)
+	if (!chip) return { state: roleValue('disconnected'), details: '' }
+	return { state: { text: chip.state, tone: chip.moving ? 'active' : chip.tone }, details: chip.details }
 }
 
 // Returns the time an operation has run, from its start in Unix milliseconds to now in Unix milliseconds, as

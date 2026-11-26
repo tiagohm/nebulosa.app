@@ -21,7 +21,8 @@ Target Centering gives the operator and the automations a verified position, and
 - Takes its frames through the shared camera capturer with the camera settings of Camera Acquisition and its own exposure time; frames are auxiliary and recorded in the [Capture Frames](capture-frames.md) registry.
 - Solves each frame with [Plate Solving](plate-solving.md), whose settings are fixed when the session starts.
 - Suspends the [Guiding](guiding.md) through the setup's guide output, which drives its mount, before moving it, keeps it from starting meanwhile, and restores it afterwards.
-- The target is typed or selected in the [Sky Map](sky-map.md); the orientation is typed or taken from the latest solved frame of the camera tab, the same position angle of the image top the Plate Solver shows and [Framing](framing.md) calls rotation.
+- The target is typed or selected in the [Sky Map](sky-map.md); the orientation is typed, taken from the latest solved frame of the camera tab, or taken from the rotation of a saved [Framing](framing.md), the same position angle of the image top the Plate Solver shows.
+- The Sky's framings and the [Plate Solving](plate-solving.md) of any solved image hand a target with its orientation to the form of the Main Camera (Center Here, Center on This Frame), which only fills it and shows the tool.
 - The [Meridian Flip Executor](meridian-flip-executor.md) composes it inside its reservation after a flip.
 - An [Equipment Control](equipment-control.md) stop of any device it holds cancels it, and its outcome raises a [notification](notifications.md).
 - A rotation is a new context for [Guiding](guiding.md), which derives its calibration for it when the guide camera turns with the rotator.
@@ -36,6 +37,7 @@ Target Centering gives the operator and the automations a verified position, and
 - A verified position with guiding not restored is not ready for imaging, so an automation must not go on as if the whole workflow succeeded.
 - An orientation is verified only by the same frame as the position, taken after the last motion of the mount or of the rotator.
 - The rotator is closed-loop on the sky: its angle is never synced, homed, or reversed, and only its rotation sense is learned, from a check that the field turned with it; a rotator that does not turn the field ends the session.
+- A Center that verified an orientation keeps the offset of the position angle for the rotator, modulo a half turn, and a later Center allowing the half turn turns the rotator while the mount slews; the first frame after it still verifies, and a stale offset costs only the usual rotation.
 - A position angle and the one opposite frame the same field by default, so the rotator turns at most a quarter turn and a meridian flip keeps the orientation without turning it.
 - An orientation outside the rotator's limits is refused before any rotation; an alt-az mount is refused, its field turning all the time; Center of an orientation without a rotator is refused, and Verify Only measures it with none.
 - Flats must be taken after the final framing: a rotation turns the camera on the telescope.

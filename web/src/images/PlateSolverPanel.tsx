@@ -4,6 +4,8 @@ import { imageTopPositionAngle } from 'nebulosa/src/astrometry/wcs/orientation'
 import { type ReactNode, useEffect, useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { analysisElapsed, isActive } from '../analysis'
+import { targetCenteringRuntime } from '../camera/targetcentering'
+import { sendToTargetCentering, targetCenteringHandoffBlocker } from '../camera/targetcentering.handoff'
 import { controlRuntime, sendCommand, watchedDeviceState } from '../equipment-control/control'
 import { roleAvailability } from '../equipment/availability'
 import { useRoleDevice } from '../equipment/useEquipment'
@@ -81,7 +83,7 @@ export function PlateSolverPanel({ document, view, camera, onOpen }: ImageToolPa
 		)
 	}
 
-	return <PlateSolver documentKey={document.key} imageId={document.info?.id} image={document.info} name={document.name} plateSolving={view.plateSolving} astrometry={view.astrometry} unavailable={imageUnavailableReason(document)} camera={camera?.settings} />
+	return <PlateSolver documentKey={document.key} imageId={document.info?.id} image={document.info} acquisition={document.info?.acquisition} name={document.name} plateSolving={view.plateSolving} astrometry={view.astrometry} unavailable={imageUnavailableReason(document)} camera={camera?.settings} />
 }
 
 interface PlateSolverProps {
@@ -91,6 +93,8 @@ interface PlateSolverProps {
 	readonly imageId?: string
 	// Size of its image, in pixels; absent until it has one.
 	readonly image?: { readonly width: number; readonly height: number }
+	// What the header of its image says of the object and the camera; absent until it has one.
+	readonly acquisition?: FrameAcquisition
 	// Name of the document.
 	readonly name: string
 	// Plate solving request, solution shown, and overlay of the document.
@@ -105,7 +109,7 @@ interface PlateSolverProps {
 
 // Sections of the Plate Solver panel of a document: Solve Image and the latest solve always, then the settings until a
 // solution is shown, or the solution and its tools once one is, with the settings folded.
-function PlateSolver({ documentKey, imageId, image, name, plateSolving, astrometry, unavailable, camera }: PlateSolverProps) {
+function PlateSolver({ documentKey, imageId, image, acquisition, name, plateSolving, astrometry, unavailable, camera }: PlateSolverProps) {
 	const state = useSnapshot(plateSolvingState)
 	const profiles = useSnapshot(profileState)
 	const { settings } = activeProfile(profiles)
@@ -150,7 +154,7 @@ function PlateSolver({ documentKey, imageId, image, name, plateSolving, astromet
 		<>
 			{execution}
 			<SolveSettings request={request} onChange={edit} offered={offered} />
-			<Solution job={shown} latest={plateSolving.selected === undefined ? latest : undefined} solution={solution} style={coordinates} />
+			<Solution job={shown} latest={plateSolving.selected === undefined ? latest : undefined} solution={solution} style={coordinates} name={name} acquisition={acquisition} />
 			{shown && result && <SolverDetails result={result} solution={solution} />}
 			<Solutions documentKey={documentKey} imageId={imageId} selected={plateSolving.selected} />
 			<MountSync solution={solution} />
@@ -332,11 +336,23 @@ interface SolutionProps {
 	readonly solution: PlateSolution
 	// How the centre is written.
 	readonly style: CoordinateStyle
+	// Name of the document.
+	readonly name: string
+	// What the header of the image says of the object and the camera.
+	readonly acquisition?: FrameAcquisition
+}
+
+// What the header of an image says of what it shows and what took it.
+interface FrameAcquisition {
+	// Object (OBJECT).
+	readonly object?: string
+	// Camera (INSTRUME).
+	readonly camera?: string
 }
 
 // Centre of the solution shown as the one Readout of the panel, then its scale, orientation, parity, and field, with
-// where it comes from.
-function Solution({ job, latest, solution, style }: SolutionProps) {
+// where it comes from, and Center on This Frame.
+function Solution({ job, latest, solution, style, name, acquisition }: SolutionProps) {
 	const timeZone = useActiveTimeZone()
 	// At the center of the image, as Target Centering takes it from a solved frame.
 	const topAngle = imageTopPositionAngle(solution, (solution.widthInPixels + 1) / 2, (solution.heightInPixels + 1) / 2)
@@ -362,7 +378,49 @@ function Solution({ job, latest, solution, style }: SolutionProps) {
 				<DataRow label="PA of Image Top">{formatPositionAngle(topAngle)}</DataRow>
 				<DataRow label="Parity">{solution.parity === 'NORMAL' ? 'Normal' : 'Flipped'}</DataRow>
 			</div>
+			{topAngle !== undefined && <CenterOnFrame solution={solution} positionAngle={topAngle} name={name} acquisition={acquisition} />}
 		</CollapsibleSection>
+	)
+}
+
+interface CenterOnFrameProps {
+	// Solution of the frame.
+	readonly solution: PlateSolution
+	// Position angle of the image top at its center, in radians.
+	readonly positionAngle: number
+	// Name of the document.
+	readonly name: string
+	// What the header of the image says of the object and the camera.
+	readonly acquisition?: FrameAcquisition
+}
+
+// Center on This Frame: fills the Target Centering of the Main Camera with the solved center of the frame and the position
+// angle of its image top, so a project goes on framed as it was, and shows it; nothing moves until Center is confirmed
+// there. A mirrored frame of another camera is pointed out, since the Main Camera would frame it unmirrored.
+function CenterOnFrame({ solution, positionAngle, name, acquisition }: CenterOnFrameProps) {
+	const images = useSnapshot(imagesState)
+	const centering = useSnapshot(targetCenteringRuntime)
+	const mainCamera = useRoleDevice('MAIN_CAMERA').device
+	const camera = mainCamera && { connectionId: mainCamera.connectionId, deviceId: mainCamera.id }
+	const blocker = targetCenteringHandoffBlocker(images.documents, centering, camera)
+	// A camera tab is named after its camera, which names no object.
+	const label = acquisition?.object?.trim() || (name !== acquisition?.camera ? name : undefined)
+	const otherCamera = acquisition?.camera !== undefined && mainCamera !== undefined && acquisition.camera !== mainCamera.name
+
+	return (
+		<>
+			<Actions>
+				<Button
+					variant="secondary"
+					disabled={blocker !== undefined}
+					title={blocker ?? `Fill the Target Centering of ${mainCamera?.name ?? 'the Main Camera'} with the center of this frame and its orientation`}
+					onClick={() => camera && sendToTargetCentering(camera, { rightAscension: solution.rightAscension, declination: solution.declination, label, oriented: true, positionAngle, orientationSource: `the solved image ${name}` })}
+				>
+					Center on This Frame
+				</Button>
+			</Actions>
+			{solution.parity === 'FLIPPED' && otherCamera && <Notice warning>This frame is mirrored and was taken by another camera: the Main Camera frames the same field unmirrored.</Notice>}
+		</>
 	)
 }
 

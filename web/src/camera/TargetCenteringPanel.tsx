@@ -1,6 +1,7 @@
 import type { DeviceSummary, TargetCenteringSessionSummary } from 'api'
 import { imageTopPositionAngle } from 'nebulosa/src/astrometry/wcs/orientation'
 import { deg, toArcsec, toDeg } from 'nebulosa/src/math/units/angle'
+import { useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { controlRuntime, watchedDeviceState } from '../equipment-control/control'
 import { DeviceLink } from '../equipment-control/DeviceLink'
@@ -8,6 +9,7 @@ import { deviceAvailability, type RoleAvailability, roleAvailability } from '../
 import { EquipmentSetupButton } from '../equipment/EquipmentSetupButton'
 import type { RoleDevice } from '../equipment/useEquipment'
 import { formatAngularSize, formatExposureTime, formatFixed, formatSignedAngle, MISSING } from '../format'
+import { framingsState, sortedFramings } from '../framing/framings'
 import { operationsState } from '../operations'
 import { CameraPlateSolvingSection } from '../platesolving/CameraPlateSolvingSection'
 import { type CoordinateStyle, formatDeclinationAs, formatRightAscensionAs } from '../platesolving/coordinates'
@@ -27,6 +29,7 @@ import { DataList, DataRow } from '../ui/DataRow'
 import { LinkButton } from '../ui/LinkButton'
 import { Notice } from '../ui/Notice'
 import { NumberInput } from '../ui/NumberInput'
+import { Select } from '../ui/Select'
 import { Cell, Row, Table, type TableColumn } from '../ui/Table'
 import { CameraAcquisitionSection } from './CameraAcquisitionSection'
 import { cameraKey } from './capture'
@@ -53,6 +56,7 @@ import {
 	targetCenteringStale,
 	targetCenteringStateText,
 } from './targetcentering'
+import { framingAngle, setTargetCenteringDraft } from './targetcentering.handoff'
 import { TargetCenteringBullseye } from './TargetCenteringBullseye'
 
 // Contextual panel sections of Target Centering, a camera operation of the Images camera tabs. The session leads with its
@@ -130,6 +134,11 @@ export function TargetCenteringSections({ device, availability, mount, guideOutp
 	// Latest solution of the frame the tab shows, whose orientation the form can take.
 	const latest = usePlateSolution(imageId).solution
 	const latestAngle = latest && imageTopPositionAngle(latest, (latest.widthInPixels + 1) / 2, (latest.heightInPixels + 1) / 2)
+	// Saved framings, whose rotation is the position angle of the image top they plan; the Equipment Setup's are never saved.
+	const framingsSnapshot = useSnapshot(framingsState)
+	const framings = sortedFramings(framingsSnapshot)
+	const [framingId, setFramingId] = useState<string>()
+	const framing = framings.find(({ id }) => id === framingId) ?? framings[0]
 	// Mount whose own page fixes the blocker (disconnected, no site, parked, no tracking), rather than the equipment setup.
 	const blockingMount = !running && availability.status === 'ready' && mountAvailability.status !== 'notSelected' && mountAvailability.status !== 'busy' && targetCenteringMountBlocker('center', mountAvailability, mountState) !== undefined ? mount.device : undefined
 	const catalog = catalogTarget(sky.selection)
@@ -145,9 +154,7 @@ export function TargetCenteringSections({ device, availability, mount, guideOutp
 
 	// Replaces the target being edited, clearing a refusal that spoke for the previous one.
 	function edit(next: TargetCenteringDraft) {
-		if (!key) return
-		targetCenteringRuntime.drafts[key] = next
-		delete targetCenteringRuntime.errors[key]
+		if (key) setTargetCenteringDraft(targetCenteringRuntime, key, next)
 	}
 
 	function run(mode: 'center' | 'verifyOnly') {
@@ -241,12 +248,37 @@ export function TargetCenteringSections({ device, availability, mount, guideOutp
 				<Checkbox label="Set orientation" checked={running && session ? session.request.orientation !== undefined : draft?.oriented === true} disabled={locked} onChange={(oriented) => edit({ ...draft, oriented, positionAngle: draft?.positionAngle ?? 0 })} />
 				{(running && session ? session.request.orientation !== undefined : draft?.oriented) && (
 					<>
-						<NumberInput label="PA of Image Top (N→E)" value={toDeg((running && session ? session.request.orientation?.positionAngle : draft?.positionAngle) ?? 0)} min={0} max={359.99} step={0.1} suffix="°" disabled={locked} onChange={(angle) => edit({ ...draft, positionAngle: deg(angle) })} />
+						<NumberInput
+							label="PA of Image Top (N→E)"
+							value={toDeg((running && session ? session.request.orientation?.positionAngle : draft?.positionAngle) ?? 0)}
+							min={0}
+							max={359.99}
+							step={0.1}
+							suffix="°"
+							disabled={locked}
+							onChange={(angle) => edit({ ...draft, positionAngle: deg(angle), orientationSource: undefined })}
+						/>
+						{!running && draft?.orientationSource && <p className="m-0 text-xs leading-4 text-ink-300">From {draft.orientationSource}</p>}
 						<Actions>
-							<Button variant="secondary" disabled={locked || latestAngle === undefined} title={latestAngle === undefined ? 'The frame shown has no solution' : undefined} onClick={() => latestAngle !== undefined && edit({ ...draft, positionAngle: latestAngle })}>
+							<Button
+								variant="secondary"
+								disabled={locked || latestAngle === undefined}
+								title={latestAngle === undefined ? 'The frame shown has no solution' : undefined}
+								onClick={() => latestAngle !== undefined && edit({ ...draft, positionAngle: latestAngle, orientationSource: 'the latest solved frame' })}
+							>
 								Use Latest Solved Frame
 							</Button>
 						</Actions>
+						{framing && (
+							<>
+								<Select label="Framing" options={framings.map(({ id }) => id)} value={framing.id} format={(id) => framingLabel(framings.find((each) => each.id === id))} disabled={locked} onChange={setFramingId} />
+								<Actions>
+									<Button variant="secondary" disabled={locked} title="Takes the rotation of the framing as the position angle of the image top" onClick={() => edit({ ...draft, positionAngle: framingAngle(framing.rotation), orientationSource: `framing ${framing.name}` })}>
+										Use Framing
+									</Button>
+								</Actions>
+							</>
+						)}
 						{latest?.parity === 'FLIPPED' && <Notice warning>The frame shown is mirrored. A position angle taken from Framing describes an unmirrored field.</Notice>}
 						<Notice>{rotator?.device ? `Center turns ${rotator.device.name}; Verify Only measures without turning it.` : 'Verify Only measures the orientation; Center needs a Rotator in the Equipment Setup.'} Take flats after the final framing: a rotation turns the camera on the telescope.</Notice>
 					</>
@@ -311,6 +343,11 @@ export function TargetCenteringSections({ device, availability, mount, guideOutp
 // Formats an altitude in radians as degrees to a tenth.
 function formatDegrees(angle: number) {
 	return `${formatFixed(toDeg(angle), 1)}°`
+}
+
+// Returns the option of a framing in the picker: its name and rotation.
+function framingLabel(framing: { readonly name: string; readonly rotation: number } | undefined) {
+	return framing ? `${framing.name} · PA ${formatFixed(framing.rotation, 1)}°` : ''
 }
 
 // Returns the summary of an orientation: its position angle in degrees, or Off without one.

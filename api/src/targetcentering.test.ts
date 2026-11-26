@@ -700,8 +700,53 @@ describe('orientation', () => {
 		await start(request({ target: offsetTarget(arcmin(2)), orientation: { positionAngle: requested(rotator.angle.value), tolerance: deg(0.5), halfTurn: true }, rotator: rotatorDevice }))
 		await waitUntil(() => summary().sessionId !== first.sessionId && summary().endedAt !== undefined)
 		const second = summary()
+		// The offset the first one measured turns the rotator before the first frame, which verifies both.
 		expect(second).toMatchObject({ state: 'completed', orientationVerified: true, sense: -1, senseSource: 'stored' })
-		expect(second.attempts.filter((attempt) => attempt.rotation !== undefined)).toHaveLength(1)
+		expect(second.preRotation).toBeDefined()
+		expect(Math.abs(second.attempts[0].positionAngleError!)).toBeLessThan(deg(0.5))
+		expect(second.attempts.filter((attempt) => attempt.rotation !== undefined)).toHaveLength(0)
+		// φ = PA − s·M = (−M + 30) + M = 30.
+		expect(senses.get('positionAngle', camera, rotator)?.offset).toBeCloseTo(30, 3)
+	})
+
+	test('the rotator turns while the mount slews, and only when the half turn is allowed', async () => {
+		const { start, request, ended, summary, withRotator, offsetTarget, id, rotatorId, senses, camera, events } = await setup()
+		const rotator = await withRotator(1, 10)
+		const rotatorDevice = { connectionId: id, deviceId: rotatorId }
+		// A sense and an offset known from an earlier session: PA = M + 10.
+		senses.learned('positionAngle', camera, rotator, 1, undefined, 1, Date.now())
+		senses.offsetMeasured(camera, rotator, 10, Date.now())
+		const target = (angle: number) => deg((((angle + 10 + 60) % 360) + 360) % 360)
+
+		const from = rotator.angle.value
+		await start(request({ target: offsetTarget(deg(2)), orientation: { positionAngle: target(from), tolerance: deg(0.5), halfTurn: true }, rotator: rotatorDevice }))
+		await ended()
+		const slewed = summary()
+		expect(slewed).toMatchObject({ state: 'completed', orientationVerified: true, preRotation: { from } })
+		expect(slewed.preRotation!.to).toBeCloseTo(from + 60, 6)
+		// The pre-rotation was published while slewing, before any frame.
+		const announced = events.find((event) => event.session.sessionId === slewed.sessionId && event.session.preRotation !== undefined)!
+		expect(announced.session).toMatchObject({ step: 'slewing', attempts: [] })
+		expect(slewed.attempts.filter((attempt) => attempt.rotation !== undefined)).toHaveLength(0)
+
+		await start(request({ target: offsetTarget(arcmin(2)), orientation: { positionAngle: target(rotator.angle.value), tolerance: deg(0.5), halfTurn: false }, rotator: rotatorDevice }))
+		await waitUntil(() => summary().sessionId !== slewed.sessionId && summary().endedAt !== undefined)
+		expect(summary().preRotation).toBeUndefined()
+		expect(summary()).toMatchObject({ state: 'completed', orientationVerified: true })
+	})
+
+	test('a pre-rotation that fails ends the session with the mount stopped', async () => {
+		const { start, request, ended, summary, withRotator, offsetTarget, id, rotatorId, senses, camera, mount } = await setup()
+		const rotator = await withRotator(1, 0)
+		senses.learned('positionAngle', camera, rotator, 1, undefined, 1, Date.now())
+		senses.offsetMeasured(camera, rotator, 0, Date.now())
+		const move = spyOn(RotatorCommander.prototype, 'moveTo').mockResolvedValue(failedOperationResult('alert', 'rotator jammed'))
+
+		await start(request({ target: offsetTarget(deg(2)), orientation: { positionAngle: deg((rotator.angle.value + 45) % 360), tolerance: deg(0.5), halfTurn: true }, rotator: { connectionId: id, deviceId: rotatorId } }))
+		await ended()
+		move.mockRestore()
+		expect(summary()).toMatchObject({ state: 'failed', reason: 'alert', attempts: [] })
+		expect(isDeviceQuiescent(mount)).toBeTrue()
 	})
 
 	test('the session holds the rotator, and a stop of it from Equipment Control cancels the session', async () => {

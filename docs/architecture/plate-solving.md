@@ -21,7 +21,7 @@ One service gives all of them the same solve, hints, and acceptance rules.
 - Its index folder defaults to a folder of the data directory, into which the settings of the built-in solver download bands of `.nqi` tiles built from a star database (ASTAP D20) and shared on Google Drive; they recommend the bands that suit the field of view of the Equipment Setup and of each [Framing](framing.md).
 - On a camera tab the settings belong to the physical camera and are shared with the operations of that camera.
 - The toolkit (`core`) parses and proves the WCS and does the spherical geometry.
-- Sync Mount syncs the mount of the active equipment setup on the solution shown, through the mount commands; Target Offset may take its target from the [Sky Map](sky-map.md) selection.
+- Sync Mount syncs the mount of the active equipment setup on the solution shown, through the mount commands; Target Offset may take its target from the [Sky Map](sky-map.md) selection; Center on This Frame hands the solved center and the position angle of the image top to the [Target Centering](target-centering.md) form of the Main Camera, moving nothing.
 
 ## Rules and Limitations
 

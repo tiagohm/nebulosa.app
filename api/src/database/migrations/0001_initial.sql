@@ -407,6 +407,10 @@ CREATE TABLE rotator_senses (
 	parity TEXT CHECK (parity IN ('NORMAL', 'FLIPPED')),
 	-- Evidence of the check that learned it: turn of the image per commanded turn, about 1; NULL when unknown.
 	gain REAL,
+	-- Offset φ of positionAngle, PA of the image top minus sense times the mechanical angle, in degrees within [0, 180)
+	-- (a meridian flip adds 180°), measured by the last Center that verified an orientation; NULL until then, and cleared
+	-- whenever the sense is learned again.
+	offset REAL CHECK (offset >= 0 AND offset < 180),
 	-- When it was learned, Unix milliseconds (UTC).
 	learned_at INTEGER NOT NULL,
 	-- When a check last confirmed it, Unix milliseconds (UTC); NULL when never.

@@ -19,11 +19,11 @@ It is the one source of fields of view for every tool that applies one, so a cam
 - Proxies CDS hips2fits cutouts of the surveys bundled by `bun make:surveys` from the CDS MocServer.
 - Persists the framings in the database and publishes every change (see [Persistence and State](persistence-and-state.md)).
 - Centers its preview on a catalog search, typed coordinates, the [Sky Map](sky-map.md) selection (Open in Framing, also from the [Moon Inspector](moon-inspector.md)), or the mount's current position, read only.
-- Read by the [Sky Map](sky-map.md), which draws the framings around the selection, by the [Observing Planner](observing-planner.md), which judges how targets fit one, and by the [Calculator](calculator.md), which imports one by value.
+- Read by the [Sky Map](sky-map.md), which draws the framings around the selection, by the [Observing Planner](observing-planner.md), which judges how targets fit one, by the [Calculator](calculator.md), which imports one by value, and by [Target Centering](target-centering.md), which takes the rotation of a saved one as its orientation, from its own panel or from the Sky's framings with the selection as the target.
 
 ## Rules and Limitations
 
-- A framing never holds a position on the sky; a tool that needs one asks for it itself, so [Target Centering](target-centering.md) never takes its target from a framing.
+- A framing never holds a position on the sky; a tool that needs one asks for it itself, so [Target Centering](target-centering.md) never takes its target from a framing, only its orientation.
 - Consumers read the framings and never keep a copy; framings are created and edited only in the Framing tool.
 - The pseudo-framings of the Equipment Setup's Main Camera and Guide Camera come first everywhere and are never saved; the Guide Camera's only while the setup has a guide camera or a guide telescope, and a tool that has no framing chosen, or chose one no longer listed, uses the Main Camera's.
 - Edits are written from the revision they were made on, and a conflict keeps the draft for the operator to resolve.

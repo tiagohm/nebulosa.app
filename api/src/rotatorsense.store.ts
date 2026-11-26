@@ -8,7 +8,8 @@ import type { AppDatabase } from './database'
 // belongs to a physical camera, a physical rotator, and the reverse switch of the rotator, and is learned only from a
 // check that passed: the response of the field to a rotation (positionAngle, Target Centering), or the motion of the
 // guide star after a rotation (guideImage, guiding). Learning again replaces the row; a row learned with another driver
-// of the rotator is ignored.
+// of the rotator is ignored. A main camera's row also keeps the offset φ of its position angle (θ = s·M + φ), modulo
+// a half turn, which a Center verifying an orientation measures and a later one pre-rotates with.
 
 // What a sense describes: the sky position angle of the image top of a main camera per mechanical degree, or the turn
 // of the image of a guide camera behind the rotator per mechanical degree.
@@ -22,6 +23,9 @@ export interface StoredRotatorSense {
 	readonly parity?: Parity
 	// Turn of the image per commanded turn measured by the check that learned it; absent when unknown.
 	readonly gain?: number
+	// Offset of the position angle of the image top (positionAngle only): PA minus sense times the mechanical angle, in
+	// degrees within [0, 180); absent until a Center verified an orientation with this sense.
+	readonly offset?: number
 	// When it was learned, Unix milliseconds (UTC).
 	readonly learnedAt: number
 	// When a check last confirmed it, Unix milliseconds (UTC).
@@ -33,6 +37,7 @@ interface RotatorSenseRow {
 	readonly sense: number
 	readonly parity: Parity | null
 	readonly gain: number | null
+	readonly offset: number | null
 	readonly rotator_driver: string | null
 	readonly learned_at: number
 	readonly last_used_at: number | null
@@ -51,19 +56,28 @@ export class RotatorSenseStore {
 	// Returns the sense of kind learned for camera and rotator with the rotator's current reverse switch, or undefined
 	// when none was, or it was learned with another driver of the rotator.
 	get(kind: RotatorSenseKind, camera: Camera, rotator: Rotator): StoredRotatorSense | undefined {
-		const row = this.database.db.query<RotatorSenseRow, [string, string, number]>('SELECT sense, parity, gain, rotator_driver, learned_at, last_used_at FROM rotator_senses WHERE kind = ? AND equipment_key = ? AND reversed = ?').get(kind, equipmentKeyOf(camera, rotator), rotator.reversed ? 1 : 0)
+		const row = this.database.db.query<RotatorSenseRow, [string, string, number]>('SELECT sense, parity, gain, offset, rotator_driver, learned_at, last_used_at FROM rotator_senses WHERE kind = ? AND equipment_key = ? AND reversed = ?').get(kind, equipmentKeyOf(camera, rotator), rotator.reversed ? 1 : 0)
 		if (!row || (row.rotator_driver !== null && rotator.driver.executable && row.rotator_driver !== rotator.driver.executable)) return undefined
-		return { sense: row.sense === 1 ? 1 : -1, ...(row.parity !== null && { parity: row.parity }), ...(row.gain !== null && { gain: row.gain }), learnedAt: row.learned_at, ...(row.last_used_at !== null && { lastUsedAt: row.last_used_at }) }
+		return { sense: row.sense === 1 ? 1 : -1, ...(row.parity !== null && { parity: row.parity }), ...(row.gain !== null && { gain: row.gain }), ...(row.offset !== null && { offset: row.offset }), learnedAt: row.learned_at, ...(row.last_used_at !== null && { lastUsedAt: row.last_used_at }) }
 	}
 
 	// Saves the sense of kind just learned for camera and rotator with the rotator's current reverse switch, at time (Unix
-	// milliseconds, UTC), replacing what was there. Throws when the database cannot be written; nothing is saved then.
+	// milliseconds, UTC), replacing what was there, its offset included. Throws when the database cannot be written; nothing
+	// is saved then.
 	learned(kind: RotatorSenseKind, camera: Camera, rotator: Rotator, sense: 1 | -1, parity: Parity | undefined, gain: number | undefined, time: number) {
 		this.database.write(() => {
 			this.database.db
 				.query('INSERT OR REPLACE INTO rotator_senses (kind, equipment_key, reversed, camera_name, rotator_name, rotator_driver, sense, parity, gain, learned_at, last_used_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)')
 				.run(kind, equipmentKeyOf(camera, rotator), rotator.reversed ? 1 : 0, camera.name, rotator.name, rotator.driver.executable || null, sense, parity ?? null, gain !== undefined && Number.isFinite(gain) ? gain : null, time)
 		})
+	}
+
+	// Records the offset of the position angle (degrees, reduced to [0, 180)) a Center measured for camera and rotator with
+	// the rotator's current reverse switch, at time (Unix milliseconds, UTC), on the stored sense only: nothing is written
+	// without one. Throws when the database cannot be written.
+	offsetMeasured(camera: Camera, rotator: Rotator, offset: number, time: number) {
+		const reduced = ((offset % 180) + 180) % 180
+		this.database.db.query("UPDATE rotator_senses SET offset = ?, last_used_at = ? WHERE kind = 'positionAngle' AND equipment_key = ? AND reversed = ?").run(reduced < 180 ? reduced : 0, time, equipmentKeyOf(camera, rotator), rotator.reversed ? 1 : 0)
 	}
 
 	// Records that a check confirmed the stored sense of kind at time (Unix milliseconds, UTC).

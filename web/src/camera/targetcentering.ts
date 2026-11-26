@@ -40,6 +40,8 @@ export interface TargetCenteringDraft {
 	readonly oriented?: boolean
 	// Position angle of the image top, ICRS, from north through east, in radians, [0, 2π); absent until entered.
 	readonly positionAngle?: number
+	// What the position angle was taken from, meant for people (a framing, an image); absent when typed.
+	readonly orientationSource?: string
 }
 
 // Target Centering state of the tab.

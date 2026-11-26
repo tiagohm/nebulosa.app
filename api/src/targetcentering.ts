@@ -12,11 +12,25 @@ import { failedOperationResult, type OperationContext, type OperationFailureReas
 import { abortableDelay } from 'nebulosa/src/devices/orchestration/operation.wait'
 import { resourceKey } from 'nebulosa/src/devices/orchestration/resource'
 import { numericKeyword } from 'nebulosa/src/io/formats/fits/util'
-import { type Angle, toArcsec, toDeg } from 'nebulosa/src/math/units/angle'
+import { type Angle, deg, toArcsec, toDeg } from 'nebulosa/src/math/units/angle'
 import { toMeter } from 'nebulosa/src/math/units/distance'
 import type { CameraCapturer } from 'nebulosa/src/observation/capture/capture'
 import { type CameraCaptureTime, SYSTEM_CAMERA_CAPTURE_CLOCK } from 'nebulosa/src/observation/capture/types'
-import { type CenteringCorrection, type CenteringFrame, type CenteringMeasurement, type CenteringObserver, type CenteringOptions, type CenteringOrientation, type CenteringRotationCheck, type CenteringServices, type CenteringStep, type CenteringTarget, centerTarget } from 'nebulosa/src/observation/mount/centering'
+import {
+	type CenteringCorrection,
+	type CenteringFrame,
+	type CenteringMeasurement,
+	type CenteringObserver,
+	type CenteringOptions,
+	type CenteringOrientation,
+	type CenteringRotationCheck,
+	type CenteringServices,
+	type CenteringStep,
+	type CenteringTarget,
+	centerTarget,
+	plannedRotation,
+	positionAngleError,
+} from 'nebulosa/src/observation/mount/centering'
 import { CameraSessionRegistry } from './camerasessions'
 import { type CaptureFrameRegistry, captureFrameId } from './captureframes'
 import { type CaptureFrame, type CaptureSettings, exposureProgressListener } from './captures'
@@ -54,7 +68,9 @@ import type { SkyObserver } from './sky/ephemeris'
 // Center turns the rotator of the Equipment Setup toward it inside the same loop, the operation holding the rotator with the
 // mount, so the final frame proves both. The rotation sense the loop learns is kept in the operational database for the
 // camera and the rotator (RotatorSenseStore) and read when a later session is admitted, whoever admits it; the rotator's
-// angle is never synced. Rotator angles are mechanical degrees.
+// angle is never synced. Rotator angles are mechanical degrees. A Center that verified an orientation also keeps the offset of
+// the position angle for the rotator, modulo a half turn, so a later Center allowing the half turn turns the rotator while
+// the mount slews (pre-rotation), and its first frame usually verifies both.
 
 // What a session does:
 // - center: slews to the target when the mount stands farther than a correction may go, then corrects until a solution
@@ -227,6 +243,9 @@ export interface TargetCenteringSessionSummary {
 	readonly finalPositionAngleError?: Angle
 	// Name of the rotator the session turns; absent without one.
 	readonly rotatorName?: string
+	// Rotation made before the first frame from the stored sense and offset, between mechanical angles in degrees; absent
+	// without one.
+	readonly preRotation?: { readonly from: number; readonly to: number }
 	// Rotation sense in force, and where it came from; absent while none is known.
 	readonly sense?: 1 | -1
 	readonly senseSource?: TargetCenteringSenseSource
@@ -300,6 +319,12 @@ interface TargetCenteringVerification {
 
 // Nothing verified.
 const NOTHING_VERIFIED: TargetCenteringVerification = { position: false, orientation: false }
+
+// Outcome of a motion a session does not make.
+const NOTHING_DONE: OperationResult<void> = successfulOperationResult(undefined)
+
+// Bounds of plannedRotation's probe, never used by a pre-rotation, which always has a sense: its defaults, in degrees.
+const PRE_ROTATION_PROBE = { minimum: 2, maximum: 10 } as const
 
 // Smallest orientation tolerance a Center turning a rotator accepts, in degrees: about the precision of the position
 // angle of a plate solution of few stars.
@@ -688,10 +713,13 @@ export class TargetCenteringSessions {
 				if (!started.ok) return started
 			}
 
-			if (this.#slews(session)) {
-				const slewed = await this.#slew(session, context)
-				if (!slewed.ok) return slewed
-			}
+			// The rotator turns while the mount slews; both end before the first exposure, the first failure ending the session.
+			const preRotation = this.#preRotation(session)
+			const slews = this.#slews(session)
+			if (preRotation) this.#sessions.update(session, { state: 'running', step: slews ? 'slewing' : 'rotating', preRotation })
+			const [slewed, turned] = await Promise.all([slews ? this.#slew(session, context) : NOTHING_DONE, preRotation ? this.rotatorCommander!.moveTo(context, session.rotator!, preRotation.to) : NOTHING_DONE])
+			if (!slewed.ok) return slewed
+			if (!turned.ok) return turned
 
 			const services: CenteringServices = {
 				mountCommander: this.commander,
@@ -704,7 +732,10 @@ export class TargetCenteringSessions {
 			}
 			const centered = await centerTarget(context, mount, camera, target, this.#options(session), services)
 
-			if (centered.ok) return successfulOperationResult({ position: true, orientation: session.summary.request.orientation !== undefined })
+			if (centered.ok) {
+				if (session.summary.request.orientation) this.#keepOffset(session)
+				return successfulOperationResult({ position: true, orientation: session.summary.request.orientation !== undefined })
+			}
 
 			// A solve that ran out of time ends the loop before its measurement.
 			if (centered.reason === 'timeout') this.#updateAttempt(session, session.summary.attempts.length, { outcome: 'timeout', error: centered.error })
@@ -716,6 +747,35 @@ export class TargetCenteringSessions {
 			return centered
 		} finally {
 			await rm(directory, { recursive: true, force: true })
+		}
+	}
+
+	// Returns the rotation a Center makes before its first frame, or undefined when it makes none: only with an orientation
+	// that allows the half turn (the offset of the pier side after the slew is not known, and a half turn is what tells the
+	// sides apart), a rotator, a stored sense and offset, and a predicted error over the tolerance that a reachable angle
+	// corrects (plannedRotation). The position angle now is predicted as sense times the mechanical angle plus the offset.
+	#preRotation({ summary: { request }, rotator, storedSense }: Session): { readonly from: number; readonly to: number } | undefined {
+		const { orientation, mode } = request
+		if (mode !== 'center' || !orientation?.halfTurn || !rotator || !this.rotatorCommander || storedSense?.offset === undefined) return undefined
+		const from = rotator.angle.value
+		const predicted = deg(storedSense.sense * from + storedSense.offset)
+		const error = positionAngleError(orientation.positionAngle, predicted, true)
+		if (!(Math.abs(error) > orientation.tolerance)) return undefined
+		const to = plannedRotation(rotator, from, toDeg(error), true, storedSense.sense, PRE_ROTATION_PROBE)
+		return to === undefined ? undefined : { from, to }
+	}
+
+	// Keeps the offset of the position angle a verified Center measured on its last frame, PA minus sense times the mechanical
+	// angle, for the next pre-rotation; a database that cannot be written leaves a warning.
+	#keepOffset(session: Session) {
+		const { camera, rotator, summary } = session
+		const last = summary.attempts.at(-1)
+		if (!rotator || !this.senses || summary.sense === undefined || last?.positionAngle === undefined || last.rotatorAngle === undefined) return
+
+		try {
+			this.senses.offsetMeasured(camera, rotator, toDeg(last.positionAngle) - summary.sense * last.rotatorAngle, Date.now())
+		} catch (error) {
+			this.#warn(session, `The orientation offset of ${rotator.name} was not saved, so the next session does not turn it during the slew: ${Error.isError(error) ? error.message : String(error)}`)
 		}
 	}
 

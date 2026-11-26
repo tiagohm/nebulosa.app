@@ -8,16 +8,40 @@ import { skyMapPalette } from '../../sky/palette'
 import { createRequestGuard } from '../../sky/selection'
 import { Button } from '../../ui/Button'
 import type { PreviewFit, PreviewSource } from './framing'
-import { canvasAngle, canvasPoint, cutoutSize, fetchCutout, fetchField, type LabelBox, placeLabel, positionAngleAt, previewLayout, type PreviewLayout, projectPosition, rotationHandle, skyPosition, snapRotation, starRadius } from './preview'
+import {
+	canvasAngle,
+	canvasPoint,
+	cutoutCovers,
+	cutoutCrop,
+	type CutoutCrop,
+	cutoutOrigin,
+	cutoutSuffices,
+	cutoutView,
+	type CutoutView,
+	fetchCutout,
+	fetchField,
+	type LabelBox,
+	placeLabel,
+	positionAngleAt,
+	previewLayout,
+	type PreviewLayout,
+	projectPosition,
+	rotationHandle,
+	skyPosition,
+	snapRotation,
+	starRadius,
+} from './preview'
 
 // Preview of the Framing tool, the canvas the framings are planned on: one north-up gnomonic view around a J2000 center,
 // east on the left, with the outline of every framing that has a field in its own colour and a mark at the middle of its
 // top edge, the one shown in the panel drawn bolder with its rotation handle. Dragging the handle turns that framing, the
 // arrow keys turn it while the canvas has the focus, and a click (or tap) elsewhere centers the view there. The view is
 // scaled to fit every framing or only the one shown. The Mini-Sky (the stars and deep-sky objects of the server's
-// catalog, drawn offline) is always read and drawn; the Survey background draws a hips2fits cutout over it once one has
-// downloaded, so a slow or failed download never leaves the view blank and never locks anything: it shows its progress
-// with Cancel, and a failure says why with Try Again and Show Mini-Sky.
+// catalog, drawn offline) is always read and drawn; the Survey background draws a hips2fits cutout over it, cropped to
+// the view, once one that covers it has downloaded, so a slow or failed download never leaves the view blank and never
+// locks anything: it shows its progress with Cancel, and a failure says why with Try Again and Show Mini-Sky. Both are
+// asked for every rotation of the fitted framings at once (see ./preview), so turning a framing reads nothing, and a
+// cutout that still serves the view, such as after a small resize, is kept.
 
 // Delay between the last change of the view and the request of its background, in milliseconds, so a resize or a typed
 // center asks once.
@@ -62,10 +86,18 @@ export interface FramingPreviewProps {
 
 // Survey image of a view.
 interface Cutout {
-	// Key of the view it was asked for.
-	readonly key: string
+	// What it was asked for and the part of the sky it holds.
+	readonly view: CutoutView
 	// Decoded image.
 	readonly image: HTMLImageElement
+}
+
+// Survey image drawn over a view: the image and the rectangle of it the canvas shows.
+interface Backdrop {
+	// Decoded image.
+	readonly image: HTMLImageElement
+	// Part of the image drawn over the whole canvas, in image pixels.
+	readonly crop: CutoutCrop
 }
 
 // Catalog objects of a view.
@@ -119,12 +151,15 @@ export function FramingPreview({ framings, selectedId, center, source, survey, f
 	const selectedFrame = selected && frameOf(selected)
 	const fitted = fit === 'selected' && selectedFrame ? [selectedFrame] : drawn.flatMap((framing) => frameOf(framing) ?? [])
 	const layout = size && previewLayout(size.width, size.height, fitted)
-	// The view a background is asked for: its center, its scale, and its size, rounded so a small change asks nothing.
-	const viewKey = layout && `${center.rightAscension.toFixed(7)}:${center.declination.toFixed(7)}:${layout.fov.toPrecision(5)}:${Math.round(layout.width)}x${Math.round(layout.height)}`
-	const surveyKey = viewKey && `${survey}:${viewKey}`
+	// The view the catalog field is asked for: its center, the scale that covers every rotation, and its size, rounded so
+	// a small change asks nothing.
+	const viewKey = layout && `${center.rightAscension.toFixed(7)}:${center.declination.toFixed(7)}:${layout.coverScale.toPrecision(5)}:${Math.round(layout.width)}x${Math.round(layout.height)}`
+	// The cutout the view asks for, the same for every rotation, and the key of its request.
+	const wanted = layout && cutoutView(survey, center, layout, window.devicePixelRatio || 1)
+	const wantedKey = wanted && `${wanted.origin}:${wanted.request.fov.toPrecision(5)}:${wanted.request.width}x${wanted.request.height}`
 	const rotatable = onRotate !== undefined && selectedFrame !== undefined && !isSetupFraming(selectedId)
-	const image = source === 'survey' && cutout && cutout.key === surveyKey ? cutout.image : undefined
-	const readingField = !image && !fieldFailed && field?.key !== viewKey
+	const backdrop: Backdrop | undefined = source === 'survey' && layout && cutout && cutoutCovers(cutout.view, cutoutOrigin(survey, center), layout) ? { image: cutout.image, crop: cutoutCrop(cutout.view, layout) } : undefined
+	const readingField = !backdrop && !fieldFailed && field?.key !== viewKey
 
 	// Follows the size of the host.
 	useEffect(() => {
@@ -159,25 +194,23 @@ export function FramingPreview({ framings, selectedId, center, source, survey, f
 		return () => clearTimeout(timer)
 	}, [viewKey])
 
-	// Downloads the survey cutout of the view, again after Try Again.
+	// Downloads the survey cutout of the view unless the one read still serves it, again after Try Again.
 	const cutoutGuard = useRef(createRequestGuard())
 	useEffect(() => {
-		if (source !== 'survey' || !layout || !surveyKey) {
+		if (source !== 'survey' || !wanted || (cutout && cutoutSuffices(cutout.view, wanted))) {
 			cutoutGuard.current.cancel()
 			setDownloading(false)
 			setCutoutError(undefined)
 			return
 		}
-		if (cutout?.key === surveyKey) return
 		setCutoutError(undefined)
 		const timer = setTimeout(() => {
 			const request = cutoutGuard.current.begin()
-			const pixels = cutoutSize(layout.width, layout.height, window.devicePixelRatio || 1)
 			setDownloading(true)
 			void (async () => {
 				try {
-					const next = await decodeImage(await fetchCutout({ survey, rightAscension: center.rightAscension, declination: center.declination, fov: layout.fov, ...pixels }, request.signal))
-					if (request.current()) setCutout({ key: surveyKey, image: next })
+					const next = await decodeImage(await fetchCutout(wanted.request, request.signal))
+					if (request.current()) setCutout({ view: wanted, image: next })
 				} catch (error) {
 					if (request.current() && !aborted(error)) setCutoutError(cutoutFailure(error))
 				} finally {
@@ -186,7 +219,7 @@ export function FramingPreview({ framings, selectedId, center, source, survey, f
 			})()
 		}, REQUEST_DELAY_MS)
 		return () => clearTimeout(timer)
-	}, [source, surveyKey, attempt])
+	}, [source, wantedKey, attempt])
 
 	useEffect(
 		() => () => {
@@ -206,7 +239,7 @@ export function FramingPreview({ framings, selectedId, center, source, survey, f
 		const context = element.getContext('2d')
 		if (!context) return
 		context.setTransform(ratio, 0, 0, ratio, 0, 0)
-		draw(context, layout, center, image ? undefined : field?.field, image, drawn, selectedId, rotatable)
+		draw(context, layout, center, backdrop ? undefined : field?.field, backdrop, drawn, selectedId, rotatable)
 	})
 
 	// Returns the canvas point of a pointer event.
@@ -312,14 +345,14 @@ export function FramingPreview({ framings, selectedId, center, source, survey, f
 					</div>
 				)}
 				{readingField && <span className="rounded-sm bg-base-100/80 px-2 py-1 text-xs leading-4 text-ink-300">Reading the sky catalog…</span>}
-				{fieldFailed && !image && <span className="rounded-sm bg-base-100/80 px-2 py-1 text-xs leading-4 text-danger">The sky catalog could not be read for this view.</span>}
+				{fieldFailed && !backdrop && <span className="rounded-sm bg-base-100/80 px-2 py-1 text-xs leading-4 text-danger">The sky catalog could not be read for this view.</span>}
 			</div>
 		</div>
 	)
 }
 
 // Draws the background, the framings, and the orientation of a view.
-function draw(context: CanvasRenderingContext2D, layout: PreviewLayout, center: FramePoint, field: FramingField | undefined, image: HTMLImageElement | undefined, framings: readonly ResolvedFraming[], selectedId: string, rotatable: boolean) {
+function draw(context: CanvasRenderingContext2D, layout: PreviewLayout, center: FramePoint, field: FramingField | undefined, backdrop: Backdrop | undefined, framings: readonly ResolvedFraming[], selectedId: string, rotatable: boolean) {
 	const palette = skyMapPalette()
 	const { width, height } = layout
 	const labels: LabelBox[] = []
@@ -327,7 +360,7 @@ function draw(context: CanvasRenderingContext2D, layout: PreviewLayout, center: 
 	context.font = `${LABEL_SIZE}px ${palette.font}`
 	context.textBaseline = 'top'
 
-	if (image) context.drawImage(image, 0, 0, width, height)
+	if (backdrop) context.drawImage(backdrop.image, backdrop.crop.x, backdrop.crop.y, backdrop.crop.width, backdrop.crop.height, 0, 0, width, height)
 
 	// The framing shown last, so it is drawn over the others; its name is placed first, so it always finds room.
 	const ordered = [...framings.filter((framing) => framing.id !== selectedId), ...framings.filter((framing) => framing.id === selectedId)].flatMap((framing) => {
@@ -339,7 +372,7 @@ function draw(context: CanvasRenderingContext2D, layout: PreviewLayout, center: 
 	const named = new Set(ordered.toReversed().flatMap((each) => (placeLabel(labels, each.label, width, height) || each.framing.id === selectedId ? [each.framing.id] : [])))
 
 	// The catalog under the outlines, its names where the framings left room.
-	if (!image && field) drawField(context, layout, center, field, labels)
+	if (!backdrop && field) drawField(context, layout, center, field, labels)
 
 	for (const { framing, field: frame, rotation, outline, label } of ordered) {
 		const selected = framing.id === selectedId

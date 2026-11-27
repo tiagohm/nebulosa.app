@@ -20,11 +20,11 @@ export interface NumberInputProps {
 }
 
 const stepButtonClassName =
-	'flex flex-[0_0_38px] cursor-pointer items-center justify-center border border-line-200 bg-base-300 p-0 text-base leading-none text-ink-100 transition-colors duration-150 not-disabled:hover:bg-accent-subtle not-disabled:hover:text-accent disabled:cursor-not-allowed disabled:bg-base-200 disabled:text-ink-300'
+	'flex flex-[0_0_38px] cursor-pointer items-center pointer-coarse:flex-[0_0_44px] justify-center border border-line-200 bg-base-300 p-0 text-base leading-none text-ink-100 transition-colors duration-150 not-disabled:hover:bg-accent-subtle not-disabled:hover:text-accent disabled:cursor-not-allowed disabled:bg-base-200 disabled:text-ink-300'
 
-// Look of the text field between the step buttons: square corners against the buttons, centered tabular figures, and
-// raised while focused so its focus ring is drawn over the buttons.
-export const stepperInputClassName = cn(inputClassName, 'relative flex-1 rounded-none text-center tabular-nums focus:z-1')
+// Look of the text field between the step buttons: square corners against the buttons, centered tabular figures,
+// raised while focused so its focus ring is drawn over the buttons, and as tall as the frame on a coarse pointer.
+export const stepperInputClassName = cn(inputClassName, 'relative flex-1 rounded-none text-center tabular-nums focus:z-1 pointer-coarse:h-[44px]')
 
 // Props of the frame of a numeric field.
 export interface StepperFrameProps {
@@ -41,10 +41,11 @@ export interface StepperFrameProps {
 }
 
 // Frame of a numeric field: the − and + step buttons around its text field, kept out of the Tab order since the arrow
-// keys step the field. Shared by NumberInput and the fields that keep their text as typed, such as the Calculator's.
+// keys step the field. On a coarse pointer the buttons are 44 px touch targets, since they are pressed at the scope.
+// Shared by NumberInput and the fields that keep their text as typed, such as the Calculator's.
 export function StepperFrame({ decreaseDisabled, increaseDisabled, onDecrease, onIncrease, children }: StepperFrameProps) {
 	return (
-		<div className="flex h-9.5 items-stretch">
+		<div className="flex h-9.5 items-stretch pointer-coarse:h-[44px]">
 			<button type="button" tabIndex={-1} title="Decrease" disabled={decreaseDisabled} onClick={onDecrease} className={cn(stepButtonClassName, 'rounded-l-sm border-r-0')}>
 				−
 			</button>

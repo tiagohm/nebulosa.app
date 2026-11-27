@@ -1,5 +1,5 @@
 import { cn } from 'cn'
-import type { ReactNode } from 'react'
+import { type ReactNode, useLayoutEffect, useRef } from 'react'
 import { IconButton } from '../ui/IconButton'
 import { SectionHeading } from '../ui/SectionHeading'
 
@@ -8,7 +8,8 @@ import { SectionHeading } from '../ui/SectionHeading'
 // workspace as a drawer, or, for a live content that asked for it, opens as a sheet under that content, which then
 // shrinks to stay in sight. The panel only presents controls: collapsing or replacing it never stops what
 // those controls started, so it holds no operational state of its own. While docked and open it carries
-// data-docked-panel, which the notification toasts read to stay beside it.
+// data-docked-panel, which the notification toasts read to stay beside it. A new title means a new subject, such as
+// another tool, so the content scrolls back to its top instead of opening at the previous subject's position.
 
 export interface ContextualPanelProps {
 	// Heading of the panel's current content.
@@ -30,6 +31,11 @@ export interface ContextualPanelProps {
 // Right-hand panel of a workspace.
 export function ContextualPanel({ title, actions, open, docked, sheet = false, onClose, children }: ContextualPanelProps) {
 	const drawer = !docked && !sheet
+	const content = useRef<HTMLDivElement>(null)
+
+	useLayoutEffect(() => {
+		content.current?.scrollTo({ top: 0 })
+	}, [title])
 
 	return (
 		<>
@@ -53,7 +59,9 @@ export function ContextualPanel({ title, actions, open, docked, sheet = false, o
 						{actions}
 						<IconButton icon="close" label="Hide panel" onClick={onClose} />
 					</header>
-					<div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">{children}</div>
+					<div ref={content} className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+						{children}
+					</div>
 				</div>
 			</aside>
 		</>

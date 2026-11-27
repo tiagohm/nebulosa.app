@@ -168,9 +168,11 @@ test('reports a blocked mount and the outcome of a centering, never a measuremen
 
 test('reports each manual step of the Flat Wizard by its id, cleanup warnings, and outcomes', () => {
 	const classifier = new NotificationClassifier()
-	const step = classifier.classify(flatWizard({ state: 'waitingForFilter', pending: { stepId: 'x', kind: 'filter', filter: 0 } }))
-	expect(step).toEqual([expect.objectContaining({ key: 'flat.step:x', level: 'warning', code: 'flatWizard.actionRequired' })])
-	expect(classifier.classify(flatWizard({ state: 'waitingForIllumination', pending: { stepId: 'y', kind: 'illumination', filter: 1 } }))[0].key).toBe('flat.step:y')
+	const filters = [{ name: 'Ha' }, { name: 'OIII' }] as unknown as FlatWizardSessionSummary['filters']
+	const step = classifier.classify(flatWizard({ state: 'waitingForFilter', filters, pending: { stepId: 'x', kind: 'filter', filter: 0 } }))
+	expect(step).toEqual([expect.objectContaining({ key: 'flat.step:x', level: 'warning', code: 'flatWizard.actionRequired', message: 'Put Ha in place for CCD and continue in the Flat Wizard.' })])
+	const light = classifier.classify(flatWizard({ state: 'waitingForIllumination', filters, pending: { stepId: 'y', kind: 'illumination', filter: 1 } }))[0]
+	expect(light).toMatchObject({ key: 'flat.step:y', message: 'Ready the light of OIII for CCD and continue in the Flat Wizard.' })
 
 	const ended = classifier.classify(flatWizard({ state: 'completed', cleanupWarning: 'panel left on' }))
 	expect(ended.map((d) => d.code)).toEqual(['flatWizard.cleanupWarning', 'flatWizard.completed'])

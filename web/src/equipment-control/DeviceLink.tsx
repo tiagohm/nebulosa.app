@@ -19,14 +19,15 @@ interface DeviceLinkProps {
 	readonly onNavigate?: () => void
 }
 
-// Name of a device that opens it in Equipment Control, or the fallback text without a device.
+// Name of a device that opens it in Equipment Control, or the fallback text without a device; a 44 px touch target on a
+// coarse pointer.
 export function DeviceLink({ device, fallback = MISSING, className, onNavigate }: DeviceLinkProps) {
 	if (!device) return <>{fallback}</>
 
 	return (
 		<LinkButton
 			title={`Open ${device.name} in Equipment Control`}
-			className={cn('max-w-full truncate', className)}
+			className={cn('max-w-full truncate pointer-coarse:min-h-[44px]', className)}
 			onClick={() => {
 				navigate(routeState, { workspace: 'equipment', device: device.id })
 				onNavigate?.()

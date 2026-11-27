@@ -554,5 +554,8 @@ describe('Flat Wizard filter names', () => {
 		expect(filterName({ names: ['Luminance', ' ', 'Red'] }, 1)).toBe('Filter 2')
 		expect(filterName({ names: ['Luminance'] }, 4)).toBe('Filter 5')
 		expect(filterName(undefined, 0)).toBe('Filter 1')
+		expect(filterName(undefined, 0, ' Ha ')).toBe('Ha')
+		expect(filterName(undefined, 1, ' ')).toBe('Filter 2')
+		expect(filterName({ names: ['Luminance'] }, 0, 'Ha')).toBe('Luminance')
 	})
 })

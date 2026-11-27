@@ -3,7 +3,7 @@ import type { FlatWizardFilterRun, FlatWizardSession, FlatWizardSessionSummary }
 import { proxy } from 'valtio'
 import { DEFAULT_EXPOSURE_SETTINGS, DEFAULT_FLAT_WIZARD_FILTER, DEFAULT_FLAT_WIZARD_SETTINGS, type FlatWizardSettings } from '../profile/schema'
 import { cameraKey } from './capture'
-import { continueFlatWizard, darkFlatGroups, flatWizardBlocker, flatWizardFilterName, flatWizardRequest, flatWizardRunning, type FlatWizardRuntime, handleFlatWizardEvent, refreshFlatWizard, startFlatWizard, stopFlatWizard } from './flatwizard'
+import { continueFlatWizard, darkFlatGroups, flatWizardBlocker, flatWizardFilterName, flatWizardPreflight, flatWizardRequest, flatWizardResultNotes, flatWizardStepText, flatWizardRunning, type FlatWizardRuntime, handleFlatWizardEvent, refreshFlatWizard, startFlatWizard, stopFlatWizard } from './flatwizard'
 
 function newState() {
 	return proxy<FlatWizardRuntime>({ sessions: {}, details: {}, pending: {}, errors: {} })
@@ -72,9 +72,10 @@ test('an assigned device that cannot be used, or an incomplete form, blocks the 
 	expect(flatWizardBlocker(READY, undefined, undefined, DEFAULT_FLAT_WIZARD_SETTINGS, undefined, { status: 'unsupported', message: 'The cover cannot be opened and closed.' })).toBe('The cover cannot be opened and closed.')
 	const wheelState = { count: 3, names: ['L', 'R', ''] }
 	expect(flatWizardBlocker(READY, READY, undefined, { ...DEFAULT_FLAT_WIZARD_SETTINGS, filters: [{ ...DEFAULT_FLAT_WIZARD_FILTER, slot: 3 }] }, wheelState)).toBe('The wheel has no slot 4.')
-	expect(flatWizardBlocker(READY, READY, undefined, { ...DEFAULT_FLAT_WIZARD_SETTINGS, filters: [{ ...DEFAULT_FLAT_WIZARD_FILTER, slot: 1, targetRange: [5, 5] }] }, wheelState)).toBe('The target of R is empty.')
+	expect(flatWizardBlocker(READY, READY, undefined, { ...DEFAULT_FLAT_WIZARD_SETTINGS, filters: [{ ...DEFAULT_FLAT_WIZARD_FILTER, slot: 1, targetRange: [5, 5] }] }, wheelState)).toBe('R: Target Max must be above Target Min.')
+	expect(flatWizardBlocker(READY, undefined, undefined, { ...DEFAULT_FLAT_WIZARD_SETTINGS, filters: [{ ...DEFAULT_FLAT_WIZARD_FILTER, name: 'Ha', minimumExposure: 2, maximumExposure: 1 }] })).toBe('Ha: Max Exposure must be above Min Exposure.')
 	expect(flatWizardBlocker(READY, undefined, undefined, { ...DEFAULT_FLAT_WIZARD_SETTINGS, filters: [{ ...DEFAULT_FLAT_WIZARD_FILTER, slot: 7 }] }, wheelState)).toBeUndefined()
-	expect(flatWizardBlocker(READY, undefined, undefined, { ...DEFAULT_FLAT_WIZARD_SETTINGS, filters: [{ ...DEFAULT_FLAT_WIZARD_FILTER, targetRange: [5, 5] }] })).toContain('target')
+	expect(flatWizardBlocker(READY, undefined, undefined, { ...DEFAULT_FLAT_WIZARD_SETTINGS, filters: [{ ...DEFAULT_FLAT_WIZARD_FILTER, targetRange: [5, 5] }] })).toBe('Filter 1: Target Max must be above Target Min.')
 })
 
 test('events are applied in revision order and a new exposure or the end fetches the record', async () => {
@@ -166,6 +167,34 @@ test('a filter is named as the wheel names its slot, or by its 1-based slot numb
 	expect(flatWizardFilterName(['Luminance', ' ', 'Red'], 1)).toBe('Filter 2')
 	expect(flatWizardFilterName(['Luminance'], 4)).toBe('Filter 5')
 	expect(flatWizardFilterName(undefined, 2)).toBe('Filter 3')
+	expect(flatWizardFilterName(undefined, 0, ' Ha ')).toBe('Ha')
+	expect(flatWizardFilterName(['L'], 0, 'Ha')).toBe('L')
+})
+
+test('the preflight tells what moves and what is asked, and the step names its filter', () => {
+	expect(flatWizardPreflight({ wheel: 'EFW', panel: 'Panel', cover: 'Cap' }, ['L', 'R', 'G'], 60)).toBe('Start closes Cap (opened again at the end unless it was already closed), lights Panel, and moves EFW through L, R, and G, then saves 60 flats.')
+	expect(flatWizardPreflight({}, ['Ha', 'OIII'], 1)).toBe('Start asks you to put Ha and OIII in place and to switch the light on, then saves 1 flat.')
+	expect(flatWizardPreflight({ wheel: 'EFW' }, ['L'], 20)).toBe('Start moves EFW through L and asks you to switch the light on, then saves 20 flats.')
+
+	const filters = [{ name: 'Ha' }, { name: 'OIII' }]
+	expect(flatWizardStepText({ stepId: 'a', kind: 'filter', filter: 0 }, filters, false)).toBe('Put Ha in place and switch the light on, then continue.')
+	expect(flatWizardStepText({ stepId: 'b', kind: 'filter', filter: 1 }, filters, false)).toBe('Put OIII in place, then continue.')
+	expect(flatWizardStepText({ stepId: 'c', kind: 'illumination', filter: 1 }, filters, true)).toBe('Make sure the light is on and stable for OIII, then continue.')
+})
+
+test('identical result notes of several filters read as one', () => {
+	const short = { status: 'notEvaluated', reason: 'At least three accepted frames are needed' } as const
+	const notes = flatWizardResultNotes([
+		{ name: 'L', sequence: short },
+		{ name: 'R', sequence: short },
+		{ name: 'G', error: 'G is too dim' },
+		{ name: 'B', sequence: { status: 'evaluated', verdict: 'rejected', outliers: [2], reasons: [] } as unknown as FlatWizardFilterRun['sequence'] },
+	])
+	expect(notes).toEqual([
+		{ filters: ['L', 'R'], text: 'stability not evaluated. At least three accepted frames are needed.', error: false },
+		{ filters: ['G'], text: 'G is too dim', error: true },
+		{ filters: ['B'], text: 'unstable. Outliers: 2.', error: true },
+	])
 })
 
 describe('dark-flats', () => {

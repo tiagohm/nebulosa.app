@@ -55,9 +55,11 @@ export type FlatWizardCaptureSettings = Pick<CaptureSettings, 'gain' | 'offset' 
 // One group of frames taken through one filter.
 export interface FlatWizardFilter {
 	// Filter slot, 0-based: the wheel moves to it, or, without a wheel, the operator puts that filter in place. The
-	// filter is named by the slot name the wheel reports, or "Filter <slot + 1>" when it reports none or there is no
-	// wheel (see filterName).
+	// filter is named by the slot name the wheel reports, or, without a wheel, by name; "Filter <slot + 1>" when neither
+	// names it (see filterName).
 	readonly slot: number
+	// Name the operator gives the filter, used only without a wheel; absent or blank names it by its slot.
+	readonly name?: string
 	// Number of accepted frames to save, at least 1.
 	readonly count: number
 	// Exposure of the first trial frame, in seconds.
@@ -473,7 +475,7 @@ export class FlatWizardSessions {
 				request: structuredClone(request),
 				state: 'preparing',
 				filter: 0,
-				filters: request.filters.map((filter) => ({ name: filterName(wheel, filter.slot), slot: filter.slot, required: filter.count, state: 'pending', trials: 0, accepted: 0, rejected: 0, inconclusive: 0, saveFailed: 0, files: [] })),
+				filters: request.filters.map((filter) => ({ name: filterName(wheel, filter.slot, filter.name), slot: filter.slot, required: filter.count, state: 'pending', trials: 0, accepted: 0, rejected: 0, inconclusive: 0, saveFailed: 0, files: [] })),
 				startedAt: Date.now(),
 				revision: 0,
 			},
@@ -979,10 +981,10 @@ export function finalVerdict(analysis: FlatAnalysis): 'accepted' | 'rejected' | 
 	return target.status === 'pass' && finiteSamples.status === 'pass' ? 'accepted' : 'inconclusive'
 }
 
-// Returns the name of the filter at a 0-based slot: the name the wheel reports for it, or "Filter <slot + 1>" when the
-// wheel names it not or there is no wheel.
-export function filterName(wheel: Pick<Wheel, 'names'> | undefined, slot: number) {
-	return wheel?.names[slot]?.trim() || `Filter ${slot + 1}`
+// Returns the name of the filter at a 0-based slot: the name the wheel reports for it or, without a wheel, the name the
+// operator gave it; "Filter <slot + 1>" when neither names it.
+export function filterName(wheel: Pick<Wheel, 'names'> | undefined, slot: number, name?: string) {
+	return (wheel ? wheel.names[slot]?.trim() : name?.trim()) || `Filter ${slot + 1}`
 }
 
 // Returns the plane with the highest finite observed median, or undefined when none has one.

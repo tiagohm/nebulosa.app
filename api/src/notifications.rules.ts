@@ -546,7 +546,8 @@ export class NotificationClassifier {
 		const drafts: NotificationDraft[] = []
 
 		if (pending) {
-			const message = pending.kind === 'filter' ? `Put the next filter in place for ${cameraName} and continue in the Flat Wizard.` : `Ready the light for ${cameraName} and continue in the Flat Wizard.`
+			const filter = session.filters[pending.filter].name
+			const message = pending.kind === 'filter' ? `Put ${filter} in place for ${cameraName} and continue in the Flat Wizard.` : `Ready the light of ${filter} for ${cameraName} and continue in the Flat Wizard.`
 			drafts.push({ key: `flat.step:${pending.stepId}`, level: 'warning', code: 'flatWizard.actionRequired', title: 'Flat Wizard needs you', message, source, target })
 		}
 

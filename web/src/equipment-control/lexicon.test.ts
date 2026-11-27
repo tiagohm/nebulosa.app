@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test'
 import { deg } from 'nebulosa/src/math/units/angle'
 import { domeMoving, domeStateWord, guideOutputStateWord, mountStateWord } from './lexicon'
-import { mountSiteDiffers } from './mountSite'
+import { mountSiteDiffers, mountSiteDistance } from './mountSite'
 import { firstReason } from './useControl'
 
 const mount = { parking: false, homing: false, moving: false, slewing: false, parked: false, tracking: false }
@@ -41,4 +41,10 @@ test('tells a mount site apart from the observing site', () => {
 test('gives the first reason a command is unavailable', () => {
 	expect(firstReason(undefined, false, 'Unpark the mount first', 'Enter both coordinates')).toBe('Unpark the mount first')
 	expect(firstReason(undefined, false)).toBeUndefined()
+})
+
+test('measures the ground distance from a mount site to the observing site', () => {
+	expect(mountSiteDistance({ latitude: deg(-22.5), longitude: deg(-45.5) }, { latitude: -22.5, longitude: -45.5 })).toBe(0)
+	expect(mountSiteDistance({ latitude: deg(-23.5), longitude: deg(-45.5) }, { latitude: -22.5, longitude: -45.5 })).toBeCloseTo(111.32, 1)
+	expect(mountSiteDistance({ latitude: 0, longitude: deg(-179.5) }, { latitude: 0, longitude: 179.5 })).toBeCloseTo(111.32, 1)
 })

@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import type { CaptureSession, GuidingSessionSummary, OperationKind, OperationRecord } from 'api'
+import { deg } from 'nebulosa/src/math/units/angle'
 import { newControlRuntime } from '../../equipment-control/control'
 import {
 	absentChip,
@@ -33,6 +34,7 @@ import {
 	roleDetail,
 	rotatorChip,
 	scopedDeviceErrors,
+	scopedWarnings,
 	scopedRunningOperations,
 	type ScopedDevice,
 	serverLinkLabel,
@@ -142,6 +144,25 @@ describe('scoped device errors', () => {
 
 	test('ignores errors of devices that are not listed on the connection', () => {
 		expect(scopedDeviceErrors({ serverId: 'A', devices: { watched: 'A', devices, errors: { x9: 'Gone' } }, control: { watched: 'A', errors: {} } })).toEqual([])
+	})
+})
+
+describe('scoped warnings', () => {
+	const observer = { name: 'Home', latitude: -22.5, longitude: -45.5 }
+	const site = { latitude: deg(-22.5), longitude: deg(-45.5), elevation: 800 }
+
+	test('warns of a connected mount reporting another site, with the distance', () => {
+		const warnings = scopedWarnings({ serverId: 'A', mount: MOUNT, mountState: { connected: true, site: { ...site, latitude: deg(-23.5) } }, observer })
+		expect(warnings).toEqual([{ id: 'mount-site', label: 'Mount site', message: 'Reports a site 111 km from Home, so it converts coordinates for another place', device: MOUNT }])
+	})
+
+	test('says nothing for the same site, a disconnected mount, another connection, or no observing site', () => {
+		const far = { connected: true, site: { ...site, longitude: 0 } }
+		expect(scopedWarnings({ serverId: 'A', mount: MOUNT, mountState: { connected: true, site }, observer })).toEqual([])
+		expect(scopedWarnings({ serverId: 'A', mount: MOUNT, mountState: { ...far, connected: false }, observer })).toEqual([])
+		expect(scopedWarnings({ serverId: 'B', mount: MOUNT, mountState: far, observer })).toEqual([])
+		expect(scopedWarnings({ serverId: 'A', mount: MOUNT, mountState: far, observer: undefined })).toEqual([])
+		expect(scopedWarnings({ serverId: 'A', mount: undefined, mountState: far, observer })).toEqual([])
 	})
 })
 

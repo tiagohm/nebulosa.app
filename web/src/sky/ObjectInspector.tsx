@@ -67,7 +67,7 @@ export function ObjectInspector({ observer, onSetObserver, timeZone, onOpenFrami
 	return (
 		<>
 			<CollapsibleSection id="sky.object" title="Object" summary={selection.name}>
-				<ObjectTitle name={selection.name} kind={typeOf(selection)} designations={designations.join(' · ')} />
+				<ObjectTitle name={selection.name} kind={selectionType(selection)} designations={designations.join(' · ')} />
 				{magnitude !== undefined && <DataRow label="Magnitude">{formatMagnitude(magnitude)}</DataRow>}
 				{selection.detailsError && <Notice error>Details unavailable: {selection.detailsError}</Notice>}
 				<ObjectActions target={selection.ref} targetName={selection.name} observer={observer} onOpenFraming={onOpenFraming} />
@@ -90,8 +90,9 @@ export function ObjectInspector({ observer, onSetObserver, timeZone, onOpenFrami
 	)
 }
 
-// Object type line of the selection.
-function typeOf(selection: SkySelection) {
+// Returns the type line of a selection, such as "Galaxy in Andromeda" or "Comet · Jupiter-family"; "Loading…" while its
+// details load, and empty for what has no line of its own (the mount, satellites, and meteor shower radiants).
+export function selectionType(selection: SkySelection) {
 	if (selection.catalog) return `${selection.catalog.typeName} in ${selection.catalog.constellationName}`
 	if (selection.minorBody) return `${selection.minorBody.kind === 'comet' ? 'Comet' : 'Asteroid'} · ${selection.minorBody.orbitClass}`
 	if (selection.ref.kind === 'constellation') return 'Constellation'

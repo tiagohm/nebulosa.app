@@ -235,7 +235,7 @@ A warm, low-light palette: near-black surfaces with a faint olive warmth, cream 
 - **Aurora Green** (`success`): connected, completed, available, a good reading.
 - **Arcturus Amber** (`warning`): attention needed but nothing failed; a flip window approaching.
 - **Antares Red** (`danger`): failure, refusal, a destructive confirmation, an out-of-range reading.
-- **Vega Blue** (`info`): neutral information in notifications.
+- **Vega Blue** (`info`): neutral information in notifications, and, in the status bar, a device that moves or is busy and a running operation, so busy never reads as the Antares Red of a device that is not connected.
 
 ### Star Map
 
@@ -369,7 +369,7 @@ The bell's Float panel reads like a toast stack you can scroll: rows share the t
 
 - **Top bar:** Deep Night, logo and wordmark, the Management menu, then the observing site, connection indicator, notifications, settings, and profile on the right.
 - **Navigation rail:** Deep Night, one stacked icon and caption per workspace in Zodiacal Gray, Horizon Haze on hover; the active one is Ember Wash with an Ember Clay icon, a semibold caption, and a 3.5 px Ember Clay bar on its left edge. The About button is anchored at the bottom.
-- **Status bar:** Deep Night, caption text in Moonlight, 24.5 px tall and 35 px below 640 px so a thumb can press it, every control pressed across its full height. Device chips and running operations are fitted to the room available, overflow counted on a details button. A chip's reading stays Moonlight while it is merely present; Aurora Green is kept for a good state (Tracking, Guiding) and Antares Red for a device of the setup that is not connected, which always says so in words.
+- **Status bar:** Deep Night, caption text in Moonlight, 24.5 px tall and 35 px below 640 px so a thumb can press it, every control pressed across its full height. Device chips and running operations are fitted to the room available, overflow counted on a details button. A chip's reading stays Moonlight while it is merely present; Aurora Green is kept for a good state (Tracking, Guiding), Vega Blue for a device that moves or is busy (Slewing, Moving, Exposing) and for a running operation, and Antares Red for a device of the setup that is not connected, which always says so in words. A warning, such as a mount reporting another site than the profile's, is an Arcturus Amber icon and count beside the failures, both opening the details. In the room the chips leave, after the clock, the object selected in the Sky is a Moonlight target icon and name that opens its place now and its actions in a Float panel above it.
 
 ### Collapsible Section and Data Rows (signature)
 

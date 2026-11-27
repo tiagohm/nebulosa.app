@@ -1,6 +1,6 @@
 import type { DeviceSummary, NotificationTarget, OperationRecord } from 'api'
 import { cn } from 'cn'
-import { type ReactNode, type Ref, useEffect, useRef, useState } from 'react'
+import type { ReactNode, Ref } from 'react'
 import { useSnapshot } from 'valtio'
 import { captureCount, captureRuntime, captureStatus } from '../../camera/capture'
 import { GUIDING_STATE_LABELS, guidingRuntime } from '../../camera/guiding'
@@ -23,11 +23,11 @@ import { DataRow } from '../../ui/DataRow'
 import { Icon } from '../../ui/Icon'
 import { LinkButton } from '../../ui/LinkButton'
 import { SectionHeading } from '../../ui/SectionHeading'
-import { TONE_TEXT } from '../../ui/StatusBadge'
 import { useNow } from '../../useNow'
 import { navigate, routeState } from '../route'
 import { astronomicalClockRuntime, clockApproximate, clockFreshness, clockReadingText, liveClock } from './astronomicalclock'
 import { useMonotonicNow } from './AstronomicalClockChip'
+import { type PanelPlacement, panelStyle, useBarPopover } from './popover'
 import {
 	activeCapture,
 	activeGuiding,
@@ -48,104 +48,39 @@ import {
 	type ScopedDevice,
 	serverLinkLabel,
 	sessionOperationIds,
+	type StatusWarning,
 } from './selectors'
-import { AbortButton, HIT_CLASS, TONE_CLASSES, useOperationAbortable } from './StatusItems'
+import { AbortButton, BAR_BADGE_TEXT, HIT_CLASS, TONE_CLASSES, useOperationAbortable } from './StatusItems'
 
 // Details of the status bar: a button at its right end, showing how many items the bar left out, and before it, while
-// a device fails, a button naming how many failures there are, both opening a panel above themselves with everything
-// the bar summarizes for the active profile's server connection — the server link and the selected connection, how many
+// a device fails, a button naming how many failures there are, and while the equipment gives wrong results, such as a mount
+// reporting another site, a button naming how many warnings there are, all opening a panel above themselves (./popover) with
+// everything the bar summarizes for the active profile's server connection — the server link and the selected connection, how many
 // devices of the Equipment Setup are connected, every assigned role with its device, what it is doing in words, and what
 // it reads, the Connect of each device that is not connected and Connect all, the way to the Equipment Setup, the running capture and guiding sessions with the enabled Meridian Flip
 // Monitor and the running Mount Remote Control listeners of the mount, every other running operation with its devices,
-// elapsed time, and reported progress, each with its Abort, the device failures, and the real-time clock, even when the
-// bar has no room for it, then the way to the Status Bar settings of the profile. The panel is placed in the viewport (fixed), so the clipping bar never cuts it, follows the
-// buttons when the window resizes, takes the focus when it opens so the keyboard goes on inside it, and closes when a
-// button is pressed again, on a press outside, on Escape (returning the focus to the details button), and after it
-// opened a device, a camera tab, a tool, the Equipment Setup, or the settings; a Connect keeps it open. Closing it, or anything
-// it opens, never stops a session or an operation, and nothing in it disconnects a device; only an Abort stops one.
+// elapsed time, and reported progress, each with its Abort, the device failures, the warnings, each opening its device, and
+// the real-time clock, even when the bar has no room for it, then the way to the Status Bar settings of the profile. The
+// panel closes as every panel of the bar does, and after it opened a device, a camera tab, a tool, the Equipment Setup, or
+// the settings; a Connect keeps it open. Closing it, or anything it opens, never stops a session or an operation, and
+// nothing in it disconnects a device; only an Abort stops one.
 
 // Width of the panel, in CSS pixels, when the viewport has room for it.
 const PANEL_WIDTH = 420
-
-// Smallest distance kept between the panel and the edges of the viewport, in CSS pixels.
-const VIEWPORT_GUTTER = 16
-
-// Distance between the button and the panel, in CSS pixels.
-const PANEL_GAP = 4
-
-// Height of the top bar the panel never covers, in CSS pixels.
-const TOP_BAR_HEIGHT = 56
-
-// Position and width of the panel in the viewport, in CSS pixels.
-interface PanelPlacement {
-	readonly bottom: number
-	readonly right: number
-	readonly width: number
-}
 
 interface StatusDetailsProps {
 	// Items the bar left out, counted on the button.
 	readonly hidden: number
 	// Failures of the devices of the active connection, counted on their own button.
 	readonly errors: readonly DeviceError[]
+	// Warnings of the active connection, counted on their own button.
+	readonly warnings: readonly StatusWarning[]
 }
 
-// Buttons of the failures and of the details, and the panel they open.
-export function StatusDetails({ hidden, errors }: StatusDetailsProps) {
-	const [placement, setPlacement] = useState<PanelPlacement>()
-	const rootRef = useRef<HTMLSpanElement>(null)
-	const buttonRef = useRef<HTMLButtonElement>(null)
-	const panelRef = useRef<HTMLDivElement>(null)
+// Buttons of the failures, of the warnings, and of the details, and the panel they open.
+export function StatusDetails({ hidden, errors, warnings }: StatusDetailsProps) {
+	const { rootRef, buttonRef, panelRef, placement, toggle, close } = useBarPopover(PANEL_WIDTH)
 	const open = !!placement
-
-	// Returns where the panel goes: above the buttons, aligned with the right edge of the details button but kept inside
-	// the viewport, or undefined while the button is not laid out.
-	function place(): PanelPlacement | undefined {
-		const rect = buttonRef.current?.getBoundingClientRect()
-		if (!rect) return undefined
-		const width = Math.min(PANEL_WIDTH, window.innerWidth - 2 * VIEWPORT_GUTTER)
-		const right = Math.max(VIEWPORT_GUTTER, Math.min(window.innerWidth - rect.right, window.innerWidth - width - VIEWPORT_GUTTER))
-		return { bottom: window.innerHeight - rect.top + PANEL_GAP, right, width }
-	}
-
-	// Opens the panel, or closes it when it is open.
-	function toggle() {
-		setPlacement(open ? undefined : place())
-	}
-
-	// Moves the focus into the panel once it opened, so Tab goes on through its controls.
-	useEffect(() => {
-		if (open) panelRef.current?.focus()
-	}, [open])
-
-	useEffect(() => {
-		if (!open) return
-
-		function handlePointerDown(e: MouseEvent) {
-			if (e.target instanceof Node && !rootRef.current?.contains(e.target)) setPlacement(undefined)
-		}
-
-		function handleKeyDown(e: KeyboardEvent) {
-			if (e.key !== 'Escape' || e.defaultPrevented) return
-			setPlacement(undefined)
-			buttonRef.current?.focus()
-		}
-
-		// Follows the buttons, as when a phone's address bar hides or the device turns.
-		function handleResize() {
-			setPlacement(place())
-		}
-
-		document.addEventListener('mousedown', handlePointerDown)
-		document.addEventListener('keydown', handleKeyDown)
-		window.addEventListener('resize', handleResize)
-
-		return () => {
-			document.removeEventListener('mousedown', handlePointerDown)
-			document.removeEventListener('keydown', handleKeyDown)
-			window.removeEventListener('resize', handleResize)
-		}
-	}, [open])
 
 	return (
 		<span ref={rootRef} data-fixed className="flex flex-none items-center gap-3">
@@ -160,6 +95,17 @@ export function StatusDetails({ hidden, errors }: StatusDetailsProps) {
 					{errors.length === 1 ? '1 failure' : `${errors.length} failures`}
 				</button>
 			)}
+			{warnings.length > 0 && (
+				<button
+					type="button"
+					title={`${warnings.map((warning) => `${warning.device.name}: ${warning.message}`).join('\n')}\n· Open the status details`}
+					onClick={toggle}
+					className={cn('flex cursor-pointer items-center gap-1 text-warning focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent', HIT_CLASS)}
+				>
+					<Icon name="warning" className="size-3.5" />
+					{warnings.length}
+				</button>
+			)}
 			<button
 				ref={buttonRef}
 				type="button"
@@ -169,7 +115,7 @@ export function StatusDetails({ hidden, errors }: StatusDetailsProps) {
 			>
 				{hidden > 0 ? `+${hidden}` : <Icon name="info" className="size-3.5" />}
 			</button>
-			{placement && <StatusDetailsPanel ref={panelRef} placement={placement} onClose={() => setPlacement(undefined)} />}
+			{placement && <StatusDetailsPanel ref={panelRef} placement={placement} warnings={warnings} onClose={close} />}
 		</span>
 	)
 }
@@ -179,12 +125,14 @@ interface StatusDetailsPanelProps {
 	readonly ref?: Ref<HTMLDivElement>
 	// Position and width of the panel.
 	readonly placement: PanelPlacement
+	// Warnings of the active connection.
+	readonly warnings: readonly StatusWarning[]
 	// Closes the panel.
 	readonly onClose: () => void
 }
 
 // Panel of the details.
-function StatusDetailsPanel({ ref, placement: { bottom, right, width }, onClose }: StatusDetailsPanelProps) {
+function StatusDetailsPanel({ ref, placement, warnings, onClose }: StatusDetailsPanelProps) {
 	const now = useNow()
 	const serverId = useActiveServerId()
 	const { server: link } = useSnapshot(notificationsState)
@@ -232,12 +180,7 @@ function StatusDetailsPanel({ ref, placement: { bottom, right, width }, onClose 
 	const guidingTarget: NotificationTarget | undefined = guideCamera && { kind: 'cameraTool', connectionId: guideCamera.connectionId, deviceId: guideCamera.id, tool: 'guiding' }
 
 	return (
-		<div
-			ref={ref}
-			tabIndex={-1}
-			style={{ bottom, right, width, maxHeight: `calc(100dvh - ${bottom + TOP_BAR_HEIGHT + VIEWPORT_GUTTER}px)` }}
-			className="fixed z-30 box-border flex flex-col gap-3 overflow-y-auto rounded-md border border-line-100 bg-base-200 p-3 text-xs whitespace-normal text-ink-200 shadow-[0_12px_32px_rgb(0_0_0/0.45)] outline-none"
-		>
+		<div ref={ref} tabIndex={-1} style={panelStyle(placement)} className="fixed z-30 box-border flex flex-col gap-3 overflow-y-auto rounded-md border border-line-100 bg-base-200 p-3 text-xs whitespace-normal text-ink-200 shadow-[0_12px_32px_rgb(0_0_0/0.45)] outline-none">
 			{link !== 'online' && <p className="m-0 rounded-sm border border-danger px-2 py-1 text-danger">{link === 'offline' ? 'Server offline: showing the last known state.' : 'Connecting to the server.'}</p>}
 			<Section title="Connection">
 				<Row label="Server">{serverLinkLabel(link)}</Row>
@@ -256,7 +199,7 @@ function StatusDetailsPanel({ ref, placement: { bottom, right, width }, onClose 
 								</>
 							}
 						>
-							<span className="text-accent">{captureStatus(capture)}</span> · {captureCount(capture)}
+							<span className={TONE_CLASSES.active}>{captureStatus(capture)}</span> · {captureCount(capture)}
 							{percent !== undefined && ` · ${percent}%`}
 						</Row>
 					)}
@@ -276,7 +219,7 @@ function StatusDetailsPanel({ ref, placement: { bottom, right, width }, onClose 
 					)}
 					{monitor && (
 						<Row label="Meridian flip" actions={<OpenButton label="Open tool" onClick={openMeridianFlip} />}>
-							<span className={TONE_TEXT[meridianFlipHeadline(monitor)[1]]}>{meridianFlipStatusText(monitor, now)}</span>
+							<span className={BAR_BADGE_TEXT[meridianFlipHeadline(monitor)[1]]}>{meridianFlipStatusText(monitor, now)}</span>
 						</Row>
 					)}
 					{listeners && (
@@ -295,6 +238,13 @@ function StatusDetailsPanel({ ref, placement: { bottom, right, width }, onClose 
 						<Row key={error.deviceId} label={error.name} tone="danger">
 							{error.message}
 						</Row>
+					))}
+				</Section>
+			)}
+			{warnings.length > 0 && (
+				<Section title="Warnings">
+					{warnings.map((warning) => (
+						<WarningRow key={warning.id} warning={warning} devices={devices.devices} onNavigate={onClose} />
 					))}
 				</Section>
 			)}
@@ -473,6 +423,34 @@ function EquipmentRow({ role, label, device, name, detail, canConnect, onNavigat
 				)}
 			</span>
 		</li>
+	)
+}
+
+interface WarningRowProps {
+	// Warning of the row.
+	readonly warning: StatusWarning
+	// Devices of the watched connection, among which its device is opened.
+	readonly devices: readonly DeviceSummary[]
+	// Called after its device was opened.
+	readonly onNavigate: () => void
+}
+
+// One warning on two lines: what it concerns in the warning tone, then what is wrong in words, with the link to its device
+// in Equipment Control, where it is fixed.
+function WarningRow({ warning, devices, onNavigate }: WarningRowProps) {
+	const device = devices.find((candidate) => candidate.id === warning.device.id && candidate.connectionId === warning.device.connectionId)
+
+	return (
+		<div className="flex flex-col gap-0.5 py-1">
+			<div className="flex items-baseline justify-between gap-3">
+				<span className="flex items-center gap-1.5 text-sm leading-5 text-warning">
+					<Icon name="warning" className="size-3.5" />
+					{warning.label}
+				</span>
+				<DeviceLink device={device} fallback={warning.device.name} className="text-xs text-ink-200 hover:text-ink-100" onNavigate={onNavigate} />
+			</div>
+			<p className="m-0 text-xs leading-4 text-ink-200">{warning.message}.</p>
+		</div>
 	)
 }
 

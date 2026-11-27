@@ -11,6 +11,7 @@ import { useActiveSite, useDisplayZone } from '../location/useLocation'
 import { notificationsState } from '../notifications/notifications'
 import { operationsState } from '../operations'
 import { activeProfile, activeSetup, astronomicalClockPreferences, profileState, statusChipPreferences } from '../profile/profile'
+import { skyState } from '../sky/sky'
 import { meridianFlipState, monitorKey } from '../tools/meridianflip/meridianflip'
 import { capturePausedBy, latestExecution, MERIDIAN_FLIP_STEP_LABELS, meridianFlipExecutorState } from '../tools/meridianflip/meridianflipexecutor'
 import { mountListeners, mountRemoteControlState } from '../tools/mountremotecontrol/listeners'
@@ -40,7 +41,10 @@ import {
 	type ScopedDevice,
 	scopedDeviceErrors,
 	scopedRunningOperations,
+	scopedWarnings,
+	SKY_SELECTION_ID,
 } from './statusbar/selectors'
+import { SkySelectionItem } from './statusbar/SkySelectionItem'
 import { StatusDetails } from './statusbar/StatusDetailsPanel'
 import { EphemerisOfflineItem, LiveStackingItem, MeridianFlipItem, MountRemoteItem, OperationItem, ServerLinkItem, StatusChip, useOperationAbortable } from './statusbar/StatusItems'
 
@@ -49,15 +53,17 @@ import { EphemerisOfflineItem, LiveStackingItem, MeridianFlipItem, MountRemoteIt
 // roles, the device operations running on the profile's server connection, each with its Abort, the Meridian Flip
 // Monitor of the profile's mount while it is enabled, the Mount Remote Control listeners of that mount while one runs, the
 // Live Stacking sessions of the profile's connection, which hold no device,
-// the offline switch of the ephemeris sources while it is on, its device failures, and the details button that lists
+// the offline switch of the ephemeris sources while it is on, its device failures, its warnings, such as a mount reporting
+// another site than the profile's, and the details button that lists
 // all of it. While the profile's server connection is open, every device the Equipment Setup assigns has a chip: a
 // connected one with what the profile asks of it, or none while the profile hides it, any other with its status in
 // words, even when hidden, kept in view first, since the setup says it is in use. A narrower bar shows fewer chips, by priority, and fewer operations, and counts the others
-// on the details button; the server link, the monitor, the listeners, the live stacking sessions, the offline switch, the failures, and the first
+// on the details button; the server link, the monitor, the listeners, the live stacking sessions, the offline switch, the failures, the warnings, and the first
 // operation are never left out. Every operation has its own Abort, through the same command as the page that started
 // it, and it interrupts that operation alone; a motion of the mount of the profile that no operation holds has one too.
 // In the room all of that leaves, the bar shows the real-time clock the profile asks for, which opens the Astronomical
-// Time Converter; it never takes room from anything else, and is never the Sky simulation clock. Below 640 px the bar
+// Time Converter, then the object selected in the Sky, which opens its place and actions; neither ever takes room from
+// anything else, and the clock is never the Sky simulation clock. Below 640 px the bar
 // is taller, so its controls can be pressed with a thumb.
 
 // Gap between the items of the bar, in CSS pixels (gap-3).
@@ -143,6 +149,8 @@ export function StatusBar() {
 	const capture = activeCapture(captures.sessions, mainCamera)
 	const session = activeGuiding(guiding.sessions, roleDevice(setup, 'GUIDE_CAMERA', devices))
 	const errors = scopedDeviceErrors({ serverId, devices, control })
+	const warnings = scopedWarnings({ serverId, mount, mountState, observer })
+	const selected = useSnapshot(skyState).selection !== undefined
 	const abort = mountAbortTarget({ link, serverId, watched: control.watched, mount, state: mountState, operations: running })
 	const online = link === 'online'
 	const chips: BarChip[] = []
@@ -209,7 +217,7 @@ export function StatusBar() {
 		const next = fitItems(items, left, ITEM_GAP, operations.length - shown.visible.size)
 		setFitted((current) => (current && current.hidden === next.hidden && sameIds(current.chips, next.visible) && sameIds(current.operations, shown.visible) ? current : { chips: next.visible, operations: shown.visible, hidden: next.hidden }))
 		const clocks = fitClocks(
-			readings.map((reading) => ({ id: reading, width: widths.get(reading) ?? 0 })),
+			[...readings, ...(selected ? [SKY_SELECTION_ID] : [])].map((id) => ({ id, width: widths.get(id) ?? 0 })),
 			items,
 			next,
 			left,
@@ -238,11 +246,15 @@ export function StatusBar() {
 						<AstronomicalClockChip reading={reading} timeZone={timeZone} showSeconds={clock.showSeconds} hasSite={observer !== undefined} measure />
 					</span>
 				))}
+				<span data-chip={SKY_SELECTION_ID} className="flex">
+					<SkySelectionItem measure />
+				</span>
 			</div>
 			<ServerLinkItem ref={serverRef} />
 			{chips.map((chip) => (!fitted || fitted.chips.has(chip.id)) && <StatusChip key={chip.id} icon={chip.icon} label={chip.label} name={chip.name} value={chip.value} device={chip.device} />)}
 			<span ref={groupRef} className="ml-auto flex min-w-0 items-center gap-3 border-l border-line-100 pl-3">
 				{operations.map((operation) => (!fitted || fitted.operations.has(operation.id)) && <OperationItem key={operation.id} operation={operation} online={online} />)}
+				{fittedClocks?.has(SKY_SELECTION_ID) && <SkySelectionItem />}
 				{readings.map((reading) => fittedClocks?.has(reading) && <AstronomicalClockChip key={reading} reading={reading} timeZone={timeZone} showSeconds={clock.showSeconds} hasSite={observer !== undefined} />)}
 				{monitor && <MeridianFlipItem monitor={monitor} name={mount?.name} executor={executor} />}
 				{listeners.length > 0 && <MountRemoteItem servers={listeners} name={mount?.name} />}
@@ -250,7 +262,7 @@ export function StatusBar() {
 					<LiveStackingItem key={stacking.sessionId} session={stacking} />
 				))}
 				{ephemerisOffline && <EphemerisOfflineItem />}
-				<StatusDetails hidden={hidden} errors={errors} />
+				<StatusDetails hidden={hidden} errors={errors} warnings={warnings} />
 			</span>
 		</footer>
 	)

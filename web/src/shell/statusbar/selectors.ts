@@ -12,9 +12,10 @@ import type { TppaRuntime } from '../../camera/tppa'
 import type { SelectedConnectionStatus } from '../../connection/useSelectedConnection'
 import { type ControlRuntime, watchedDeviceState } from '../../equipment-control/control'
 import { mountMotion } from '../../equipment-control/mountActivity'
+import { mountSiteDiffers, mountSiteDistance } from '../../equipment-control/mountSite'
 import { ROLE_STATUS_LABELS, type RoleStatus } from '../../equipment/equipment'
 import type { EquipmentRole } from '../../equipment/roles'
-import { formatClockDuration, formatDegrees, formatFixed, MISSING } from '../../format'
+import { formatClockDuration, formatDegrees, formatFixed, formatKilometers, MISSING } from '../../format'
 import type { MountPointingRuntime } from '../../mountpointing/mountpointing'
 import type { ServerLink } from '../../notifications/notifications'
 import { OPERATION_LABELS } from '../../operations'
@@ -129,6 +130,41 @@ export function scopedDeviceErrors({ serverId, devices, control }: DeviceErrorsI
 	}
 
 	return errors
+}
+
+// Condition of the active profile's equipment that still works but gives wrong results, as listed by the status bar.
+export interface StatusWarning {
+	// Stable id of the condition, such as "mount-site".
+	readonly id: string
+	// Short name of what it concerns, such as "Mount site".
+	readonly label: string
+	// What is wrong and what it changes, in words.
+	readonly message: string
+	// Device it concerns, opened in Equipment Control to fix it.
+	readonly device: ScopedDevice
+}
+
+// Inputs of the warnings of the active connection.
+export interface StatusWarningsInput {
+	// Id of the active profile's open server connection.
+	readonly serverId: string | undefined
+	// Device assigned to the profile's MOUNT role.
+	readonly mount: ScopedDevice | undefined
+	// Control state of that mount, read only while the control store mirrors its connection.
+	readonly mountState: Pick<MountState, 'connected' | 'site'> | undefined
+	// Observing site of the active profile, latitude and longitude in degrees; absent when it has none.
+	readonly observer: { readonly name?: string; readonly latitude: number; readonly longitude: number } | undefined
+}
+
+// Returns the warnings of the active server connection: today the profile's mount, connected, reporting another site than
+// the profile's observing site (mountSiteDiffers), so it converts coordinates for another place, with the distance between
+// them. Nothing is said without an observing site, since there is nothing to compare with.
+export function scopedWarnings({ serverId, mount, mountState, observer }: StatusWarningsInput): StatusWarning[] {
+	if (serverId === undefined || !mount || mount.connectionId !== serverId || !mountState?.connected || !observer) return []
+	if (!mountSiteDiffers(mountState.site, observer)) return []
+	const kilometers = mountSiteDistance(mountState.site, observer)
+	const distance = formatKilometers(kilometers, kilometers < 10 ? 1 : 0)
+	return [{ id: 'mount-site', label: 'Mount site', message: `Reports a site ${distance} from ${observer.name ?? 'the active site'}, so it converts coordinates for another place`, device: mount }]
 }
 
 // Severity of a status value, mapped to a text color by the status bar; the text always states the value too.
@@ -559,17 +595,21 @@ export function fitItems(items: readonly BarItem[], room: number, gap: number, h
 	return { visible, hidden: items.length - visible.size + hiddenOperations }
 }
 
-// Reading of the clock as the fitting sees it.
+// Opportunistic item as the fitting sees it: a reading of the clock, or the chip of the Sky selection.
 export interface BarClock {
-	// Id of the reading.
+	// Id of the item: a reading of the clock, or SKY_SELECTION_ID.
 	readonly id: string
-	// Width of the reading as rendered, in CSS pixels.
+	// Width of the item as rendered, in CSS pixels.
 	readonly width: number
 }
 
-// Returns the readings of the clock that fit, in order, a later one only if the one before it fit. The clock is opportunistic:
-// it takes no room fitItems gave out, so it is shown only when nothing else is left out, in the room left after the operations
-// and every chip. Never counted on the details button, which always lists it. Widths and room are in CSS pixels, as for fitItems.
+// Id the chip of the Sky selection is fitted and measured by.
+export const SKY_SELECTION_ID = 'sky-selection'
+
+// Returns the opportunistic items that fit, in order, a later one only if the one before it fit: the readings of the clock,
+// then the chip of the Sky selection. They take no room fitItems gave out, so they are shown only when nothing else is left
+// out, in the room left after the operations and every chip, and are never counted on the details button. Widths and room
+// are in CSS pixels, as for fitItems.
 export function fitClocks(clocks: readonly BarClock[], items: readonly BarItem[], { hidden }: Pick<FittedItems, 'hidden'>, room: number, gap: number): Set<string> {
 	const shown = new Set<string>()
 	if (hidden > 0) return shown

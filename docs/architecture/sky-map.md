@@ -21,6 +21,7 @@ It is the hub of planning: from it the operator points the mount and hands targe
 - Draws the satellites of [Artificial Satellites](artificial-satellites.md), the radiants of [Meteor Showers](meteor-showers.md), and the framings of [Framing](framing.md) around the selection.
 - Receives coordinates and footprints from solved images (see [Plate Solving](plate-solving.md)) and targets from the [Observing Planner](observing-planner.md) and the [Jupiter](jupiter-observing-planner.md) and [Saturn](saturn-observing-planner.md) Observing Planners.
 - Opens [Framing](framing.md), the [Observing Planner](observing-planner.md), and the [Orbital Mechanics Explorer](orbital-mechanics-explorer.md) on the selection.
+- Its selection is shown by the status bar of every workspace (see [UI Structure](ui-and-layout.md)), which locates it at the real current time and offers the Object Inspector's actions; the selection lives in the tab, so it is gone after a reload.
 - Keeps its favorites and display preferences in the profile (see [Persistence and State](persistence-and-state.md)); satellite favorites are those of Artificial Satellites.
 
 ## Rules and Limitations

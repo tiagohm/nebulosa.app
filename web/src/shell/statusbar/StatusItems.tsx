@@ -23,7 +23,7 @@ import { profileState } from '../../profile/profile'
 import { meridianFlipHeadline, meridianFlipStatusText } from '../../tools/meridianflip/meridianflip'
 import { connectEndpoints, listenersStatusText, MOUNT_REMOTE_PROTOCOL_LABELS } from '../../tools/mountremotecontrol/listeners'
 import { Icon, type IconName } from '../../ui/Icon'
-import { TONE_TEXT } from '../../ui/StatusBadge'
+import { type StatusTone as BadgeTone, TONE_TEXT } from '../../ui/StatusBadge'
 import { useNow } from '../../useNow'
 import { navigate, routeState } from '../route'
 import { abortOperation, type OperationAbortStores } from './abort'
@@ -37,14 +37,19 @@ import { type BarOperation, type ChipValue, operationInterruption, type ScopedDe
 // opens its exact device in Equipment Control, or the page itself for a device missing from the connection. Every
 // control of the bar is pressed anywhere across the height of the bar, not only on the text it shows.
 
-// Text color of each status tone.
+// Text color of each status tone: a device that moves or is busy, and a running operation, read in Vega Blue, far from the
+// Antares Red of a device that is not connected, and never in the Ember of what is selected.
 export const TONE_CLASSES: Readonly<Record<StatusTone, string>> = {
 	muted: 'text-ink-300',
 	idle: 'text-ink-200',
-	active: 'text-accent',
+	active: 'text-info',
 	ok: 'text-success',
 	error: 'text-danger',
 }
+
+// Text color of each badge tone the bar reads from a tool, such as the Meridian Flip Monitor or Live Stacking: those of the
+// badges, but a running one busy in Vega Blue, as the chips and operations are.
+export const BAR_BADGE_TEXT: Readonly<Record<BadgeTone, string>> = { ...TONE_TEXT, active: TONE_CLASSES.active }
 
 // Classes shared by the chips: the separator and the spacing.
 const CHIP_CLASS = 'flex flex-none items-center gap-1 border-l border-line-100 pl-3'
@@ -181,7 +186,7 @@ export function MeridianFlipItem({ monitor, name, executor }: MeridianFlipItemPr
 	return (
 		<button type="button" data-fixed title={`${title} · Open the tool`} onClick={() => navigate(routeState, { workspace: 'tools', tool: 'meridian-flip' })} className={cn('flex flex-none items-center gap-1', BUTTON_CLASS)}>
 			<Icon name="meridian" className="size-3.5 text-ink-300" />
-			<span className={cn('tabular-nums', TONE_TEXT[tone])}>{text}</span>
+			<span className={cn('tabular-nums', BAR_BADGE_TEXT[tone])}>{text}</span>
 		</button>
 	)
 }
@@ -200,7 +205,7 @@ export function LiveStackingItem({ session }: LiveStackingItemProps) {
 	return (
 		<button type="button" data-fixed title={`${title} · Open the tool`} onClick={() => openCameraTool(session.connectionId, session.deviceId, 'live-stacking')} className={cn('flex flex-none items-center gap-1', BUTTON_CLASS)}>
 			<Icon name="liveStack" className="size-3.5 text-ink-300" />
-			<span className={cn('tabular-nums', TONE_TEXT[tone])}>{text}</span>
+			<span className={cn('tabular-nums', BAR_BADGE_TEXT[tone])}>{text}</span>
 		</button>
 	)
 }
@@ -285,7 +290,7 @@ interface OperationItemProps {
 // Icon, name, and progress of a running operation, followed by its Abort when it can be interrupted.
 export function OperationItem({ operation: { id, icon, label, target, detail, title, abortable }, online }: OperationItemProps) {
 	return (
-		<span title={online ? title : `Server offline: last known operation · ${title}`} className={cn('flex flex-none items-center gap-2', online ? 'text-accent' : 'text-ink-300')}>
+		<span title={online ? title : `Server offline: last known operation · ${title}`} className={cn('flex flex-none items-center gap-2', online ? 'text-info' : 'text-ink-300')}>
 			<Icon name={icon} className="size-3.5 text-ink-300" />
 			{label}
 			{detail && <span className="tabular-nums">{detail}</span>}

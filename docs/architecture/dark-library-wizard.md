@@ -23,7 +23,7 @@ The wizard runs them with the light kept out and the temperature verified, so th
 ## Rules and Limitations
 
 - It is only an acquisition: browsing, importing, masters, and reuse belong to the Calibration Library, and no pixel it saves is ever calibrated or rewritten.
-- The protection hardware can verify is checked again right before every exposure; what it cannot verify (a manual cap, the opacity of a filter, an unlit panel as the only barrier) is asserted by the operator when starting or resuming.
+- The protection hardware can verify is checked again right before every exposure; what it cannot verify (the manual cap a protection without any device means, the opacity of a filter, an unlit panel as the only barrier) is asserted by the operator when starting or resuming, so it never blocks a start.
 - A suspicion of light never rejects a frame by itself, since an image cannot prove the absence of light; it is recorded, or waits for the operator's decision.
 - Pausing keeps every device held, so the protection cannot be undone unnoticed.
 - The cooler is never switched off or warmed, and devices the session changed are restored when it ends only if no other operation took them first.

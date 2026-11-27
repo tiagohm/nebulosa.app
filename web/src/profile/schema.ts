@@ -38,7 +38,7 @@ import type { StarProfileSettings } from '../stars/starprofile.settings'
 // Version of the shape of the preferences and camera forms the server keeps (sync.ts). A value of any other version is
 // read as absent, never migrated, so a change to the shape of what is kept only raises this number; an added optional
 // field, which reads as its default, does not.
-export const PROFILE_SETTINGS_VERSION = 12
+export const PROFILE_SETTINGS_VERSION = 13
 
 // Application preferences that belong to a profile. Each preference is added here, with its default in
 // defaultSettings when it is not optional, and either kept by the server (PREFERENCES and the camera forms of sync.ts) or
@@ -815,10 +815,9 @@ export interface DarkLibraryWizardSettings {
 	darkSlot: number
 	// Whether the dust cover closes.
 	closeCover: boolean
-	// Whether the flat panel light is switched off.
+	// Whether the flat panel light is switched off. With none of the dark filter, the cover, and the panel, the operator
+	// blocks the light with an opaque cap.
 	panelOff: boolean
-	// Whether the operator confirms a manual opaque cap.
-	manualCap: boolean
 	// Whether a suspicion of light on the first frame of a group stops for a decision.
 	verifyFirstFrame: boolean
 	// Largest distance from a target temperature, in degrees Celsius; positive.
@@ -853,14 +852,13 @@ export const DARK_LIBRARY_WIZARD_MAXIMUM_REJECTIONS = 100
 export const DEFAULT_DARK_LIBRARY_WIZARD_GROUP: DarkGroup = { exposure: 60, count: 30 }
 
 // Dark Library Wizard form of a camera that has none yet: common exposures of 30 frames, protected by a manual
-// cap, since no device may be assigned. Tolerance, hold, and timeout are provisional defaults of ±0.5 °C, 2 min, and 30 min.
+// cap (no device selected), since no device may be assigned. Tolerance, hold, and timeout are provisional defaults of ±0.5 °C, 2 min, and 30 min.
 export const DEFAULT_DARK_LIBRARY_WIZARD_SETTINGS: DarkLibraryWizardSettings = {
 	groups: [60, 120, 180, 300].map((exposure) => ({ exposure, count: DEFAULT_DARK_LIBRARY_WIZARD_GROUP.count })),
 	useDarkFilter: false,
 	darkSlot: 0,
 	closeCover: false,
 	panelOff: false,
-	manualCap: true,
 	verifyFirstFrame: true,
 	tolerance: 0.5,
 	hold: 120,

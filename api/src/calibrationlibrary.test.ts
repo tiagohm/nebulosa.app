@@ -120,7 +120,7 @@ async function plan(library: CalibrationLibrary, base: string, frames: number, r
 		directory: base,
 		capture: { gain: 100, offset: 50, binX: 1, binY: 1, subframe: false, x: 0, y: 0, width: 0, height: 0, frameFormat: 'RAW16' },
 		groups: [group],
-		protection: { closeCover: false, panelOff: false, manualCap: true, verifyFirstFrame: true },
+		protection: { closeCover: false, panelOff: false, verifyFirstFrame: true },
 		thermal: { tolerance: 0.5, hold: 120, timeout: 1800 },
 		maximumRejections: 3,
 		...patch,

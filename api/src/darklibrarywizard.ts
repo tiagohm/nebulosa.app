@@ -52,9 +52,9 @@ import { type OperationDevice, type OperationProgressReporter, type OperationReg
 //
 // Protection is prepared in a safe order: the panel light off first, so a cover never moves with it on, then the wheel
 // at the dark slot, then the cover closed, each confirmed by the state the device reports, never by the command. What
-// hardware cannot verify is the operator's to ensure before starting, which the panel warns about: the manual cap, the
-// opacity of a filter (a slot's name proves nothing), and an unlit panel as the only barrier. A start, or a resume, is that
-// assertion, so no step asks for it. The verified state is read again synchronously right before every exposure, through
+// hardware cannot verify is the operator's to ensure before starting, which the panel warns about: the manual cap a
+// protection without any device means, the opacity of a filter (a slot's name proves nothing), and an unlit panel as the
+// only barrier. A start, or a resume, is that assertion, so no step asks for it. The verified state is read again synchronously right before every exposure, through
 // the capturer's beforeExposure hook, and a change waits for the operator.
 //
 // Temperature is the sensor's, as reported. A command is only dispatched, so a group with a target waits until readings
@@ -209,6 +209,10 @@ export interface DarkLibraryWizardSessionSummary {
 	readonly protection: DarkProtection
 	readonly thermal: DarkThermalPolicy
 	readonly maximumRejections: number
+	// What the frames are for; absent is an ordinary dark.
+	readonly purpose?: 'darkFlat'
+	// Whether the Calibration Library builds the masters of the complete groups once the acquisition ends.
+	readonly generateMasters?: boolean
 	// What the session is doing.
 	readonly state: DarkLibraryWizardState
 	// Whether a pause was asked for and takes effect after the current frame.
@@ -607,6 +611,8 @@ export class DarkLibraryWizardSessions implements Disposable {
 				protection,
 				thermal,
 				maximumRejections,
+				...(plan.purpose && { purpose: plan.purpose }),
+				...(plan.generateMasters && { generateMasters: true }),
 				state: 'preparing',
 				pauseRequested: false,
 				group: 0,

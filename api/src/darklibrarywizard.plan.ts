@@ -64,7 +64,8 @@ export interface DarkPlanGroup extends DarkGroup {
 	readonly key: string
 }
 
-// Light protection of a plan: any combination of the mechanisms, each one verified or asserted.
+// Light protection of a plan: any combination of the mechanisms, each one verified or asserted; none of them is an opaque
+// cap the operator fits by hand, which only the operator can assert.
 export interface DarkProtection {
 	// Dark or opaque slot of the wheel, 0-based; absent leaves the wheel alone.
 	readonly darkFilter?: { readonly slot: number }
@@ -72,8 +73,6 @@ export interface DarkProtection {
 	readonly closeCover: boolean
 	// Whether the assigned flat panel is switched off.
 	readonly panelOff: boolean
-	// Whether the operator asserts a manual opaque cap.
-	readonly manualCap: boolean
 	// Whether a suspicion of light on the first frame of each group stops for the operator's decision.
 	readonly verifyFirstFrame: boolean
 }

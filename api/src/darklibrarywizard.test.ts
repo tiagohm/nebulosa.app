@@ -44,7 +44,7 @@ function request(directory: string, patch: Partial<DarkLibraryWizardRequest> = {
 		token: `token-${tokens++}`,
 		capture: { gain: 0, offset: 0, binX: 1, binY: 1, subframe: true, x: 0, y: 0, width: 64, height: 64, frameFormat: '' },
 		groups: [{ exposure: 0.01, count: 2 }],
-		protection: { closeCover: false, panelOff: false, manualCap: true, verifyFirstFrame: true },
+		protection: { closeCover: false, panelOff: false, verifyFirstFrame: true },
 		thermal: { tolerance: 0.5, hold: 0, timeout: 30 },
 		maximumRejections: 2,
 		directory,
@@ -274,7 +274,7 @@ describe('Dark Library Wizard sessions', () => {
 	test('every protection is applied in order, verified, restored, and left off', async () => {
 		const { id, cameraId, wizard, directory, wheel, panel, cover, panels, operations, wheelDevice, panelDevice, coverDevice, events, summary, ended } = await setup()
 		expect(await panels.commander.enable(operations.coordinator, panel)).toMatchObject({ ok: true })
-		const body = request(directory, { groups: [{ exposure: 1, count: 1 }], protection: { darkFilter: { slot: 2 }, closeCover: true, panelOff: true, manualCap: false, verifyFirstFrame: true }, wheel: wheelDevice, panel: panelDevice, cover: coverDevice })
+		const body = request(directory, { groups: [{ exposure: 1, count: 1 }], protection: { darkFilter: { slot: 2 }, closeCover: true, panelOff: true, verifyFirstFrame: true }, wheel: wheelDevice, panel: panelDevice, cover: coverDevice })
 		await start(wizard, id, cameraId, body)
 
 		await waitUntil(() => summary()?.state === 'exposing')
@@ -295,7 +295,7 @@ describe('Dark Library Wizard sessions', () => {
 	test('a cover found closed stays closed', async () => {
 		const { id, cameraId, wizard, directory, cover, covers, operations, coverDevice, summary, ended } = await setup()
 		expect(await covers.commander.park(operations.coordinator, cover)).toMatchObject({ ok: true })
-		await start(wizard, id, cameraId, request(directory, { protection: { closeCover: true, panelOff: false, manualCap: false, verifyFirstFrame: true }, cover: coverDevice }))
+		await start(wizard, id, cameraId, request(directory, { protection: { closeCover: true, panelOff: false, verifyFirstFrame: true }, cover: coverDevice }))
 		await waitUntil(ended, 60000)
 		expect(summary()).toMatchObject({ state: 'completed' })
 		expect(cover.parked).toBeTrue()
@@ -312,7 +312,7 @@ describe('Dark Library Wizard sessions', () => {
 
 	test('a selected device that is missing, a slot the wheel lacks, or an uncoolable target is refused without moving anything', async () => {
 		const { id, cameraId, wizard, directory, wheel, wheelDevice, events } = await setup()
-		const protection = { closeCover: false, panelOff: false, manualCap: false, verifyFirstFrame: true }
+		const protection = { closeCover: false, panelOff: false, verifyFirstFrame: true }
 
 		const missing = wizard.start(id, cameraId, request(directory, { protection: { ...protection, closeCover: true } }))
 		expect(missing.status).toBe(409)
@@ -378,7 +378,7 @@ describe('Dark Library Wizard sessions', () => {
 
 	test('a device that leaves its verified state stops the frames until it returns', async () => {
 		const { id, cameraId, wizard, directory, summary, ended, confirm, operations, wheel, wheelDevice, pending, client } = await setup()
-		const { sessionId } = await start(wizard, id, cameraId, request(directory, { groups: [{ exposure: 0.01, count: 2 }], protection: { darkFilter: { slot: 2 }, closeCover: false, panelOff: false, manualCap: false, verifyFirstFrame: true }, wheel: wheelDevice }))
+		const { sessionId } = await start(wizard, id, cameraId, request(directory, { groups: [{ exposure: 0.01, count: 2 }], protection: { darkFilter: { slot: 2 }, closeCover: false, panelOff: false, verifyFirstFrame: true }, wheel: wheelDevice }))
 		expect(wizard.pause(sessionId).status).toBe(204)
 		await waitUntil(() => summary()?.state === 'paused')
 
@@ -425,7 +425,7 @@ describe('Dark Library Wizard sessions', () => {
 
 	test('without first-frame verification one suspicion is only recorded, and two in a row stop', async () => {
 		const { id, cameraId, wizard, directory, summary, confirm, pending } = await setup(flooded)
-		const protection = { closeCover: false, panelOff: false, manualCap: true, verifyFirstFrame: false }
+		const protection = { closeCover: false, panelOff: false, verifyFirstFrame: false }
 		const { sessionId } = await start(wizard, id, cameraId, request(directory, { protection, groups: [{ exposure: 0.01, count: 3 }] }))
 		expect(await pending()).toMatchObject({ kind: 'suspectedLight' })
 		expect(summary()?.groups[0]).toMatchObject({ acceptedWithWarnings: 1, attempted: 2 })
@@ -476,7 +476,7 @@ describe('Dark Library Wizard sessions', () => {
 
 	test('a disconnection ends the session, and what it held is reported rather than restored', async () => {
 		const { id, cameraId, wizard, directory, summary, ended, manager, client, cover, coverDevice } = await setup()
-		await start(wizard, id, cameraId, request(directory, { groups: [{ exposure: 30, count: 1 }], protection: { closeCover: true, panelOff: false, manualCap: true, verifyFirstFrame: true }, cover: coverDevice }))
+		await start(wizard, id, cameraId, request(directory, { groups: [{ exposure: 30, count: 1 }], protection: { closeCover: true, panelOff: false, verifyFirstFrame: true }, cover: coverDevice }))
 		await waitUntil(() => summary()?.state === 'exposing')
 		manager.devices.switch(client, cover.id, false)
 		await waitUntil(ended, 30000)

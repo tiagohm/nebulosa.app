@@ -5,10 +5,13 @@ import { DARK_LIBRARY_WIZARD_MAXIMUM_GROUPS, DEFAULT_DARK_LIBRARY_WIZARD_SETTING
 import { cameraKey } from './capture'
 import {
 	continueDarkLibraryWizard,
+	darkGroupProblem,
 	darkLibraryWizardBlocker,
 	darkLibraryWizardCapture,
 	darkLibraryWizardEstimate,
 	darkLibraryWizardExposureLeft,
+	darkLibraryWizardManualCap,
+	darkLibraryWizardProtectionSummary,
 	darkLibraryWizardRequest,
 	darkLibraryWizardRunning,
 	darkLibraryWizardWarning,
@@ -132,8 +135,9 @@ test('a request takes every camera setting of Camera Acquisition but its exposur
 	const exposure = { ...DEFAULT_EXPOSURE_SETTINGS, offset: 20, gain: 500, binX: 2, binY: 2, exposureTime: 123, subframe: true, x: 10, y: 20, width: 100, height: 100 }
 	const request = darkLibraryWizardRequest(settings, exposure, { wheel, panel }, {}, CAPABILITIES)
 
-	expect(request).toMatchObject({ capture: { gain: 100, offset: 20, binX: 2, binY: 2, subframe: true, x: 10, y: 20, width: 100, height: 100 }, groups, protection: { darkFilter: { slot: 4 }, panelOff: false, manualCap: true }, wheel, directory: '/darks', maximumRejections: 5 })
+	expect(request).toMatchObject({ capture: { gain: 100, offset: 20, binX: 2, binY: 2, subframe: true, x: 10, y: 20, width: 100, height: 100 }, groups, protection: { darkFilter: { slot: 4 }, panelOff: false }, wheel, directory: '/darks', maximumRejections: 5 })
 	expect(request.capture).not.toHaveProperty('exposureTime')
+	expect(request.protection).not.toHaveProperty('manualCap')
 	expect(request.panel).toBeUndefined()
 })
 
@@ -143,7 +147,7 @@ test('a start is blocked by what it selected and cannot use, never by what it di
 
 	expect(blocker({})).toBeUndefined()
 	expect(blocker({}, { camera: BUSY })).toBe('The device is busy.')
-	expect(blocker({ manualCap: false })).toBe('Select how the light is blocked.')
+	expect(blocker({ useDarkFilter: false, closeCover: false, panelOff: false })).toBeUndefined()
 	expect(blocker({ closeCover: true })).toBe('The setup has no cover.')
 	expect(blocker({ panelOff: true })).toBe('The setup has no flat panel.')
 	expect(blocker({ useDarkFilter: true })).toBe('The setup has no filter wheel.')
@@ -166,12 +170,32 @@ test('a start is blocked by what it selected and cannot use, never by what it di
 })
 
 test('the warning above Start names what no device verifies', () => {
-	const protection = { manualCap: false, useDarkFilter: false, darkSlot: 0, panelOff: false, closeCover: false }
-	expect(darkLibraryWizardWarning({ ...protection, manualCap: true })).toBe('Before starting, make sure that an opaque cap covers the optical path.')
-	expect(darkLibraryWizardWarning({ ...protection, manualCap: true, useDarkFilter: true, darkSlot: 2 })).toBe('Before starting, make sure that an opaque cap covers the optical path and the filter at slot 3 is opaque.')
+	const protection = { useDarkFilter: false, darkSlot: 0, panelOff: false, closeCover: false }
+	expect(darkLibraryWizardWarning(protection)).toBe('Before starting, make sure that an opaque cap covers the optical path.')
+	expect(darkLibraryWizardWarning({ ...protection, useDarkFilter: true, darkSlot: 2 })).toBe('Before starting, make sure that the filter at slot 3 is opaque.')
+	expect(darkLibraryWizardWarning({ ...protection, useDarkFilter: true, darkSlot: 2, panelOff: true })).toBe('Before starting, make sure that the filter at slot 3 is opaque.')
 	expect(darkLibraryWizardWarning({ ...protection, panelOff: true })).toContain('the unlit flat panel blocks the outside light')
 	expect(darkLibraryWizardWarning({ ...protection, panelOff: true, closeCover: true })).toBeUndefined()
 	expect(darkLibraryWizardWarning({ ...protection, closeCover: true })).toBeUndefined()
+})
+
+test('the protection summary names the devices, or the manual cap, and the test frame', () => {
+	const protection = { useDarkFilter: false, closeCover: false, panelOff: false, verifyFirstFrame: false }
+	expect(darkLibraryWizardManualCap(protection)).toBeTrue()
+	expect(darkLibraryWizardManualCap({ ...protection, panelOff: true })).toBeFalse()
+	expect(darkLibraryWizardProtectionSummary({ ...protection, verifyFirstFrame: true })).toBe('Manual cap · test frame')
+	expect(darkLibraryWizardProtectionSummary({ ...protection, useDarkFilter: true, closeCover: true, panelOff: true })).toBe('Dark filter · Cover · Panel off')
+})
+
+test('a group names its own problem, as the start blocker does', () => {
+	const groups = [
+		{ exposure: 60, count: 3 },
+		{ exposure: 60, count: 5 },
+		{ exposure: 7200, count: 1 },
+	]
+	expect(darkGroupProblem(groups, 0, CAPABILITIES)).toBeUndefined()
+	expect(darkGroupProblem(groups, 1, CAPABILITIES)).toBe('Group 2 repeats another one.')
+	expect(darkGroupProblem(groups, 2, CAPABILITIES)).toContain('outside what the camera accepts')
 })
 
 test('the dark filter proposes a slot named as opaque, keeping one already named so', () => {

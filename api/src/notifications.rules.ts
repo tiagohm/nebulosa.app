@@ -518,7 +518,7 @@ export class NotificationClassifier {
 
 	// Reports a Dark Library Wizard waiting for the operator, leaving a device in an unintended state, and its outcome.
 	#darkLibraryWizard(session: DarkLibraryWizardSessionSummary): NotificationDraft[] {
-		const { sessionId, camera, cameraName, state, pending, reason, cleanupWarnings } = session
+		const { sessionId, camera, cameraName, state, pending, reason, cleanupWarnings, purpose } = session
 		const source = this.#source('darkLibraryWizard', camera.connectionId, camera.deviceId, session.operationId, sessionId)
 		const target = cameraTool(camera.connectionId, camera.deviceId, 'dark-library-wizard')
 		const drafts: NotificationDraft[] = []
@@ -531,7 +531,7 @@ export class NotificationClassifier {
 		if (cleanupWarnings.length > 0)
 			drafts.push({ key: `dark.cleanup:${sessionId}`, level: 'warning', code: 'darkLibraryWizard.cleanupWarning', title: 'Dark Library Wizard left a device changed', message: `Check the panel, wheel, and cover of ${cameraName}: the Dark Library Wizard could not restore them.`, source, target })
 
-		if (state === 'completed') drafts.push({ key: `dark:${sessionId}`, level: 'success', code: 'darkLibraryWizard.completed', title: 'Dark Library Wizard completed', message: `Darks of ${cameraName} were captured.`, source, target })
+		if (state === 'completed') drafts.push({ key: `dark:${sessionId}`, level: 'success', code: 'darkLibraryWizard.completed', title: 'Dark Library Wizard completed', message: `${purpose === 'darkFlat' ? 'Dark-flats' : 'Darks'} of ${cameraName} were captured.`, source, target })
 		else if (state === 'failed' && !this.#quiet(camera.connectionId, reason))
 			drafts.push({ key: `dark:${sessionId}`, level: 'error', code: 'darkLibraryWizard.failed', title: 'Dark Library Wizard failed', message: `Dark Library Wizard of ${cameraName} failed: ${failureText(reason, session.error)}.`, source, target })
 

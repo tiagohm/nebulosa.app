@@ -84,6 +84,7 @@ test('a Dark Library Wizard reports what needs the operator, what it left change
 	])
 	expect(classifier.classify(darkLibraryWizard({ state: 'waitingForDecision', pending: { stepId: 'y', kind: 'suspectedLight', group: 0, suspicions: ['saturation'] } }))[0].message).toContain('external light')
 	expect(classifier.classify(darkLibraryWizard({ state: 'completed', cleanupWarnings: ['cover'] })).map((draft) => draft.code)).toEqual(['darkLibraryWizard.cleanupWarning', 'darkLibraryWizard.completed'])
+	expect(classifier.classify(darkLibraryWizard({ sessionId: 'd2', state: 'completed', purpose: 'darkFlat' }))[0].message).toBe('Dark-flats of CCD were captured.')
 	expect(classifier.classify(darkLibraryWizard({ state: 'failed', reason: 'alert' }))[0]).toMatchObject({ key: 'dark:d1', code: 'darkLibraryWizard.failed' })
 })
 

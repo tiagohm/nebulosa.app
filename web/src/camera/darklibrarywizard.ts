@@ -1,5 +1,6 @@
 import type { CameraCapabilities, CaptureSnoop, DarkGroup, DarkLibraryWizardCaptureSettings, DarkLibraryWizardRequest, DarkLibraryWizardSession, DarkLibraryWizardSessionSummary, DarkLibraryWizardState, DarkLightSuspicion, OperationDevice, ServerEvent, WheelState } from 'api'
 import { nanoid } from 'nanoid'
+import type { FlatPlane } from 'nebulosa/src/imaging/analysis/flat/types'
 import { proxy } from 'valtio'
 import type { RoleAvailability } from '../equipment/availability'
 import { type ApiFetch, browserFetch, deviceUrl, jsonInit } from '../http'
@@ -60,6 +61,9 @@ export const DARK_LIBRARY_WIZARD_STATE_LABELS: Readonly<Record<DarkLibraryWizard
 	cancelled: 'Stopped',
 	failed: 'Failed',
 }
+
+// Label of the level of each plane of a frame, in DN: one for a mono sensor, one per color of a color sensor.
+export const DARK_PLANE_LABELS: Readonly<Record<FlatPlane, string>> = { mono: 'Level', red: 'Level R', green: 'Level G', green1: 'Level G1', green2: 'Level G2', blue: 'Level B' }
 
 // Explanation of each suspicion of light. None of them proves it.
 export const DARK_SUSPICION_LABELS: Readonly<Record<DarkLightSuspicion, string>> = {
@@ -148,13 +152,27 @@ export function darkLibraryWizardCapture(exposure: Readonly<CameraExposureSettin
 	return capture
 }
 
+// Returns whether a form blocks the light with an opaque cap the operator fits: it selects none of the dark filter, the
+// cover, and the panel.
+export function darkLibraryWizardManualCap({ useDarkFilter, closeCover, panelOff }: Pick<DarkLibraryWizardSettings, 'useDarkFilter' | 'closeCover' | 'panelOff'>) {
+	return !useDarkFilter && !closeCover && !panelOff
+}
+
+// Returns the one-line summary of how a form blocks the light: the devices it selects, or the manual cap, and whether
+// the first frame of each group is verified.
+export function darkLibraryWizardProtectionSummary(settings: Pick<DarkLibraryWizardSettings, 'useDarkFilter' | 'closeCover' | 'panelOff' | 'verifyFirstFrame'>) {
+	const { useDarkFilter, closeCover, panelOff, verifyFirstFrame } = settings
+	const barriers = darkLibraryWizardManualCap(settings) ? ['Manual cap'] : [useDarkFilter && 'Dark filter', closeCover && 'Cover', panelOff && 'Panel off'].filter((name) => name !== false)
+	return [...barriers, ...(verifyFirstFrame ? ['test frame'] : [])].join(' · ')
+}
+
 // Builds the start request of the form of a camera, with the camera settings of Camera Acquisition. Only the devices the
 // protection selected are sent.
 export function darkLibraryWizardRequest(settings: Readonly<DarkLibraryWizardSettings>, exposure: Readonly<CameraExposureSettings>, { wheel, panel, cover }: DarkLibraryWizardEquipment, snoop: CaptureSnoop, capabilities?: CameraCapabilities): Omit<DarkLibraryWizardRequest, 'token'> {
 	return {
 		capture: darkLibraryWizardCapture(exposure, capabilities),
 		groups: settings.groups,
-		protection: { ...(settings.useDarkFilter && { darkFilter: { slot: settings.darkSlot } }), closeCover: settings.closeCover, panelOff: settings.panelOff, manualCap: settings.manualCap, verifyFirstFrame: settings.verifyFirstFrame },
+		protection: { ...(settings.useDarkFilter && { darkFilter: { slot: settings.darkSlot } }), closeCover: settings.closeCover, panelOff: settings.panelOff, verifyFirstFrame: settings.verifyFirstFrame },
 		thermal: { tolerance: settings.tolerance, hold: settings.hold, timeout: settings.timeout },
 		maximumRejections: settings.maximumRejections,
 		...(settings.useDarkFilter && wheel && { wheel }),
@@ -167,13 +185,26 @@ export function darkLibraryWizardRequest(settings: Readonly<DarkLibraryWizardSet
 	}
 }
 
+// Returns what is wrong with one group of a plan, or undefined when nothing is: an exposure outside what the camera
+// accepts (its range in seconds, when known), a frame count outside [1, DARK_LIBRARY_WIZARD_MAXIMUM_COUNT], a target the
+// camera cannot set and report, or the exposure and target of an earlier group.
+export function darkGroupProblem(groups: readonly DarkGroup[], index: number, capabilities?: CameraCapabilities): string | undefined {
+	const group = groups[index]
+	const range = capabilities?.exposure
+	if (!(group.exposure > 0) || (range && (group.exposure < range.min || group.exposure > range.max))) return `The exposure of group ${index + 1} is outside what the camera accepts.`
+	if (!(group.count >= 1 && group.count <= DARK_LIBRARY_WIZARD_MAXIMUM_COUNT)) return `Group ${index + 1} has at most ${DARK_LIBRARY_WIZARD_MAXIMUM_COUNT} frames.`
+	if (group.temperature !== undefined && capabilities && !(capabilities.canSetTemperature && capabilities.temperature !== undefined)) return 'The camera cannot set and report a target temperature.'
+	if (groups.findIndex((candidate) => sameGroup(candidate, group)) !== index) return `Group ${index + 1} repeats another one.`
+	return undefined
+}
+
 // Returns why no session can start now, or undefined when one can. A selected device that cannot be used blocks the start
-// instead of being replaced by a manual step, while a device nothing selected never does. The server checks again.
+// instead of being replaced by a manual step, while a device nothing selected never does; selecting none is a manual
+// cap, which only the warning with Start asks for. The server checks again.
 export function darkLibraryWizardBlocker({ camera, wheel, panel, cover }: DarkLibraryWizardAvailability, settings: Readonly<DarkLibraryWizardSettings>, wheelState?: Pick<WheelState, 'count'>, capabilities?: CameraCapabilities): string | undefined {
 	if (camera.status !== 'ready') return camera.message
 
-	const { groups, useDarkFilter, closeCover, panelOff, manualCap, darkSlot } = settings
-	if (!useDarkFilter && !closeCover && !panelOff && !manualCap) return 'Select how the light is blocked.'
+	const { groups, useDarkFilter, closeCover, panelOff, darkSlot } = settings
 	if (useDarkFilter && wheel?.status !== 'ready') return wheel?.message ?? 'The setup has no filter wheel.'
 	if (closeCover && cover?.status !== 'ready') return cover?.message ?? 'The setup has no cover.'
 	if (panelOff && panel?.status !== 'ready') return panel?.message ?? 'The setup has no flat panel.'
@@ -183,14 +214,9 @@ export function darkLibraryWizardBlocker({ camera, wheel, panel, cover }: DarkLi
 	if (groups.length > DARK_LIBRARY_WIZARD_MAXIMUM_GROUPS) return `A plan has at most ${DARK_LIBRARY_WIZARD_MAXIMUM_GROUPS} groups.`
 	if (groups.reduce((total, group) => total + group.count, 0) > DARK_LIBRARY_WIZARD_MAXIMUM_FRAMES) return `A plan has at most ${DARK_LIBRARY_WIZARD_MAXIMUM_FRAMES} frames.`
 
-	const range = capabilities?.exposure
-
 	for (let index = 0; index < groups.length; index++) {
-		const group = groups[index]
-		if (!(group.exposure > 0) || (range && (group.exposure < range.min || group.exposure > range.max))) return `The exposure of group ${index + 1} is outside what the camera accepts.`
-		if (!(group.count >= 1 && group.count <= DARK_LIBRARY_WIZARD_MAXIMUM_COUNT)) return `Group ${index + 1} has at most ${DARK_LIBRARY_WIZARD_MAXIMUM_COUNT} frames.`
-		if (group.temperature !== undefined && capabilities && !(capabilities.canSetTemperature && capabilities.temperature !== undefined)) return 'The camera cannot set and report a target temperature.'
-		if (groups.findIndex((candidate) => sameGroup(candidate, group)) !== index) return `Group ${index + 1} repeats another one.`
+		const problem = darkGroupProblem(groups, index, capabilities)
+		if (problem) return problem
 	}
 
 	return undefined
@@ -213,11 +239,13 @@ export function proposedDarkTemperature(sensor: number | undefined) {
 	return sensor === undefined || !Number.isFinite(sensor) ? 0 : Math.floor(sensor)
 }
 
-// Returns the warning shown above Start for what no device can verify, or undefined when the devices verify everything.
-// Starting is the operator's assertion of it: a manual cap, the opacity of the filter at the dark slot (a slot's name
-// proves nothing), and, when the panel is the only barrier, that an unlit panel really blocks the light.
-export function darkLibraryWizardWarning({ manualCap, useDarkFilter, darkSlot, panelOff, closeCover }: Pick<DarkLibraryWizardSettings, 'manualCap' | 'useDarkFilter' | 'darkSlot' | 'panelOff' | 'closeCover'>): string | undefined {
-	const asserted = [...(manualCap ? ['an opaque cap covers the optical path'] : []), ...(useDarkFilter ? [`the filter at slot ${darkSlot + 1} is opaque`] : []), ...(panelOff && !closeCover && !manualCap && !useDarkFilter ? ['the unlit flat panel blocks the outside light'] : [])]
+// Returns the warning shown with Start for what no device can verify, or undefined when the devices verify everything.
+// Starting is the operator's assertion of it: the manual cap when no device is selected, the opacity of the filter at
+// the dark slot (a slot's name proves nothing), and, when the panel is the only barrier, that an unlit panel really
+// blocks the light.
+export function darkLibraryWizardWarning(settings: Pick<DarkLibraryWizardSettings, 'useDarkFilter' | 'darkSlot' | 'panelOff' | 'closeCover'>): string | undefined {
+	const { useDarkFilter, darkSlot, panelOff, closeCover } = settings
+	const asserted = darkLibraryWizardManualCap(settings) ? ['an opaque cap covers the optical path'] : [...(useDarkFilter ? [`the filter at slot ${darkSlot + 1} is opaque`] : []), ...(panelOff && !closeCover && !useDarkFilter ? ['the unlit flat panel blocks the outside light'] : [])]
 
 	if (asserted.length === 0) return undefined
 	return `Before starting, make sure that ${asserted.length === 1 ? asserted[0] : `${asserted.slice(0, -1).join(', ')} and ${asserted.at(-1)}`}.`

@@ -718,7 +718,7 @@ function CaptureReadout({ connectionId, deviceId }: CaptureReadoutProps) {
 	const file = running && frame?.sessionId === session.sessionId && frame.file ? FILE_STATE_LABELS[fileState(frame)] : undefined
 
 	return (
-		<div className="flex flex-wrap items-baseline gap-x-3 px-3 pt-1.5">
+		<div className="flex flex-wrap items-center gap-x-3 px-3 pt-1.5">
 			<span className="text-xs font-medium tracking-[0.08em] text-ink-300 uppercase">Captured</span>
 			<span className="text-3xl leading-9 font-semibold tracking-[-0.01em] text-ink-100 tabular-nums">{captureFrames(session)}</span>
 			<span className={cn('min-w-0 text-sm leading-5 tabular-nums', failed ? 'text-danger' : 'text-ink-200')}>
@@ -791,7 +791,6 @@ function CameraBottom({ document, expanded, onToggle }: CameraBottomProps) {
 
 	return (
 		<div className="flex-none border-t border-line-100 bg-base-100">
-			<CaptureReadout connectionId={source.connectionId} deviceId={source.deviceId} />
 			<div className="flex min-h-8 items-center gap-3 pr-3 pl-1 font-mono text-xs tracking-wide text-ink-300 uppercase">
 				<button
 					type="button"
@@ -802,7 +801,10 @@ function CameraBottom({ document, expanded, onToggle }: CameraBottomProps) {
 					<Icon name="stepForward" className={cn('size-3.5 transition-transform duration-150 motion-reduce:transition-none', expanded && 'rotate-90')} />
 				</button>
 				{available.length === 1 ? (
-					<span>{BOTTOM_VIEW_LABELS.frames}</span>
+					<div className="flex flex-row items-center gap-3 min-h-12">
+						<CaptureReadout connectionId={source.connectionId} deviceId={source.deviceId} />
+						<span>{BOTTOM_VIEW_LABELS.frames}</span>
+					</div>
 				) : (
 					<span onKeyDown={handleViewKey} className="flex min-w-0 gap-3 overflow-x-auto">
 						{available.map((option) => (

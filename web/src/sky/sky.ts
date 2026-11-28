@@ -9,7 +9,7 @@ import { refKey, type SkySelectionRef } from './objects'
 import { createRequestGuard } from './selection'
 
 // State and API access of the tab's Sky workspace: the selected object with its catalog, minor body,
-// or constellation data, position, and events; and the contextual panel view. The selection is independent of where it came from (a click on the map or a search
+// or constellation data, position, and events; whether the map follows the selection; and the contextual panel view. The selection is independent of where it came from (a click on the map or a search
 // result); only the latest selection's responses are applied. The J2000 map catalog (stars, deep-sky objects, and
 // constellations) is downloaded once and kept in memory for the tab, so returning to the workspace or moving the clock
 // by any span never downloads it again; the map computes its positions of date itself (./mapdata). Positions and events are computed for the instant of the Sky
@@ -60,6 +60,8 @@ export type SkyPanelView = 'inspector' | 'display' | 'framing'
 export interface SkyState {
 	// Selected object; absent when nothing is selected.
 	selection?: SkySelection
+	// Whether the map keeps the view on the selection; a new selection, clearing it, or a pan stops it.
+	following: boolean
 	// Content of the contextual panel.
 	panel: SkyPanelView
 }
@@ -112,7 +114,7 @@ const FRESH_POSITION_MS = 5_000
 export const REALTIME_REFRESH: SkyRefreshOptions = { tolerance: FRESH_POSITION_MS, mode: 'accurate' }
 
 // Sky workspace state of the tab.
-export const skyState = proxy<SkyState>({ panel: 'inspector' })
+export const skyState = proxy<SkyState>({ following: false, panel: 'inspector' })
 
 // Requests of the current selection; a new selection supersedes them.
 const selectionGuard = createRequestGuard()
@@ -169,8 +171,8 @@ export function fetchSkyBodies(time: number, observer: SkyObserver | undefined, 
 	return postJson<SkyBodyPosition[]>(io, '/api/sky/bodies', { time, observer }, signal)
 }
 
-// Selects an object and loads its details and position for an observer. Selecting the object already
-// selected only refreshes its position.
+// Selects an object and loads its details and position for an observer, which stops following the previous one.
+// Selecting the object already selected only refreshes its position.
 export function selectSkyObject(state: SkyState, input: SkySelectionInput, observer: GeographicLocation | undefined, io: SkyIo = browserSkyIo) {
 	const key = refKey(input.ref)
 
@@ -181,15 +183,17 @@ export function selectSkyObject(state: SkyState, input: SkySelectionInput, obser
 	}
 
 	deferredRefresh = undefined
+	state.following = false
 	state.selection = { ref: input.ref, key, source: input.source, category: input.category, name: input.name, minorBody: input.minorBody, loading: true }
 	state.panel = 'inspector'
 	void loadSelection(state, observer, io, true, 'accurate')
 }
 
-// Clears the selection and abandons its requests.
+// Clears the selection, stops following it, and abandons its requests.
 export function clearSkySelection(state: SkyState) {
 	selectionGuard.cancel()
 	deferredRefresh = undefined
+	state.following = false
 	state.selection = undefined
 }
 

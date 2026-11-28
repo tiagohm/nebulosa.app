@@ -10,7 +10,7 @@ import { Notice } from '../../ui/Notice'
 import { ObjectTitle } from '../../ui/ObjectTitle'
 import { skyClock, skyTime } from '../clock'
 import { formatDeclination, formatRightAscension, formatSolarSystemDistance } from '../format'
-import type { SkySelection } from '../sky'
+import { type SkySelection, skyState } from '../sky'
 import { findNextSatellitePass, inspectSatellite, skySatelliteState } from './satellite'
 
 // Object Inspector of an artificial satellite in the Sky: its identity, its geometric position at the instant the Sky
@@ -35,7 +35,8 @@ export interface SatelliteInspectorProps {
 // Satellite Inspector.
 export function SatelliteInspector({ selection, observer, onSetObserver, timeZone }: SatelliteInspectorProps) {
 	const noradId = selection.ref.kind === 'satellite' ? selection.ref.noradId : ''
-	const { details, detailsError, nextPass, nextPassLoading, nextPassError, tracking, trail } = useSnapshot(skySatelliteState)
+	const { details, detailsError, nextPass, nextPassLoading, nextPassError, trail } = useSnapshot(skySatelliteState)
+	const { following } = useSnapshot(skyState)
 	const { position, positionError } = selection
 	const object = details?.object
 
@@ -49,8 +50,8 @@ export function SatelliteInspector({ selection, observer, onSetObserver, timeZon
 				<DataRow label="Brightness">Unknown</DataRow>
 				{detailsError && <Notice error>Details unavailable: {detailsError}</Notice>}
 				<div className="flex flex-wrap gap-2">
-					<Button variant={tracking ? 'primary' : 'secondary'} disabled={!position} title="Keeps the view on the satellite; panning the map stops it." onClick={() => (skySatelliteState.tracking = !tracking)}>
-						{tracking ? 'Stop Tracking' : 'Track on Sky'}
+					<Button variant={following ? 'primary' : 'secondary'} disabled={!position} title="Keeps the view on the satellite, as Follow Selection does; panning the map stops it." onClick={() => (skyState.following = !following)}>
+						{following ? 'Stop Tracking' : 'Track on Sky'}
 					</Button>
 					<Button variant={trail ? 'primary' : 'secondary'} title="Draws the track of the satellite around the time shown." onClick={() => (skySatelliteState.trail = !trail)}>
 						{trail ? 'Hide Track' : 'Show Track'}

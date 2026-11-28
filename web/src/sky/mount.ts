@@ -8,7 +8,7 @@ import type { ObserverLocation } from './celestial/types'
 import type { SkySelection } from './sky'
 
 // Mount runtime of the tab for the Sky workspace: the one mount the active profile assigns to the MOUNT role on its
-// open server connection, the slews this tab started on it, and whether the map follows it. Its real state is the one
+// open server connection and the slews this tab started on it. Its real state is the one
 // the control runtime mirrors (mountView), never fetched apart. The mount is addressed by its server connection id
 // and exact device id, and switching profile or connection drops everything known about the previous mount. Positions
 // only come from the server; a mount without a reported state has no position. Slew targets are resolved by the
@@ -44,8 +44,6 @@ export interface MountRuntime {
 	sending: boolean
 	// Why the latest slew or stop request was refused.
 	error?: string
-	// Whether the map keeps the mount at its center.
-	following: boolean
 }
 
 // Equatorial point of date in radians.
@@ -57,7 +55,7 @@ export interface MountPoint {
 }
 
 // Mount runtime of the tab.
-export const mountRuntime = proxy<MountRuntime>({ sending: false, following: false })
+export const mountRuntime = proxy<MountRuntime>({ sending: false })
 
 // Mount runtime with the state the control runtime mirrors for its target, as the views read it.
 export interface MountView extends Readonly<MountRuntime> {
@@ -75,7 +73,7 @@ export function mountView(runtime: Readonly<MountRuntime>, control: Pick<Control
 	return { ...runtime, state: watchedDeviceState(control, 'mount', runtime.target) }
 }
 
-// Follows another mount, or none. Everything known about the previous one is dropped and following stops. The same
+// Follows another mount, or none. Everything known about the previous one is dropped. The same
 // mount only refreshes its name.
 export function watchMount(runtime: MountRuntime, target: MountTarget | undefined) {
 	if (sameMount(runtime.target, target)) {
@@ -87,7 +85,6 @@ export function watchMount(runtime: MountRuntime, target: MountTarget | undefine
 	runtime.slew = undefined
 	runtime.error = undefined
 	runtime.sending = false
-	runtime.following = false
 }
 
 // Returns where the followed mount points, or undefined when it is not connected or its state is

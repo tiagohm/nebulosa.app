@@ -282,7 +282,7 @@ describe('chart readout', () => {
 describe('handoffs', () => {
 	function handoff() {
 		const route = proxy<RouteState>({ route: { workspace: 'tools' } })
-		const sky = proxy<SkyState>({ panel: 'framing' })
+		const sky = proxy<SkyState>({ following: false, panel: 'framing' })
 		const images = proxy<SkyImageState>({})
 		const clock = proxy<SkyClock>({ mode: 'fixed', anchor: 1000, startedAt: 0, rate: 1 })
 		const skyIo: SkyIo = { fetch: () => respond({}), time: () => 1000 }

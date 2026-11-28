@@ -29,7 +29,7 @@ function fakeApi() {
 const position = (ra: number) => ({ time: 1_000, source: 'local', center: 'geocentric', rightAscension: ra, declination: 0, rightAscensionJ2000: ra, declinationJ2000: 0, constellation: 'ORI' })
 
 test('a late response of a previous selection is discarded', async () => {
-	const state = proxy<SkyState>({ panel: 'display' })
+	const state = proxy<SkyState>({ following: false, panel: 'display' })
 	const { io, release } = fakeApi()
 
 	selectSkyObject(state, { ref: { kind: 'catalog', id: 1 }, source: 'map', name: 'A' }, undefined, io)
@@ -46,7 +46,7 @@ test('a late response of a previous selection is discarded', async () => {
 })
 
 test('catalog details and position of a selection', async () => {
-	const state = proxy<SkyState>({ panel: 'inspector' })
+	const state = proxy<SkyState>({ following: false, panel: 'inspector' })
 	const { io, release } = fakeApi()
 	const observer = { latitude: -23.5, longitude: -46.6, elevation: 760 }
 
@@ -63,7 +63,7 @@ test('catalog details and position of a selection', async () => {
 })
 
 test('a failed position keeps the catalog data', async () => {
-	const state = proxy<SkyState>({ panel: 'inspector' })
+	const state = proxy<SkyState>({ following: false, panel: 'inspector' })
 	const { io, release } = fakeApi()
 
 	selectSkyObject(state, { ref: { kind: 'catalog', id: 7 }, source: 'search', name: 'X' }, undefined, io)
@@ -75,8 +75,26 @@ test('a failed position keeps the catalog data', async () => {
 	expect(state.selection?.loading).toBe(false)
 })
 
+test('another selection or clearing it stops following; the same one keeps it', () => {
+	const state = proxy<SkyState>({ following: false, panel: 'inspector' })
+	const { io } = fakeApi()
+	const mars = { ref: { kind: 'body', code: '499' }, source: 'map', name: 'Mars' } as const
+
+	selectSkyObject(state, mars, undefined, io)
+	state.following = true
+	selectSkyObject(state, mars, undefined, io)
+	expect(state.following).toBeTrue()
+
+	selectSkyObject(state, { ref: { kind: 'catalog', id: 7 }, source: 'search', name: 'X' }, undefined, io)
+	expect(state.following).toBeFalse()
+
+	state.following = true
+	clearSkySelection(state)
+	expect(state.following).toBeFalse()
+})
+
 test('changing the observer drops the previous position', async () => {
-	const state = proxy<SkyState>({ panel: 'inspector' })
+	const state = proxy<SkyState>({ following: false, panel: 'inspector' })
 	const { io, release } = fakeApi()
 
 	selectSkyObject(state, { ref: { kind: 'body', code: '10' }, source: 'map', name: 'Sun' }, undefined, io)
@@ -93,7 +111,7 @@ test('changing the observer drops the previous position', async () => {
 })
 
 test('a refresh skips a fresh or loading selection', async () => {
-	const state = proxy<SkyState>({ panel: 'inspector' })
+	const state = proxy<SkyState>({ following: false, panel: 'inspector' })
 	const { io, pending, release } = fakeApi()
 
 	selectSkyObject(state, { ref: { kind: 'body', code: '10' }, source: 'map', name: 'Sun' }, undefined, io)
@@ -106,7 +124,7 @@ test('a refresh skips a fresh or loading selection', async () => {
 })
 
 test('constellation details', async () => {
-	const state = proxy<SkyState>({ panel: 'inspector' })
+	const state = proxy<SkyState>({ following: false, panel: 'inspector' })
 	const { io, release } = fakeApi()
 
 	selectSkyObject(state, { ref: { kind: 'constellation', code: 'ORI' }, source: 'map', name: 'Orion' }, undefined, io)
@@ -115,7 +133,7 @@ test('constellation details', async () => {
 })
 
 test('positions are computed for the instant shown', async () => {
-	const state = proxy<SkyState>({ panel: 'inspector' })
+	const state = proxy<SkyState>({ following: false, panel: 'inspector' })
 	const { io, pending, release } = fakeApi()
 	let time = 5_000_000
 	const clocked: SkyIo = { ...io, time: () => time }
@@ -169,7 +187,7 @@ test('the J2000 map catalog is downloaded once per tab, whatever the instant, an
 })
 
 test('a forced refresh asked while the selection loads runs once that load ends', async () => {
-	const state = proxy<SkyState>({ panel: 'inspector' })
+	const state = proxy<SkyState>({ following: false, panel: 'inspector' })
 	const { io, pending, release } = fakeApi()
 
 	selectSkyObject(state, { ref: { kind: 'minorBody', spkId: '1000042', designation: '161P' }, source: 'map', name: '161P' }, undefined, io)
@@ -190,7 +208,7 @@ test('a forced refresh asked while the selection loads runs once that load ends'
 })
 
 test('a new selection drops the forced refresh of the previous one', async () => {
-	const state = proxy<SkyState>({ panel: 'inspector' })
+	const state = proxy<SkyState>({ following: false, panel: 'inspector' })
 	const { io, pending, release } = fakeApi()
 
 	selectSkyObject(state, { ref: { kind: 'body', code: '499' }, source: 'map', name: 'Mars', category: 'solarSystem' }, undefined, io)

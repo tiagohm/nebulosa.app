@@ -42,7 +42,9 @@ import { TimeController } from './TimeController'
 // observing site, chosen in the top bar: with one the map is its local sky; without one it is an equatorial chart of the
 // whole sky, never an assumed place. Times read in the profile's display zone, which changes no position. A solved image can send its footprint, drawn while its document shows that image,
 // and a coordinate to mark; the view is only panned to them, never reprojected, and the toolbar toggles the footprint
-// and clears the mark. Keyboard shortcuts (./shortcuts) focus the search, zoom, and return to the real time.
+// and clears the mark. The toolbar centers the view on the mount, selecting it, and makes the view follow the selection,
+// whatever it is, until the user pans or selects another object. Keyboard shortcuts (./shortcuts) focus the search, zoom,
+// and return to the real time.
 
 // Classes of the toolbar's icon buttons: 43.75 px touch targets on phones, where the buttons take a line of their own,
 // and the compact 28 px toolbar size elsewhere.
@@ -98,12 +100,14 @@ export function SkyWorkspace() {
 	const showSatellites = isSkyLayerVisible(display, SATELLITES_LAYER)
 	const selectedSatellite = sky.selection?.ref.kind === 'satellite' ? sky.selection.ref.noradId : undefined
 	const { revision } = useSnapshot(satelliteCatalogState)
-	const { tracking, trail } = useSnapshot(skySatelliteState)
+	const { trail } = useSnapshot(skySatelliteState)
+	// A followed satellite is kept in view by the satellite layer, from its own positions, while the layer is shown.
+	const satelliteFollowed = sky.following && showSatellites && !!selectedSatellite
 	const satelliteIds = showSatellites ? [...new Set([...(selectedSatellite ? [selectedSatellite] : []), ...favorites])].slice(0, SATELLITE_TRACKS_LIMIT).join(',') : ''
 
 	useEffect(() => {
-		map.setSatellites({ ids: satelliteIds ? satelliteIds.split(',') : [], selected: selectedSatellite, observer: currentSite(), revision, tracking: tracking && showSatellites && !!selectedSatellite, trail })
-	}, [map, satelliteIds, selectedSatellite, key, revision, tracking, trail, showSatellites])
+		map.setSatellites({ ids: satelliteIds ? satelliteIds.split(',') : [], selected: selectedSatellite, observer: currentSite(), revision, tracking: satelliteFollowed, trail })
+	}, [map, satelliteIds, selectedSatellite, key, revision, satelliteFollowed, trail])
 
 	// Draws the radiants of the active meteor showers while the display shows them, and the selected shower's radiant,
 	// following the catalog.
@@ -162,6 +166,13 @@ export function SkyWorkspace() {
 		if (status === 'ready') map.syncSelection()
 	}, [map, status, selectionKey, selectionCenter?.rightAscension, selectionCenter?.declination, selectionName, selectionType])
 
+	// Keeps the view on the followed selection, recentered at each of its positions; a satellite the satellite layer
+	// follows is left to it.
+	const followed = sky.following && !satelliteFollowed ? selectionCenter : undefined
+	useEffect(() => {
+		map.follow(followed)
+	}, [map, followed?.rightAscension, followed?.declination])
+
 	// Keyboard shortcuts of the workspace (./shortcuts): / focuses the search, + and − zoom, N returns to the real time.
 	const searchRef = useRef<HTMLInputElement>(null)
 
@@ -189,6 +200,14 @@ export function SkyWorkspace() {
 		map.syncSelection()
 		if (result.ref.kind === 'minorBody') void map.locateMinorBody(result.ref)
 		if (!panelState.docked) openPanel('inspector')
+	}
+
+	// Selects the mount marker, as a click on it would, and centers the view on it.
+	function centerOnMount() {
+		if (!mountTarget || !mountCenter) return
+		selectSkyObject(skyState, { ref: { kind: 'mount', connectionId: mountTarget.connectionId, id: mountTarget.id }, source: 'map', name: mountTarget.name }, observer)
+		map.syncSelection()
+		map.centerOn(mountCenter)
 	}
 
 	// Shows a view in the panel, opening the panel.
@@ -257,17 +276,14 @@ export function SkyWorkspace() {
 				<div className="flex flex-none items-center gap-2 border-b border-line-100 bg-base-100 px-2 max-sm:flex-wrap max-sm:gap-y-1 max-sm:py-1 sm:h-11">
 					<SkySearch onSelect={handleSearchSelect} inputRef={searchRef} />
 					<div className="ml-auto flex flex-none items-center gap-1 max-sm:w-full max-sm:flex-wrap max-sm:justify-end">
-						<IconButton icon="mount" label={mountCenter ? 'Center on Mount' : 'Center on Mount (the mount position is shown in real time only, while connected)'} disabled={!mountCenter} onClick={() => mountCenter && map.centerOn(mountCenter)} className={TOUCH_BUTTON} />
+						<IconButton icon="mount" label={mountCenter ? 'Center on Mount' : 'Center on Mount (the mount position is shown in real time only, while connected)'} disabled={!mountCenter} onClick={centerOnMount} className={TOUCH_BUTTON} />
 						<IconButton
 							className={TOUCH_BUTTON}
 							icon="reticle"
-							label={mountCenter ? 'Follow Mount' : 'Follow Mount (the mount position is shown in real time only, while connected)'}
-							disabled={!mountCenter}
-							pressed={mount.following && !!mountCenter}
-							onClick={() => {
-								mountRuntime.following = !mountRuntime.following
-								if (mountRuntime.following && mountCenter) map.centerOn(mountCenter)
-							}}
+							label={selectionCenter ? `Follow ${sky.selection?.name || 'Selection'}` : 'Follow Selection (select an object whose position is known)'}
+							disabled={!selectionCenter}
+							pressed={sky.following && !!selectionCenter}
+							onClick={() => (skyState.following = !skyState.following)}
 						/>
 						{footprint && <IconButton icon="images" label={`${handoffs.footprintHidden ? 'Show' : 'Hide'} the footprint of ${footprint.name}`} pressed={!handoffs.footprintHidden} onClick={() => toggleImageFootprint(skyImageState)} className={TOUCH_BUTTON} />}
 						{handoffs.intent?.mark && <IconButton icon="pin" label={`Clear the mark of ${handoffs.intent.label}`} onClick={() => clearSkyCoordinate(skyImageState)} className={TOUCH_BUTTON} />}

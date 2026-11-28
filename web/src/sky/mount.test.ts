@@ -57,7 +57,7 @@ function fakeFetch(respond: () => Response) {
 }
 
 function runtime(): MountRuntime {
-	const value = proxy<MountRuntime>({ sending: false, following: false })
+	const value = proxy<MountRuntime>({ sending: false })
 	watchMount(value, TARGET)
 	return value
 }
@@ -77,14 +77,12 @@ test('reads the state the control runtime mirrors for the followed mount only', 
 	expect(mountView(value, control).state).toBeUndefined()
 })
 
-test('switching the mount drops what was known and stops following', () => {
+test('switching the mount drops what was known', () => {
 	const value = runtime()
-	value.following = true
 	value.error = 'refused'
 
 	watchMount(value, { ...TARGET, connectionId: 'b' })
 	expect(value.error).toBeUndefined()
-	expect(value.following).toBeFalse()
 })
 
 test('has a position only while connected and in real time', () => {

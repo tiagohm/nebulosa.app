@@ -12,11 +12,10 @@ import { formatApparentSize } from './format'
 import { isCometSpkId, type KernelBody, kernelBodies } from './kernels.sky'
 import { mapDataCovers, type SkyMapCatalog, skyMapAt } from './mapdata'
 import { MeteorRadiantLayer, type MeteorRadiantTargets } from './meteors.sky'
-import { type MountPoint, mountRuntime } from './mount'
+import type { MountPoint } from './mount'
 import { hoverLabel, type MapNames, MOUNT_SHAPE_TYPE, type MountMarkerData, type MountRef, movingBodyId, refKey, refOfCelestialObject, selectionTargets, SKY_POINT_NAME, SKY_POINT_SHAPE_ID, SKY_POINT_SHAPE_TYPE, type SkyPointData, type SkyPointRef, type SkySelectionRef } from './objects'
 import { skyMapFont, skyMapPalette, skyMapReferenceLines, skyMapTheme } from './palette'
 import { isRememberable, type RememberedObject, RememberedObjects, type RememberedShapeData, REMEMBERED_SHAPE_TYPE, rememberedOf, rememberedShapeId } from './remembered'
-import { skySatelliteState } from './satellite/satellite'
 import { SatelliteLayer, type SatelliteTargets } from './satellites.sky'
 import { createLatestRunner, createRequestGuard } from './selection'
 import { browserSkyIo, fetchMinorBodyPositions, fetchSkyBodies, fetchSkyPosition, loadSkyMapCatalog, REALTIME_REFRESH, refreshSkySelection, type SkyRefreshOptions, type SkySelection, selectSkyObject, skyState } from './sky'
@@ -30,8 +29,9 @@ import { browserSkyIo, fetchMinorBodyPositions, fetchSkyBodies, fetchSkyPosition
 // the instant of the Sky simulation clock (./clock); its J2000 catalog, downloaded once per tab, is moved and precessed
 // to the instant in the browser (./mapdata) and computed again in place whenever the clock reaches an instant more than a
 // year away from the one it was computed for, playing or not. The mount's reported position is
-// drawn as a selectable marker while the clock shows the real time, and the view can be centered on it
-// or follow it until the user pans. A click on an empty part of the map selects the Sky point there: fixed J2000
+// drawn as a selectable marker while the clock shows the real time, and the view can be centered on it. The view can
+// follow the selection, whatever it is, until the user pans, another object is selected, or an image sends a coordinate:
+// it is recentered on each new position and, on the local sky, kept on it across clock updates. A click on an empty part of the map selects the Sky point there: fixed J2000
 // coordinates, converted from the frame of the loaded catalogs and marked while selected, so the mount can be sent
 // between objects. Selected objects the map data lacks (minor bodies, and catalog
 // objects fainter than it) are remembered for the tab (./remembered) and stay drawn and selectable, the
@@ -413,6 +413,8 @@ export class Planetarium {
 	// Point of date (radians) at the middle of the view before the latest clock update, recentered once the
 	// map is updated; absent when the view keeps the horizon still.
 	#anchor?: MountPoint
+	// Point of date (radians) of the selection the view follows; absent while it follows none.
+	#followed?: MountPoint
 	// Instant the map shows, Unix milliseconds (UTC).
 	#shownTime: number
 	// Timer of the refresh of the selection for a fixed instant, once it settles.
@@ -454,8 +456,7 @@ export class Planetarium {
 			}),
 			this.celestial.on('updateEnd', ({ time }) => this.#updateEnded(time)),
 			this.celestial.on('panStart', () => {
-				mountRuntime.following = false
-				skySatelliteState.tracking = false
+				skyState.following = false
 			}),
 			subscribe(spiceKernelsState, () => this.#followLibrary()),
 		]
@@ -708,14 +709,13 @@ export class Planetarium {
 
 		if (coordinate && point && coordinate.seq !== this.#coordinateSeq) {
 			this.#coordinateSeq = coordinate.seq
-			mountRuntime.following = false
+			skyState.following = false
 			planetariumState.coordinateHidden = !this.celestial.centerOnCoordinate(point.rightAscension, point.declination)
 		}
 	}
 
 	// Draws the mount marker at a point of date (radians), moving the existing marker in place so a
-	// selected marker keeps its highlight, or removes it when there is no mount or point. Recenters the
-	// view on it while the mount is followed.
+	// selected marker keeps its highlight, or removes it when there is no mount or point.
 	syncMount(mount: { readonly ref: MountRef; readonly name: string } | undefined, point: MountPoint | undefined) {
 		if (!mount || !point) {
 			if (this.#mountMarker) this.celestial.removeShape(MOUNT_MARKER_ID)
@@ -735,14 +735,20 @@ export class Planetarium {
 			this.#mountMarker = { coordinate, data }
 			this.celestial.addShape({ id: MOUNT_MARKER_ID, type: MOUNT_SHAPE_TYPE, coordinate, data, render: (_, ctx, state) => drawMountMarker(ctx, state.x, state.y, data.name) })
 		}
-
-		if (mountRuntime.following) this.centerOn(point)
 	}
 
 	// Pans the view to a point of date (radians), keeping the zoom, orientation, and layers; a point below
 	// the local horizon leaves the view unchanged.
 	centerOn(point: MountPoint) {
 		this.celestial.centerOnCoordinate(point.rightAscension, point.declination)
+	}
+
+	// Keeps the view on the followed selection at a point of date (radians), recentering it there, or follows nothing
+	// when absent. The caller passes each new position of the selection; a satellite the satellite layer follows itself
+	// is not passed.
+	follow(point: MountPoint | undefined) {
+		this.#followed = point && { rightAscension: point.rightAscension, declination: point.declination }
+		if (point) this.centerOn(point)
 	}
 
 	// Applies the display preferences in place, keeping the view and data; the local meridian is drawn
@@ -769,7 +775,7 @@ export class Planetarium {
 			return
 		}
 
-		const targets = selectionTargets(selection.ref, selection.category, this.#names)
+		const targets = selection.ref.kind === 'mount' ? this.#mountTargets(selection.key) : selectionTargets(selection.ref, selection.category, this.#names)
 		// A clicked object (such as one of the two Serpens labels) keeps its highlight.
 		const found = this.#isSelected(selection.key) ? this.celestial.selectedObject : this.#selectFirst(targets)
 		const position = selection.position
@@ -795,6 +801,12 @@ export class Planetarium {
 		} catch {
 			// The Inspector shows why the position is unavailable.
 		}
+	}
+
+	// Selection targets of a mount selection key: the mount marker when it draws that mount, otherwise none.
+	#mountTargets(key: string): SelectionTarget[] {
+		const marker = this.#mountMarker
+		return marker && refKey(marker.data.ref) === key ? [{ type: 'shape', id: MOUNT_MARKER_ID }] : []
 	}
 
 	// Highlights the first loaded object of a list of selection targets; returns it, or null when none is.
@@ -940,10 +952,13 @@ export class Planetarium {
 		else this.#clockTimer = setInterval(tick, mode === 'playing' ? PLAYING_INTERVAL_MS : SKY_REALTIME_TICK_MS)
 	}
 
-	// Point of date (radians) at the middle of the view that a clock update keeps there: only on the local
-	// sky zoomed in to SKY_ANCHOR_ZOOM or more, and not while the mount is followed, which recenters itself.
+	// Point of date (radians) that a clock update keeps at the middle of the view, only on the local sky: the followed
+	// selection's at any zoom, so it stays there until its next position, otherwise the middle of the view zoomed in to
+	// SKY_ANCHOR_ZOOM or more.
 	#viewAnchor(): MountPoint | undefined {
-		if (this.coordinateSystem !== 'horizontal' || mountRuntime.following || this.celestial.viewState.transform.k < SKY_ANCHOR_ZOOM) return undefined
+		if (this.coordinateSystem !== 'horizontal') return undefined
+		if (this.#followed) return this.#followed
+		if (this.celestial.viewState.transform.k < SKY_ANCHOR_ZOOM) return undefined
 		const center = this.celestial.screenToEquatorial(this.#host.clientWidth / 2, this.#host.clientHeight / 2)
 		return center ? { rightAscension: center.rightAscension, declination: center.declination } : undefined
 	}

@@ -282,7 +282,7 @@ test('a ground track is read when its view shows a satellite with elements', () 
 })
 
 test('Open in Sky selects the satellite and moves the clock only when asked', () => {
-	const sky = proxy<SkyState>({ panel: 'display' })
+	const sky = proxy<SkyState>({ following: false, panel: 'display' })
 	const clock = proxy<SkyClock>({ mode: 'now', anchor: 0, startedAt: 0, rate: 1 })
 	const route = proxy<RouteState>({ route: { workspace: 'tools' } })
 	const bodies: unknown[] = []

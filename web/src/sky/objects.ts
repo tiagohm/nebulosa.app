@@ -161,8 +161,8 @@ export function refOfCelestialObject(object: CelestialObject, names: MapNames): 
 
 // Returns the map objects a reference may select, in the order to try: a catalog id may be a star or a
 // deep-sky object of the map data, or else the shape of the remembered object; solar-system objects are
-// moving bodies; a constellation is any of its labels; the Sky point is its marker. The mount marker is a custom shape,
-// highlighted only when clicked, so it has none.
+// moving bodies; a constellation is any of its labels; the Sky point is its marker. The mount marker is a custom shape
+// of the map, which only it knows the mount of (./planetarium), so it has none here.
 export function selectionTargets(ref: SkySelectionRef, category: SkySearchResult['category'] | undefined, names: MapNames): SelectionTarget[] {
 	if (ref.kind === 'mount') return []
 	if (ref.kind === 'meteorShower') return [{ type: 'shape', id: meteorRadiantShapeId(ref.id) }]

@@ -5,8 +5,8 @@ import { type GeographicLocation, siteObserver } from '../../location/site'
 import { createRequestGuard } from '../selection'
 
 // State of the Satellite Inspector of the Sky, tab memory: the details of the satellite selected, its next pass for the
-// Sky observer after the instant the Sky shows, and whether the map follows it and draws its track. The position is the
-// selection's, refreshed by the Sky like every object's.
+// Sky observer after the instant the Sky shows, and whether the map draws its track. The position is the selection's,
+// refreshed by the Sky like every object's, and the map follows it as it follows any selection (SkyState.following).
 
 // Window of the next pass search, in milliseconds after the Sky's instant.
 const NEXT_PASS_WINDOW_MS = 2 * 86_400_000
@@ -25,22 +25,19 @@ export interface SkySatelliteState {
 	nextPass?: SatellitePassPrediction | null
 	nextPassLoading: boolean
 	nextPassError?: string
-	// Whether the map keeps the view on the satellite; a pan stops it.
-	tracking: boolean
 	// Whether the map draws the track of the satellite around the instant shown.
 	trail: boolean
 }
 
 // Satellite Inspector state of the tab.
-export const skySatelliteState = proxy<SkySatelliteState>({ nextPassLoading: false, tracking: false, trail: false })
+export const skySatelliteState = proxy<SkySatelliteState>({ nextPassLoading: false, trail: false })
 
 // Requests of the details and of the next pass.
 const detailsGuard = createRequestGuard()
 const passGuard = createRequestGuard()
 
 // Shows another satellite (or the same one again after a failure): forgets the details and the next pass of the previous
-// one at once, stops following it, and
-// reads the new details.
+// one at once, and reads the new details.
 export async function inspectSatellite(state: SkySatelliteState, noradId: string, fetch: ApiFetch = browserFetch) {
 	if (state.noradId === noradId && !state.detailsError) return
 	state.noradId = noradId
@@ -49,7 +46,6 @@ export async function inspectSatellite(state: SkySatelliteState, noradId: string
 	state.nextPass = undefined
 	state.nextPassError = undefined
 	state.nextPassLoading = false
-	state.tracking = false
 	passGuard.cancel()
 	const request = detailsGuard.begin()
 

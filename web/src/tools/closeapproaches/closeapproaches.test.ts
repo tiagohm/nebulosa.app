@@ -458,7 +458,7 @@ describe('handoff to the Sky', () => {
 
 	// Sky, clock, and route of a test, recording the instant the selection read.
 	function handoff() {
-		const sky = proxy<SkyState>({ panel: 'display' })
+		const sky = proxy<SkyState>({ following: false, panel: 'display' })
 		const clock = proxy<SkyClock>({ mode: 'now', anchor: 0, startedAt: 0, rate: 1 })
 		const route = proxy<RouteState>({ route: { workspace: 'tools', tool: 'close-approaches' } })
 		const paths: unknown[] = []

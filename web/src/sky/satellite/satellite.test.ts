@@ -10,7 +10,7 @@ function pass(start: number, startsBeforeWindow: boolean) {
 }
 
 function state(): SkySatelliteState {
-	return { nextPassLoading: false, tracking: false, trail: false }
+	return { nextPassLoading: false, trail: false }
 }
 
 test('details are read once per satellite, and again after a failure', async () => {
@@ -21,11 +21,9 @@ test('details are read once per satellite, and again after a failure', async () 
 		return Promise.resolve(ok ? Response.json({ object: { noradId: '25544', name: 'ISS (ZARYA)' } }) : Response.json({ error: 'Not found', code: 'notFound' }, { status: 404 }))
 	}
 	const inspector = state()
-	inspector.tracking = true
 
 	await inspectSatellite(inspector, '25544', fetch)
 	expect(inspector.detailsError).toBeDefined()
-	expect(inspector.tracking).toBeFalse()
 
 	ok = true
 	await inspectSatellite(inspector, '25544', fetch)

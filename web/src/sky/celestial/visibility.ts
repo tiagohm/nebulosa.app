@@ -156,7 +156,7 @@ export function smallBodyLabelMagnitudeLimit(k: number) {
 }
 
 // Returns whether a moving body is an asteroid or a comet.
-function isSmallBody(object: MovingBody) {
+export function isSmallBody(object: MovingBody) {
 	return object.type === 'asteroid' || object.type === 'comet'
 }
 

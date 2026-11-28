@@ -3,7 +3,7 @@ import { positionSkyLabel, skyLabelFont, skyLabelSize, STAR_LABEL_OFFSET_X, STAR
 import { applyViewTransform, isPointInsideViewportMargin, writeBaseViewportBounds } from './geometry'
 import { movingBodyLayerId } from './picking'
 import type { RenderState } from './types'
-import { isMovingBodyVisible, isMovingLabelOptional, isOptionalMovingLabelVisible, starLabelMagnitudeLimit } from './visibility'
+import { isMovingBodyVisible, isMovingLabelOptional, isOptionalMovingLabelVisible, isSmallBody, starLabelMagnitudeLimit } from './visibility'
 
 // Space the names of the star map share, so no name is drawn over another, in a fixed priority: the names of the Sun,
 // the Moon, the planets, and the asteroids and comets always visible (looked for) are always drawn; then star names, the
@@ -193,9 +193,9 @@ export class SkyLabelSpace {
 		return true
 	}
 
-	// Places the names of the visible moving bodies of the movingBodies layer inside the view: those always drawn, each moved around its
-	// body to fit where it can, or the `optional` ones, bright enough for the zoom, each left out when it would overlap a
-	// name placed before.
+	// Places the names of the visible moving bodies of the movingBodies layer, those of asteroids and comets only inside
+	// the view: those always drawn, each moved around its body to fit where it can, or the `optional` ones, bright enough
+	// for the zoom, each left out when it would overlap a name placed before.
 	private placeMovingBodies(ctx: CanvasRenderingContext2D, state: RenderState, optional: boolean) {
 		if (!state.celestial.isLayerVisible('movingBodies')) return
 
@@ -207,8 +207,9 @@ export class SkyLabelSpace {
 			if (movingBodyLayerId(object.type) !== 'movingBodies' || isMovingLabelOptional(object) !== optional || !isMovingBodyVisible(object, state)) continue
 			if (optional && !isOptionalMovingLabelVisible(object, state)) continue
 			if (!state.projectEquatorialToScreen(object.position.rightAscension, object.position.declination, this.point)) continue
-			// A body outside the view has no name: positionSkyLabel would pin it to the nearest edge.
-			if (!isPointInsideViewportMargin(this.point[0], this.point[1], state.width, state.height, 0)) continue
+			// An asteroid or comet outside the view has no name, which positionSkyLabel would pin to the nearest edge; the
+			// Sun, the Moon, and the planets keep theirs there, pointing where they are.
+			if (isSmallBody(object) && !isPointInsideViewportMargin(this.point[0], this.point[1], state.width, state.height, 0)) continue
 
 			const name = object.name ?? object.type
 			if (!positionSkyLabel(ctx, state, name, this.point[0], this.point[1], STAR_LABEL_OFFSET_X, STAR_LABEL_OFFSET_Y, this.labelPoint)) continue

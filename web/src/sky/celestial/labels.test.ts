@@ -62,16 +62,17 @@ test('drawing every asteroid keeps the faint ones unnamed', () => {
 	expect(labels.movingAt(1, out)).toBeDefined()
 })
 
-test('bodies outside the view are not named', () => {
-	const bodies = [body('inside', 'asteroid', 400, 300, { alwaysVisible: true }), body('right', 'asteroid', 820, 300, { alwaysVisible: true }), body('above', 'jupiter', 400, -15), body('optional', 'asteroid', -10, 300, { magnitude: 6 })]
+test('asteroids and comets outside the view are not named; planets keep their name at the edge', () => {
+	const bodies = [body('inside', 'asteroid', 400, 300, { alwaysVisible: true }), body('right', 'asteroid', 820, 300, { alwaysVisible: true }), body('above', 'jupiter', 400, -15), body('optional', 'asteroid', -10, 300, { magnitude: 6 }), body('comet', 'comet', 400, 620, { alwaysVisible: true })]
 	const { state, ctx } = frame(bodies)
 	const labels = new SkyLabelSpace().place(ctx, state)
 	const out = new Float32Array(2)
 
 	expect(labels.movingAt(0, out)).toBeDefined()
 	expect(labels.movingAt(1, out)).toBeUndefined()
-	expect(labels.movingAt(2, out)).toBeUndefined()
+	expect(labels.movingAt(2, out)).toBeDefined()
 	expect(labels.movingAt(3, out)).toBeUndefined()
+	expect(labels.movingAt(4, out)).toBeUndefined()
 })
 
 test('a later frame forgets the names of the bodies that are gone', () => {

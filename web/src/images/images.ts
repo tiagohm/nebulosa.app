@@ -256,7 +256,7 @@ export interface ImagesState {
 	// Key of the document shown; absent when none is open.
 	activeKey?: string
 	// Whether a tool was chosen since the workspace last opened its contextual panel, which holds the tool; the workspace
-	// opens the panel, the drawer on narrow screens included, and clears it, so a tool chosen from another page shows too.
+	// opens the panel, the sheet on narrow screens included, and clears it, so a tool chosen from another page shows too.
 	panelRequested?: boolean
 }
 

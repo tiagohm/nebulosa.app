@@ -94,8 +94,8 @@ import { IMAGE_TOOL_DEFINITIONS, type ImageToolId, imageToolsFor } from './tools
 // Images workspace: a permanent camera tab for each connected camera of the watched connection, showing the frames
 // its camera takes, then FITS and XISF images opened from the server, one closable tab each, shown in the shared
 // viewer, with the contextual tool each document selected (the Image Inspector at first) in the contextual panel, a
-// sheet under the viewer on narrow screens for a tool that asks for one (Star Detection, Streak Detection, Mount Nudge, Guiding, TPPA, iPolar), which hides the bottom area while
-// open so the frame stays in sight. It works without any connection or equipment; only the camera operations of a
+// sheet under the viewer on narrow screens whatever the tool, which hides the bottom area while open so the frame stays
+// in sight. It works without any connection or equipment; only the camera operations of a
 // camera tab command its camera, and the
 // toolbar of a camera tab shows the state of its capture whatever tool is selected, and its bottom area the Focus
 // Curve of its Auto Focus or the graph of its guiding on request; while Guiding is the tool, a click on the session's
@@ -114,7 +114,7 @@ import { IMAGE_TOOL_DEFINITIONS, type ImageToolId, imageToolsFor } from './tools
 // coordinates under the pointer are drawn from that solution, and the measure mode of the toolbar draws measurements
 // (astrometryTool.ts). With the Image Inspector shown, Select Area of its statistics takes the presses over the image to
 // draw the area measured (statisticsArea.ts), which is drawn while the Inspector is shown; while it does, a bar over the
-// viewer says so with Cancel, and the panel, when it is a drawer over the image, closes until the area is drawn. Clicks
+// viewer says so with Cancel. Clicks
 // go to the first owner of: a Guiding star pick (which disables the measure modes), the area selection, a measure mode, the Plate Solver tool
 // (selecting and editing measurements), then Star Detection, the Star Profile Inspector (measuring the star at the
 // click, a star detected there if any), Streak Detection, and Annotation. The toolbar hides every overlay of a document
@@ -221,37 +221,17 @@ export function ImagesWorkspace() {
 	const { setOpen: setPanelOpen } = panelState
 	const panelRequested = state.panelRequested === true
 	const selectingArea = !!areaTool
-	// Whether the area selection is in progress, as last seen, and whether it closed the drawer to uncover the image.
-	const areaSelection = useRef({ selecting: false, closedDrawer: false })
 	// Whether the panel is open as a sheet under the viewer on a narrow screen; the bottom area then yields its room to the
 	// viewer, so the frame the tool changes stays in sight.
-	const sheetOpen = definition.sheet === true && !panelState.docked && panelState.open
+	const sheetOpen = !panelState.docked && panelState.open
 
-	// Opens the panel on the tool just chosen, from the tool bar, a panel, or another page, as a drawer on narrow screens
+	// Opens the panel on the tool just chosen, from the tool bar, a panel, or another page, as a sheet on narrow screens
 	// as well as docked.
 	useEffect(() => {
 		if (!panelRequested) return
 		imagesState.panelRequested = false
 		setPanelOpen(true)
 	}, [panelRequested, setPanelOpen])
-
-	// Closes the drawer over the image while an area is drawn, and opens it again once the selection ends, so the operator
-	// sees the image to draw on and then the statistics of what was drawn. A docked panel stays as it is.
-	useEffect(() => {
-		const current = areaSelection.current
-		if (selectingArea === current.selecting) return
-		current.selecting = selectingArea
-
-		if (selectingArea) {
-			if (!panelState.docked && panelState.open) {
-				current.closedDrawer = true
-				setPanelOpen(false)
-			}
-		} else if (current.closedDrawer) {
-			current.closedDrawer = false
-			if (!panelState.docked) setPanelOpen(true)
-		}
-	}, [selectingArea, panelState.docked, panelState.open, setPanelOpen])
 
 	const toolBar = <ImageToolBar tools={imageToolsFor(document)} selected={tool} disabled={!document} onSelect={pickTool} />
 	const openButton = <IconButton icon="folder" onClick={() => setChoosing(true)} label="Open Image" />
@@ -265,15 +245,7 @@ export function ImagesWorkspace() {
 	const savingDocument = state.documents.find((d) => d.key === saving?.key)
 
 	return (
-		<WorkspaceLayout
-			workspace="images"
-			title="Images"
-			actions={openButton}
-			context={toolBar}
-			contextFill
-			panelState={panelState}
-			panel={{ title: definition.panelTitle, content: <Panel key={document?.key} document={document} view={view} camera={camera} onOpen={() => setChoosing(true)} />, sheet: definition.sheet }}
-		>
+		<WorkspaceLayout workspace="images" title="Images" actions={openButton} context={toolBar} contextFill panelState={panelState} panel={{ title: definition.panelTitle, content: <Panel key={document?.key} document={document} view={view} camera={camera} onOpen={() => setChoosing(true)} />, sheet: true }}>
 			<div ref={viewerRef} className="flex h-full flex-col bg-base-000">
 				{state.documents.length > 0 && <DocumentTabs documents={state.documents} activeKey={state.activeKey} onClose={(key) => closeImage(imagesState, key)} />}
 				<div className="relative min-h-0 flex-1">

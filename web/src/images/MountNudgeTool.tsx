@@ -10,7 +10,7 @@ import type { ImageToolPanelProps } from './tools'
 // Mount Nudge tool of an Images camera tab: the nudge panel of the mount the tab's context associates with its
 // camera (the MOUNT of the active equipment setup), with the state of the tab's camera. The panel is mounted per tab,
 // so switching tool or camera tab unmounts it and releases any press it holds; the viewer keeps showing the tab's
-// frames, and nudging never needs a new exposure. On narrow screens it is a sheet under the viewer (see tools.ts). The
+// frames, and nudging never needs a new exposure. On narrow screens it is a sheet under the viewer, as every Images panel. The
 // plate solution of the frame shown, or else the one its header carries, records the orientation of the camera's frames
 // (nudgeOrientations), which the pad then moves by; a later unsolved frame keeps the last one.
 

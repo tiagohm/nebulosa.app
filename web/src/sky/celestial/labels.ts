@@ -1,6 +1,6 @@
 import { clamp } from 'nebulosa/src/math/numerical/math'
 import { positionSkyLabel, skyLabelFont, skyLabelSize, STAR_LABEL_OFFSET_X, STAR_LABEL_OFFSET_Y } from './drawing'
-import { applyViewTransform, writeBaseViewportBounds } from './geometry'
+import { applyViewTransform, isPointInsideViewportMargin, writeBaseViewportBounds } from './geometry'
 import { movingBodyLayerId } from './picking'
 import type { RenderState } from './types'
 import { isMovingBodyVisible, isMovingLabelOptional, isOptionalMovingLabelVisible, starLabelMagnitudeLimit } from './visibility'
@@ -193,7 +193,7 @@ export class SkyLabelSpace {
 		return true
 	}
 
-	// Places the names of the visible moving bodies of the movingBodies layer: those always drawn, each moved around its
+	// Places the names of the visible moving bodies of the movingBodies layer inside the view: those always drawn, each moved around its
 	// body to fit where it can, or the `optional` ones, bright enough for the zoom, each left out when it would overlap a
 	// name placed before.
 	private placeMovingBodies(ctx: CanvasRenderingContext2D, state: RenderState, optional: boolean) {
@@ -207,6 +207,8 @@ export class SkyLabelSpace {
 			if (movingBodyLayerId(object.type) !== 'movingBodies' || isMovingLabelOptional(object) !== optional || !isMovingBodyVisible(object, state)) continue
 			if (optional && !isOptionalMovingLabelVisible(object, state)) continue
 			if (!state.projectEquatorialToScreen(object.position.rightAscension, object.position.declination, this.point)) continue
+			// A body outside the view has no name: positionSkyLabel would pin it to the nearest edge.
+			if (!isPointInsideViewportMargin(this.point[0], this.point[1], state.width, state.height, 0)) continue
 
 			const name = object.name ?? object.type
 			if (!positionSkyLabel(ctx, state, name, this.point[0], this.point[1], STAR_LABEL_OFFSET_X, STAR_LABEL_OFFSET_Y, this.labelPoint)) continue
@@ -228,8 +230,8 @@ export class SkyLabelSpace {
 					[right, this.point[1] - height],
 					[left, this.point[1] - height],
 				] as const
-				// Kept inside the view as positionSkyLabel keeps a name, so a body just outside it (a name pinned to the edge)
-				// can still move its name below or above.
+				// Kept inside the view as positionSkyLabel keeps a name, so a body near an edge can still move its name below
+				// or above.
 				for (const [ax, ay] of alternatives) {
 					const cx = clamp(ax, LABEL_EDGE_INSET, state.width - width - LABEL_EDGE_INSET)
 					const cy = clamp(ay, height / 2, state.height - height / 2)

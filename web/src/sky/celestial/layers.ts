@@ -1129,9 +1129,9 @@ export class MovingBodyLayer extends InternalLayer {
 	private readonly point = new Float32Array(2)
 	private readonly labelPoint = new Float32Array(3)
 
-	// Draws the visible moving bodies of the layer and their names: those of the movingBodies layer where the label space
-	// placed them, always; those of the satellites layer where they overlap no other name, but the selected one's
-	// always (see SkyLabelSpace of ./labels).
+	// Draws the visible moving bodies of the layer and the names of those inside the view: those of the movingBodies layer
+	// where the label space placed them, always; those of the satellites layer where they overlap no other name, but the
+	// selected one's always (see SkyLabelSpace of ./labels).
 	render(ctx: CanvasRenderingContext2D, state: RenderState) {
 		const labels = state.labels.place(ctx, state)
 		const satellites = this.id === 'satellites'
@@ -1162,7 +1162,7 @@ export class MovingBodyLayer extends InternalLayer {
 
 			if (!satellites) {
 				if (labels.movingAt(i, this.labelPoint)) ctx.fillText(label, this.labelPoint[0], this.labelPoint[1])
-			} else if (positionSkyLabel(ctx, state, label, this.point[0], this.point[1], STAR_LABEL_OFFSET_X, STAR_LABEL_OFFSET_Y, this.labelPoint)) {
+			} else if (isPointInsideViewportMargin(this.point[0], this.point[1], state.width, state.height, 0) && positionSkyLabel(ctx, state, label, this.point[0], this.point[1], STAR_LABEL_OFFSET_X, STAR_LABEL_OFFSET_Y, this.labelPoint)) {
 				const selected = state.selectedObject?.type === 'movingBody' && state.selectedObject.object.id === object.id
 				const x = this.labelPoint[0]
 				if (labels.claimDynamic(state, x, x + this.labelPoint[2], this.labelPoint[1], labelHeight, selected)) ctx.fillText(label, x, this.labelPoint[1])

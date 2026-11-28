@@ -110,7 +110,7 @@ interface SettingsProps {
 function SettingsSections({ request, onChange }: SettingsProps) {
 	return (
 		<>
-			<CollapsibleSection id="images.star-detection.detection" title="Detection" summary={detectionSummary(request)}>
+			<CollapsibleSection id="images.star-detection.detection" title="Detection" summary={detectionSummary(request)} defaultOpen={false}>
 				<DetectorSettingsControls request={request} onChange={onChange} />
 				<SharedNotice />
 			</CollapsibleSection>

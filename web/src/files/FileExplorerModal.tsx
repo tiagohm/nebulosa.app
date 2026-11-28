@@ -425,7 +425,7 @@ export function FileExplorerModal(props: FileExplorerModalProps) {
 				<IconButton icon="newFolder" label={listing?.path ? 'New folder' : 'New folder: choose a drive first'} pressed={naming} disabled={!listing?.path || !!error} onClick={() => (naming ? cancelFolder() : setFolder(''))} className="pointer-coarse:size-[44px]" />
 			</form>
 			{shortcuts.length > 0 && (
-				<div className="-mx-1 mt-2 flex flex-none gap-1.5 overflow-x-auto px-1 pb-0.5">
+				<div className="no-scrollbar -mx-1 mt-2 flex flex-none gap-1.5 overflow-x-auto px-1 pb-0.5">
 					{shortcuts.map((place) => (
 						<button
 							key={place.name}

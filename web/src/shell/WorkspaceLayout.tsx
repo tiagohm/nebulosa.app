@@ -91,7 +91,7 @@ export function WorkspaceLayout({ workspace, title, context, contextFill = false
 	// drawer waiting beside it would then pull the workspace sideways.
 	const frame = (
 		<section className={cn('relative flex min-h-0 min-w-0 flex-1 overflow-clip', sheet && 'flex-col')}>
-			<div className="flex min-w-0 flex-1 flex-col">
+			<div className="flex min-h-0 min-w-0 flex-1 flex-col">
 				<header className="flex min-h-12 flex-none flex-wrap items-center gap-x-3 gap-y-1 border-b border-line-100 bg-base-100 px-4 py-1">
 					<span className="flex min-w-0 flex-none items-center gap-2 text-sm">
 						{inTool && (

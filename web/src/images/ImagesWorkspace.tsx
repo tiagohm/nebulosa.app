@@ -94,8 +94,9 @@ import { IMAGE_TOOL_DEFINITIONS, type ImageToolId, imageToolsFor } from './tools
 // Images workspace: a permanent camera tab for each connected camera of the watched connection, showing the frames
 // its camera takes, then FITS and XISF images opened from the server, one closable tab each, shown in the shared
 // viewer, with the contextual tool each document selected (the Image Inspector at first) in the contextual panel, a
-// sheet under the viewer on narrow screens whatever the tool, which hides the bottom area while open so the frame stays
-// in sight. It works without any connection or equipment; only the camera operations of a
+// sheet under the viewer on narrow screens whatever the tool. That sheet and the bottom area of a camera tab share the
+// room under the viewer: while the sheet is open the bottom area folds to its header, and showing a view from that
+// header closes the panel, so one of them at a time sits under the frame and the frame stays in sight. It works without any connection or equipment; only the camera operations of a
 // camera tab command its camera, and the
 // toolbar of a camera tab shows the state of its capture whatever tool is selected, and its bottom area the Focus
 // Curve of its Auto Focus or the graph of its guiding on request; while Guiding is the tool, a click on the session's
@@ -221,8 +222,8 @@ export function ImagesWorkspace() {
 	const { setOpen: setPanelOpen } = panelState
 	const panelRequested = state.panelRequested === true
 	const selectingArea = !!areaTool
-	// Whether the panel is open as a sheet under the viewer on a narrow screen; the bottom area then yields its room to the
-	// viewer, so the frame the tool changes stays in sight.
+	// Whether the panel is open as a sheet under the viewer on a narrow screen; the bottom area then folds to its header,
+	// so the frame the tool changes stays in sight.
 	const sheetOpen = !panelState.docked && panelState.open
 
 	// Opens the panel on the tool just chosen, from the tool bar, a panel, or another page, as a sheet on narrow screens
@@ -236,6 +237,17 @@ export function ImagesWorkspace() {
 	const toolBar = <ImageToolBar tools={imageToolsFor(document)} selected={tool} disabled={!document} onSelect={pickTool} />
 	const openButton = <IconButton icon="folder" onClick={() => setChoosing(true)} label="Open Image" />
 	const waiting = document?.camera && !document.info
+
+	// Shows or hides the view of the bottom area. Under an open sheet the area is folded whatever the preference, so showing
+	// it closes the panel instead and keeps the preference shown.
+	function toggleBottom() {
+		if (sheetOpen) {
+			setPanelOpen(false)
+			if (!framesShown) setCameraFramesShown(profileState, true)
+		} else {
+			setCameraFramesShown(profileState, !framesShown)
+		}
+	}
 
 	// Selects a tool of the active document; picking the selected tool opens its panel again.
 	function pickTool(id: ImageToolId) {
@@ -384,7 +396,7 @@ export function ImagesWorkspace() {
 						</div>
 					)}
 				</div>
-				{document?.camera && !sheetOpen && <CameraBottom document={document} expanded={framesShown} onToggle={() => setCameraFramesShown(profileState, !framesShown)} />}
+				{document?.camera && <CameraBottom document={document} expanded={framesShown && !sheetOpen} compact={!panelState.docked} onToggle={toggleBottom} />}
 				{/* Inside the column, so the menu stays visible while it fills the screen. */}
 				{menu && solution && document?.info && menu.key === document.key && (
 					<ImageMenu
@@ -664,51 +676,20 @@ function CameraFrameButton({ document }: { readonly document: ImageDocument }) {
 	)
 }
 
-interface CaptureReadoutProps {
-	// Id of the connection that provides the camera.
-	readonly connectionId: string
-	// Exact id of the camera.
-	readonly deviceId: string
-}
-
-// State of the capture of a camera tab's camera, whatever tool or frame is shown, heading its bottom area so it reads
-// from across the room: the frames captured in the Readout style, then what the capture does (with the time of an
-// exposure or delay) and the file state of its latest frame while it runs, or that it was aborted or why it failed,
-// wrapping rather than cut. Only a failure is in the danger colour, since an abort is the operator's own command.
-// Nothing is shown for a camera that never captured or whose capture ended normally.
-function CaptureReadout({ connectionId, deviceId }: CaptureReadoutProps) {
-	const runtime = useSnapshot(captureRuntime)
-	const key = cameraKey(connectionId, deviceId)
-	const session = runtime.sessions[key]
-	if (!session) return null
-
-	const running = captureRunning(session)
-	const failed = session.phase === 'failed'
-	if (!running && !failed && session.phase !== 'aborted') return null
-
-	const frame = runtime.frames[key]
-	const file = running && frame?.sessionId === session.sessionId && frame.file ? FILE_STATE_LABELS[fileState(frame)] : undefined
-
-	return (
-		<div className="flex flex-wrap items-center gap-x-3 px-3 pt-1.5">
-			<span className="text-xs font-medium tracking-[0.08em] text-ink-300 uppercase">Captured</span>
-			<span className="text-3xl leading-9 font-semibold tracking-[-0.01em] text-ink-100 tabular-nums">{captureFrames(session)}</span>
-			<span className={cn('min-w-0 text-sm leading-5 tabular-nums', failed ? 'text-danger' : 'text-ink-200')}>
-				{captureStatus(session)}
-				{file && ` · ${file}`}
-			</span>
-		</div>
-	)
-}
-
 // Label of each view of the bottom area.
 const BOTTOM_VIEW_LABELS: Readonly<Record<BottomView, string>> = { frames: 'Captured Frames', curve: 'Focus Curve', guiding: 'Guiding Graph', pointing: 'Pointing Map' }
+
+// Short label of each view of the bottom area, so every view fits the header of a phone beside the state.
+const BOTTOM_VIEW_SHORT_LABELS: Readonly<Record<BottomView, string>> = { frames: 'Frames', curve: 'Curve', guiding: 'Guiding', pointing: 'Pointing' }
 
 interface CameraBottomProps {
 	// Camera tab.
 	readonly document: ImageDocument
 	// Whether the view is shown under its header; the header stays when it is not.
 	readonly expanded: boolean
+	// Whether the area shares a narrow screen with the panel's sheet: the header names the views shortly, and the area
+	// takes at most half the column, scrolling what is taller, so the frame always keeps the other half.
+	readonly compact: boolean
 	// Shows or hides the view.
 	readonly onToggle: () => void
 }
@@ -720,7 +701,7 @@ interface CameraBottomProps {
 // updating whatever frame or tool is shown; choosing a view never changes the selection. A view whose session is gone
 // shows the carousel. The view is kept per camera tab (bottomview.ts), and a new Auto Focus session of the camera shows
 // its Focus Curve once.
-function CameraBottom({ document, expanded, onToggle }: CameraBottomProps) {
+function CameraBottom({ document, expanded, compact, onToggle }: CameraBottomProps) {
 	const autoFocus = useSnapshot(autoFocusRuntime)
 	const bottom = useSnapshot(cameraBottomViews)
 	const guidingState = useSnapshot(guidingRuntime)
@@ -745,6 +726,7 @@ function CameraBottom({ document, expanded, onToggle }: CameraBottomProps) {
 	const frameKey = frameSourceKey(source.connectionId, source.deviceId)
 	const savedCount = frames.sources[frameKey]?.count ?? frames.frames[frameKey]?.length ?? 0
 	const state = view === 'frames' ? `${savedCount} saved` : view === 'pointing' && pointing ? MOUNT_POINTING_STATE_LABELS[pointing.state] : view === 'guiding' && guiding ? (guiding.active ? GUIDING_STATE_LABELS[guiding.state] : 'Stopped') : session && AUTO_FOCUS_STATE_LABELS[session.state]
+	const labels = compact ? BOTTOM_VIEW_SHORT_LABELS : BOTTOM_VIEW_LABELS
 
 	// Shows a view, expanding the area when it is collapsed.
 	function onView(next: BottomView) {
@@ -762,8 +744,8 @@ function CameraBottom({ document, expanded, onToggle }: CameraBottomProps) {
 	}
 
 	return (
-		<div className="flex-none border-t border-line-100 bg-base-100">
-			<div className="flex min-h-8 items-center gap-3 pr-3 pl-1 font-mono text-xs tracking-wide text-ink-300 uppercase">
+		<div className={cn('flex flex-none flex-col border-t border-line-100 bg-base-100', compact && 'max-h-1/2')}>
+			<div className={cn('flex min-h-8 flex-none items-center pr-3 pl-1 font-mono text-xs tracking-wide text-ink-300 uppercase', compact ? 'gap-2' : 'gap-3')}>
 				<button
 					type="button"
 					title={`${expanded ? 'Hide' : 'Show'} ${BOTTOM_VIEW_LABELS[view]}`}
@@ -773,12 +755,9 @@ function CameraBottom({ document, expanded, onToggle }: CameraBottomProps) {
 					<Icon name="stepForward" className={cn('size-3.5 transition-transform duration-150 motion-reduce:transition-none', expanded && 'rotate-90')} />
 				</button>
 				{available.length === 1 ? (
-					<div className="flex flex-row items-center gap-3 min-h-12">
-						<CaptureReadout connectionId={source.connectionId} deviceId={source.deviceId} />
-						<span>{BOTTOM_VIEW_LABELS.frames}</span>
-					</div>
+					<span>{labels.frames}</span>
 				) : (
-					<span onKeyDown={handleViewKey} className="flex min-w-0 gap-3 overflow-x-auto">
+					<span onKeyDown={handleViewKey} className={cn('flex min-w-0 overflow-x-auto scrollbar-none', compact ? 'gap-1' : 'gap-3')}>
 						{available.map((option) => (
 							<button
 								key={option}
@@ -786,9 +765,14 @@ function CameraBottom({ document, expanded, onToggle }: CameraBottomProps) {
 								data-view
 								tabIndex={option === view ? 0 : -1}
 								onClick={() => onView(option)}
-								className={cn('flex-none cursor-pointer border-0 bg-transparent p-0 font-mono text-xs tracking-wide whitespace-nowrap uppercase focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent', option === view ? 'text-accent' : 'text-ink-300 hover:text-ink-100')}
+								title={compact ? BOTTOM_VIEW_LABELS[option] : undefined}
+								className={cn(
+									'flex-none cursor-pointer border-0 bg-transparent font-mono text-xs tracking-wide whitespace-nowrap uppercase focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent',
+									compact ? 'px-1.5 py-2 focus-visible:-outline-offset-2 pointer-coarse:py-3' : 'p-0',
+									option === view ? 'text-accent' : 'text-ink-300 hover:text-ink-100',
+								)}
 							>
-								{BOTTOM_VIEW_LABELS[option]}
+								{labels[option]}
 							</button>
 						))}
 					</span>
@@ -799,7 +783,7 @@ function CameraBottom({ document, expanded, onToggle }: CameraBottomProps) {
 				(view === 'frames' ? (
 					<CaptureFramesCarousel document={document} />
 				) : (
-					<div className="px-2 pb-2">
+					<div className="min-h-0 overflow-y-auto overscroll-contain px-2 pb-2">
 						{view === 'pointing' && pointing ? (
 							<PointingMapView session={pointing} />
 						) : view === 'guiding' && guiding ? (

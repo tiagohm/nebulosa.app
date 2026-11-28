@@ -183,7 +183,7 @@ function SettingsSections({ request, onChange, offered }: SettingsProps) {
 
 	return (
 		<>
-			<CollapsibleSection id="images.plate-solver.solver" title="Solver" summary={`Nebulosa · ${solverState}`}>
+			<CollapsibleSection id="images.plate-solver.solver" title="Solver" summary={`Nebulosa · ${solverState}`} defaultOpen={false}>
 				<SolverAvailability />
 			</CollapsibleSection>
 			<CollapsibleSection id="images.plate-solver.solving-strategy" title="Solving Strategy" summary={STRATEGY_LABELS[request.strategy]}>
